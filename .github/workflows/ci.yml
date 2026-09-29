@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: composer.json valido
+        run: composer validate --strict
+      # Pacchetto pubblico: un segreto qui dentro e' pubblicato. Il controllo e' grezzo apposta.
+      - name: Nessun segreto nel repo
+        run: |
+          if git ls-files | grep -E '(^|/)\.env($|\.)|\.key$|\.pem$'; then echo "file sensibile nel repo"; exit 1; fi

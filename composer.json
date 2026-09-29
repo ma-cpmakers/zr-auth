@@ -1,0 +1,15 @@
+{
+    "name": "zeiras/zr-auth",
+    "description": "Zeiras: la parte comune dei moduli zr-* (ingresso via zr-home con OpenID Connect, sessione nel workspace, avvisi, barra comune).",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Zeiras\\Auth\\": "src/"
+        }
+    },
+    "minimum-stability": "stable"
+}
