@@ -6,8 +6,10 @@ use SensitiveParameter;
 
 /**
  * Un avviso di zr-home (voce #979): il `logout_token` del Back-Channel Logout di OpenID Connect, che zr-home manda
- * all'uscita di una sessione (`sid`), quando toglie una persona da un workspace o ne cambia il ruolo (`sub` e `workspace`),
- * quando un workspace disattiva il modulo (`workspace`). Firma, date, emittente e destinatario li verifica Token; qui i
+ * all'uscita di una sessione (`sid`), quando toglie una persona da un workspace o ne cambia il ruolo, quando una persona
+ * cambia o reimposta la password (`sub` e `workspace`; per la password un avviso per ogni suo workspace), quando un
+ * workspace disattiva il modulo (`workspace`). Il claim `motivo` dice quale: `uscita`, `membro_rimosso`,
+ * `ruolo_cambiato`, `password_cambiata`, `app_disattivata`. Firma, date, emittente e destinatario li verifica Token; qui i
  * controlli del Back-Channel Logout e del contratto con zr-home.
  */
 final class Avviso

@@ -89,7 +89,8 @@ final class Ingresso
 
     /**
      * Scambia il codice e, se l'id_token è valido per questo modulo e per questo ingresso, apre la sessione del modulo:
-     * la persona ricopiata, il workspace e il ruolo del token. Se zr-home non risponde, la sessione non si apre.
+     * la persona ricopiata, il workspace e il ruolo del token. Se zr-home non risponde, o respinge il client (401) o lo
+     * frena (429), la sessione non si apre e il log lo dice.
      *
      * @param  array{nonce: string, verificatore: string, ritorno: string, workspace: int|null, silenzioso: bool}  $ingresso
      */
@@ -108,6 +109,17 @@ final class Ingresso
             ]);
         } catch (ConnectionException $errore) {
             Log::warning('zr-auth: zr-home non risponde (scambio del codice)', ['errore' => $errore->getMessage()]);
+
+            return false;
+        }
+        // Il segreto del client sbagliato (401) o il freno di zr-home (429) non si aggiustano rifacendo l'ingresso: chi
+        // gestisce il modulo lo legge nel log. Lo stato e l'errore di zr-home, mai il segreto né il codice.
+        if (in_array($risposta->status(), [401, 429], true)) {
+            $errore = $risposta->json('error');
+            Log::warning('zr-auth: zr-home respinge lo scambio del codice', [
+                'stato' => $risposta->status(),
+                'errore' => is_string($errore) ? $errore : null,
+            ]);
 
             return false;
         }

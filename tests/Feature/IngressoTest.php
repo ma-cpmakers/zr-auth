@@ -105,6 +105,38 @@ it('se zr-home non risponde, allo scambio del codice o col JWKS, il ritorno è 4
         ->and($avvisi[0])->toContain('zr-home non risponde');
 })->with(['lo scambio del codice' => '/oauth/token', 'il JWKS' => '/oauth/jwks']);
 
+it('se zr-home respinge lo scambio col 401 o col 429, il ritorno è 403 e il log lo dice con lo stato e l\'errore, mai col segreto né col codice (review M1)', function (int $stato, array $corpo, ?string $errore) {
+    $righe = [];
+    Log::listen(function (MessageLogged $messaggio) use (&$righe) {
+        $righe[] = $messaggio;
+    });
+    zrHomeCon('/oauth/token', Http::response($corpo, $stato));
+
+    entra()->assertForbidden();
+
+    expect(session()->has('zr-auth.sessione'))->toBeFalse()
+        ->and($righe)->toHaveCount(1)
+        ->and($righe[0]->level)->toBe('warning')
+        ->and($righe[0]->message)->toBe('zr-auth: zr-home respinge lo scambio del codice')
+        ->and($righe[0]->context)->toBe(['stato' => $stato, 'errore' => $errore]);
+})->with([
+    'il segreto sbagliato' => [401, ['error' => 'invalid_client', 'error_description' => 'Client authentication failed'], 'invalid_client'],
+    'il freno' => [429, ['message' => 'Too Many Attempts.'], null],
+]);
+
+it('un codice che zr-home non scambia (400 invalid_grant) non scrive nel log: l\'ingresso si rifà, non è un guasto (review M1)', function () {
+    $righe = [];
+    Log::listen(function (MessageLogged $messaggio) use (&$righe) {
+        $righe[] = $messaggio;
+    });
+    zrHomeCon('/oauth/token', Http::response(['error' => 'invalid_grant'], 400));
+
+    entra()->assertForbidden();
+
+    expect(session()->has('zr-auth.sessione'))->toBeFalse()
+        ->and($righe)->toBe([]);
+});
+
 it('lo stesso ritorno usato due volte, o con uno state sconosciuto, risponde 403 e non apre la sessione (T3.3)', function () {
     $chiesto = ingressoChiesto($this->get('/pagina'));
     zrHomeFinto($chiesto, idToken(claims($chiesto['nonce'])));

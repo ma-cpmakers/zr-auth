@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
@@ -145,6 +146,21 @@ it('un kid che il JWKS in cache non ha lo fa rileggere, al più una volta al min
     avvisaCon(logoutToken(['sid' => 'sid-4'], 'altra', kid: 'zr-home-3'))->assertStatus(400);
     expect(jwksChiesti())->toBe(3)
         ->and(Revoca::query()->orderBy('id')->pluck('sid')->all())->toBe(['sid-1', 'sid-2']);
+});
+
+it('un kid nuovo mentre zr-home ha appena fallito non consuma la rilettura: passati i 30 secondi del fallimento si rilegge (review M5)', function () {
+    zrHomeCon('/oauth/jwks', Http::sequence()->push(jwks())->push(jwks('altra', 'zr-home-2')));
+    avvisa(['sid' => 'sid-1'])->assertOk();
+    // Un altro processo, partito con la cache vuota prima che il JWKS ci entrasse, ha appena trovato zr-home giù.
+    Cache::put('zr-auth:jwks:errore', true, 30);
+
+    avvisaCon(logoutToken(['sid' => 'sid-2'], 'altra', kid: 'zr-home-2'))->assertStatus(400);
+    expect(jwksChiesti())->toBe(1);
+
+    $this->travel(31)->seconds();
+    avvisaCon(logoutToken(['sid' => 'sid-3'], 'altra', kid: 'zr-home-2'))->assertOk();
+    expect(jwksChiesti())->toBe(2)
+        ->and(Revoca::query()->orderBy('id')->pluck('sid')->all())->toBe(['sid-1', 'sid-3']);
 });
 
 it('un avviso firmato 5 minuti fa vale ancora: si rifiutano solo i più vecchi (T5.3)', function () {

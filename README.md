@@ -6,8 +6,9 @@ React della barra comune.
 
 **Repo pubblico di proposito**: i moduli lo installano da Composer senza credenziali sul server. Quindi qui dentro
 **nessun segreto, mai** — niente `.env`, niente id o segreti di client, niente URL interni. La CI fallisce su un file
-sensibile, su una chiave privata, su un valore di riserva per una variabile segreta (`env()`, `getenv()`, `?:`, `??`) e
-su un valore segreto nella configurazione di PHPUnit (`.github/nessun-segreto.sh`, che si lancia anche in locale).
+sensibile (`.env`, chiavi e certificati, `.p12` e `.pfx`, l'`auth.json` di Composer), su una chiave privata, su un valore
+di riserva per una variabile segreta (`env()`, `getenv()`, `?:`, `??`) e su un valore segreto nella configurazione di
+PHPUnit (`.github/nessun-segreto.sh`, che si lancia anche in locale).
 
 Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il contratto sta nella spec di `zr-home`.
 
@@ -24,13 +25,14 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
   una volta, e il ritorno ha un freno: 30 al minuto per indirizzo (un IPv6 conta per il suo /64), che dev'essere quello
   vero del visitatore (vedi «L'indirizzo del visitatore»).
 - **Il JWKS di zr-home resta in cache 10 minuti** (chiave `zr-auth:jwks` nella cache del modulo), e solo se ha chiavi
-  valide. **zr-home cambia chiave con un `kid` nuovo**: un token con un `kid` che le chiavi in cache non hanno fa rileggere
-  il JWKS, al più una volta al minuto. Quindi zr-home pubblica la chiave nuova nel JWKS al più tardi quando comincia a
-  firmare con quella, e tiene la vecchia almeno 5 minuti dopo l'ultimo token firmato con quella; se il modulo ha riletto
-  da meno di un minuto, nel caso peggiore per quel minuto i ritorni sono 403 e gli avvisi 400 (zr-home li ripete). Una
+  valide. **zr-home firma con una chiave sola, e una chiave nuova arriva con un `kid` nuovo** (`token_headers.kid` in
+  `config/openid.php` di zr-home): un token con un `kid` che le chiavi in cache non hanno fa rileggere il JWKS, al più una
+  volta al minuto. La chiave vecchia non resta nel JWKS: un token firmato con quella e ancora in viaggio fallisce una
+  volta — il ritorno risponde 403 e l'ingresso si rifà, l'avviso risponde 400 e zr-home lo firma di nuovo e lo ripete. Se
+  il modulo ha riletto da meno di un minuto, nel caso peggiore per quel minuto i ritorni sono 403 e gli avvisi 400. Una
   chiave nuova con lo **stesso** `kid` resterebbe sconosciuta al modulo fino a 10 minuti. Se zr-home non risponde, o il
-  JWKS non vale, il modulo non lo richiede per 30 secondi: il ritorno è 403 e l'avviso 400, mai un errore del server, con
-  una riga `warning` nel log (`zr-auth: …`).
+  JWKS non vale, il modulo non lo richiede per 30 secondi, e intanto non consuma la rilettura del minuto: il ritorno è
+  403 e l'avviso 400, mai un errore del server, con una riga `warning` nel log (`zr-auth: …`).
 - **La sessione è di un workspace solo e vale al massimo 12 ore.** Dopo, l'ingresso si rifà in silenzio (`prompt=none`);
   se zr-home vuole la persona davanti (`login_required`, `interaction_required`, `consent_required`,
   `account_selection_required`), riparte con l'accesso. Un indirizzo con `?workspace=<id>` diverso da quello della
@@ -72,6 +74,9 @@ Variabili d'ambiente del modulo (**solo** nell'`.env` del server, mai nel repo):
 
 Il client lo crea chi gestisce zr-home, sul server di zr-home: `php artisan zeiras:modulo <codice>
 --ritorno=https://<modulo>/auth/callback` stampa id e segreto **una volta sola**, e vanno nell'ambiente del modulo.
+Un segreto sbagliato fa rispondere 403 a ogni ritorno, con una riga `warning` nel log: `zr-auth: zr-home respinge lo
+scambio del codice`, con lo stato (`401`, e dopo dieci al minuto `429`: il freno di zr-home) e l'errore di zr-home
+(`invalid_client`), mai il segreto né il codice.
 
 La sessione di Laravel deve arrivare al ritorno da zr-home: `SESSION_SAME_SITE=lax` (il default), non `strict`.
 `SESSION_LIFETIME` sotto i 720 minuti fa rifare l'ingresso prima, dopo l'inattività (in silenzio).

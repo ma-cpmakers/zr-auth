@@ -6,8 +6,9 @@ set -uo pipefail
 
 trovato=0
 
-# I file che non ci devono essere: un .env (anche .env.example), una chiave, un certificato.
-if git ls-files | grep -E '(^|/)\.env($|\.)|\.key$|\.pem$'; then
+# I file che non ci devono essere: un .env (anche .env.example), una chiave, un certificato, un archivio di chiavi (.p12,
+# .pfx), le credenziali di Composer (auth.json).
+if git ls-files | grep -E '(^|/)\.env($|\.)|\.key$|\.pem$|\.p12$|\.pfx$|(^|/)auth\.json$'; then
     echo "file sensibile nel repo"
     trovato=1
 fi
@@ -19,7 +20,7 @@ if git grep -lE 'BEGIN [A-Z ]*PRIVATE KEY' -- .; then
 fi
 
 # Il nome di una variabile segreta, in inglese o in italiano, maiuscole o minuscole.
-export NOMI='[A-Z0-9_]*(?:SECRET|KEY|TOKEN|PASSWORD|SEGRETO|CHIAVE)[A-Z0-9_]*'
+export NOMI='[A-Z0-9_]*(?:SECRET|KEY|TOKEN|PASSWORD|PASSWD|PWD|SEGRETO|SEGRETI|CHIAVE|CHIAVI)[A-Z0-9_]*'
 
 # Un valore di riserva per una variabile segreta, nel PHP: env('…', valore), env('…') ?: valore, env('…') ?? valore, anche
 # su più righe; lo stesso con getenv() e Env::get(); $_ENV['…'] e $_SERVER['…'] seguiti da ?: o ??.

@@ -84,8 +84,8 @@ final class Token
     /**
      * Le chiavi del JWKS di zr-home, dalla cache o da zr-home. Un `kid` che le chiavi in cache non hanno vuol dire che zr-home
      * firma con una chiave nuova: si rilegge, al più una volta al minuto. zr-home che non risponde, o una risposta senza
-     * chiavi RS256 valide, non entrano in cache e si ricordano 30 secondi: nel frattempo non si richiede, e restano le chiavi
-     * che c'erano.
+     * chiavi RS256 valide, non entrano in cache e si ricordano 30 secondi: nel frattempo non si richiede, restano le chiavi
+     * che c'erano, e la rilettura del minuto non si consuma.
      *
      * @return array<string, Key>|null
      */
@@ -93,10 +93,13 @@ final class Token
     {
         $jwks = Cache::get(self::CACHE);
         $chiavi = is_array($jwks) ? self::leggi($jwks) : null;
-        if ($chiavi !== null && ($kid === null || isset($chiavi[$kid]) || ! Cache::add(self::CACHE.':riletto', true, self::RILETTURA))) {
+        if ($chiavi !== null && ($kid === null || isset($chiavi[$kid]))) {
             return $chiavi;
         }
         if (Cache::has(self::CACHE.':errore')) {
+            return $chiavi;
+        }
+        if ($chiavi !== null && ! Cache::add(self::CACHE.':riletto', true, self::RILETTURA)) {
             return $chiavi;
         }
 
