@@ -195,6 +195,15 @@ it('il ritorno ha un freno per indirizzo: 30 al minuto, poi 429 (review R-SA1)',
     $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])->get('/auth/callback?state=sconosciuto')->assertForbidden();
 });
 
+it('il freno del ritorno conta un IPv6 per il suo /64: un indirizzo nuovo dello stesso /64 non lo azzera (review N4, R-SA1)', function () {
+    foreach (range(1, 30) as $volta) {
+        $this->withServerVariables(['REMOTE_ADDR' => "2001:db8:1:2::{$volta}"])->get('/auth/callback?state=sconosciuto')->assertForbidden();
+    }
+
+    $this->withServerVariables(['REMOTE_ADDR' => '2001:db8:1:2::ff'])->get('/auth/callback?state=sconosciuto')->assertStatus(429);
+    $this->withServerVariables(['REMOTE_ADDR' => '2001:db8:1:3::1'])->get('/auth/callback?state=sconosciuto')->assertForbidden();
+});
+
 it('un indirizzo con un altro workspace rifà l\'ingresso in silenzio per quello: la sessione è di un workspace solo (T3.5)', function () {
     entra()->assertRedirect('/pagina');
     $this->get('/pagina?workspace=7')->assertOk()->assertJsonPath('workspace', 7);

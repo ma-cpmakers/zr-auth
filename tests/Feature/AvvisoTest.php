@@ -112,16 +112,39 @@ it('il JWKS di zr-home resta in cache 10 minuti: due avvisi, una richiesta sola 
     expect(jwksChiesti())->toBe(2);
 });
 
-it('zr-home che non risponde o un JWKS senza chiavi non restano in cache: l\'avviso è 400, mai un errore del server, e il successivo richiede il JWKS (review A3, A6)', function () {
+it('zr-home che non risponde o un JWKS senza chiavi non restano in cache e si ricordano 30 secondi: l\'avviso è 400, mai un errore del server, e intanto il JWKS non si richiede (review A3, A6, S5)', function () {
     zrHomeCon('/oauth/jwks', Http::sequence()->pushFailedConnection()->push(['keys' => []])->push(jwks()));
 
     avvisa(['sid' => 'sid-1'])->assertStatus(400);
     avvisa(['sid' => 'sid-2'])->assertStatus(400);
-    avvisa(['sid' => 'sid-3'])->assertOk();
+    expect(jwksChiesti())->toBe(1);
+
+    $this->travel(31)->seconds();
+    avvisa(['sid' => 'sid-3'])->assertStatus(400);
+    expect(jwksChiesti())->toBe(2);
+
+    $this->travel(31)->seconds();
     avvisa(['sid' => 'sid-4'])->assertOk();
+    avvisa(['sid' => 'sid-5'])->assertOk();
 
     expect(jwksChiesti())->toBe(3)
-        ->and(Revoca::query()->orderBy('id')->pluck('sid')->all())->toBe(['sid-3', 'sid-4']);
+        ->and(Revoca::query()->orderBy('id')->pluck('sid')->all())->toBe(['sid-4', 'sid-5']);
+});
+
+it('un kid che il JWKS in cache non ha lo fa rileggere, al più una volta al minuto: zr-home che cambia chiave non ferma i moduli (review N3)', function () {
+    zrHomeCon('/oauth/jwks', Http::sequence()->push(jwks())->push(jwks('altra', 'zr-home-2'))->whenEmpty(Http::response(jwks('altra', 'zr-home-2'))));
+
+    avvisa(['sid' => 'sid-1'])->assertOk();
+    avvisaCon(logoutToken(['sid' => 'sid-2'], 'altra', kid: 'zr-home-2'))->assertOk();
+    expect(jwksChiesti())->toBe(2);
+
+    avvisaCon(logoutToken(['sid' => 'sid-3'], 'altra', kid: 'zr-home-3'))->assertStatus(400);
+    expect(jwksChiesti())->toBe(2);
+
+    $this->travel(61)->seconds();
+    avvisaCon(logoutToken(['sid' => 'sid-4'], 'altra', kid: 'zr-home-3'))->assertStatus(400);
+    expect(jwksChiesti())->toBe(3)
+        ->and(Revoca::query()->orderBy('id')->pluck('sid')->all())->toBe(['sid-1', 'sid-2']);
 });
 
 it('un avviso firmato 5 minuti fa vale ancora: si rifiutano solo i più vecchi (T5.3)', function () {

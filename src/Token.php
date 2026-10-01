@@ -24,12 +24,16 @@ final class Token
     private const TOLLERANZA = 60;
 
     /**
-     * Il JWKS di zr-home resta in cache 10 minuti, solo se ha chiavi valide: una chiave nuova di zr-home va pubblicata nel
-     * JWKS almeno 10 minuti prima di firmare con quella.
+     * Il JWKS di zr-home resta in cache 10 minuti, solo se ha chiavi valide. Un `kid` che non ha lo fa rileggere al più una
+     * volta al minuto (`:riletto`); zr-home che non risponde, o un JWKS che non vale, si ricordano 30 secondi (`:errore`).
      */
     private const CACHE = 'zr-auth:jwks';
 
     private const DURATA_CACHE = 600;
+
+    private const RILETTURA = 60;
+
+    private const DURATA_ERRORE = 30;
 
     /**
      * I claim del token se è firmato da zr-home (JWKS) per questo modulo — emittente zr-home, destinatario questo client
@@ -40,7 +44,7 @@ final class Token
      */
     public static function claims(#[SensitiveParameter] string $token, ?string $tipo = null): ?array
     {
-        $chiavi = self::chiavi();
+        $chiavi = self::chiavi(self::kid($token));
         if ($chiavi === null) {
             return null;
         }
@@ -78,35 +82,52 @@ final class Token
     }
 
     /**
-     * Le chiavi del JWKS di zr-home, dalla cache o da zr-home. Una risposta senza chiavi RS256 valide, o zr-home che non
-     * risponde, non restano in cache: la volta dopo si richiede.
+     * Le chiavi del JWKS di zr-home, dalla cache o da zr-home. Un `kid` che le chiavi in cache non hanno vuol dire che zr-home
+     * firma con una chiave nuova: si rilegge, al più una volta al minuto. zr-home che non risponde, o una risposta senza
+     * chiavi RS256 valide, non entrano in cache e si ricordano 30 secondi: nel frattempo non si richiede, e restano le chiavi
+     * che c'erano.
      *
      * @return array<string, Key>|null
      */
-    private static function chiavi(): ?array
+    private static function chiavi(?string $kid): ?array
     {
         $jwks = Cache::get(self::CACHE);
-        if (is_array($jwks)) {
-            return self::leggi($jwks);
+        $chiavi = is_array($jwks) ? self::leggi($jwks) : null;
+        if ($chiavi !== null && ($kid === null || isset($chiavi[$kid]) || ! Cache::add(self::CACHE.':riletto', true, self::RILETTURA))) {
+            return $chiavi;
+        }
+        if (Cache::has(self::CACHE.':errore')) {
+            return $chiavi;
         }
 
         try {
-            $risposta = Http::acceptJson()->timeout(10)->get(Ingresso::zrHome().'/oauth/jwks');
+            $risposta = Http::acceptJson()->timeout(5)->get(Ingresso::zrHome().'/oauth/jwks');
         } catch (ConnectionException $errore) {
             Log::warning('zr-auth: zr-home non risponde (JWKS)', ['errore' => $errore->getMessage()]);
+            Cache::put(self::CACHE.':errore', true, self::DURATA_ERRORE);
 
-            return null;
+            return $chiavi;
         }
-        $jwks = $risposta->successful() ? $risposta->json() : null;
-        $chiavi = is_array($jwks) ? self::leggi($jwks) : null;
-        if ($chiavi === null) {
+        $nuovo = $risposta->successful() ? $risposta->json() : null;
+        $nuove = is_array($nuovo) ? self::leggi($nuovo) : null;
+        if ($nuove === null) {
             Log::warning('zr-auth: il JWKS di zr-home non vale', ['stato' => $risposta->status()]);
+            Cache::put(self::CACHE.':errore', true, self::DURATA_ERRORE);
 
-            return null;
+            return $chiavi;
         }
-        Cache::put(self::CACHE, $jwks, self::DURATA_CACHE);
+        Cache::put(self::CACHE, $nuovo, self::DURATA_CACHE);
 
-        return $chiavi;
+        return $nuove;
+    }
+
+    /** Il `kid` dell'intestazione del token, se c'è: non è verificato, serve solo a scegliere la chiave. */
+    private static function kid(#[SensitiveParameter] string $token): ?string
+    {
+        $json = base64_decode(strtr(explode('.', $token)[0], '-_', '+/'), true);
+        $intestazione = is_string($json) ? json_decode($json, true) : null;
+
+        return is_array($intestazione) && is_string($intestazione['kid'] ?? null) ? $intestazione['kid'] : null;
     }
 
     /**

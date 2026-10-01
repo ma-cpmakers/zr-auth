@@ -34,12 +34,12 @@ function base64url(string $binario): string
 }
 
 /** Il JWKS di zr-home come lo pubblica (sprint 4, T2.1): una chiave RSA RS256 col suo `kid`. */
-function jwks(): array
+function jwks(string $chiave = 'zr-home', string $kid = 'zr-home-1'): array
 {
-    $rsa = openssl_pkey_get_details(chiaveRsa())['rsa'];
+    $rsa = openssl_pkey_get_details(chiaveRsa($chiave))['rsa'];
 
     return ['keys' => [[
-        'kty' => 'RSA', 'alg' => 'RS256', 'use' => 'sig', 'kid' => 'zr-home-1',
+        'kty' => 'RSA', 'alg' => 'RS256', 'use' => 'sig', 'kid' => $kid,
         'n' => base64url($rsa['n']), 'e' => base64url($rsa['e']),
     ]]];
 }
@@ -173,7 +173,7 @@ function entra(array $altri = [], string $pagina = '/pagina'): TestResponse
  * Back-Channel Logout, `typ` logout+jwt e il `kid` del JWKS, con `$altri` sopra (`sid`, `sub`, `workspace`, `motivo`); un
  * claim a null non c'è.
  */
-function logoutToken(array $altri, string $chiave = 'zr-home', string $tipo = 'logout+jwt'): string
+function logoutToken(array $altri, string $chiave = 'zr-home', string $tipo = 'logout+jwt', string $kid = 'zr-home-1'): string
 {
     openssl_pkey_export(chiaveRsa($chiave), $privata);
 
@@ -184,7 +184,7 @@ function logoutToken(array $altri, string $chiave = 'zr-home', string $tipo = 'l
         'exp' => now()->addMinutes(2)->getTimestamp(),
         'jti' => (string) Str::uuid(),
         'events' => ['http://schemas.openid.net/event/backchannel-logout' => new stdClass],
-    ], $altri), fn (mixed $valore) => $valore !== null), $privata, 'RS256', 'zr-home-1', ['typ' => $tipo]);
+    ], $altri), fn (mixed $valore) => $valore !== null), $privata, 'RS256', $kid, ['typ' => $tipo]);
 }
 
 /** zr-home che manda un avviso al modulo: il POST di un form, da un server, senza cookie e senza token CSRF. */
