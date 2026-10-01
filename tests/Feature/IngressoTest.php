@@ -105,7 +105,7 @@ it('se zr-home non risponde, allo scambio del codice o col JWKS, il ritorno è 4
         ->and($avvisi[0])->toContain('zr-home non risponde');
 })->with(['lo scambio del codice' => '/oauth/token', 'il JWKS' => '/oauth/jwks']);
 
-it('se zr-home respinge lo scambio col 401 o col 429, il ritorno è 403 e il log lo dice con lo stato e l\'errore, mai col segreto né col codice (review M1)', function (int $stato, array $corpo, ?string $errore) {
+it('se zr-home respinge lo scambio col 401, col 429 o con un altro 4xx che non è il 400, il ritorno è 403 e il log lo dice con lo stato e l\'errore, mai col segreto né col codice (review M1, P4)', function (int $stato, array $corpo, ?string $errore) {
     $righe = [];
     Log::listen(function (MessageLogged $messaggio) use (&$righe) {
         $righe[] = $messaggio;
@@ -122,7 +122,24 @@ it('se zr-home respinge lo scambio col 401 o col 429, il ritorno è 403 e il log
 })->with([
     'il segreto sbagliato' => [401, ['error' => 'invalid_client', 'error_description' => 'Client authentication failed'], 'invalid_client'],
     'il freno' => [429, ['message' => 'Too Many Attempts.'], null],
+    'un indirizzo di zr-home sbagliato' => [404, ['message' => 'Not Found'], null],
 ]);
+
+it('se zr-home risponde allo scambio con un errore del server, il ritorno è 403 e il log lo dice: dietro Cloudflare zr-home giù è un 52x, non una connessione caduta (review P4)', function (int $stato) {
+    $righe = [];
+    Log::listen(function (MessageLogged $messaggio) use (&$righe) {
+        $righe[] = $messaggio;
+    });
+    zrHomeCon('/oauth/token', Http::response("<html>error code: {$stato}</html>", $stato));
+
+    entra()->assertForbidden();
+
+    expect(session()->has('zr-auth.sessione'))->toBeFalse()
+        ->and($righe)->toHaveCount(1)
+        ->and($righe[0]->level)->toBe('warning')
+        ->and($righe[0]->message)->toBe('zr-auth: zr-home non risponde (scambio del codice)')
+        ->and($righe[0]->context)->toBe(['stato' => $stato, 'errore' => null]);
+})->with(['500' => 500, 'il 502 di Cloudflare' => 502, 'il 521 di Cloudflare' => 521]);
 
 it('un codice che zr-home non scambia (400 invalid_grant) non scrive nel log: l\'ingresso si rifà, non è un guasto (review M1)', function () {
     $righe = [];

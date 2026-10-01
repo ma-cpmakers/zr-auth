@@ -7,8 +7,10 @@ React della barra comune.
 **Repo pubblico di proposito**: i moduli lo installano da Composer senza credenziali sul server. Quindi qui dentro
 **nessun segreto, mai** — niente `.env`, niente id o segreti di client, niente URL interni. La CI fallisce su un file
 sensibile (`.env`, chiavi e certificati, `.p12` e `.pfx`, l'`auth.json` di Composer), su una chiave privata, su un valore
-di riserva per una variabile segreta (`env()`, `getenv()`, `?:`, `??`) e su un valore segreto nella configurazione di
-PHPUnit (`.github/nessun-segreto.sh`, che si lancia anche in locale).
+di riserva per una variabile segreta (`env()`, `getenv()`, `?:`, `??`), su un valore segreto nella configurazione di
+PHPUnit e su un valore segreto scritto come in un `.env` (`NOME=valore`) o in un YAML (`NOME: valore`) in qualunque file,
+questo README compreso: negli esempi il valore è vuoto o un segnaposto (`<…>`, `$VAR`). Lo script è
+`.github/nessun-segreto.sh`, e si lancia anche in locale.
 
 Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il contratto sta nella spec di `zr-home`.
 
@@ -23,7 +25,10 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
   /auth/callback`) il modulo scambia il codice, verifica l'`id_token` col JWKS di zr-home (firma, emittente, destinatario,
   scadenza, `nonce`, il workspace chiesto) e apre la sessione; poi torna alla pagina chiesta all'inizio. Lo `state` vale
   una volta, e il ritorno ha un freno: 30 al minuto per indirizzo (un IPv6 conta per il suo /64), che dev'essere quello
-  vero del visitatore (vedi «L'indirizzo del visitatore»).
+  vero del visitatore (vedi «L'indirizzo del visitatore»). Un codice che zr-home non scambia (400) dà 403 e niente nel
+  log: l'ingresso si rifà. zr-home giù — la connessione che cade, o un 5xx come il 52x di Cloudflare — dà 403 con una riga
+  `warning` nel log (`zr-auth: zr-home non risponde (scambio del codice)`), e così ogni altro rifiuto di zr-home (vedi il
+  segreto sbagliato, sotto).
 - **Il JWKS di zr-home resta in cache 10 minuti** (chiave `zr-auth:jwks` nella cache del modulo), e solo se ha chiavi
   valide. **zr-home firma con una chiave sola, e una chiave nuova arriva con un `kid` nuovo** (`token_headers.kid` in
   `config/openid.php` di zr-home): un token con un `kid` che le chiavi in cache non hanno fa rileggere il JWKS, al più una

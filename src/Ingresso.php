@@ -89,8 +89,8 @@ final class Ingresso
 
     /**
      * Scambia il codice e, se l'id_token è valido per questo modulo e per questo ingresso, apre la sessione del modulo:
-     * la persona ricopiata, il workspace e il ruolo del token. Se zr-home non risponde, o respinge il client (401) o lo
-     * frena (429), la sessione non si apre e il log lo dice.
+     * la persona ricopiata, il workspace e il ruolo del token. Se zr-home non risponde, o respinge lo scambio per un
+     * motivo che non è il codice, la sessione non si apre e il log lo dice.
      *
      * @param  array{nonce: string, verificatore: string, ritorno: string, workspace: int|null, silenzioso: bool}  $ingresso
      */
@@ -112,14 +112,17 @@ final class Ingresso
 
             return false;
         }
-        // Il segreto del client sbagliato (401) o il freno di zr-home (429) non si aggiustano rifacendo l'ingresso: chi
-        // gestisce il modulo lo legge nel log. Lo stato e l'errore di zr-home, mai il segreto né il codice.
-        if (in_array($risposta->status(), [401, 429], true)) {
+        // Un codice che non vale (400) è un ingresso da rifare. Il resto non si aggiusta rifacendolo — il segreto del client
+        // sbagliato (401), il freno di zr-home (429), zr-home giù dietro Cloudflare (5xx) —: chi gestisce il modulo lo legge
+        // nel log, con lo stato e l'errore di zr-home, mai il segreto né il codice.
+        if ($risposta->failed() && $risposta->status() !== 400) {
             $errore = $risposta->json('error');
-            Log::warning('zr-auth: zr-home respinge lo scambio del codice', [
-                'stato' => $risposta->status(),
-                'errore' => is_string($errore) ? $errore : null,
-            ]);
+            Log::warning($risposta->serverError()
+                ? 'zr-auth: zr-home non risponde (scambio del codice)'
+                : 'zr-auth: zr-home respinge lo scambio del codice', [
+                    'stato' => $risposta->status(),
+                    'errore' => is_string($errore) ? $errore : null,
+                ]);
 
             return false;
         }

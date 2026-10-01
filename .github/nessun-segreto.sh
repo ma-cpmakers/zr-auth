@@ -53,4 +53,20 @@ if ! git ls-files -z -- '*phpunit*.xml*' | xargs -0 -r perl -0777 -ne '
     trovato=1
 fi
 
+# Un valore per una variabile segreta scritto come in un .env, NOME=valore, in qualunque file di testo — un README, un
+# esempio, uno script —, e come in un YAML, NOME: valore. Nomi in maiuscolo, come nell'ambiente. Passano il valore vuoto
+# e i segnaposto: <…>, $VAR, ${VAR}, ${{ secrets.… }}, {{ … }}.
+if ! git ls-files -z | xargs -0 -r perl -ne '
+    BEGIN { $nomi = $ENV{NOMI}; $vuoto = qr/(?!["\x27]{2}|["\x27]?[<\$\{]|\s*$|\s*#)/ }
+    $binario = -B $ARGV if $. == 1;
+    if (! $binario && (/\b($nomi)=$vuoto/ || ($ARGV =~ /\.ya?ml$/ && /^\s*-?\s*($nomi):\s*$vuoto\S/))) {
+        printf "%s:%d: %s\n", $ARGV, $., $1;
+        $trovato = 1;
+    }
+    close ARGV if eof;
+    END { exit($trovato ? 1 : 0) }'; then
+    echo "un segreto scritto come in un .env o in un YAML"
+    trovato=1
+fi
+
 exit "$trovato"
