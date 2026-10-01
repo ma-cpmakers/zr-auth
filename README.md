@@ -17,12 +17,14 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
   con `X-Inertia-Location`), una richiesta JSON o un'API rispondono 401.
 - **L'ingresso** è il flusso a codice di OpenID Connect con PKCE S256, `state` e `nonce`. Al ritorno (`GET
   /auth/callback`) il modulo scambia il codice, verifica l'`id_token` col JWKS di zr-home (firma, emittente, destinatario,
-  scadenza, `nonce`) e apre la sessione; poi torna alla pagina chiesta all'inizio. Lo `state` vale una volta.
+  scadenza, `nonce`, il workspace chiesto) e apre la sessione; poi torna alla pagina chiesta all'inizio. Lo `state` vale
+  una volta, e il ritorno ha un freno: 30 al minuto per indirizzo.
 - **Il JWKS di zr-home resta in cache 10 minuti** (chiave `zr-auth:jwks` nella cache del modulo), e solo se ha chiavi
   valide: una chiave nuova di zr-home va pubblicata nel JWKS almeno 10 minuti prima di firmare con quella. Se zr-home non
   risponde il ritorno è 403 e l'avviso 400, mai un errore del server, con una riga `warning` nel log (`zr-auth: …`).
 - **La sessione è di un workspace solo e vale al massimo 12 ore.** Dopo, l'ingresso si rifà in silenzio (`prompt=none`);
-  se zr-home non ha più la sessione, riparte con l'accesso. Un indirizzo con `?workspace=<id>` diverso da quello della
+  se zr-home vuole la persona davanti (`login_required`, `interaction_required`, `consent_required`,
+  `account_selection_required`), riparte con l'accesso. Un indirizzo con `?workspace=<id>` diverso da quello della
   sessione rifà l'ingresso per quel workspace: è così che entra il link «Apri →» della home di zr-home.
 - **La persona** si ricopia a ogni ingresso nella tabella `zr_persone` (l'id è il `sub` di zr-home: email, nome, lingua).
 - **Gli avvisi di zr-home** arrivano a `POST /auth/avviso`: all'uscita da zr-home, quando una persona viene tolta da un

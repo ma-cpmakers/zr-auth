@@ -109,18 +109,18 @@ final class Ingresso
             return false;
         }
         $idToken = $risposta->successful() ? $risposta->json('id_token') : null;
-        $claims = is_string($idToken) ? $this->verifica($idToken, $ingresso['nonce']) : null;
+        $claims = is_string($idToken) ? $this->verifica($idToken, $ingresso) : null;
         if ($claims === null) {
             return false;
         }
 
-        $persona = Persona::query()->findOrNew((int) $claims['sub']);
-        $persona->forceFill([
-            'id' => (int) $claims['sub'],
+        // Due primi ingressi insieme della stessa persona: updateOrCreate passa da createOrFirst, e l'INSERT che trova la
+        // riga già scritta diventa un aggiornamento.
+        Persona::unguarded(fn () => Persona::query()->updateOrCreate(['id' => (int) $claims['sub']], [
             'email' => $claims['email'],
             'name' => is_string($claims['name'] ?? null) ? $claims['name'] : null,
             'locale' => is_string($claims['locale'] ?? null) ? $claims['locale'] : null,
-        ])->save();
+        ]));
 
         $richiesta->session()->regenerate(true);
         $richiesta->session()->put(self::SESSIONE, [
@@ -137,20 +137,23 @@ final class Ingresso
 
     /**
      * I claim dell'id_token se è valido: firmato da zr-home per questo client solo (Token), con la scadenza, col `nonce` di
-     * questo ingresso e i claim che la sessione vuole — il `sub` è un id di zr-home. Null altrimenti.
+     * questo ingresso, del workspace che l'ingresso chiedeva, se ne chiedeva uno, e coi claim che la sessione vuole — il
+     * `sub` è un id di zr-home. Null altrimenti.
      *
+     * @param  array{nonce: string, verificatore: string, ritorno: string, workspace: int|null, silenzioso: bool}  $ingresso
      * @return array<string, mixed>|null
      */
-    private function verifica(#[SensitiveParameter] string $idToken, string $nonce): ?array
+    private function verifica(#[SensitiveParameter] string $idToken, #[SensitiveParameter] array $ingresso): ?array
     {
         $claims = Token::claims($idToken);
 
         $valido = $claims !== null
             && isset($claims['exp'])
-            && is_string($claims['nonce'] ?? null) && hash_equals($nonce, $claims['nonce'])
+            && is_string($claims['nonce'] ?? null) && hash_equals($ingresso['nonce'], $claims['nonce'])
             && Token::id($claims['sub'] ?? null) !== null
             && is_string($claims['email'] ?? null)
             && is_int($claims['workspace']['id'] ?? null) && is_string($claims['workspace']['name'] ?? null)
+            && ($ingresso['workspace'] === null || $claims['workspace']['id'] === $ingresso['workspace'])
             && is_string($claims['role'] ?? null)
             && is_string($claims['sid'] ?? null);
 

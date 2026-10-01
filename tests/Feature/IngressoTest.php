@@ -1,6 +1,8 @@
 <?php
 
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Zeiras\Auth\Persona;
@@ -121,6 +123,61 @@ it('dopo 12 ore la sessione non vale più: l\'ingresso si rifà in silenzio, e s
     expect(array_key_exists('prompt', $conAccesso))->toBeFalse()
         ->and($conAccesso['workspace'] ?? null)->toBe('7')
         ->and($conAccesso['state'])->not->toBe($silenzioso['state']);
+});
+
+it('dal silenzioso l\'ingresso riparte con l\'accesso per ogni errore con cui zr-home vuole la persona davanti (T3.4, review A7)', function (string $errore) {
+    entra()->assertRedirect('/pagina');
+    $silenzioso = ingressoChiesto($this->get('/pagina?workspace=8'));
+    expect($silenzioso['prompt'] ?? null)->toBe('none');
+
+    $conAccesso = ingressoChiesto($this->get('/auth/callback?'.http_build_query(['error' => $errore, 'state' => $silenzioso['state']])));
+    expect(array_key_exists('prompt', $conAccesso))->toBeFalse()
+        ->and($conAccesso['workspace'] ?? null)->toBe('8');
+})->with(['login_required', 'interaction_required', 'consent_required', 'account_selection_required']);
+
+it('un altro errore dal silenzioso, o un errore dell\'ingresso con l\'accesso, risponde 403 e non riparte (T3.4, review A7)', function () {
+    entra()->assertRedirect('/pagina');
+    $silenzioso = ingressoChiesto($this->get('/pagina?workspace=8'));
+    $this->get('/auth/callback?'.http_build_query(['error' => 'access_denied', 'state' => $silenzioso['state']]))->assertForbidden();
+
+    $conAccesso = ingressoChiesto($this->get('/pagina'));
+    expect(array_key_exists('prompt', $conAccesso))->toBeFalse();
+    $this->get('/auth/callback?'.http_build_query(['error' => 'interaction_required', 'state' => $conAccesso['state']]))->assertForbidden();
+    expect(session()->has('zr-auth.sessione'))->toBeFalse();
+});
+
+it('un id_token di un workspace diverso da quello che l\'ingresso chiedeva non apre la sessione (T3.5, review A8)', function () {
+    $chiesto = ingressoChiesto($this->get('/pagina?workspace=8'));
+    zrHomeFinto($chiesto, idToken(claims($chiesto['nonce'])));
+
+    ritorno($chiesto)->assertForbidden();
+    expect(session()->has('zr-auth.sessione'))->toBeFalse();
+});
+
+it('la persona che un\'altra richiesta registra mentre questa entra non fa fallire l\'ingresso: si aggiorna (review A5)', function () {
+    // L'altra richiesta scrive la persona fra la lettura di questa e la sua scrittura.
+    $scritta = false;
+    DB::listen(function (QueryExecuted $query) use (&$scritta) {
+        if (! $scritta && str_contains($query->sql, 'from "zr_persone"')) {
+            $scritta = true;
+            DB::table('zr_persone')->insert(['id' => 42, 'email' => 'prima@esempio.it', 'created_at' => now(), 'updated_at' => now()]);
+        }
+    });
+
+    entra()->assertRedirect('/pagina');
+
+    expect($scritta)->toBeTrue()
+        ->and(Persona::query()->count())->toBe(1)
+        ->and(Persona::query()->find(42)?->only('email', 'name'))->toBe(['email' => 'giulia@esempio.it', 'name' => 'Giulia Rossi']);
+});
+
+it('il ritorno ha un freno per indirizzo: 30 al minuto, poi 429 (review R-SA1)', function () {
+    foreach (range(1, 30) as $volta) {
+        $this->get('/auth/callback?state=sconosciuto')->assertForbidden();
+    }
+
+    $this->get('/auth/callback?state=sconosciuto')->assertStatus(429);
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])->get('/auth/callback?state=sconosciuto')->assertForbidden();
 });
 
 it('un indirizzo con un altro workspace rifà l\'ingresso in silenzio per quello: la sessione è di un workspace solo (T3.5)', function () {
