@@ -13,10 +13,15 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+          extensions: mbstring, xml, sqlite3, pdo_sqlite, openssl
           coverage: none
       - name: composer.json valido
         run: composer validate --strict
-      # Pacchetto pubblico: un segreto qui dentro e' pubblicato. Il controllo e' grezzo apposta.
+      # Pacchetto pubblico: un segreto qui dentro e' pubblicato. Il controllo e' grezzo apposta, e si lancia anche in locale.
       - name: Nessun segreto nel repo
-        run: |
-          if git ls-files | grep -E '(^|/)\.env($|\.)|\.key$|\.pem$'; then echo "file sensibile nel repo"; exit 1; fi
+        run: bash .github/nessun-segreto.sh
+      # Libreria: nessun composer.lock nel repo, le dipendenze si risolvono a ogni run.
+      - name: Dipendenze
+        run: composer update --no-interaction --no-progress --prefer-dist
+      - name: Pest (Testbench, SQLite in memoria)
+        run: vendor/bin/pest

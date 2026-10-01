@@ -4,12 +4,40 @@
     "type": "library",
     "license": "proprietary",
     "require": {
-        "php": "^8.4"
+        "php": "^8.4",
+        "firebase/php-jwt": "^7.0",
+        "laravel/framework": "^13.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^4.0"
     },
     "autoload": {
         "psr-4": {
             "Zeiras\\Auth\\": "src/"
         }
     },
-    "minimum-stability": "stable"
+    "autoload-dev": {
+        "psr-4": {
+            "Zeiras\\Auth\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Zeiras\\Auth\\ZrAuthServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "platform": {
+            "php": "8.4.26"
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }
