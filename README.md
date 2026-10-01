@@ -6,7 +6,8 @@ React della barra comune.
 
 **Repo pubblico di proposito**: i moduli lo installano da Composer senza credenziali sul server. Quindi qui dentro
 **nessun segreto, mai** — niente `.env`, niente id o segreti di client, niente URL interni. La CI fallisce su un file
-sensibile o su una chiave privata nel repo.
+sensibile, su una chiave privata, su un valore di riserva per una variabile segreta (`env()`, `getenv()`, `?:`, `??`) e
+su un valore segreto nella configurazione di PHPUnit (`.github/nessun-segreto.sh`, che si lancia anche in locale).
 
 Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il contratto sta nella spec di `zr-home`.
 
@@ -20,10 +21,16 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
 - **L'ingresso** è il flusso a codice di OpenID Connect con PKCE S256, `state` e `nonce`. Al ritorno (`GET
   /auth/callback`) il modulo scambia il codice, verifica l'`id_token` col JWKS di zr-home (firma, emittente, destinatario,
   scadenza, `nonce`, il workspace chiesto) e apre la sessione; poi torna alla pagina chiesta all'inizio. Lo `state` vale
-  una volta, e il ritorno ha un freno: 30 al minuto per indirizzo.
+  una volta, e il ritorno ha un freno: 30 al minuto per indirizzo (un IPv6 conta per il suo /64), che dev'essere quello
+  vero del visitatore (vedi «L'indirizzo del visitatore»).
 - **Il JWKS di zr-home resta in cache 10 minuti** (chiave `zr-auth:jwks` nella cache del modulo), e solo se ha chiavi
-  valide: una chiave nuova di zr-home va pubblicata nel JWKS almeno 10 minuti prima di firmare con quella. Se zr-home non
-  risponde il ritorno è 403 e l'avviso 400, mai un errore del server, con una riga `warning` nel log (`zr-auth: …`).
+  valide. **zr-home cambia chiave con un `kid` nuovo**: un token con un `kid` che le chiavi in cache non hanno fa rileggere
+  il JWKS, al più una volta al minuto. Quindi zr-home pubblica la chiave nuova nel JWKS al più tardi quando comincia a
+  firmare con quella, e tiene la vecchia almeno 5 minuti dopo l'ultimo token firmato con quella; se il modulo ha riletto
+  da meno di un minuto, nel caso peggiore per quel minuto i ritorni sono 403 e gli avvisi 400 (zr-home li ripete). Una
+  chiave nuova con lo **stesso** `kid` resterebbe sconosciuta al modulo fino a 10 minuti. Se zr-home non risponde, o il
+  JWKS non vale, il modulo non lo richiede per 30 secondi: il ritorno è 403 e l'avviso 400, mai un errore del server, con
+  una riga `warning` nel log (`zr-auth: …`).
 - **La sessione è di un workspace solo e vale al massimo 12 ore.** Dopo, l'ingresso si rifà in silenzio (`prompt=none`);
   se zr-home vuole la persona davanti (`login_required`, `interaction_required`, `consent_required`,
   `account_selection_required`), riparte con l'accesso. Un indirizzo con `?workspace=<id>` diverso da quello della
@@ -32,14 +39,18 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
   `zr_persone` tiene chi è entrato nel modulo da qualunque workspace, e non dice chi è nel workspace (lo dirà zr-home,
   voce #981): un modulo non lega `{persona}` in una rotta né valida `exists:zr_persone,id` per mostrare una persona.
 - **Gli avvisi di zr-home** arrivano a `POST /auth/avviso`: all'uscita da zr-home, quando una persona viene tolta da un
-  workspace o ne cambia il ruolo, quando un workspace disattiva il modulo. L'avviso è un `logout_token` del Back-Channel
+  workspace o ne cambia il ruolo, quando una persona cambia o reimposta la password (un avviso per ogni suo workspace),
+  quando un workspace disattiva il modulo. L'avviso è un `logout_token` del Back-Channel
   Logout di OpenID Connect; il modulo lo verifica col JWKS di zr-home (firma, emittente, destinatario, firmato da non più
   di 5 minuti, l'evento del back-channel, niente `nonce`, `typ` `logout+jwt`) e registra una revoca in `zr_revoche`.
   Alla loro richiesta successiva si chiudono le sessioni aperte **prima** dell'avviso — quella di quella sessione di
   zr-home (`sid`), quelle della persona in quel workspace (`sub` e `workspace`), quelle del workspace (`workspace`, da
   solo: un'estensione di Zeiras al Back-Channel Logout, che prevede `sid` o `sub`) — e
-  l'ingresso si rifà in silenzio; chi rientra dopo l'avviso resta dentro. Un avviso non valido risponde 400 e non chiude
-  niente. La rotta non ha sessione né CSRF: la chiama il server di zr-home, all'indirizzo del modulo nel suo catalogo.
+  l'ingresso si rifà in silenzio; chi rientra dopo l'avviso resta dentro. Il claim `motivo` dice perché — `uscita` (con
+  `sid`); `membro_rimosso`, `ruolo_cambiato`, `password_cambiata` (con `sub` e `workspace`); `app_disattivata` (con
+  `workspace`) — e si registra nella revoca: non cambia cosa si chiude, e un motivo che il modulo non conosce vale come
+  gli altri. Un avviso non valido risponde 400 e non chiude niente. La rotta non ha sessione né CSRF: la chiama il server
+  di zr-home, all'indirizzo del modulo nel suo catalogo.
 
 ## Installazione
 
@@ -65,6 +76,12 @@ Il client lo crea chi gestisce zr-home, sul server di zr-home: `php artisan zeir
 La sessione di Laravel deve arrivare al ritorno da zr-home: `SESSION_SAME_SITE=lax` (il default), non `strict`.
 `SESSION_LIFETIME` sotto i 720 minuti fa rifare l'ingresso prima, dopo l'inattività (in silenzio).
 
+**L'indirizzo del visitatore.** Il freno del ritorno conta per `$request->ip()`. Dietro Cloudflare, o un altro proxy,
+quell'indirizzo è del proxy: chi passa dallo stesso nodo divide con tutti gli altri 30 ritorni al minuto, e un estraneo li
+esaurisce con 30 richieste. Il modulo deve vedere l'indirizzo vero: lo ricava il server web (nginx col modulo `real_ip` e
+i blocchi di Cloudflare in `set_real_ip_from`), oppure Laravel con `trustProxies(at: [...])` che elenca **solo** i blocchi
+di Cloudflare — mai `'*'`, che crede all'`X-Forwarded-For` di chiunque si colleghi direttamente all'origine.
+
 ## Nel codice
 
 ```php
@@ -79,10 +96,14 @@ $contesto->persona();        // Zeiras\Auth\Persona
 
 I dati del modulo si separano per workspace col tratto `DelWorkspace` (e una colonna `workspace_id`): il modello trova
 solo le righe del workspace della sessione — anche nei binding delle rotte, dove l'id di un altro workspace è un 404 —,
-una riga nuova prende quel workspace, e una riga non cambia mai workspace (un aggiornamento con un altro `workspace_id`
-lo lascia com'era). Senza sessione (console, coda) non trova niente: un job che lavora per un workspace apre il
-`Contesto` da sé. Un `update()` di massa sul builder non passa dagli eventi del modello: non va mai scritto con un
-`workspace_id`.
+una riga nuova prende quel workspace, e `save()` e `update()` del modello non cambiano il workspace di una riga (un
+`workspace_id` diverso fra i dati resta com'era). Senza sessione (console, coda) non trova niente: un job che lavora per
+un workspace apre il `Contesto` da sé.
+
+**La guardia sta negli eventi del modello.** Le vie che non ci passano scrivono `workspace_id` così com'è, e non si usano
+mai con un `workspace_id` fra i dati: `update()`, `insert()` e `upsert()` sul builder, `increment()`, `decrement()` e
+`incrementEach()` con le colonne in più, `saveQuietly()`, `updateQuietly()`, `Model::withoutEvents()`. `DB::table()` non
+ha nemmeno lo scope: legge e scrive le righe di tutti i workspace.
 
 ```php
 use Zeiras\Auth\Concerns\DelWorkspace;
@@ -112,7 +133,7 @@ elencano nel test col perché.
 
 ## Sviluppo
 
-La CI gira `composer validate`, il controllo dei file sensibili e Pest su Testbench (PHP 8.4, SQLite in memoria). I test
+La CI gira `composer validate`, il controllo dei segreti (`bash .github/nessun-segreto.sh`) e Pest su Testbench (PHP 8.4, SQLite in memoria). I test
 usano uno zr-home finto (`tests/Pest.php`): le chiavi RSA nascono nel test, il JWKS e lo scambio del codice sono risposte
 di `Http::fake()`, e nessuna richiesta esce (`preventStrayRequests()`); un avviso è un `logout_token` firmato nel test
 (`avvisa()`).

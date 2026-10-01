@@ -17,12 +17,9 @@ jobs:
           coverage: none
       - name: composer.json valido
         run: composer validate --strict
-      # Pacchetto pubblico: un segreto qui dentro e' pubblicato. Il controllo e' grezzo apposta.
+      # Pacchetto pubblico: un segreto qui dentro e' pubblicato. Il controllo e' grezzo apposta, e si lancia anche in locale.
       - name: Nessun segreto nel repo
-        run: |
-          if git ls-files | grep -E '(^|/)\.env($|\.)|\.key$|\.pem$'; then echo "file sensibile nel repo"; exit 1; fi
-          if git grep -lE 'BEGIN [A-Z ]*PRIVATE KEY' -- .; then echo "chiave privata nel repo"; exit 1; fi
-          if git grep -nE "env\(\s*['\"][A-Z0-9_]*(SECRET|KEY|TOKEN|PASSWORD)[A-Z0-9_]*['\"]\s*," -- '*.php'; then echo "un segreto come default di env()"; exit 1; fi
+        run: bash .github/nessun-segreto.sh
       # Libreria: nessun composer.lock nel repo, le dipendenze si risolvono a ogni run.
       - name: Dipendenze
         run: composer update --no-interaction --no-progress --prefer-dist
