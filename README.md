@@ -14,7 +14,9 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
 
 - **Ogni pagina e ogni API vuole la sessione.** Il middleware `Zeiras\Auth\Http\Middleware\Sessione` entra da sé nei
   gruppi `web` e `api`. Senza sessione una pagina rimanda all'ingresso di zr-home (una visita di Inertia riceve il 409
-  con `X-Inertia-Location`), una richiesta JSON o un'API rispondono 401.
+  con `X-Inertia-Location`), una richiesta JSON o un'API rispondono 401. Il gruppo `api` di Laravel 13 non ha la
+  sessione di Laravel: le API del modulo la hanno con `statefulApi()` di Sanctum, o stando nel gruppo `web`; altrimenti
+  rispondono sempre 401.
 - **L'ingresso** è il flusso a codice di OpenID Connect con PKCE S256, `state` e `nonce`. Al ritorno (`GET
   /auth/callback`) il modulo scambia il codice, verifica l'`id_token` col JWKS di zr-home (firma, emittente, destinatario,
   scadenza, `nonce`, il workspace chiesto) e apre la sessione; poi torna alla pagina chiesta all'inizio. Lo `state` vale
@@ -27,12 +29,15 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
   `account_selection_required`), riparte con l'accesso. Un indirizzo con `?workspace=<id>` diverso da quello della
   sessione rifà l'ingresso per quel workspace: è così che entra il link «Apri →» della home di zr-home.
 - **La persona** si ricopia a ogni ingresso nella tabella `zr_persone` (l'id è il `sub` di zr-home: email, nome, lingua).
+  `zr_persone` tiene chi è entrato nel modulo da qualunque workspace, e non dice chi è nel workspace (lo dirà zr-home,
+  voce #981): un modulo non lega `{persona}` in una rotta né valida `exists:zr_persone,id` per mostrare una persona.
 - **Gli avvisi di zr-home** arrivano a `POST /auth/avviso`: all'uscita da zr-home, quando una persona viene tolta da un
   workspace o ne cambia il ruolo, quando un workspace disattiva il modulo. L'avviso è un `logout_token` del Back-Channel
   Logout di OpenID Connect; il modulo lo verifica col JWKS di zr-home (firma, emittente, destinatario, firmato da non più
   di 5 minuti, l'evento del back-channel, niente `nonce`, `typ` `logout+jwt`) e registra una revoca in `zr_revoche`.
   Alla loro richiesta successiva si chiudono le sessioni aperte **prima** dell'avviso — quella di quella sessione di
-  zr-home (`sid`), quelle della persona in quel workspace (`sub` e `workspace`), quelle del workspace (`workspace`) — e
+  zr-home (`sid`), quelle della persona in quel workspace (`sub` e `workspace`), quelle del workspace (`workspace`, da
+  solo: un'estensione di Zeiras al Back-Channel Logout, che prevede `sid` o `sub`) — e
   l'ingresso si rifà in silenzio; chi rientra dopo l'avviso resta dentro. Un avviso non valido risponde 400 e non chiude
   niente. La rotta non ha sessione né CSRF: la chiama il server di zr-home, all'indirizzo del modulo nel suo catalogo.
 
@@ -101,7 +106,9 @@ it('ogni rotta del modulo vuole la sessione di zr-auth', function () {
 `Rotte::senzaSessione()` elenca, come «METODO uri», ogni rotta che risponde senza la sessione: quelle fuori dai gruppi
 `web` e `api` e quelle che si tolgono `Sessione` con `withoutMiddleware`. Le eccezioni sono tre: `GET auth/callback` (il
 ritorno da zr-home), `POST auth/avviso` (gli avvisi di zr-home), `GET up` (il controllo di salute). Una rotta pubblica
-voluta si scrive nel test del modulo, col perché accanto.
+voluta si scrive nel test del modulo, col perché accanto. In un modulo Laravel 13 di serie il disco `local` ha `'serve'
+=> true` (`config/filesystems.php`), che apre `GET` e `PUT storage/{path}` fuori dai gruppi: si mette `false`, o si
+elencano nel test col perché.
 
 ## Sviluppo
 

@@ -4,7 +4,10 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
+use Zeiras\Auth\Contesto;
 use Zeiras\Auth\Persona;
 
 /*
@@ -42,6 +45,17 @@ it('senza sessione una richiesta JSON e un\'API rispondono 401, una visita di In
     ingressoChiesto($this->get('/pagina', ['X-Inertia' => 'true'])->assertStatus(409));
 });
 
+it('un\'API del gruppo api vuole la sessione di Laravel: con StartSession (statefulApi di Sanctum) risponde a chi è entrato, senza resta 401 (T3.1, review A2)', function () {
+    Route::middleware(['api', StartSession::class])->prefix('api')
+        ->get('con-sessione', fn (Contesto $contesto) => ['workspace' => $contesto->workspaceId()]);
+
+    $this->getJson('/api/con-sessione')->assertUnauthorized();
+    entra()->assertRedirect('/pagina');
+
+    $this->getJson('/api/con-sessione')->assertOk()->assertExactJson(['workspace' => 7]);
+    $this->getJson('/api/dati')->assertUnauthorized();
+});
+
 it('al ritorno il modulo scambia il codice, verifica l\'id_token e apre la sessione: persona, workspace e ruolo, poi la pagina chiesta (T3.2)', function () {
     entra(pagina: '/note?ordine=1')->assertRedirect('/note?ordine=1');
 
@@ -67,6 +81,7 @@ it('l\'id_token non apre la sessione se è di un altro client, con un altro nonc
     'scaduto' => [fn (string $nonce) => idToken(claims($nonce, [
         'iat' => now()->subHours(2)->getTimestamp(), 'exp' => now()->subMinutes(5)->getTimestamp(),
     ]))],
+    'senza la scadenza' => [fn (string $nonce) => idToken(claims($nonce, ['exp' => null]))],
     'un\'altra chiave' => [fn (string $nonce) => idToken(claims($nonce), 'altra')],
     'un altro emittente' => [fn (string $nonce) => idToken(claims($nonce, ['iss' => 'https://altro.example']))],
     'un sub zero' => [fn (string $nonce) => idToken(claims($nonce, ['sub' => '0']))],

@@ -99,8 +99,8 @@ function zrHomeFinto(array $chiesto, string $idToken): void
 
 /**
  * zr-home finto, in ascolto una volta per test: il JWKS, e lo scambio del codice per l'ultimo ingresso di zrHomeFinto().
- * Http::fake() si registra una volta (il primo stub vince, e ogni fake() azzera le richieste registrate), e nessuna
- * richiesta esce.
+ * Http::fake() si registra una volta (il primo stub vince, e ogni fake() azzera le richieste registrate); che nessuna
+ * richiesta esca lo dice TestCase, per ogni test.
  */
 function zrHomeInAscolto(): void
 {
@@ -108,7 +108,6 @@ function zrHomeInAscolto(): void
         return;
     }
     app()->instance('zr-home-in-ascolto', true);
-    Http::preventStrayRequests();
     Http::fake([
         ZR_HOME.'/oauth/jwks' => Http::response(jwks()),
         ZR_HOME.'/oauth/token' => function (RichiestaHttp $richiesta) {

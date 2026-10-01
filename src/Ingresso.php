@@ -26,7 +26,10 @@ final class Ingresso
     /** Gli ingressi che aspettano il ritorno, per `state`: ognuno vale una volta. */
     public const IN_ATTESA = 'zr-auth.ingressi';
 
-    /** Quanti ingressi possono aspettare insieme: più schede rifanno l'ingresso nello stesso momento. */
+    /**
+     * Quanti ingressi possono aspettare insieme, uno per scheda. La sessione di Laravel non ha lock: due ingressi cominciati
+     * nello stesso istante possono sovrascriversi, e il ritorno di quello perso risponde 403 — si ricarica la pagina.
+     */
     private const TETTO = 5;
 
     /**

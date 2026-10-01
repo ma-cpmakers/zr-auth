@@ -3,6 +3,7 @@
 namespace Zeiras\Auth\Tests;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Orchestra\Testbench\TestCase as Testbench;
 use Zeiras\Auth\Contesto;
 use Zeiras\Auth\ZrAuthServiceProvider;
@@ -13,6 +14,13 @@ use Zeiras\Auth\ZrAuthServiceProvider;
  */
 abstract class TestCase extends Testbench
 {
+    /** Nessuna richiesta esce, in nessun test: quelle verso zr-home le risponde Http::fake() (tests/Pest.php). */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+    }
+
     protected function getPackageProviders($app): array
     {
         return [ZrAuthServiceProvider::class];
