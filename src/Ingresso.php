@@ -112,11 +112,12 @@ final class Ingresso
 
             return false;
         }
-        // Un codice che non vale (400) è un ingresso da rifare. Il resto non si aggiusta rifacendolo — il segreto del client
-        // sbagliato (401), il freno di zr-home (429), zr-home giù dietro Cloudflare (5xx) —: chi gestisce il modulo lo legge
-        // nel log, con lo stato e l'errore di zr-home, mai il segreto né il codice.
-        if ($risposta->failed() && $risposta->status() !== 400) {
-            $errore = $risposta->json('error');
+        // Un codice che non vale (400 invalid_grant) è un ingresso da rifare. Il resto non si aggiusta rifacendolo — il
+        // segreto del client sbagliato (401) o che manca (400 invalid_request), il freno di zr-home (429), zr-home giù dietro
+        // Cloudflare (5xx) —: chi gestisce il modulo lo legge nel log, con lo stato e l'errore di zr-home, mai il segreto né
+        // il codice.
+        $errore = $risposta->failed() ? $risposta->json('error') : null;
+        if ($risposta->failed() && ! ($risposta->status() === 400 && $errore === 'invalid_grant')) {
             Log::warning($risposta->serverError()
                 ? 'zr-auth: zr-home non risponde (scambio del codice)'
                 : 'zr-auth: zr-home respinge lo scambio del codice', [

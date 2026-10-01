@@ -105,7 +105,7 @@ it('se zr-home non risponde, allo scambio del codice o col JWKS, il ritorno è 4
         ->and($avvisi[0])->toContain('zr-home non risponde');
 })->with(['lo scambio del codice' => '/oauth/token', 'il JWKS' => '/oauth/jwks']);
 
-it('se zr-home respinge lo scambio col 401, col 429 o con un altro 4xx che non è il 400, il ritorno è 403 e il log lo dice con lo stato e l\'errore, mai col segreto né col codice (review M1, P4)', function (int $stato, array $corpo, ?string $errore) {
+it('se zr-home respinge lo scambio per un motivo che non è il codice — 401, 429, un 400 che non è invalid_grant, un altro 4xx —, il ritorno è 403 e il log lo dice con lo stato e l\'errore, mai col segreto né col codice (review M1, P4, Q2)', function (int $stato, array $corpo, ?string $errore) {
     $righe = [];
     Log::listen(function (MessageLogged $messaggio) use (&$righe) {
         $righe[] = $messaggio;
@@ -123,6 +123,7 @@ it('se zr-home respinge lo scambio col 401, col 429 o con un altro 4xx che non �
     'il segreto sbagliato' => [401, ['error' => 'invalid_client', 'error_description' => 'Client authentication failed'], 'invalid_client'],
     'il freno' => [429, ['message' => 'Too Many Attempts.'], null],
     'un indirizzo di zr-home sbagliato' => [404, ['message' => 'Not Found'], null],
+    'il modulo senza segreto' => [400, ['error' => 'invalid_request', 'error_description' => 'Check the `client_secret` parameter'], 'invalid_request'],
 ]);
 
 it('se zr-home risponde allo scambio con un errore del server, il ritorno è 403 e il log lo dice: dietro Cloudflare zr-home giù è un 52x, non una connessione caduta (review P4)', function (int $stato) {
