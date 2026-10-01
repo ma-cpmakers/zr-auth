@@ -4,6 +4,7 @@ use Firebase\JWT\JWT;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as RichiestaHttp;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Zeiras\Auth\Tests\TestCase;
 
@@ -86,27 +87,38 @@ function ingressoChiesto(TestResponse $risposta): array
 }
 
 /**
- * zr-home finto: il JWKS, e lo scambio del codice che risponde con `$idToken` solo alla richiesta giusta — il client col
+ * zr-home finto per un ingresso: lo scambio del codice risponde con `$idToken` solo alla richiesta giusta — il client col
  * suo segreto, il ritorno registrato, il codice, il verificatore della sfida PKCE mandata all'authorize. Un secondo
- * ingresso nello stesso test cambia ingresso e token: Http::fake() si registra una volta (il primo stub vince, e ogni
- * fake() azzera le richieste registrate).
+ * ingresso nello stesso test cambia ingresso e token.
  */
 function zrHomeFinto(array $chiesto, string $idToken): void
 {
-    if (! app()->bound('zr-home-finto')) {
-        Http::preventStrayRequests();
-        Http::fake([
-            ZR_HOME.'/oauth/jwks' => Http::response(jwks()),
-            ZR_HOME.'/oauth/token' => function (RichiestaHttp $richiesta) {
-                ['chiesto' => $chiesto, 'id_token' => $idToken] = app('zr-home-finto');
-
-                return scambioGiusto($richiesta, $chiesto)
-                    ? Http::response(['token_type' => 'Bearer', 'expires_in' => 600, 'access_token' => 'accesso', 'id_token' => $idToken])
-                    : Http::response(['error' => 'invalid_grant'], 400);
-            },
-        ]);
-    }
+    zrHomeInAscolto();
     app()->instance('zr-home-finto', ['chiesto' => $chiesto, 'id_token' => $idToken]);
+}
+
+/**
+ * zr-home finto, in ascolto una volta per test: il JWKS, e lo scambio del codice per l'ultimo ingresso di zrHomeFinto().
+ * Http::fake() si registra una volta (il primo stub vince, e ogni fake() azzera le richieste registrate), e nessuna
+ * richiesta esce.
+ */
+function zrHomeInAscolto(): void
+{
+    if (app()->bound('zr-home-in-ascolto')) {
+        return;
+    }
+    app()->instance('zr-home-in-ascolto', true);
+    Http::preventStrayRequests();
+    Http::fake([
+        ZR_HOME.'/oauth/jwks' => Http::response(jwks()),
+        ZR_HOME.'/oauth/token' => function (RichiestaHttp $richiesta) {
+            $ingresso = app()->bound('zr-home-finto') ? app('zr-home-finto') : null;
+
+            return $ingresso !== null && scambioGiusto($richiesta, $ingresso['chiesto'])
+                ? Http::response(['token_type' => 'Bearer', 'expires_in' => 600, 'access_token' => 'accesso', 'id_token' => $ingresso['id_token']])
+                : Http::response(['error' => 'invalid_grant'], 400);
+        },
+    ]);
 }
 
 function scambioGiusto(RichiestaHttp $richiesta, array $chiesto): bool
@@ -139,4 +151,36 @@ function entra(array $altri = [], string $pagina = '/pagina'): TestResponse
     zrHomeFinto($chiesto, idToken(claims($chiesto['nonce'], $altri)));
 
     return ritorno($chiesto);
+}
+
+/**
+ * Il logout_token di un avviso di zr-home (sprint 4, T4): `iss`, `aud`, `iat`, `exp` fra due minuti, `jti`, l'evento del
+ * Back-Channel Logout, `typ` logout+jwt e il `kid` del JWKS, con `$altri` sopra (`sid`, `sub`, `workspace`, `motivo`); un
+ * claim a null non c'è.
+ */
+function logoutToken(array $altri, string $chiave = 'zr-home', string $tipo = 'logout+jwt'): string
+{
+    openssl_pkey_export(chiaveRsa($chiave), $privata);
+
+    return JWT::encode(array_filter(array_replace([
+        'iss' => ZR_HOME,
+        'aud' => CLIENTE,
+        'iat' => now()->getTimestamp(),
+        'exp' => now()->addMinutes(2)->getTimestamp(),
+        'jti' => (string) Str::uuid(),
+        'events' => ['http://schemas.openid.net/event/backchannel-logout' => new stdClass],
+    ], $altri), fn (mixed $valore) => $valore !== null), $privata, 'RS256', 'zr-home-1', ['typ' => $tipo]);
+}
+
+/** zr-home che manda un avviso al modulo: il POST di un form, da un server, senza cookie e senza token CSRF. */
+function avvisa(array $altri, string $chiave = 'zr-home', string $tipo = 'logout+jwt'): TestResponse
+{
+    return avvisaCon(logoutToken($altri, $chiave, $tipo));
+}
+
+function avvisaCon(string $logoutToken): TestResponse
+{
+    zrHomeInAscolto();
+
+    return test()->post('/auth/avviso', ['logout_token' => $logoutToken]);
 }

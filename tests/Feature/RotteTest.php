@@ -11,7 +11,6 @@ use Zeiras\Auth\Testing\Rotte;
 
 it('le pagine e le API del modulo vogliono la sessione: nessuna rotta scoperta fuori dalle tre eccezioni (T3.7)', function () {
     Route::get('up', fn () => 'su');
-    Route::post('auth/avviso', fn () => 'avviso');
 
     expect(Rotte::senzaSessione())->toBe([]);
 });

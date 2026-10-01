@@ -7,11 +7,13 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Zeiras\Auth\Contesto;
 use Zeiras\Auth\Ingresso;
+use Zeiras\Auth\Revoca;
 
 /**
  * La sessione del modulo (voce #978), nei gruppi `web` e `api`. Senza, una pagina rimanda all'ingresso di zr-home (una
  * visita di Inertia col 409), una richiesta JSON o un'API rispondono 401. Vale al massimo `zr-auth.ore` ore ed è di un
- * workspace solo: scaduta, o con un altro `workspace` nell'indirizzo, l'ingresso si rifà in silenzio (`prompt=none`).
+ * workspace solo: scaduta, con un altro `workspace` nell'indirizzo, o chiusa da un avviso di zr-home (Revoca), l'ingresso si
+ * rifà in silenzio (`prompt=none`).
  */
 final class Sessione
 {
@@ -24,7 +26,7 @@ final class Sessione
         $sessione = is_array($sessione) && self::completa($sessione) ? $sessione : null;
         $chiesto = self::workspaceChiesto($richiesta);
 
-        if ($sessione !== null && self::vale($sessione, $chiesto)) {
+        if ($sessione !== null && self::vale($sessione, $chiesto) && ! Revoca::chiude($sessione)) {
             $this->contesto->apri($sessione['sub'], $sessione['workspace']['id'], $sessione['workspace']['nome'], $sessione['ruolo']);
 
             return $next($richiesta);
@@ -48,7 +50,7 @@ final class Sessione
     /**
      * @param  array<mixed>  $sessione
      *
-     * @phpstan-assert-if-true array{sub: int, sid: string, workspace: array{id: int, nome: string}, ruolo: string, inizio: int} $sessione
+     * @phpstan-assert-if-true array{sub: int, sid: string, workspace: array{id: int, nome: string}, ruolo: string, inizio: int, revoca: int} $sessione
      */
     private static function completa(array $sessione): bool
     {
@@ -57,13 +59,14 @@ final class Sessione
             && is_int($sessione['workspace']['id'] ?? null)
             && is_string($sessione['workspace']['nome'] ?? null)
             && is_string($sessione['ruolo'] ?? null)
-            && is_int($sessione['inizio'] ?? null);
+            && is_int($sessione['inizio'] ?? null)
+            && is_int($sessione['revoca'] ?? null);
     }
 
     /**
      * Aperta da meno di `zr-auth.ore` ore, e del workspace che l'indirizzo chiede, se ne chiede uno.
      *
-     * @param  array{sub: int, sid: string, workspace: array{id: int, nome: string}, ruolo: string, inizio: int}  $sessione
+     * @param  array{sub: int, sid: string, workspace: array{id: int, nome: string}, ruolo: string, inizio: int, revoca: int}  $sessione
      */
     private static function vale(array $sessione, ?int $chiesto): bool
     {

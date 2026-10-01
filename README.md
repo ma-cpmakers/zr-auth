@@ -22,6 +22,14 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
   se zr-home non ha più la sessione, riparte con l'accesso. Un indirizzo con `?workspace=<id>` diverso da quello della
   sessione rifà l'ingresso per quel workspace: è così che entra il link «Apri →» della home di zr-home.
 - **La persona** si ricopia a ogni ingresso nella tabella `zr_persone` (l'id è il `sub` di zr-home: email, nome, lingua).
+- **Gli avvisi di zr-home** arrivano a `POST /auth/avviso`: all'uscita da zr-home, quando una persona viene tolta da un
+  workspace o ne cambia il ruolo, quando un workspace disattiva il modulo. L'avviso è un `logout_token` del Back-Channel
+  Logout di OpenID Connect; il modulo lo verifica col JWKS di zr-home (firma, emittente, destinatario, firmato da non più
+  di 5 minuti, l'evento del back-channel, niente `nonce`, `typ` `logout+jwt`) e registra una revoca in `zr_revoche`.
+  Alla loro richiesta successiva si chiudono le sessioni aperte **prima** dell'avviso — quella di quella sessione di
+  zr-home (`sid`), quelle della persona in quel workspace (`sub` e `workspace`), quelle del workspace (`workspace`) — e
+  l'ingresso si rifà in silenzio; chi rientra dopo l'avviso resta dentro. Un avviso non valido risponde 400 e non chiude
+  niente. La rotta non ha sessione né CSRF: la chiama il server di zr-home, all'indirizzo del modulo nel suo catalogo.
 
 ## Installazione
 
@@ -30,7 +38,7 @@ Lo scrive l'agente `zr-home` (è l'altra metà del contratto coi moduli); il con
 "require": { "zeiras/zr-auth": "dev-main" }
 ```
 
-Il provider si registra da sé. Poi `php artisan migrate` crea `zr_persone`.
+Il provider si registra da sé. Poi `php artisan migrate` crea `zr_persone` e `zr_revoche`.
 
 Variabili d'ambiente del modulo (**solo** nell'`.env` del server, mai nel repo):
 
@@ -92,4 +100,5 @@ voluta si scrive nel test del modulo, col perché accanto.
 
 La CI gira `composer validate`, il controllo dei file sensibili e Pest su Testbench (PHP 8.4, SQLite in memoria). I test
 usano uno zr-home finto (`tests/Pest.php`): le chiavi RSA nascono nel test, il JWKS e lo scambio del codice sono risposte
-di `Http::fake()`, e nessuna richiesta esce (`preventStrayRequests()`).
+di `Http::fake()`, e nessuna richiesta esce (`preventStrayRequests()`); un avviso è un `logout_token` firmato nel test
+(`avvisa()`).

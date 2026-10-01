@@ -2,22 +2,22 @@
 
 namespace Zeiras\Auth;
 
-use Firebase\JWT\JWK;
-use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
-use Throwable;
 
 /**
  * L'ingresso del modulo da zr-home con OpenID Connect (voce #978): la richiesta all'`authorize` (PKCE S256, `state`,
  * `nonce`), lo scambio del codice, la verifica dell'id_token e la sessione del modulo. Firma e scadenze le verifica
- * firebase/php-jwt col JWKS di zr-home; qui si aggiungono i controlli — emittente, destinatario, nonce, claim — e non si
- * sostituiscono (G18).
+ * Token col JWKS di zr-home; qui si aggiungono i controlli — emittente, destinatario, nonce, claim — e non si sostituiscono
+ * (G18).
  */
 final class Ingresso
 {
-    /** La sessione del modulo: `sub`, `sid`, `workspace` {`id`, `nome`}, `ruolo`, `inizio`. */
+    /**
+     * La sessione del modulo: `sub`, `sid`, `workspace` {`id`, `nome`}, `ruolo`, `inizio`, e `revoca`, l'ultima revoca
+     * arrivata prima dello scambio del codice (per la sessione valgono solo quelle dopo: Revoca).
+     */
     public const SESSIONE = 'zr-auth.sessione';
 
     /** Gli ingressi che aspettano il ritorno, per `state`: ognuno vale una volta. */
@@ -25,9 +25,6 @@ final class Ingresso
 
     /** Quanti ingressi possono aspettare insieme: più schede rifanno l'ingresso nello stesso momento. */
     private const TETTO = 5;
-
-    /** Un minuto di tolleranza fra l'orologio di zr-home e quello del modulo. */
-    private const TOLLERANZA = 60;
 
     /**
      * Comincia un ingresso e torna l'indirizzo dell'`authorize` di zr-home. L'ingresso aspetta nella sessione di Laravel;
@@ -92,6 +89,8 @@ final class Ingresso
      */
     public function apri(Request $richiesta, array $ingresso, string $codice): bool
     {
+        // Prima dello scambio: un avviso che arriva mentre zr-home risponde chiude anche questa sessione.
+        $revoca = Revoca::ultima();
         $risposta = Http::asForm()->acceptJson()->timeout(10)->post(self::zrHome().'/oauth/token', [
             'grant_type' => 'authorization_code',
             'client_id' => config('zr-auth.client_id'),
@@ -121,6 +120,7 @@ final class Ingresso
             'workspace' => ['id' => $claims['workspace']['id'], 'nome' => $claims['workspace']['name']],
             'ruolo' => $claims['role'],
             'inizio' => now()->getTimestamp(),
+            'revoca' => $revoca,
         ]);
 
         return true;
@@ -134,26 +134,9 @@ final class Ingresso
      */
     private function verifica(string $idToken, string $nonce): ?array
     {
-        $jwks = Http::acceptJson()->timeout(10)->get(self::zrHome().'/oauth/jwks');
-        if (! $jwks->successful() || ! is_array($jwks->json())) {
-            return null;
-        }
+        $claims = Token::claims($idToken);
 
-        // L'orologio è quello dell'app, come per la durata della sessione.
-        $tolleranza = JWT::$leeway;
-        $adesso = JWT::$timestamp;
-        try {
-            JWT::$leeway = self::TOLLERANZA;
-            JWT::$timestamp = now()->getTimestamp();
-            $claims = json_decode((string) json_encode(JWT::decode($idToken, JWK::parseKeySet($jwks->json(), 'RS256'))), true);
-        } catch (Throwable) {
-            return null;
-        } finally {
-            JWT::$leeway = $tolleranza;
-            JWT::$timestamp = $adesso;
-        }
-
-        $valido = is_array($claims)
+        $valido = $claims !== null
             && ($claims['iss'] ?? null) === self::zrHome()
             && (array) ($claims['aud'] ?? []) === [config('zr-auth.client_id')]
             && isset($claims['exp'])
