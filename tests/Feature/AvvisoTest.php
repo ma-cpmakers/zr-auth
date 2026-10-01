@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use Zeiras\Auth\Ingresso;
@@ -100,6 +101,28 @@ it('un avviso non valido risponde 400 e non chiude niente (T5.3)', function (Clo
     'l\'id_token di un ingresso' => [fn () => idToken(claims('un-nonce', ['sid' => 'sid-che-esce']))],
     'non un token' => [fn () => 'non-un-token'],
 ]);
+
+it('il JWKS di zr-home resta in cache 10 minuti: due avvisi, una richiesta sola (review A3)', function () {
+    avvisa(['sid' => 'sid-1'])->assertOk();
+    avvisa(['sid' => 'sid-2'])->assertOk();
+    expect(jwksChiesti())->toBe(1);
+
+    $this->travel(11)->minutes();
+    avvisa(['sid' => 'sid-3'])->assertOk();
+    expect(jwksChiesti())->toBe(2);
+});
+
+it('zr-home che non risponde o un JWKS senza chiavi non restano in cache: l\'avviso è 400, mai un errore del server, e il successivo richiede il JWKS (review A3, A6)', function () {
+    zrHomeCon('/oauth/jwks', Http::sequence()->pushFailedConnection()->push(['keys' => []])->push(jwks()));
+
+    avvisa(['sid' => 'sid-1'])->assertStatus(400);
+    avvisa(['sid' => 'sid-2'])->assertStatus(400);
+    avvisa(['sid' => 'sid-3'])->assertOk();
+    avvisa(['sid' => 'sid-4'])->assertOk();
+
+    expect(jwksChiesti())->toBe(3)
+        ->and(Revoca::query()->orderBy('id')->pluck('sid')->all())->toBe(['sid-3', 'sid-4']);
+});
 
 it('un avviso firmato 5 minuti fa vale ancora: si rifiutano solo i più vecchi (T5.3)', function () {
     $this->freezeSecond();

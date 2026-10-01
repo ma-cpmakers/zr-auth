@@ -2,14 +2,17 @@
 
 namespace Zeiras\Auth;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use SensitiveParameter;
 
 /**
  * L'ingresso del modulo da zr-home con OpenID Connect (voce #978): la richiesta all'`authorize` (PKCE S256, `state`,
- * `nonce`), lo scambio del codice, la verifica dell'id_token e la sessione del modulo. Firma e scadenze le verifica
- * Token col JWKS di zr-home; qui si aggiungono i controlli — emittente, destinatario, nonce, claim — e non si sostituiscono
+ * `nonce`), lo scambio del codice, la verifica dell'id_token e la sessione del modulo. Firma, scadenze, emittente e
+ * destinatario li verifica Token col JWKS di zr-home; qui si aggiungono i controlli — nonce, claim — e non si sostituiscono
  * (G18).
  */
 final class Ingresso
@@ -83,22 +86,28 @@ final class Ingresso
 
     /**
      * Scambia il codice e, se l'id_token è valido per questo modulo e per questo ingresso, apre la sessione del modulo:
-     * la persona ricopiata, il workspace e il ruolo del token.
+     * la persona ricopiata, il workspace e il ruolo del token. Se zr-home non risponde, la sessione non si apre.
      *
      * @param  array{nonce: string, verificatore: string, ritorno: string, workspace: int|null, silenzioso: bool}  $ingresso
      */
-    public function apri(Request $richiesta, array $ingresso, string $codice): bool
+    public function apri(Request $richiesta, #[SensitiveParameter] array $ingresso, #[SensitiveParameter] string $codice): bool
     {
         // Prima dello scambio: un avviso che arriva mentre zr-home risponde chiude anche questa sessione.
         $revoca = Revoca::ultima();
-        $risposta = Http::asForm()->acceptJson()->timeout(10)->post(self::zrHome().'/oauth/token', [
-            'grant_type' => 'authorization_code',
-            'client_id' => config('zr-auth.client_id'),
-            'client_secret' => config('zr-auth.client_secret'),
-            'redirect_uri' => self::ritornoRegistrato(),
-            'code' => $codice,
-            'code_verifier' => $ingresso['verificatore'],
-        ]);
+        try {
+            $risposta = Http::asForm()->acceptJson()->timeout(10)->post(self::zrHome().'/oauth/token', [
+                'grant_type' => 'authorization_code',
+                'client_id' => config('zr-auth.client_id'),
+                'client_secret' => config('zr-auth.client_secret'),
+                'redirect_uri' => self::ritornoRegistrato(),
+                'code' => $codice,
+                'code_verifier' => $ingresso['verificatore'],
+            ]);
+        } catch (ConnectionException $errore) {
+            Log::warning('zr-auth: zr-home non risponde (scambio del codice)', ['errore' => $errore->getMessage()]);
+
+            return false;
+        }
         $idToken = $risposta->successful() ? $risposta->json('id_token') : null;
         $claims = is_string($idToken) ? $this->verifica($idToken, $ingresso['nonce']) : null;
         if ($claims === null) {
@@ -127,21 +136,19 @@ final class Ingresso
     }
 
     /**
-     * I claim dell'id_token se è valido: firmato da zr-home (JWKS), non scaduto, emesso da zr-home per questo client solo,
-     * col `nonce` di questo ingresso e i claim che la sessione vuole. Null altrimenti.
+     * I claim dell'id_token se è valido: firmato da zr-home per questo client solo (Token), con la scadenza, col `nonce` di
+     * questo ingresso e i claim che la sessione vuole — il `sub` è un id di zr-home. Null altrimenti.
      *
      * @return array<string, mixed>|null
      */
-    private function verifica(string $idToken, string $nonce): ?array
+    private function verifica(#[SensitiveParameter] string $idToken, string $nonce): ?array
     {
         $claims = Token::claims($idToken);
 
         $valido = $claims !== null
-            && ($claims['iss'] ?? null) === self::zrHome()
-            && (array) ($claims['aud'] ?? []) === [config('zr-auth.client_id')]
             && isset($claims['exp'])
             && is_string($claims['nonce'] ?? null) && hash_equals($nonce, $claims['nonce'])
-            && is_string($claims['sub'] ?? null) && ctype_digit($claims['sub'])
+            && Token::id($claims['sub'] ?? null) !== null
             && is_string($claims['email'] ?? null)
             && is_int($claims['workspace']['id'] ?? null) && is_string($claims['workspace']['name'] ?? null)
             && is_string($claims['role'] ?? null)

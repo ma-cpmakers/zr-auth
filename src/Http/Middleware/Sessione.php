@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Zeiras\Auth\Contesto;
 use Zeiras\Auth\Ingresso;
 use Zeiras\Auth\Revoca;
+use Zeiras\Auth\Token;
 
 /**
  * La sessione del modulo (voce #978), nei gruppi `web` e `api`. Senza, una pagina rimanda all'ingresso di zr-home (una
@@ -77,8 +78,6 @@ final class Sessione
     /** Il workspace che l'indirizzo chiede (`?workspace=<id>`), se è un id. */
     private static function workspaceChiesto(Request $richiesta): ?int
     {
-        $workspace = $richiesta->query('workspace');
-
-        return is_string($workspace) && preg_match('/^[1-9][0-9]{0,17}$/', $workspace) === 1 ? (int) $workspace : null;
+        return Token::id($richiesta->query('workspace'));
     }
 }

@@ -2,11 +2,13 @@
 
 namespace Zeiras\Auth;
 
+use SensitiveParameter;
+
 /**
  * Un avviso di zr-home (voce #979): il `logout_token` del Back-Channel Logout di OpenID Connect, che zr-home manda
  * all'uscita di una sessione (`sid`), quando toglie una persona da un workspace o ne cambia il ruolo (`sub` e `workspace`),
- * quando un workspace disattiva il modulo (`workspace`). Firma e date le verifica Token; qui i controlli del Back-Channel
- * Logout e del contratto con zr-home.
+ * quando un workspace disattiva il modulo (`workspace`). Firma, date, emittente e destinatario li verifica Token; qui i
+ * controlli del Back-Channel Logout e del contratto con zr-home.
  */
 final class Avviso
 {
@@ -22,12 +24,10 @@ final class Avviso
      *
      * @return array{sid: string|null, sub: int|null, workspace: int|null, motivo: string|null}|null
      */
-    public static function revoca(string $logoutToken): ?array
+    public static function revoca(#[SensitiveParameter] string $logoutToken): ?array
     {
         $claims = Token::claims($logoutToken, 'logout+jwt');
         if ($claims === null
-            || ($claims['iss'] ?? null) !== Ingresso::zrHome()
-            || (array) ($claims['aud'] ?? []) !== [config('zr-auth.client_id')]
             || ! is_int($claims['iat'] ?? null) || $claims['iat'] < now()->getTimestamp() - self::VALIDITA
             || ! is_array($claims['events'][self::EVENTO] ?? null)
             || array_key_exists('nonce', $claims)) {
@@ -35,7 +35,7 @@ final class Avviso
         }
 
         $sid = is_string($claims['sid'] ?? null) && $claims['sid'] !== '' ? $claims['sid'] : null;
-        $sub = is_string($claims['sub'] ?? null) && preg_match('/^[1-9][0-9]{0,17}$/', $claims['sub']) === 1 ? (int) $claims['sub'] : null;
+        $sub = Token::id($claims['sub'] ?? null);
         $workspace = is_int($claims['workspace'] ?? null) && $claims['workspace'] > 0 ? $claims['workspace'] : null;
         $motivo = is_string($claims['motivo'] ?? null) && preg_match('/^[a-z_]{1,40}$/', $claims['motivo']) === 1 ? $claims['motivo'] : null;
 

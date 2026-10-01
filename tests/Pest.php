@@ -132,6 +132,16 @@ function scambioGiusto(RichiestaHttp $richiesta, array $chiesto): bool
         && base64url(hash('sha256', (string) $richiesta['code_verifier'], true)) === $chiesto['code_challenge'];
 }
 
+/**
+ * zr-home che a `$percorso` risponde con `$risposta` — una sequenza, una connessione che cade —, e per il resto come
+ * zrHomeInAscolto(). Si chiama prima di ogni ingresso e di ogni avviso del test: il primo stub vince.
+ */
+function zrHomeCon(string $percorso, mixed $risposta): void
+{
+    Http::fake([ZR_HOME.$percorso => $risposta]);
+    zrHomeInAscolto();
+}
+
 /** Il ritorno da zr-home al modulo, col codice e lo `state` dell'ingresso chiesto. */
 function ritorno(array $chiesto): TestResponse
 {
@@ -142,6 +152,12 @@ function ritorno(array $chiesto): TestResponse
 function scambi(): int
 {
     return count(Http::recorded(fn (RichiestaHttp $richiesta) => $richiesta->url() === ZR_HOME.'/oauth/token'));
+}
+
+/** I JWKS chiesti a zr-home, anche quelli a cui non ha risposto. */
+function jwksChiesti(): int
+{
+    return count(Http::recorded(fn (RichiestaHttp $richiesta) => $richiesta->url() === ZR_HOME.'/oauth/jwks'));
 }
 
 /** L'ingresso intero, da una pagina del modulo al ritorno: torna la risposta del ritorno. */

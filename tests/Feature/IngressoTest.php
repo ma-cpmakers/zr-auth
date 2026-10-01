@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Zeiras\Auth\Persona;
 
 /*
@@ -47,7 +50,7 @@ it('al ritorno il modulo scambia il codice, verifica l\'id_token e apre la sessi
     expect(scambi())->toBe(1);
 });
 
-it('l\'id_token non apre la sessione se è di un altro client, con un altro nonce, scaduto, firmato da un\'altra chiave o di un altro emittente (T3.2, prova 1)', function (Closure $token) {
+it('l\'id_token non apre la sessione se è di un altro client, con un altro nonce, scaduto, firmato da un\'altra chiave, di un altro emittente o con un sub che non è un id (T3.2, prova 1)', function (Closure $token) {
     $chiesto = ingressoChiesto($this->get('/pagina'));
     zrHomeFinto($chiesto, $token($chiesto['nonce']));
 
@@ -64,7 +67,26 @@ it('l\'id_token non apre la sessione se è di un altro client, con un altro nonc
     ]))],
     'un\'altra chiave' => [fn (string $nonce) => idToken(claims($nonce), 'altra')],
     'un altro emittente' => [fn (string $nonce) => idToken(claims($nonce, ['iss' => 'https://altro.example']))],
+    'un sub zero' => [fn (string $nonce) => idToken(claims($nonce, ['sub' => '0']))],
+    'un sub con gli zeri davanti' => [fn (string $nonce) => idToken(claims($nonce, ['sub' => '007']))],
 ]);
+
+it('se zr-home non risponde, allo scambio del codice o col JWKS, il ritorno è 403 e non un errore del server, e il log lo dice (review A6)', function (string $percorso) {
+    $avvisi = [];
+    Log::listen(function (MessageLogged $messaggio) use (&$avvisi) {
+        if ($messaggio->level === 'warning' && str_starts_with($messaggio->message, 'zr-auth:')) {
+            $avvisi[] = $messaggio->message;
+        }
+    });
+    zrHomeCon($percorso, Http::failedConnection());
+
+    entra()->assertForbidden();
+
+    expect(session()->has('zr-auth.sessione'))->toBeFalse()
+        ->and(Persona::query()->count())->toBe(0)
+        ->and($avvisi)->toHaveCount(1)
+        ->and($avvisi[0])->toContain('zr-home non risponde');
+})->with(['lo scambio del codice' => '/oauth/token', 'il JWKS' => '/oauth/jwks']);
 
 it('lo stesso ritorno usato due volte, o con uno state sconosciuto, risponde 403 e non apre la sessione (T3.3)', function () {
     $chiesto = ingressoChiesto($this->get('/pagina'));
