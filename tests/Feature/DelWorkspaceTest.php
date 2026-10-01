@@ -31,6 +31,23 @@ it('una riga nuova prende il workspace della sessione, anche se la richiesta ne 
     expect(DB::table('note')->where('testo', 'nuova')->value('workspace_id'))->toBe(7);
 });
 
+it('una riga resta nel suo workspace, anche se l\'aggiornamento ne porta un altro (T3.6, review A1)', function () {
+    entra()->assertRedirect('/pagina');
+
+    $this->put('/note/1', ['testo' => 'cambiata', 'workspace_id' => 8])->assertOk()
+        ->assertExactJson(['workspace_id' => 7, 'testo' => 'cambiata']);
+
+    expect(DB::table('note')->where('id', 1)->value('workspace_id'))->toBe(7)
+        ->and(DB::table('note')->where('id', 1)->value('testo'))->toBe('cambiata')
+        ->and(DB::table('note')->where('workspace_id', 8)->pluck('testo')->all())->toBe(['di Ottavo']);
+});
+
+it('una riga resta nel suo workspace anche senza contesto (un job che toglie lo scope) (T3.6, review A1)', function () {
+    Nota::query()->withoutGlobalScopes()->findOrFail(2)->update(['workspace_id' => 7]);
+
+    expect(DB::table('note')->where('id', 2)->value('workspace_id'))->toBe(8);
+});
+
 it('senza workspace nel contesto (console, coda) un modello DelWorkspace non trova nessuna riga (T3.6)', function () {
     expect(Nota::query()->count())->toBe(0)
         ->and(Nota::query()->find(1))->toBeNull()

@@ -45,6 +45,8 @@ abstract class TestCase extends Testbench
         $router->get('note/{nota}', fn (Nota $nota) => ['testo' => $nota->testo]);
         $router->post('note', fn (Request $richiesta) => Nota::query()->create($richiesta->only('testo', 'workspace_id'))
             ->only('id', 'workspace_id'));
+        $router->put('note/{nota}', fn (Nota $nota, Request $richiesta) => tap($nota)->update($richiesta->only('testo', 'workspace_id'))
+            ->only('workspace_id', 'testo'));
     }
 
     /** Un'API del modulo, nel gruppo `api`. */

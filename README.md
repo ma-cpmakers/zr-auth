@@ -68,9 +68,11 @@ $contesto->persona();        // Zeiras\Auth\Persona
 ```
 
 I dati del modulo si separano per workspace col tratto `DelWorkspace` (e una colonna `workspace_id`): il modello trova
-solo le righe del workspace della sessione — anche nei binding delle rotte, dove l'id di un altro workspace è un 404 — e
-una riga nuova prende quel workspace. Senza sessione (console, coda) non trova niente: un job che lavora per un
-workspace apre il `Contesto` da sé.
+solo le righe del workspace della sessione — anche nei binding delle rotte, dove l'id di un altro workspace è un 404 —,
+una riga nuova prende quel workspace, e una riga non cambia mai workspace (un aggiornamento con un altro `workspace_id`
+lo lascia com'era). Senza sessione (console, coda) non trova niente: un job che lavora per un workspace apre il
+`Contesto` da sé. Un `update()` di massa sul builder non passa dagli eventi del modello: non va mai scritto con un
+`workspace_id`.
 
 ```php
 use Zeiras\Auth\Concerns\DelWorkspace;
