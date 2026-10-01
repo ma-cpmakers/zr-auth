@@ -20,6 +20,8 @@ abstract class TestCase extends Testbench
 
     protected function defineEnvironment($app): void
     {
+        // Cookie e sessione cifrati, come nel modulo: la chiave nasce nel test, nessuna nel repo.
+        $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         $app['config']->set('app.url', MODULO);
         $app['config']->set('zr-auth.client_id', CLIENTE);
         $app['config']->set('zr-auth.client_secret', SEGRETO);
