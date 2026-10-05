@@ -1,0 +1,66 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use PHPUnit\Framework\AssertionFailedError;
+use Zeiras\Auth\Errori\SessioneNelBrowser;
+use Zeiras\Auth\Sessione;
+use Zeiras\Auth\Testing\Gettone;
+
+// T1.1 (Z2, prova 8): il gettone sta solo nella sessione lato server.
+
+it('apre la sessione con un id nuovo, e una pagina della persona non porta il gettone', function () {
+    $this->get('/pubblica');
+    $prima = session()->getId();
+
+    $this->post('/entra', ['accesso' => accesso(), 'gettone' => gettoneDelWorkspace()])->assertOk();
+    expect(session()->getId())->not->toBe($prima);
+
+    $risposta = $this->get('/pagina')->assertOk()
+        ->assertJsonPath('utente.id', utente()['id'])
+        ->assertJsonPath('workspace.slug', 'studio-anna-k3x9q2')
+        ->assertJsonPath('ruolo', 'proprietario')
+        ->assertJsonPath('accesso', accesso()['id']);
+
+    Gettone::assenteDa($risposta);
+});
+
+it('si rifiuta con la sessione nel cookie, e non scrive niente', function () {
+    config(['session.driver' => 'cookie']);
+
+    expect(fn () => Sessione::apri(accesso()))->toThrow(SessioneNelBrowser::class)
+        ->and(fn () => Sessione::entra(gettoneDelWorkspace()))->toThrow(SessioneNelBrowser::class)
+        ->and(session()->has(Sessione::CHIAVE))->toBeFalse();
+});
+
+it('chiude la sessione: i gettoni escono e l\'id è nuovo', function () {
+    apriSessione();
+    $prima = session()->getId();
+
+    Sessione::chiudi();
+
+    expect(session()->has(Sessione::CHIAVE))->toBeFalse()
+        ->and(session()->getId())->not->toBe($prima)
+        ->and(Sessione::aperta())->toBeFalse()
+        ->and(Sessione::utente())->toBeNull();
+});
+
+it('una sessione scaduta non è aperta e non dice niente della persona', function () {
+    apriSessione(scadeIl: now()->subMinute()->toJSON());
+
+    expect(Sessione::aperta())->toBeFalse()
+        ->and(Sessione::utente())->toBeNull()
+        ->and(Sessione::workspace())->toBeNull()
+        ->and(Sessione::accesso())->toBeNull();
+});
+
+// Il controllo stesso, per i test dei frontend: se il gettone arriva al browser, lo dice.
+
+it('Gettone::assenteDa vede il gettone nel corpo, in un header e in un cookie cifrato', function (string $dove) {
+    Route::middleware('web')->get('perde', fn () => match ($dove) {
+        'corpo' => response('<div data-page="'.GETTONE_WORKSPACE.'"></div>'),
+        'header' => response('ok')->header('X-Prova', GETTONE_WORKSPACE),
+        'cookie' => response('ok')->cookie('prova', GETTONE_WORKSPACE),
+    })->withoutMiddleware(\Zeiras\Auth\Http\Middleware\ConGettone::class);
+
+    expect(fn () => Gettone::assenteDa($this->get('/perde')))->toThrow(AssertionFailedError::class);
+})->with(['corpo', 'header', 'cookie']);

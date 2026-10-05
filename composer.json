@@ -1,11 +1,10 @@
 {
     "name": "zeiras/zr-auth",
-    "description": "Zeiras: la parte comune dei moduli zr-* (ingresso via zr-home con OpenID Connect, sessione nel workspace, avvisi, barra comune).",
+    "description": "Zeiras: il pacchetto dei frontend zr-* — sessione col gettone del backoffice, client delle API /v1, guardia sulle rotte, backoffice finto per i test. Nessun database.",
     "type": "library",
     "license": "proprietary",
     "require": {
         "php": "^8.4",
-        "firebase/php-jwt": "^7.0",
         "laravel/framework": "^13.0"
     },
     "require-dev": {

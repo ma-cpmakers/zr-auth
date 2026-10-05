@@ -1,25 +1,19 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Zeiras\Auth\Http\Middleware\Sessione;
 use Zeiras\Auth\Testing\Rotte;
 
-/*
- * Il test che il modulo eredita (voce #978, T3.7, prova 9 della spec): ogni rotta che risponde senza sessione, fuori
- * dalle tre eccezioni, manda la CI in rosso.
- */
+// T1.6 (Z4, prova 11): una rotta senza la guardia manda in rosso la CI del frontend.
 
-it('le pagine e le API del modulo vogliono la sessione: nessuna rotta scoperta fuori dalle tre eccezioni (T3.7)', function () {
-    Route::get('up', fn () => 'su');
+it('dà le rotte senza guardia: fuori dai gruppi e tolte con withoutMiddleware, salvo GET up', function () {
+    $scoperte = Rotte::senzaGuardia();
 
-    expect(Rotte::senzaSessione())->toBe([]);
+    expect($scoperte)->toContain('GET fuori', 'GET pubblica', 'POST entra')
+        ->not->toContain('GET up', 'GET pagina', 'GET io');
 });
 
-it('una rotta che si toglie la sessione con withoutMiddleware, o che sta fuori dai gruppi, fa fallire il controllo (T3.7, prova 9)', function () {
-    Route::middleware('web')->get('scoperta', fn () => 'aperta')->withoutMiddleware(Sessione::class);
-    Route::post('nuda', fn () => 'aperta');
+it('le pagine pubbliche nominate dal frontend escono dall\'elenco, le altre no', function () {
+    $scoperte = Rotte::senzaGuardia(['GET pubblica', 'POST entra']);
 
-    expect(Rotte::senzaSessione())->toBe(['GET scoperta', 'POST nuda']);
-    $this->get('/scoperta')->assertOk()->assertSee('aperta');
-    ingressoChiesto($this->get('/pagina'));
+    expect($scoperte)->toContain('GET fuori')
+        ->not->toContain('GET pubblica', 'POST entra');
 });
