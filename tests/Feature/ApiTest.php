@@ -75,10 +75,13 @@ it('un problem+json diventa ErroreApi, col codice, i testi, gli errori dei campi
             ->and($e->errori)->toBe([['detail' => 'Obbligatorio.', 'pointer' => '#/nome']])
             ->and($e->riprovaFra)->toBeNull();
     }
+});
 
+it('un 429 porta i secondi di Retry-After in riprovaFra', function () {
     Http::fake(['*' => problema(429, 'troppe_richieste', header: ['Retry-After' => '30'])]);
+
     expect(fn () => Api::senzaGettone()->post('/v1/accessi', []))
-        ->toThrow(fn (ErroreApi $e) => expect($e->riprovaFra)->toBe(30));
+        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(429)->and($e->riprovaFra)->toBe(30));
 });
 
 it('legge come JSON ogni application/*+json', function () {

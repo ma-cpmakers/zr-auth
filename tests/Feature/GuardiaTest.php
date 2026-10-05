@@ -13,7 +13,7 @@ it('un 401 del backoffice chiude la sessione e rimanda all\'ingresso, senza ripe
 
     Http::assertSentCount(1);
     expect(session()->has(Sessione::CHIAVE))->toBeFalse()
-        ->and(session('url.intended'))->toBe(FRONTEND.'/io');
+        ->and(session('url.intended'))->toBe(url('/io'));
 });
 
 it('a una visita di Inertia il 401 risponde 409 con X-Inertia-Location', function () {
@@ -31,7 +31,7 @@ it('a una visita di Inertia il 401 risponde 409 con X-Inertia-Location', functio
 it('senza sessione una pagina rimanda all\'ingresso e ricorda dove voleva andare', function () {
     $this->get('/pagina')->assertRedirect(INGRESSO);
 
-    expect(session('url.intended'))->toBe(FRONTEND.'/pagina');
+    expect(session('url.intended'))->toBe(url('/pagina'));
 });
 
 it('senza sessione una richiesta JSON riceve 401, e una visita di Inertia 409', function () {
@@ -56,5 +56,5 @@ it('con la sessione aperta la pagina risponde', function () {
 it('l\'ingresso si sceglie con ZR_AUTH_INGRESSO', function () {
     config(['zr-auth.ingresso' => '/accedi']);
 
-    $this->get('/pagina')->assertRedirect(FRONTEND.'/accedi');
+    $this->get('/pagina')->assertRedirect(url('/accedi'));
 });
