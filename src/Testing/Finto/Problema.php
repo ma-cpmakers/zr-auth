@@ -15,6 +15,7 @@ final class Problema extends RuntimeException
         'gettone_assente' => 401,
         'gettone_non_valido' => 401,
         'gettone_con_workspace' => 403,
+        'gettone_senza_workspace' => 403,
         'non_trovato' => 404,
         'dati_non_validi' => 422,
         'credenziali_non_valide' => 422,
@@ -23,7 +24,7 @@ final class Problema extends RuntimeException
     ];
 
     /**
-     * @param  list<array{detail: string, pointer: string}>  $errori  per `dati_non_validi`, e solo per lui
+     * @param  list<array{detail: string, pointer?: string, parameter?: string}>  $errori  per `dati_non_validi`, e solo per lui
      * @param  array<string, string>  $header  per `troppe_richieste` Retry-After, in secondi
      */
     public function __construct(
