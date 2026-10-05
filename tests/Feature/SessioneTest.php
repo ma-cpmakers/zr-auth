@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\AssertionFailedError;
 use Zeiras\Auth\Errori\SessioneNelBrowser;
+use Zeiras\Auth\Http\Middleware\ConGettone;
 use Zeiras\Auth\Sessione;
 use Zeiras\Auth\Testing\Gettone;
 
@@ -32,8 +33,25 @@ it('si rifiuta con la sessione nel cookie, e non scrive niente', function () {
         ->and(session()->has(Sessione::CHIAVE))->toBeFalse();
 });
 
+it('apri() ed entra() danno un id nuovo e distruggono la sessione di prima: niente fixation', function () {
+    session()->put('ospite', true);
+    session()->save();
+    $ospite = session()->getId();
+
+    Sessione::apri(accesso());
+    session()->save();
+    $accesso = session()->getId();
+    Sessione::entra(gettoneDelWorkspace());
+
+    expect(session()->getHandler()->read($ospite))->toBe('')
+        ->and(session()->getHandler()->read($accesso))->toBe('')
+        ->and($accesso)->not->toBe($ospite)
+        ->and(session()->getId())->not->toBe($accesso);
+});
+
 it('chiude la sessione: i gettoni escono, l\'id è nuovo e la sessione di prima è distrutta', function () {
     apriSessione();
+    session()->put('del frontend', 'di Anna');
     session()->save();
     $prima = session()->getId();
     expect(session()->getHandler()->read($prima))->not->toBe('');
@@ -43,6 +61,8 @@ it('chiude la sessione: i gettoni escono, l\'id è nuovo e la sessione di prima 
     // Chi ha il cookie di prima dell'uscita non riapre niente: il record del vecchio id non c'è più.
     expect(session()->getHandler()->read($prima))->toBe('')
         ->and(session()->has(Sessione::CHIAVE))->toBeFalse()
+        // Niente della sessione di Anna passa a chi entra dopo dallo stesso browser.
+        ->and(session()->has('del frontend'))->toBeFalse()
         ->and(session()->getId())->not->toBe($prima)
         ->and(Sessione::aperta())->toBeFalse()
         ->and(Sessione::utente())->toBeNull();
@@ -64,7 +84,7 @@ it('Gettone::assenteDa vede il gettone nel corpo, in un header e in un cookie ci
         'corpo' => response('<div data-page="'.GETTONE_WORKSPACE.'"></div>'),
         'header' => response('ok')->header('X-Prova', GETTONE_WORKSPACE),
         'cookie' => response('ok')->cookie('prova', GETTONE_WORKSPACE),
-    })->withoutMiddleware(\Zeiras\Auth\Http\Middleware\ConGettone::class);
+    })->withoutMiddleware(ConGettone::class);
 
     expect(fn () => Gettone::assenteDa($this->get('/perde')))->toThrow(AssertionFailedError::class);
 })->with(['corpo', 'header', 'cookie']);

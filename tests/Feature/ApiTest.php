@@ -135,5 +135,5 @@ it('tutti() si ferma oltre 100 pagine', function () {
     apriSessione();
 
     expect(fn () => Api::workspace()->tutti('/v1/workspace/membri'))->toThrow(BackofficeNonRisponde::class);
-    Http::assertSentCount(Api::PAGINE);
+    Http::assertSentCount(100);
 });

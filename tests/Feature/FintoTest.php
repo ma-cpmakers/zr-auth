@@ -1,5 +1,6 @@
 <?php
 
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\StrayRequestException;
 use Illuminate\Support\Facades\Http;
 use Zeiras\Auth\Api;
@@ -330,4 +331,65 @@ it('persona() rifiuta un\'email che il finto ha già e una lingua che Zeiras non
     expect(fn () => $finto->persona(' Anna@Example.com', 'altra'))->toThrow(LogicException::class, 'anna@example.com')
         ->and(fn () => $finto->persona('bruno@example.com', PASSWORD, lingua: 'de'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => $finto->membro($studio, $anna, 'ospite'))->toThrow(InvalidArgumentException::class);
+});
+
+// I freni dei metodi col gettone, e la scadenza al millesimo, come il backoffice.
+
+it('gettoni.crea dà al più 60 gettoni in un\'ora a una persona, poi 429 fino alla fine della finestra (T2.4)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio Anna', $anna);
+    $this->freezeTime();
+    $gettone = entraNelFinto('anna@example.com')['gettone']['gettone'];
+
+    foreach (range(1, 60) as $richiesta) {
+        expect(alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $gettone)->status())->toBe(201);
+    }
+    // Col gettone di un altro accesso della stessa persona: il freno è suo.
+    $frenata = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone']);
+
+    expect($frenata->status())->toBe(429)
+        ->and($frenata->header('Retry-After'))->toBe('3600')
+        ->and($frenata->header('Link'))->toBe(linkDi('gettoni.crea'))
+        ->and($frenata->json('detail'))->toBe('Troppe richieste in poco tempo: riprova fra 3600 secondi.');
+
+    $this->travel(3600)->seconds();
+    expect(alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $gettone)->status())->toBe(201);
+});
+
+it('un gettone fa al più 600 chiamate in un minuto: la seicentunesima è 429, nella lingua della persona (T2.3)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD, lingua: 'en');
+    $this->freezeTime();
+    $gettone = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $altro = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $esci = fn (string $con) => alFinto('DELETE', '/v1/accessi/01k6r2v8x4c7n3m9p5q1s6t2w8', gettone: $con);
+
+    foreach (range(1, 600) as $chiamata) {
+        expect($esci($gettone)->status())->toBe(404);
+    }
+    $this->travel(20)->seconds();
+    $frenata = $esci($gettone);
+
+    expect($frenata->status())->toBe(429)
+        ->and($frenata->header('Retry-After'))->toBe('40')
+        ->and($frenata->json('detail'))->toBe('Too many requests in a short time: try again in 40 seconds.')
+        // Il freno è del gettone: un altro gettone della stessa persona no.
+        ->and($esci($altro)->status())->toBe(404);
+
+    $this->travel(40)->seconds();
+    expect($esci($gettone)->status())->toBe(404);
+});
+
+it('un gettone non vale più all\'istante del suo scade_il, al millesimo (T2.1)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $gettone = entraNelFinto('anna@example.com')['gettone'];
+    $scade = CarbonImmutable::parse($gettone['scade_il']);
+
+    $this->travelTo($scade->subMillisecond());
+    expect(alFinto('DELETE', '/v1/accessi/01k6r2v8x4c7n3m9p5q1s6t2w8', gettone: $gettone['gettone'])->status())->toBe(404);
+
+    $this->travelTo($scade);
+    expect(alFinto('DELETE', '/v1/accessi/01k6r2v8x4c7n3m9p5q1s6t2w8', gettone: $gettone['gettone'])->status())->toBe(401);
 });

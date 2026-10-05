@@ -131,6 +131,6 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una passwo
 - I freni sono quelli del backoffice: 5 richieste al minuto per email in `accessi.crea` (un accesso riuscito azzera il
   conto), `io.email.codice.crea` e `io.email.verifica.crea`, poi `429` con `Retry-After`; fra un codice e l'altro 60
   secondi, al più 5 codici in un'ora e 10 in un giorno; un codice vale 5 tentativi, e una persona ha 10 codici sbagliati
-  al giorno. Non fa, per ora, il freno di `gettoni.crea` (60 gettoni in un'ora) né quello del gettone.
+  al giorno; `gettoni.crea` dà al più 60 gettoni in un'ora a una persona, e un gettone fa al più 600 chiamate al minuto.
 - Che risponda come il contratto lo prova la CI del backoffice: ogni sua risposta passa la validazione del contratto vero,
   e le copie dei testi sono uguali byte per byte a quelle del backoffice.

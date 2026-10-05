@@ -96,13 +96,14 @@ final class Sessione
     }
 
     /**
-     * Chiude la sessione: i gettoni escono, l'id della sessione è nuovo (col token CSRF) e la sessione di prima è distrutta:
-     * chi ha il cookie di prima dell'uscita non la riapre.
+     * Chiude la sessione, come il logout di Laravel: escono i gettoni e ogni altro dato della sessione, che non passa a chi
+     * entra dopo dallo stesso browser; l'id e il token CSRF sono nuovi, e la sessione di prima è distrutta: chi ha il cookie
+     * di prima dell'uscita non la riapre.
      */
     public static function chiudi(): void
     {
-        session()->forget(self::CHIAVE);
-        session()->regenerate(true);
+        session()->invalidate();
+        session()->regenerateToken();
     }
 
     /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string}|null */

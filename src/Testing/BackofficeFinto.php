@@ -48,8 +48,13 @@ final class BackofficeFinto
     /** Quante ore valgono i gettoni di un accesso, dalla sua nascita (Gettoni::ORE). */
     private const ORE = 12;
 
-    /** I freni per email dei metodi senza gettone (config zeiras.freni del backoffice): richieste in un minuto. */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'verifiche' => 5];
+    /**
+     * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
+     * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
+     */
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'verifiche' => 5, 'gettone' => 600, 'gettoni' => 60];
+
+    private const ORA = 3600;
 
     private const MINUTO = 60;
 
@@ -270,7 +275,8 @@ final class BackofficeFinto
 
         $this->freni->clear($freno);
         $accesso = self::id();
-        $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable(), 'chiuso' => false];
+        // Al millesimo, come il backoffice (datetime(3)): la scadenza scritta nella risposta è quella vera.
+        $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false];
 
         return [201, ['data' => [
             'id' => $accesso,
@@ -319,6 +325,9 @@ final class BackofficeFinto
         if (! isset($this->membri[$workspace][$chi['persona']])) {
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.workspace_non_tuo'), 'pointer' => '#/workspace_id']]);
         }
+
+        // Il freno è della persona, con qualunque suo gettone, e si conta dopo il controllo del membro.
+        $this->frena('gettoni:'.$chi['persona'], self::FRENI['gettoni'], self::ORA);
 
         return [201, ['data' => $this->emetti($chi['accesso'], $workspace)]];
     }
@@ -396,12 +405,22 @@ final class BackofficeFinto
         $riga = preg_match('/^zr_[A-Za-z0-9]{48}$/', $gettone) === 1 ? ($this->gettoni[$gettone] ?? null) : null;
         $accesso = $riga === null ? null : $this->accessi[$riga['accesso']];
 
-        if ($riga === null || $accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->isFuture()
+        if ($riga === null || $accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now()->startOfMillisecond())
             || ($riga['workspace'] !== null && ! isset($this->membri[$riga['workspace']][$accesso['utente']]))) {
             throw new Problema('gettone_non_valido', header: ['WWW-Authenticate' => 'Bearer realm="zeiras", error="invalid_token"']);
         }
 
         $this->testi->usa($this->persone[$accesso['utente']]['lingua']);
+
+        // Il freno del gettone (FrenoPerGettone), dopo la guardia: oltre il tetto in un minuto 429, e la chiamata frenata
+        // non conta.
+        $chiave = 'gettone:'.$gettone;
+
+        if ($this->freni->tooManyAttempts($chiave, self::FRENI['gettone'])) {
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) $this->freni->availableIn($chiave)]);
+        }
+
+        $this->freni->hit($chiave, self::MINUTO);
 
         return ['persona' => $accesso['utente'], 'accesso' => $riga['accesso'], 'workspace' => $riga['workspace']];
     }
