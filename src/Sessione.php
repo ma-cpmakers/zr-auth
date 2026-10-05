@@ -21,7 +21,7 @@ final class Sessione
 
     /**
      * Apre la sessione coi `data` della risposta di accessi.crea (lo schema Accesso): l'accesso e il suo gettone, senza
-     * workspace. L'id della sessione è nuovo: chi conosceva quello di prima non entra.
+     * workspace. L'id della sessione è nuovo e quella di prima è distrutta: chi conosceva l'id di prima non entra.
      *
      * @param  array<string, mixed>  $accesso
      */
@@ -30,7 +30,7 @@ final class Sessione
         self::controllaIlDriver();
         $gettone = $accesso['gettone'];
 
-        session()->regenerate();
+        session()->regenerate(true);
         session()->put(self::CHIAVE, [
             'accesso' => $accesso['id'],
             'gettoni' => ['accesso' => $gettone['gettone']],
@@ -52,7 +52,7 @@ final class Sessione
         self::controllaIlDriver();
         $stato = self::stato() ?? ['accesso' => null, 'gettoni' => []];
 
-        session()->regenerate();
+        session()->regenerate(true);
         session()->put(self::CHIAVE, [
             'accesso' => $stato['accesso'],
             'gettoni' => [...$stato['gettoni'], 'workspace' => $gettone['gettone']],
@@ -95,12 +95,14 @@ final class Sessione
         return self::aperta() ? self::stato()['accesso'] : null;
     }
 
-    /** Chiude la sessione: i gettoni escono, e l'id della sessione è nuovo. */
+    /**
+     * Chiude la sessione: i gettoni escono, l'id della sessione è nuovo (col token CSRF) e la sessione di prima è distrutta:
+     * chi ha il cookie di prima dell'uscita non la riapre.
+     */
     public static function chiudi(): void
     {
         session()->forget(self::CHIAVE);
-        session()->regenerate();
-        session()->regenerateToken();
+        session()->regenerate(true);
     }
 
     /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string}|null */

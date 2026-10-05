@@ -50,13 +50,22 @@ $gettone = Api::persona()->post('/v1/gettoni', ['workspace_id' => $id]);
 Sessione::entra($gettone['data']);           // da qui Api::workspace() manda il gettone di quel workspace
 
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
-Sessione::workspace();  // {id, nome, slug}
+Sessione::workspace();  // {id, nome}; null prima di entra()
 Sessione::ruolo();      // proprietario, amministratore o membro
 
-// L'uscita: accessi.elimina chiude l'accesso e ogni gettone che ne discende.
-Api::persona()->delete('/v1/accessi/'.Sessione::accesso());
-Sessione::chiudi();
+// L'uscita: accessi.elimina chiude l'accesso e ogni gettone che ne discende. La sessione si chiude comunque, anche se
+// il backoffice non risponde; una sessione aperta solo col gettone di un workspace non ha l'id dell'accesso.
+try {
+    if (Sessione::accesso() !== null) {
+        Api::persona()->delete('/v1/accessi/'.Sessione::accesso());
+    }
+} finally {
+    Sessione::chiudi();
+}
 ```
+
+Una pagina che vuole il workspace guarda prima `Sessione::workspace()`: senza, la persona è entrata ma non ha ancora
+scelto un workspace, e `Api::workspace()` lancia `LogicException`.
 
 Il gettone non esce mai dalla sessione: nessun metodo lo restituisce. Non va nell'HTML, nelle props di Inertia, né in
 un cookie (spec S01, prova 8).

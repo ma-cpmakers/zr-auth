@@ -5,13 +5,15 @@ namespace Zeiras\Auth\Testing;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Cache\ArrayStore;
+use Illuminate\Cache\RateLimiter;
+use Illuminate\Cache\Repository;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
 use SensitiveParameter;
-use Zeiras\Auth\Testing\Finto\Freni;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
@@ -87,13 +89,14 @@ final class BackofficeFinto
     /** @var array<string, string> l'ultimo codice partito, per email */
     private array $posta = [];
 
-    private readonly Freni $freni;
+    /** I freni, con RateLimiter come nel backoffice: in memoria, e col tempo di now(). */
+    private readonly RateLimiter $freni;
 
     private readonly Testi $testi;
 
     private function __construct()
     {
-        $this->freni = new Freni;
+        $this->freni = new RateLimiter(new Repository(new ArrayStore));
         $this->testi = new Testi;
     }
 
@@ -257,7 +260,7 @@ final class BackofficeFinto
         $dati = $this->testi->valida($corpo, self::credenziali());
         $email = self::normalizza($dati['email']);
         $freno = 'accessi:'.$email;
-        $this->freni->conta($freno, self::FRENI['accessi'], self::MINUTO);
+        $this->frena($freno, self::FRENI['accessi'], self::MINUTO);
 
         $persona = $this->conCredenziali($email, $dati['password']);
 
@@ -265,7 +268,7 @@ final class BackofficeFinto
             throw new Problema('credenziali_non_valide');
         }
 
-        $this->freni->azzera($freno);
+        $this->freni->clear($freno);
         $accesso = self::id();
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable(), 'chiuso' => false];
 
@@ -331,7 +334,7 @@ final class BackofficeFinto
     {
         $dati = $this->testi->valida($corpo, self::credenziali());
         $email = self::normalizza($dati['email']);
-        $this->freni->conta('codici:'.$email, self::FRENI['codici'], self::MINUTO);
+        $this->frena('codici:'.$email, self::FRENI['codici'], self::MINUTO);
 
         $persona = $this->conCredenziali($email, $dati['password']);
 
@@ -353,7 +356,7 @@ final class BackofficeFinto
     {
         $dati = $this->testi->valida($corpo, self::credenziali() + ['codice' => ['required', 'string', 'digits:6']]);
         $email = self::normalizza($dati['email']);
-        $this->freni->conta('verifiche:'.$email, self::FRENI['verifiche'], self::MINUTO);
+        $this->frena('verifiche:'.$email, self::FRENI['verifiche'], self::MINUTO);
 
         $persona = $this->conCredenziali($email, $dati['password']);
 
@@ -362,6 +365,17 @@ final class BackofficeFinto
         }
 
         return [200, ['data' => $this->utente($persona)]];
+    }
+
+    /**
+     * Conta una richiesta nel freno (Freno::conta del backoffice): oltre `$massimo` nella finestra, che parte dal primo
+     * colpo, 429 troppe_richieste con Retry-After, i secondi alla fine della finestra. Conta anche la richiesta frenata.
+     */
+    private function frena(string $chiave, int $massimo, int $secondi): void
+    {
+        if ($this->freni->hit($chiave, $secondi) > $massimo) {
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) $this->freni->availableIn($chiave)]);
+        }
     }
 
     /**
@@ -419,13 +433,13 @@ final class BackofficeFinto
     private function chiediCodice(string $persona): void
     {
         foreach (self::INVII as $freno => [$invii]) {
-            if ($this->freni->pieno("invii:{$freno}:{$persona}", $invii)) {
+            if ($this->freni->tooManyAttempts("invii:{$freno}:{$persona}", $invii)) {
                 return;
             }
         }
 
         foreach (self::INVII as $freno => [, $secondi]) {
-            $this->freni->colpisci("invii:{$freno}:{$persona}", $secondi);
+            $this->freni->hit("invii:{$freno}:{$persona}", $secondi);
         }
 
         $email = $this->persone[$persona]['email'];
@@ -450,14 +464,14 @@ final class BackofficeFinto
         $errori = "errori:{$persona}";
 
         if ($stato === null || $stato['scade'] - now()->getTimestamp() <= 0 || $stato['tentativi'] >= self::TENTATIVI
-            || $this->freni->pieno($errori, self::ERRORI_AL_GIORNO)) {
+            || $this->freni->tooManyAttempts($errori, self::ERRORI_AL_GIORNO)) {
             return false;
         }
 
         $this->codici[$persona]['tentativi']++;
 
         if (! hash_equals($stato['codice'], $codice)) {
-            $this->freni->colpisci($errori, 86400);
+            $this->freni->hit($errori, 86400);
 
             return false;
         }

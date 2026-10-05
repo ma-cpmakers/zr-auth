@@ -17,7 +17,7 @@ it('apre la sessione con un id nuovo, e una pagina della persona non porta il ge
 
     $risposta = $this->get('/pagina')->assertOk()
         ->assertJsonPath('utente.id', utente()['id'])
-        ->assertJsonPath('workspace.slug', 'studio-anna-k3x9q2')
+        ->assertJsonPath('workspace', ['id' => '01k6r3a7c2e6g0j4m8p2s6v0x4', 'nome' => 'Studio Anna'])
         ->assertJsonPath('ruolo', 'proprietario')
         ->assertJsonPath('accesso', accesso()['id']);
 
@@ -32,13 +32,17 @@ it('si rifiuta con la sessione nel cookie, e non scrive niente', function () {
         ->and(session()->has(Sessione::CHIAVE))->toBeFalse();
 });
 
-it('chiude la sessione: i gettoni escono e l\'id è nuovo', function () {
+it('chiude la sessione: i gettoni escono, l\'id è nuovo e la sessione di prima è distrutta', function () {
     apriSessione();
+    session()->save();
     $prima = session()->getId();
+    expect(session()->getHandler()->read($prima))->not->toBe('');
 
     Sessione::chiudi();
 
-    expect(session()->has(Sessione::CHIAVE))->toBeFalse()
+    // Chi ha il cookie di prima dell'uscita non riapre niente: il record del vecchio id non c'è più.
+    expect(session()->getHandler()->read($prima))->toBe('')
+        ->and(session()->has(Sessione::CHIAVE))->toBeFalse()
         ->and(session()->getId())->not->toBe($prima)
         ->and(Sessione::aperta())->toBeFalse()
         ->and(Sessione::utente())->toBeNull();

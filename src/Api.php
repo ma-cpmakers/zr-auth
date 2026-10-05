@@ -48,12 +48,18 @@ final class Api
     /** Col gettone del workspace in cui la persona è entrata (Sessione::entra): i metodi del workspace. */
     public static function workspace(): self
     {
+        // Il gettone si legge una volta sola: fra due letture potrebbe scadere.
+        $gettone = self::gettone('workspace');
+
+        if ($gettone !== null) {
+            return new self($gettone);
+        }
+
         if (! Sessione::aperta()) {
             throw new GettoneRifiutato;
         }
 
-        return new self(self::gettone('workspace')
-            ?? throw new LogicException('Nessun workspace nella sessione: prima Sessione::entra() coi dati di gettoni.crea.'));
+        throw new LogicException('Nessun workspace nella sessione: prima Sessione::entra() coi dati di gettoni.crea.');
     }
 
     /**
@@ -132,9 +138,10 @@ final class Api
      */
     private function chiama(\Closure $invia, string $percorso): array
     {
-        // Il gettone va solo al backoffice: un percorso che porta altrove (un indirizzo intero, `//host`) non parte.
-        if (! str_starts_with($percorso, '/v1') || str_starts_with($percorso, '//')) {
-            throw new InvalidArgumentException("Il percorso dev'essere un percorso di /v1 («/v1/…»), non «{$percorso}».");
+        // Il gettone va solo al backoffice: un percorso che porta altrove (un indirizzo intero, `//host`) non parte. La query
+        // sta in `$query`: in un GET Guzzle sostituirebbe in silenzio quella scritta nel percorso.
+        if (! str_starts_with($percorso, '/v1') || str_contains($percorso, '?') || str_contains($percorso, '#')) {
+            throw new InvalidArgumentException("Il percorso dev'essere un percorso di /v1 («/v1/…»), senza query: non «{$percorso}».");
         }
 
         $richiesta = Http::baseUrl(self::indirizzo())

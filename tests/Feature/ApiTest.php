@@ -54,6 +54,7 @@ it('non parte verso http://, né verso un indirizzo che non è di /v1', function
     'http' => ['http://api.zeiras.com', '/v1/io', IndirizzoNonSicuro::class],
     'indirizzo intero' => [API, 'https://altrove.example/v1/io', InvalidArgumentException::class],
     'host relativo' => [API, '//altrove.example/v1/io', InvalidArgumentException::class],
+    'query nel percorso' => [API, '/v1/io?limite=2', InvalidArgumentException::class],
 ]);
 
 it('senza una sessione aperta, persona() e workspace() danno GettoneRifiutato', function () {
