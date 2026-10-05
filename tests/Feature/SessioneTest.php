@@ -18,7 +18,7 @@ it('apre la sessione con un id nuovo, e una pagina della persona non porta il ge
 
     $risposta = $this->get('/pagina')->assertOk()
         ->assertJsonPath('utente.id', utente()['id'])
-        ->assertJsonPath('workspace', ['id' => '01k6r3a7c2e6g0j4m8p2s6v0x4', 'nome' => 'Studio Anna'])
+        ->assertJsonPath('workspace', ['id' => '01k6r3a7c2e6g0j4m8p2s6v0x4', 'nome' => 'Studio Anna', 'slug' => 'studio-anna-k3x9q2'])
         ->assertJsonPath('ruolo', 'proprietario')
         ->assertJsonPath('accesso', accesso()['id']);
 
