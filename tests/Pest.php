@@ -1,6 +1,8 @@
 <?php
 
+use Carbon\CarbonInterface;
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Zeiras\Auth\Sessione;
 use Zeiras\Auth\Tests\TestCase;
@@ -76,4 +78,58 @@ function problema(int $stato, string $codice, array $altri = [], array $header =
         'codice' => $codice,
         ...$altri,
     ]), $stato, ['Content-Type' => 'application/problem+json', ...$header]);
+}
+
+// Il backoffice finto (T2): le chiamate come le fa un client qualunque, e le risposte come le scrive il backoffice.
+
+const PASSWORD = 'una password lunga e sicura';
+
+/** Una chiamata al finto: metodo, percorso di /v1, corpo JSON, gettone, Accept-Language. */
+function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string $gettone = null, ?string $lingua = null): Response
+{
+    $richiesta = Http::baseUrl(API)->acceptJson();
+
+    if ($gettone !== null) {
+        $richiesta = $richiesta->withToken($gettone);
+    }
+
+    if ($lingua !== null) {
+        $richiesta = $richiesta->withHeaders(['Accept-Language' => $lingua]);
+    }
+
+    return $richiesta->send($metodo, $percorso, $corpo === null ? [] : ['json' => $corpo]);
+}
+
+/** Entra nel finto con accessi.crea, e ne dà i `data` (lo schema Accesso). */
+function entraNelFinto(string $email, string $password = PASSWORD): array
+{
+    $risposta = alFinto('POST', '/v1/accessi', ['email' => $email, 'password' => $password]);
+    expect($risposta->status())->toBe(201);
+
+    return $risposta->json('data');
+}
+
+/** Un problema di /v1 come lo scrive il backoffice (RFC 9457), coi testi di una lingua. */
+function problemaAtteso(string $codice, int $stato, string $titolo, string $dettaglio, array $altri = []): array
+{
+    return [
+        'type' => "https://docs.zeiras.com/v1/errori/{$codice}",
+        'title' => $titolo,
+        'status' => $stato,
+        'detail' => $dettaglio,
+        'codice' => $codice,
+        ...$altri,
+    ];
+}
+
+/** L'header Link di una risposta del metodo. */
+function linkDi(string $operationId): string
+{
+    return "<https://docs.zeiras.com/v1/{$operationId}>; rel=\"describedby\"";
+}
+
+/** Un istante come lo scrive il backoffice: ISO 8601, in UTC, coi millesimi. */
+function iso(CarbonInterface $istante): string
+{
+    return $istante->copy()->utc()->format('Y-m-d\\TH:i:s.v\\Z');
 }

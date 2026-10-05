@@ -92,3 +92,36 @@ expect(Rotte::senzaGuardia(['GET accedi', 'POST accedi']))->toBe([]);
 ```
 
 `GET up` è già un'eccezione. E per la prova 8: `Zeiras\Auth\Testing\Gettone::assenteDa($this->get('/dashboard'))`.
+
+## Il backoffice finto, per i test
+
+`Zeiras\Auth\Testing\BackofficeFinto` risponde alle chiamate di `/v1` come il backoffice, senza rete e senza database: le
+forme del contratto, i codici d'errore del catalogo, i testi del backoffice (it, en, es: le copie di `resources/lang/`) e
+i suoi freni. Con lui un frontend prova nella sua CI l'ingresso, l'uscita e la verifica dell'email.
+
+```php
+use Zeiras\Auth\Testing\BackofficeFinto;
+
+$finto = BackofficeFinto::attiva();
+$anna = $finto->persona('anna@example.com', 'una password lunga e sicura');  // la persona, come la dà il backoffice
+$studio = $finto->workspace('Studio Anna', $anna);                          // {id, nome}: Anna è la proprietaria
+$finto->membro($studio, $finto->persona('bruno@example.com', '…', nome: 'Bruno'), 'membro');
+
+$this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una password lunga e sicura']);
+```
+
+- `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
+  verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
+  posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
+- Fa `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea` e `io.email.verifica.crea`. Una chiamata di
+  `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- Acceso il finto, alle API risponde solo lui: niente altri `Http::fake` che rispondano a `api.zeiras.com`, né un
+  `Http::fake()` senza indirizzo, che risponderebbe a tutto. Le chiamate verso altri indirizzi restano agli altri fake.
+- Il tempo è `now()`, e un test lo sposta con `travel()`: i gettoni valgono 12 ore dall'accesso, un codice 10 minuti, un
+  freno fino alla fine della sua finestra.
+- I freni sono quelli del backoffice: 5 richieste al minuto per email in `accessi.crea` (un accesso riuscito azzera il
+  conto), `io.email.codice.crea` e `io.email.verifica.crea`, poi `429` con `Retry-After`; fra un codice e l'altro 60
+  secondi, al più 5 codici in un'ora e 10 in un giorno; un codice vale 5 tentativi, e una persona ha 10 codici sbagliati
+  al giorno. Non fa, per ora, il freno di `gettoni.crea` (60 gettoni in un'ora) né quello del gettone.
+- Che risponda come il contratto lo prova la CI del backoffice: ogni sua risposta passa la validazione del contratto vero,
+  e le copie dei testi sono uguali byte per byte a quelle del backoffice.
