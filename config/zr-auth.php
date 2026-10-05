@@ -2,15 +2,17 @@
 
 return [
 
-    // zr-home, il provider d'identità dei moduli: l'emittente dei token e l'indirizzo dell'ingresso.
-    'zr_home' => env('ZR_HOME_URL', 'https://app.zeiras.com'),
+    // Le API del backoffice di Zeiras. Solo https: sulla porta 80 il server risponde 301, e un 301 trasforma un POST in
+    // un GET. Un indirizzo in http:// non parte (IndirizzoNonSicuro).
+    'api' => env('ZR_API_URL', 'https://api.zeiras.com'),
 
-    // Il client del modulo su zr-home: `php artisan zeiras:modulo <codice> --ritorno=https://<modulo>/auth/callback`, lì,
-    // stampa id e segreto una volta sola. Il segreto sta solo nell'ambiente del modulo, mai in un repo.
-    'client_id' => env('ZR_AUTH_CLIENT_ID'),
-    'client_secret' => env('ZR_AUTH_CLIENT_SECRET'),
+    // Quanto si aspetta il backoffice, in secondi: il pool PHP-FPM del server è uno per tutti i siti, e una pagina che
+    // aspetta tiene fermo un processo, più quello del backoffice.
+    'timeout' => 5,
+    'connessione' => 2,
 
-    // Quanto vale al massimo una sessione del modulo: poi l'ingresso si rifà, in silenzio se zr-home ha la sessione.
-    'ore' => 12,
+    // La pagina d'accesso. Senza sessione, col gettone scaduto o con un gettone che il backoffice non accetta più, la
+    // guardia rimanda qui (ConGettone).
+    'ingresso' => env('ZR_AUTH_INGRESSO', 'https://app.zeiras.com/accedi'),
 
 ];

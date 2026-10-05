@@ -1,201 +1,135 @@
 <?php
 
-use Firebase\JWT\JWT;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\Client\Request as RichiestaHttp;
+use Carbon\CarbonInterface;
+use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
-use Illuminate\Testing\TestResponse;
+use Zeiras\Auth\Sessione;
 use Zeiras\Auth\Tests\TestCase;
 
-pest()->extend(TestCase::class)->use(RefreshDatabase::class)->in('Feature');
+pest()->extend(TestCase::class)->in('Feature');
 
-/*
- * Uno zr-home finto. Le chiavi RSA nascono nel test, il segreto del client è un valore di prova: nel repo, che è
- * pubblico, nessuna chiave e nessun segreto veri (G3).
- */
-const ZR_HOME = 'https://app.zeiras.com';
-const MODULO = 'https://crm.zeiras.com';
-const CLIENTE = 'cliente-del-modulo';
-const SEGRETO = 'valore-di-prova-non-un-segreto';
-const CODICE = 'codice-d-ingresso';
+const FRONTEND = 'https://board.zeiras.com';
+const API = 'https://api.zeiras.com';
+const INGRESSO = 'https://app.zeiras.com/accedi';
 
-/** Le chiavi RSA del test, una per nome e per processo (generarle costa): `zr-home` firma, `altra` è quella sbagliata. */
-function chiaveRsa(string $nome = 'zr-home'): OpenSSLAsymmetricKey
+// Gettoni di prova nella forma di Zeiras (`zr_` più 48 caratteri): nel repo, che è pubblico, nessun gettone vero (G13).
+const GETTONE_ACCESSO = 'zr_AccessoAccessoAccessoAccessoAccessoAccessoAccess';
+const GETTONE_WORKSPACE = 'zr_WorkspaceWorkspaceWorkspaceWorkspaceWorkspaceWor';
+
+/** La persona come la dà il backoffice (lo schema Utente). */
+function utente(): array
 {
-    static $chiavi = [];
-
-    return $chiavi[$nome] ??= openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+    return [
+        'id' => '01k6r2t5b9d3f7h1k5m9n3q7r1',
+        'nome' => 'Anna',
+        'email' => 'anna@example.com',
+        'email_verificata_il' => '2026-10-05T09:12:31.000Z',
+        'lingua' => 'it',
+        'fuso_orario' => 'Europe/Rome',
+    ];
 }
 
-function base64url(string $binario): string
+/** I `data` di accessi.crea (lo schema Accesso): l'accesso e il suo gettone, senza workspace. */
+function accesso(?string $scadeIl = null): array
 {
-    return rtrim(strtr(base64_encode($binario), '+/', '-_'), '=');
+    return [
+        'id' => '01k6r2v8x4c7n3m9p5q1s6t2w8',
+        'creato_il' => now()->toJSON(),
+        'gettone' => [
+            'gettone' => GETTONE_ACCESSO,
+            'scade_il' => $scadeIl ?? now()->addHours(12)->toJSON(),
+            'utente' => utente(),
+            'workspace' => null,
+            'ruolo' => null,
+        ],
+    ];
 }
 
-/** Il JWKS di zr-home come lo pubblica (sprint 4, T2.1): una chiave RSA RS256 col suo `kid`. */
-function jwks(string $chiave = 'zr-home', string $kid = 'zr-home-1'): array
+/** I `data` di gettoni.crea (lo schema Gettone): il gettone di un workspace. */
+function gettoneDelWorkspace(?string $scadeIl = null): array
 {
-    $rsa = openssl_pkey_get_details(chiaveRsa($chiave))['rsa'];
-
-    return ['keys' => [[
-        'kty' => 'RSA', 'alg' => 'RS256', 'use' => 'sig', 'kid' => $kid,
-        'n' => base64url($rsa['n']), 'e' => base64url($rsa['e']),
-    ]]];
+    return [
+        'gettone' => GETTONE_WORKSPACE,
+        'scade_il' => $scadeIl ?? now()->addHours(12)->toJSON(),
+        'utente' => utente(),
+        'workspace' => ['id' => '01k6r3a7c2e6g0j4m8p2s6v0x4', 'nome' => 'Studio Anna'],
+        'ruolo' => 'proprietario',
+    ];
 }
 
-/** I claim dell'id_token di zr-home (sprint 4, T2.2), con `$altri` sopra; un claim a null non c'è. */
-function claims(string $nonce, array $altri = []): array
+/** Una sessione aperta: l'accesso e, se si vuole, l'ingresso nel workspace. */
+function apriSessione(bool $conWorkspace = true, ?string $scadeIl = null): void
 {
-    return array_filter(array_replace([
-        'iss' => ZR_HOME,
-        'aud' => CLIENTE,
-        'sub' => '42',
-        'iat' => now()->getTimestamp(),
-        'exp' => now()->addHour()->getTimestamp(),
-        'nonce' => $nonce,
-        'email' => 'giulia@esempio.it',
-        'email_verified' => true,
-        'name' => 'Giulia Rossi',
-        'locale' => 'it',
-        'workspace' => ['id' => 7, 'name' => 'Ventiquattro'],
-        'role' => 'admin',
-        'sid' => 'sid-della-sessione-di-zr-home',
-    ], $altri), fn (mixed $valore) => $valore !== null);
-}
-
-function idToken(array $claims, string $chiave = 'zr-home'): string
-{
-    openssl_pkey_export(chiaveRsa($chiave), $privata);
-
-    return JWT::encode($claims, $privata, 'RS256', 'zr-home-1');
-}
-
-/**
- * I parametri dell'ingresso a cui la risposta rimanda, che deve essere l'`authorize` di zr-home: il redirect, o il 409 di
- * Inertia.
- *
- * @return array<string, string>
- */
-function ingressoChiesto(TestResponse $risposta): array
-{
-    $indirizzo = (string) ($risposta->headers->get('Location') ?? $risposta->headers->get('X-Inertia-Location'));
-    expect($indirizzo)->toStartWith(ZR_HOME.'/oauth/authorize?');
-    parse_str((string) parse_url($indirizzo, PHP_URL_QUERY), $parametri);
-
-    return $parametri;
-}
-
-/**
- * zr-home finto per un ingresso: lo scambio del codice risponde con `$idToken` solo alla richiesta giusta — il client col
- * suo segreto, il ritorno registrato, il codice, il verificatore della sfida PKCE mandata all'authorize. Un secondo
- * ingresso nello stesso test cambia ingresso e token.
- */
-function zrHomeFinto(array $chiesto, string $idToken): void
-{
-    zrHomeInAscolto();
-    app()->instance('zr-home-finto', ['chiesto' => $chiesto, 'id_token' => $idToken]);
-}
-
-/**
- * zr-home finto, in ascolto una volta per test: il JWKS, e lo scambio del codice per l'ultimo ingresso di zrHomeFinto().
- * Http::fake() si registra una volta (il primo stub vince, e ogni fake() azzera le richieste registrate); che nessuna
- * richiesta esca lo dice TestCase, per ogni test.
- */
-function zrHomeInAscolto(): void
-{
-    if (app()->bound('zr-home-in-ascolto')) {
-        return;
+    Sessione::apri(accesso($scadeIl));
+    if ($conWorkspace) {
+        Sessione::entra(gettoneDelWorkspace($scadeIl));
     }
-    app()->instance('zr-home-in-ascolto', true);
-    Http::fake([
-        ZR_HOME.'/oauth/jwks' => Http::response(jwks()),
-        ZR_HOME.'/oauth/token' => function (RichiestaHttp $richiesta) {
-            $ingresso = app()->bound('zr-home-finto') ? app('zr-home-finto') : null;
-
-            return $ingresso !== null && scambioGiusto($richiesta, $ingresso['chiesto'])
-                ? Http::response(['token_type' => 'Bearer', 'expires_in' => 600, 'access_token' => 'accesso', 'id_token' => $ingresso['id_token']])
-                : Http::response(['error' => 'invalid_grant'], 400);
-        },
-    ]);
 }
 
-function scambioGiusto(RichiestaHttp $richiesta, array $chiesto): bool
+/** Un errore di /v1 come lo scrive il backoffice: un problem details di RFC 9457. */
+function problema(int $stato, string $codice, array $altri = [], array $header = []): PromiseInterface
 {
-    return $richiesta->method() === 'POST'
-        && $richiesta['grant_type'] === 'authorization_code'
-        && $richiesta['client_id'] === CLIENTE
-        && $richiesta['client_secret'] === SEGRETO
-        && $richiesta['redirect_uri'] === MODULO.'/auth/callback'
-        && $richiesta['code'] === CODICE
-        && base64url(hash('sha256', (string) $richiesta['code_verifier'], true)) === $chiesto['code_challenge'];
+    return Http::response(json_encode([
+        'type' => "https://docs.zeiras.com/v1/errori/{$codice}",
+        'title' => 'Titolo',
+        'status' => $stato,
+        'detail' => 'Dettaglio per la persona.',
+        'codice' => $codice,
+        ...$altri,
+    ]), $stato, ['Content-Type' => 'application/problem+json', ...$header]);
 }
 
-/**
- * zr-home che a `$percorso` risponde con `$risposta` — una sequenza, una connessione che cade —, e per il resto come
- * zrHomeInAscolto(). Si chiama prima di ogni ingresso e di ogni avviso del test: il primo stub vince.
- */
-function zrHomeCon(string $percorso, mixed $risposta): void
+// Il backoffice finto (T2): le chiamate come le fa un client qualunque, e le risposte come le scrive il backoffice.
+
+const PASSWORD = 'una password lunga e sicura';
+
+/** Una chiamata al finto: metodo, percorso di /v1, corpo JSON, gettone, Accept-Language. */
+function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string $gettone = null, ?string $lingua = null): Response
 {
-    Http::fake([ZR_HOME.$percorso => $risposta]);
-    zrHomeInAscolto();
+    $richiesta = Http::baseUrl(API)->acceptJson();
+
+    if ($gettone !== null) {
+        $richiesta = $richiesta->withToken($gettone);
+    }
+
+    if ($lingua !== null) {
+        $richiesta = $richiesta->withHeaders(['Accept-Language' => $lingua]);
+    }
+
+    return $richiesta->send($metodo, $percorso, $corpo === null ? [] : ['json' => $corpo]);
 }
 
-/** Il ritorno da zr-home al modulo, col codice e lo `state` dell'ingresso chiesto. */
-function ritorno(array $chiesto): TestResponse
+/** Entra nel finto con accessi.crea, e ne dà i `data` (lo schema Accesso). */
+function entraNelFinto(string $email, string $password = PASSWORD): array
 {
-    return test()->get('/auth/callback?'.http_build_query(['code' => CODICE, 'state' => $chiesto['state']]));
+    $risposta = alFinto('POST', '/v1/accessi', ['email' => $email, 'password' => $password]);
+    expect($risposta->status())->toBe(201);
+
+    return $risposta->json('data');
 }
 
-/** Gli scambi del codice arrivati a zr-home. */
-function scambi(): int
+/** Un problema di /v1 come lo scrive il backoffice (RFC 9457), coi testi di una lingua. */
+function problemaAtteso(string $codice, int $stato, string $titolo, string $dettaglio, array $altri = []): array
 {
-    return count(Http::recorded(fn (RichiestaHttp $richiesta) => $richiesta->url() === ZR_HOME.'/oauth/token'));
+    return [
+        'type' => "https://docs.zeiras.com/v1/errori/{$codice}",
+        'title' => $titolo,
+        'status' => $stato,
+        'detail' => $dettaglio,
+        'codice' => $codice,
+        ...$altri,
+    ];
 }
 
-/** I JWKS chiesti a zr-home, anche quelli a cui non ha risposto. */
-function jwksChiesti(): int
+/** L'header Link di una risposta del metodo. */
+function linkDi(string $operationId): string
 {
-    return count(Http::recorded(fn (RichiestaHttp $richiesta) => $richiesta->url() === ZR_HOME.'/oauth/jwks'));
+    return "<https://docs.zeiras.com/v1/{$operationId}>; rel=\"describedby\"";
 }
 
-/** L'ingresso intero, da una pagina del modulo al ritorno: torna la risposta del ritorno. */
-function entra(array $altri = [], string $pagina = '/pagina'): TestResponse
+/** Un istante come lo scrive il backoffice: ISO 8601, in UTC, coi millesimi. */
+function iso(CarbonInterface $istante): string
 {
-    $chiesto = ingressoChiesto(test()->get($pagina));
-    zrHomeFinto($chiesto, idToken(claims($chiesto['nonce'], $altri)));
-
-    return ritorno($chiesto);
-}
-
-/**
- * Il logout_token di un avviso di zr-home (sprint 4, T4): `iss`, `aud`, `iat`, `exp` fra due minuti, `jti`, l'evento del
- * Back-Channel Logout, `typ` logout+jwt e il `kid` del JWKS, con `$altri` sopra (`sid`, `sub`, `workspace`, `motivo`); un
- * claim a null non c'è.
- */
-function logoutToken(array $altri, string $chiave = 'zr-home', string $tipo = 'logout+jwt', string $kid = 'zr-home-1'): string
-{
-    openssl_pkey_export(chiaveRsa($chiave), $privata);
-
-    return JWT::encode(array_filter(array_replace([
-        'iss' => ZR_HOME,
-        'aud' => CLIENTE,
-        'iat' => now()->getTimestamp(),
-        'exp' => now()->addMinutes(2)->getTimestamp(),
-        'jti' => (string) Str::uuid(),
-        'events' => ['http://schemas.openid.net/event/backchannel-logout' => new stdClass],
-    ], $altri), fn (mixed $valore) => $valore !== null), $privata, 'RS256', $kid, ['typ' => $tipo]);
-}
-
-/** zr-home che manda un avviso al modulo: il POST di un form, da un server, senza cookie e senza token CSRF. */
-function avvisa(array $altri, string $chiave = 'zr-home', string $tipo = 'logout+jwt'): TestResponse
-{
-    return avvisaCon(logoutToken($altri, $chiave, $tipo));
-}
-
-function avvisaCon(string $logoutToken): TestResponse
-{
-    zrHomeInAscolto();
-
-    return test()->post('/auth/avviso', ['logout_token' => $logoutToken]);
+    return $istante->copy()->utc()->format('Y-m-d\\TH:i:s.v\\Z');
 }

@@ -5,16 +5,17 @@ namespace Zeiras\Auth\Tests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Orchestra\Testbench\TestCase as Testbench;
-use Zeiras\Auth\Contesto;
+use Zeiras\Auth\Api;
+use Zeiras\Auth\Http\Middleware\ConGettone;
+use Zeiras\Auth\Sessione;
 use Zeiras\Auth\ZrAuthServiceProvider;
 
 /**
- * Un modulo finto: zr-auth installato in un'app Laravel, con qualche pagina sua. zr-home non c'è: lo fanno le risposte
- * di Http::fake() (tests/Pest.php).
+ * Un frontend finto: zr-auth installato in un'app Laravel, con qualche pagina sua. Il backoffice non c'è: lo fanno le
+ * risposte di Http::fake(), e nessuna richiesta esce.
  */
 abstract class TestCase extends Testbench
 {
-    /** Nessuna richiesta esce, in nessun test: quelle verso zr-home le risponde Http::fake() (tests/Pest.php). */
     protected function setUp(): void
     {
         parent::setUp();
@@ -28,38 +29,40 @@ abstract class TestCase extends Testbench
 
     protected function defineEnvironment($app): void
     {
-        // Cookie e sessione cifrati, come nel modulo: la chiave nasce nel test, nessuna nel repo.
+        // Cookie e sessione cifrati, come nel frontend: la chiave nasce nel test, nessuna nel repo (G13).
         $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
-        $app['config']->set('app.url', MODULO);
-        $app['config']->set('zr-auth.client_id', CLIENTE);
-        $app['config']->set('zr-auth.client_secret', SEGRETO);
+        $app['config']->set('app.url', FRONTEND);
+        $app['config']->set('session.driver', 'array');
     }
 
-    protected function defineDatabaseMigrations(): void
-    {
-        $this->loadMigrationsFrom(__DIR__.'/database/migrations');
-    }
-
-    /** Le pagine del modulo, nel gruppo `web`: zr-auth ci mette la sessione da sé. */
+    /** Le pagine del frontend, nel gruppo `web`: zr-auth ci mette la guardia da sé. */
     protected function defineWebRoutes($router): void
     {
-        $router->get('pagina', fn (Contesto $contesto) => [
-            'persona' => $contesto->personaId(),
-            'workspace' => $contesto->workspaceId(),
-            'nome' => $contesto->workspaceNome(),
-            'ruolo' => $contesto->ruolo(),
+        // Ciò che la sessione dice della persona: una pagina che lo mostra non deve mostrare il gettone (T1.1).
+        $router->get('pagina', fn () => [
+            'utente' => Sessione::utente(),
+            'workspace' => Sessione::workspace(),
+            'ruolo' => Sessione::ruolo(),
+            'accesso' => Sessione::accesso(),
         ]);
-        $router->get('note', fn () => Nota::query()->orderBy('id')->pluck('testo'));
-        $router->get('note/{nota}', fn (Nota $nota) => ['testo' => $nota->testo]);
-        $router->post('note', fn (Request $richiesta) => Nota::query()->create($richiesta->only('testo', 'workspace_id'))
-            ->only('id', 'workspace_id'));
-        $router->put('note/{nota}', fn (Nota $nota, Request $richiesta) => tap($nota)->update($richiesta->only('testo', 'workspace_id'))
-            ->only('workspace_id', 'testo'));
+        // Una pagina che legge dal backoffice col gettone del workspace (T1.4).
+        $router->get('io', fn () => Api::workspace()->get('/v1/io'));
+        // L'accesso del frontend, pubblico: apre la sessione coi dati di accessi.crea e, se ci sono, di gettoni.crea.
+        $router->post('entra', function (Request $richiesta) {
+            Sessione::apri($richiesta->input('accesso'));
+            if ($richiesta->has('gettone')) {
+                Sessione::entra($richiesta->input('gettone'));
+            }
+
+            return ['ok' => true];
+        })->withoutMiddleware(ConGettone::class);
+        $router->get('pubblica', fn () => 'pubblica')->withoutMiddleware(ConGettone::class);
     }
 
-    /** Un'API del modulo, nel gruppo `api`. */
+    /** Rotte fuori dai gruppi: il controllo di salute (un'eccezione per tutti) e una rotta scoperta. */
     protected function defineRoutes($router): void
     {
-        $router->middleware('api')->prefix('api')->get('dati', fn () => ['dati' => true]);
+        $router->get('up', fn () => 'ok');
+        $router->get('fuori', fn () => 'fuori');
     }
 }
