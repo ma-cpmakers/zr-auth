@@ -16,10 +16,11 @@ use Zeiras\Auth\Errori\IndirizzoNonSicuro;
 
 /**
  * Il client delle API /v1 del backoffice (spec S01, «zr-auth»): `ZR_API_URL`, il gettone nell'header, timeout corto.
- * Ogni metodo torna il JSON della risposta (`[]` per un 204). Un errore di /v1 (RFC 9457) diventa ErroreApi; un 401 diventa
+ * Ogni metodo torna il JSON della risposta (`[]` per un 204). Un errore di /v1 (RFC 9457) diventa ErroreApi, anche un
+ * 5xx (un 503 turnstile_non_disponibile resta leggibile: si decide su `codice`, si mostra `detail`); un 401 diventa
  * GettoneRifiutato, che chiude la sessione e rimanda all'ingresso, senza ripetere la chiamata; un backoffice che non
- * risponde, un trasporto che cade (anche dopo lo stato), un 3xx, un 5xx o una risposta senza JSON diventano
- * BackofficeNonRisponde. Un redirect non si segue.
+ * risponde, un trasporto che cade (anche dopo lo stato), un 3xx, un 5xx senza un problema JSON o una risposta senza
+ * JSON diventano BackofficeNonRisponde. Un redirect non si segue.
  *
  *     Api::senzaGettone()->post('/v1/accessi', ['email' => $email, 'password' => $password]);
  *     Api::workspace()->tutti('/v1/workspace/membri');
@@ -167,7 +168,10 @@ final class Api
             throw new BackofficeNonRisponde('Il backoffice non risponde.', previous: $e);
         }
 
-        if ($risposta->serverError() || $risposta->redirect()) {
+        // Un redirect non è mai un problema di /v1 (RFC 9457): è nginx o il trasporto, non il backoffice che risponde
+        // nella forma giusta. Un 5xx invece può portare un problema leggibile (es. 503 turnstile_non_disponibile, con
+        // `codice`, `title` e `detail`): si guarda il corpo prima di arrendersi.
+        if ($risposta->redirect()) {
             throw new BackofficeNonRisponde("Il backoffice ha risposto {$risposta->status()}.");
         }
 

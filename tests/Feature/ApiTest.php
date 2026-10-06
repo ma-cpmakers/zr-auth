@@ -97,14 +97,13 @@ it('legge come JSON ogni application/*+json', function () {
         ->toThrow(fn (ErroreApi $e) => expect($e->codice)->toBe('non_trovato')->and($e->dettaglio)->toBe('Non c\'è.'));
 });
 
-it('un timeout, un 5xx o una risposta senza JSON danno BackofficeNonRisponde', function (Closure $risposta) {
+it('un timeout, un 5xx senza problema JSON o una risposta senza JSON danno BackofficeNonRisponde', function (Closure $risposta) {
     Http::fake(['*' => $risposta]);
 
     expect(fn () => Api::senzaGettone()->get('/v1/x'))->toThrow(BackofficeNonRisponde::class);
 })->with([
     'timeout' => fn () => fn () => throw new ConnectionException('cURL error 28: timeout'),
-    '503' => fn () => fn () => Http::response('<html>503</html>', 503, ['Content-Type' => 'text/html']),
-    '500 problem+json' => fn () => fn () => problema(500, 'errore_interno'),
+    '503 html' => fn () => fn () => Http::response('<html>503</html>', 503, ['Content-Type' => 'text/html']),
     '200 html' => fn () => fn () => Http::response('<html>ok</html>', 200, ['Content-Type' => 'text/html']),
     '413 di nginx' => fn () => fn () => Http::response('<html>413</html>', 413, ['Content-Type' => 'text/html']),
 ]);
@@ -132,6 +131,19 @@ it('un 4xx del backoffice resta ErroreApi', function () {
     expect(fn () => Api::senzaGettone()->get('/v1/x'))
         ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(404)->and($e->codice)->toBe('non_trovato'));
 });
+
+// Zr-home (voce #1209, T4.3): un 503 turnstile_non_disponibile restava BackofficeNonRisponde, e il detail del
+// backoffice si perdeva dietro «il servizio non risponde». Un 5xx con un problema JSON leggibile resta ErroreApi,
+// come un 4xx: si decide su codice, si mostra detail.
+it('un 5xx del backoffice con un problema JSON resta ErroreApi', function (int $stato, string $codice) {
+    Http::fake(['*' => problema($stato, $codice)]);
+
+    expect(fn () => Api::senzaGettone()->get('/v1/x'))
+        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe($stato)->and($e->codice)->toBe($codice));
+})->with([
+    '500 errore_interno' => [500, 'errore_interno'],
+    '503 turnstile_non_disponibile' => [503, 'turnstile_non_disponibile'],
+]);
 
 // R31: il client non segue i redirect, e un 3xx non è una risposta da usare.
 
