@@ -120,7 +120,7 @@ return [
         'mixed' => 'Il campo :attribute deve contenere almeno una lettera maiuscola e una minuscola.',
         'numbers' => 'Il campo :attribute deve contenere almeno un numero.',
         'symbols' => 'Il campo :attribute deve contenere almeno un simbolo.',
-        'uncompromised' => 'Il valore di :attribute è comparso in una fuga di dati: scegline un altro.',
+        'uncompromised' => 'Il valore del campo :attribute è comparso in una fuga di dati: scegline un altro.',
     ],
     'present' => 'Il campo :attribute deve esserci.',
     'present_if' => 'Il campo :attribute deve esserci quando :other è :value.',
