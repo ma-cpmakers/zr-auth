@@ -52,6 +52,10 @@ return [
         'title' => 'Verification failed',
         'detail' => 'The code does not verify the email: check the code, the email and the password, or ask for a new code.',
     ],
+    'turnstile_non_valido' => [
+        'title' => 'Turnstile check failed',
+        'detail' => 'The Turnstile check did not pass: have the person do it again and retry with the new response.',
+    ],
     'richiesta_in_corso' => [
         'title' => 'Request in progress',
         'detail' => 'A request with the same Idempotency-Key is still in progress: wait a few seconds and repeat it unchanged.',
@@ -88,5 +92,9 @@ return [
     'servizio_non_disponibile' => [
         'title' => 'Service unavailable',
         'detail' => 'The service is temporarily unavailable: try again later.',
+    ],
+    'turnstile_non_disponibile' => [
+        'title' => 'Turnstile check unavailable',
+        'detail' => 'The Turnstile check cannot be done right now: do it again and retry shortly.',
     ],
 ];

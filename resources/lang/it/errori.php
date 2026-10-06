@@ -52,6 +52,10 @@ return [
         'title' => 'Verifica non riuscita',
         'detail' => "Il codice non verifica l'email: controlla il codice, l'email e la password, o chiedi un codice nuovo.",
     ],
+    'turnstile_non_valido' => [
+        'title' => 'Controllo Turnstile non superato',
+        'detail' => 'Il controllo Turnstile non è superato: fallo rifare alla persona e riprova con la risposta nuova.',
+    ],
     'richiesta_in_corso' => [
         'title' => 'Richiesta in corso',
         'detail' => 'Una richiesta con la stessa Idempotency-Key è ancora in corso: aspetta qualche secondo e ripetila uguale.',
@@ -88,5 +92,9 @@ return [
     'servizio_non_disponibile' => [
         'title' => 'Servizio non disponibile',
         'detail' => 'Il servizio è temporaneamente non disponibile: riprova più tardi.',
+    ],
+    'turnstile_non_disponibile' => [
+        'title' => 'Controllo Turnstile non disponibile',
+        'detail' => 'Il controllo Turnstile non si può fare adesso: rifallo e riprova fra poco.',
     ],
 ];
