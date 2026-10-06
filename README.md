@@ -70,14 +70,16 @@ Da GitHub, a un tag (le versioni sono semver; prima della 1.0 un minore nuovo pu
 
 ```json
 "repositories": [{"type": "vcs", "url": "https://github.com/ma-cpmakers/zr-auth"}],
-"require": {"zeiras/zr-auth": "^0.4"}
+"require": {"zeiras/zr-auth": "^0.5"}
 ```
 
 Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`io.mostra`, `io.workspace.elenca`,
 `app.elenca`, `workspace.membri.elenca`) e lo `slug` del workspace: il backoffice le ha da quando le loro righe sono in
 `https://docs.zeiras.com/v1/novita`, che esce col deploy. Con la 0.2 il finto non le conosce, e lancia
 `RichiestaSconosciuta`. La 0.4 porta la registrazione (`utenti.crea`) con Turnstile, e i testi dei suoi due codici
-nuovi, `turnstile_non_valido` e `turnstile_non_disponibile`.
+nuovi, `turnstile_non_valido` e `turnstile_non_disponibile`. La 0.5 porta `Sessione::ritorno()`, il ritorno dopo l'ingresso solo da un
+GET e dallo stesso sito; un 3xx del backoffice, che non si segue, diventa `BackofficeNonRisponde`; nel finto `pm` è
+`disponibile`, e ci sono i testi dei due codici nuovi, `app_non_attiva` e `app_in_arrivo`.
 
 | Variabile | Default | Cosa |
 |---|---|---|
@@ -141,13 +143,29 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   `$e->dettaglio` si mostra.
 - Un **401** (gettone scaduto o revocato) diventa `GettoneRifiutato`: zr-auth chiude la sessione e rimanda all'ingresso,
   senza ripetere la chiamata.
-- Un backoffice che non risponde, un 5xx o una risposta senza JSON diventano `BackofficeNonRisponde`: mai una lista vuota.
+- Un backoffice che non risponde, un trasporto che cade (anche dopo lo stato), un 3xx, un 5xx o una risposta senza JSON
+  diventano `BackofficeNonRisponde`: mai una lista vuota, e mai un'eccezione del client HTTP che esce. Quando il client
+  HTTP ha lanciato, la sua eccezione sta in `getPrevious()`: una `ConnectionException` se il trasporto è caduto prima
+  dello stato o dopo un 2xx o un 3xx; dopo un 4xx o un 5xx, la `RequestException` che Laravel fa dalla risposta
+  troncata, che porta quello stato e non il guasto. Un 3xx, un 5xx o una risposta senza JSON arrivati per intero non
+  hanno un `getPrevious()`.
+- Un redirect non si segue: un 307 rimanderebbe il corpo, una password compresa, al `Location`.
 
 ## La guardia, e il suo test
 
-`ConGettone` entra da sé nei gruppi `web` e `api`: senza una sessione col gettone, una pagina rimanda all'ingresso e
-ricorda la pagina chiesta (`url.intended`, da usare con `redirect()->intended()` dopo l'accesso); una visita di Inertia
-riceve 409 con `X-Inertia-Location`; una richiesta JSON 401.
+`ConGettone` entra da sé nei gruppi `web` e `api`: senza una sessione col gettone, una pagina rimanda all'ingresso; una
+visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401. Solo un GET ricorda la pagina chiesta
+(`url.intended`, l'indirizzo della richiesta): ogni altro metodo, HEAD compreso, non ricorda niente, e mai il `Referer`.
+
+Dopo l'accesso si torna lì con `Sessione::ritorno()`, **al posto di `redirect()->intended()`**, che manderebbe la persona
+a qualunque indirizzo ci sia in `url.intended`, anche di un altro sito:
+
+```php
+// Dopo Sessione::apri() (ed entra()): la pagina ricordata, se ha lo schema, l'host e la porta di questa richiesta; se no
+// (un altro host, «//altro.host/», http:// al posto di https://, nessun ritorno) la pagina predefinita del modulo.
+// Il ritorno esce dalla sessione: vale una volta.
+return redirect(Sessione::ritorno(route('bacheca')));
+```
 
 Una pagina pubblica (l'accesso, la registrazione) se la toglie, e il test del frontend la nomina:
 

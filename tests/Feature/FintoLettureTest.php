@@ -9,8 +9,6 @@ use Zeiras\Auth\Testing\BackofficeFinto;
 // accenti non contano) e poi di id, a pagine col cursore della sola chiave, lo slug del workspace, gettone_senza_workspace
 // dove lo dà il backoffice, il catalogo delle app.
 
-const CATALOGO = ['automations', 'bookings', 'content', 'crm', 'pm', 'reports'];
-
 const TESTO_DEL_CURSORE = 'Il campo cursore non è un cursore di questa lista: usa il valore di successivo della pagina prima.';
 
 /** Il gettone di chi ha questa email: quello dell'accesso, o quello del workspace, se c'è. */
@@ -164,7 +162,7 @@ it('io.workspace.elenca dà le pagine a cursore: ogni workspace una volta, e il 
         ->and(tutteLePagine('/v1/io/workspace', $gettone, 2))->toBe($tutti);
 });
 
-it('app.elenca dà il catalogo delle app in ordine di codice, tutte in_arrivo, ai tre ruoli del workspace, e a pagine col solo codice (T6.1)', function (string $ruolo) {
+it('app.elenca dà il catalogo delle app in ordine di codice, pm disponibile e le altre in_arrivo, ai tre ruoli del workspace, e a pagine col solo codice (T6.1; #1289, AP3)', function (string $ruolo) {
     $finto = BackofficeFinto::attiva();
     $anna = $finto->persona('anna@example.com', PASSWORD);
     $bruno = $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
@@ -177,7 +175,15 @@ it('app.elenca dà il catalogo delle app in ordine di codice, tutte in_arrivo, a
 
     $gettone = gettoneDelFinto($chi, $studio);
     $risposta = alFinto('GET', '/v1/app', gettone: $gettone);
-    $catalogo = array_map(fn (string $codice) => ['codice' => $codice, 'stato' => 'in_arrivo'], CATALOGO);
+    // Lo stato di ogni app, scritto per intero (R23): pm è disponibile dallo sprint 5 del backoffice (#1289, AP3).
+    $catalogo = [
+        ['codice' => 'automations', 'stato' => 'in_arrivo'],
+        ['codice' => 'bookings', 'stato' => 'in_arrivo'],
+        ['codice' => 'content', 'stato' => 'in_arrivo'],
+        ['codice' => 'crm', 'stato' => 'in_arrivo'],
+        ['codice' => 'pm', 'stato' => 'disponibile'],
+        ['codice' => 'reports', 'stato' => 'in_arrivo'],
+    ];
 
     expect($risposta->status())->toBe(200)
         ->and($risposta->header('Link'))->toBe(linkDi('app.elenca'))

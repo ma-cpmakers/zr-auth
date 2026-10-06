@@ -71,7 +71,7 @@ final class BackofficeFinto
         'bookings' => 'in_arrivo',
         'content' => 'in_arrivo',
         'crm' => 'in_arrivo',
-        'pm' => 'in_arrivo',
+        'pm' => 'disponibile',
         'reports' => 'in_arrivo',
     ];
 

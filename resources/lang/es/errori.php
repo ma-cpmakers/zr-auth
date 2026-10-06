@@ -36,6 +36,10 @@ return [
         'title' => 'Correo no verificado',
         'detail' => 'Primero hay que verificar el correo: verifícalo con el código que llegó por correo y repite la solicitud.',
     ],
+    'app_non_attiva' => [
+        'title' => 'Aplicación no activa',
+        'detail' => 'Este método es de una aplicación que no está activa en el espacio de trabajo del token: si está disponible, la activa un propietario o un administrador, con app.modifica.',
+    ],
     'percorso_inesistente' => [
         'title' => 'Ruta inexistente',
         'detail' => 'La ruta no es la de ningún método de /v1.',
@@ -59,6 +63,14 @@ return [
     'richiesta_in_corso' => [
         'title' => 'Solicitud en curso',
         'detail' => 'Una solicitud con la misma Idempotency-Key sigue en curso: espera unos segundos y repítela igual.',
+    ],
+    'app_in_arrivo' => [
+        'title' => 'Aplicación próximamente',
+        'detail' => 'Esta aplicación todavía no se puede activar ni desactivar: app.elenca indica cuáles están disponibles.',
+    ],
+    'cartella_non_vuota' => [
+        'title' => 'Carpeta no vacía',
+        'detail' => 'Esta carpeta todavía tiene tableros, y solo se puede eliminar vacía: board.board.elenca indica cuáles son.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor caducado',

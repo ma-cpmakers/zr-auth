@@ -36,6 +36,10 @@ return [
         'title' => 'Email not verified',
         'detail' => 'The email must be verified first: verify it with the code sent by email, then repeat the request.',
     ],
+    'app_non_attiva' => [
+        'title' => 'App not active',
+        'detail' => "This method belongs to an app that is not active in the token's workspace: if it is available, an owner or an administrator can activate it with app.modifica.",
+    ],
     'percorso_inesistente' => [
         'title' => 'Path not found',
         'detail' => 'The path is not the path of any /v1 method.',
@@ -59,6 +63,14 @@ return [
     'richiesta_in_corso' => [
         'title' => 'Request in progress',
         'detail' => 'A request with the same Idempotency-Key is still in progress: wait a few seconds and repeat it unchanged.',
+    ],
+    'app_in_arrivo' => [
+        'title' => 'App coming soon',
+        'detail' => 'This app cannot be activated or deactivated yet: app.elenca tells which apps are available.',
+    ],
+    'cartella_non_vuota' => [
+        'title' => 'Folder not empty',
+        'detail' => 'This folder still has boards, and it can be deleted only when empty: board.board.elenca tells which they are.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor expired',

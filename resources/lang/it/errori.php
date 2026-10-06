@@ -36,6 +36,10 @@ return [
         'title' => 'Email non verificata',
         'detail' => "Prima serve l'email verificata: verificala col codice arrivato per posta, poi ripeti la richiesta.",
     ],
+    'app_non_attiva' => [
+        'title' => 'App non attiva',
+        'detail' => "Questo metodo è di un'app che non è attiva nel workspace del gettone: se è disponibile, la attiva un proprietario o un amministratore, con app.modifica.",
+    ],
     'percorso_inesistente' => [
         'title' => 'Percorso inesistente',
         'detail' => 'Il percorso non è quello di nessun metodo di /v1.',
@@ -59,6 +63,14 @@ return [
     'richiesta_in_corso' => [
         'title' => 'Richiesta in corso',
         'detail' => 'Una richiesta con la stessa Idempotency-Key è ancora in corso: aspetta qualche secondo e ripetila uguale.',
+    ],
+    'app_in_arrivo' => [
+        'title' => 'App in arrivo',
+        'detail' => 'Questa app non si può ancora attivare né disattivare: app.elenca dice quali sono disponibili.',
+    ],
+    'cartella_non_vuota' => [
+        'title' => 'Cartella non vuota',
+        'detail' => 'Questa cartella ha ancora delle board, e si elimina solo vuota: board.board.elenca dice quali sono.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursore scaduto',
