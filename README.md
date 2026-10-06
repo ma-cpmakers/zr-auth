@@ -133,15 +133,23 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una passwo
   conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
 - La registrazione è chiusa come nel backoffice: ogni `utenti.crea` è `403` `registrazione_non_aperta`, finché il test
   non dà la lista dei consentiti con `consenti('bruno@altro.it', '@example.com')` (un'email intera o un dominio, per
-  uguaglianza) o la apre a tutti con `apri()`. Una registrazione riuscita è `202` con l'email, la stessa risposta per
-  un'email che ha già un account, che non cambia; la persona nuova nasce con l'email da verificare, e il suo primo
-  codice è in `ultimoCodice()`. Al posto di Have I Been Pwned, il finto dà per trapelata una password sola,
-  `BackofficeFinto::PASSWORD_TRAPELATA`: `422` `dati_non_validi` su `#/password`.
-- Turnstile è spento, come nel backoffice senza il segreto. `accendiTurnstile()` lo accende: una registrazione vuole
-  `turnstile` uguale a `BackofficeFinto::TURNSTILE_VALIDO`, `XXXX.DUMMY.TOKEN.XXXX` (la risposta che danno i tasti di
-  prova di Cloudflare), e senza o con un altro valore è `422` `turnstile_non_valido`, prima della lista. `guastaTurnstile()`
-  fa il Cloudflare che non risponde: una risposta ben formata è `503` `turnstile_non_disponibile`. Il backoffice si apre a
-  tutti solo col segreto: la registrazione aperta come in produzione è `apri()` con `accendiTurnstile()`.
+  uguaglianza) o la apre a tutti con `apri()`, che vale solo con Turnstile acceso, come il backoffice che si apre solo
+  col segreto. Una registrazione riuscita è `202` con l'email, la stessa risposta per un'email che ha già un account,
+  che non cambia; la persona nuova nasce con l'email da verificare, e il suo primo codice è in `ultimoCodice()`. Al
+  posto di Have I Been Pwned, il finto dà per trapelata una password sola, `BackofficeFinto::PASSWORD_TRAPELATA`: `422`
+  `dati_non_validi` su `#/password`.
+- Turnstile è spento, come nel backoffice senza il segreto: la risposta non si controlla, ma si valida come la dichiara
+  il contratto, e una che non è una stringa o supera 2048 caratteri è `422` `dati_non_validi` su `#/turnstile`.
+  `accendiTurnstile()` lo accende: una registrazione vuole `turnstile` uguale a `BackofficeFinto::TURNSTILE_VALIDO`,
+  `XXXX.DUMMY.TOKEN.XXXX` (la risposta che danno i tasti di prova di Cloudflare), e senza o con un altro valore è `422`
+  `turnstile_non_valido`, prima della lista. `guastaTurnstile()` fa il Cloudflare che non risponde: una risposta ben
+  formata è `503` `turnstile_non_disponibile`. La registrazione aperta come in produzione è `apri()` con
+  `accendiTurnstile()`.
+- Via `Api` il `503` `turnstile_non_disponibile` arriva come `BackofficeNonRisponde`, come ogni 5xx: la pagina non lo
+  distingue da un backoffice che non risponde, e chiede alla persona di rifare il controllo e riprovare fra poco.
+- In produzione una risposta del widget vale una volta: Cloudflare respinge la seconda (`422` `turnstile_non_valido`), e
+  dopo ogni invio, riuscito o no, la pagina rifà il controllo. Il finto, come i tasti di prova di Cloudflare, accetta
+  `TURNSTILE_VALIDO` ogni volta: una risposta usata due volte, nei test, passa.
 - `workspace($nome, $proprietaria)` dà il workspace con lo slug del backoffice: il nome in slug, al più 40 caratteri, poi
   un trattino e sei caratteri casuali (`studio-anna-k3x9q2`). `membro($workspace, $persona, $ruolo)` mette una persona in
   un workspace, o le cambia il ruolo: `io.mostra` lo rilegge a ogni chiamata.

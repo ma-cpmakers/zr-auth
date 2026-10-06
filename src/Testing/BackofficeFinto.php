@@ -33,8 +33,9 @@ use Zeiras\Auth\Testing\Finto\Testi;
  *
  * Fa i metodi del nucleo (registrarsi, entrare, uscire, il gettone di un workspace, la verifica dell'email) e le letture
  * della persona e del workspace: io.mostra, io.workspace.elenca, app.elenca, workspace.membri.elenca. La registrazione è
- * chiusa come nel backoffice, finché il test non dà la lista dei consentiti (consenti()) o la apre (apri()); Turnstile è
- * spento, finché il test non lo accende (accendiTurnstile()) o lo guasta (guastaTurnstile()).
+ * chiusa come nel backoffice, finché il test non dà la lista dei consentiti (consenti()) o la apre (apri(), che vale solo
+ * con Turnstile acceso); Turnstile è spento, finché il test non lo accende (accendiTurnstile()) o lo guasta
+ * (guastaTurnstile()).
  *
  * I dati nascono dai metodi del finto, mai da campi comodi nelle risposte: il codice di verifica si legge da
  * ultimoCodice(), che fa da casella di posta. Il tempo è now(): un test lo sposta con travel(). Una chiamata di /v1 che il
@@ -265,8 +266,8 @@ final class BackofficeFinto
     }
 
     /**
-     * Apre la registrazione a tutti. Il backoffice si apre solo col segreto Turnstile: un test che prova la registrazione
-     * aperta come sarà in produzione accende anche Turnstile.
+     * Apre la registrazione a tutti, come l'interruttore del backoffice: vale solo con Turnstile acceso (accendiTurnstile()
+     * o guastaTurnstile()), perché il backoffice senza il segreto resta alla lista.
      */
     public function apri(): self
     {
@@ -474,6 +475,8 @@ final class BackofficeFinto
             'lingua' => ['sometimes', 'nullable', 'string', Rule::in(Testi::LINGUE)],
             'fuso_orario' => ['sometimes', 'nullable', 'string', 'timezone:all'],
             'termini_accettati' => ['required', 'boolean', 'accepted'],
+            // La risposta del widget come la dichiara il contratto, anche a Turnstile spento; per ultima, come nel backoffice.
+            'turnstile' => ['sometimes', 'nullable', 'string', 'max:'.self::LUNGHEZZA_TURNSTILE],
         ]);
 
         if ($this->conEmail($email) === null) {
@@ -518,12 +521,12 @@ final class BackofficeFinto
     }
 
     /**
-     * La lista dei consentiti (RegistrazioneConsentita::consente): aperta, ogni email; chiusa, un'email intera della lista
-     * o il suo dominio dopo «@», per uguaglianza.
+     * La lista dei consentiti (RegistrazioneConsentita::consente): aperta e con Turnstile acceso, ogni email; altrimenti
+     * un'email intera della lista o il suo dominio dopo «@», per uguaglianza.
      */
     private function consente(string $email): bool
     {
-        if ($this->aperta) {
+        if ($this->aperta && $this->turnstile !== null) {
             return true;
         }
 

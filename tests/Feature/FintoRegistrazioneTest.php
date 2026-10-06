@@ -5,9 +5,9 @@ use Illuminate\Support\Arr;
 use Zeiras\Auth\Testing\BackofficeFinto;
 
 // T3.1 e T3.2 dello sprint 4 (#1169, D23; per zr-home #1209): la registrazione nel finto, come utenti.crea del
-// backoffice. Chiusa di norma, con la lista data dal test (consenti()) o aperta (apri()); Turnstile spento di norma,
-// acceso dal test con la risposta dei tasti di prova di Cloudflare, o guasto. L'ordine è quello del backoffice: l'email, il
-// suo freno, Turnstile, la lista, il resto.
+// backoffice. Chiusa di norma, con la lista data dal test (consenti()) o aperta (apri(), con Turnstile acceso);
+// Turnstile spento di norma, acceso dal test con la risposta dei tasti di prova di Cloudflare, o guasto. L'ordine è
+// quello del backoffice: l'email, il suo freno, Turnstile, la lista, il resto.
 
 /** Il corpo di una registrazione giusta, coi campi che il test cambia. */
 function registrazione(array $campi = []): array
@@ -198,6 +198,30 @@ it('Turnstile è spento di norma: una registrazione senza turnstile, o con un va
         ->and(registra(registrazione(['email' => 'bruno@example.com', 'turnstile' => 'un valore qualsiasi']))->status())->toBe(202);
 });
 
+it('spento, Turnstile non controlla la risposta ma la valida come il contratto: una lista, un numero o più di 2048 caratteri sono 422 dati_non_validi su #/turnstile, dopo gli altri campi (T3.2)', function () {
+    $finto = BackofficeFinto::attiva()->consenti('@example.com');
+
+    $lista = registra(registrazione(['turnstile' => ['XXXX.DUMMY.TOKEN.XXXX']]));
+    $numero = registra(registrazione(['turnstile' => 42]), lingua: 'en');
+    $lunga = registra(registrazione(['turnstile' => str_repeat('X', 2049), 'termini_accettati' => false]));
+
+    expect($lista->status())->toBe(422)
+        ->and($lista->json())->toBe(problemaAtteso('dati_non_validi', 422, 'Dati non validi',
+            'Alcuni valori non vanno bene: li trovi in errors, con cosa non va e dove stanno.', ['errors' => [
+                ['detail' => 'Il campo turnstile deve essere una stringa.', 'pointer' => '#/turnstile'],
+            ]]))
+        ->and($numero->json('errors'))->toBe([['detail' => 'The turnstile field must be a string.', 'pointer' => '#/turnstile']])
+        ->and($lunga->json('errors'))->toBe([
+            ['detail' => 'Il campo termini accettati deve essere accettato.', 'pointer' => '#/termini_accettati'],
+            ['detail' => 'Il campo turnstile non deve avere più di 2048 caratteri.', 'pointer' => '#/turnstile'],
+        ])
+        ->and($finto->ultimoCodice('anna@example.com'))->toBeNull()
+        // Vuota, di soli spazi o nulla è come assente; 2048 caratteri passano.
+        ->and(registra(registrazione(['email' => 'bruno@example.com', 'turnstile' => '   ']))->status())->toBe(202)
+        ->and(registra(registrazione(['email' => 'carla@example.com', 'turnstile' => null]))->status())->toBe(202)
+        ->and(registra(registrazione(['email' => 'dario@example.com', 'turnstile' => str_repeat('X', 2048)]))->status())->toBe(202);
+});
+
 it("acceso, Turnstile vuole la risposta dei tasti di prova di Cloudflare: senza, o con un'altra, è 422 turnstile_non_valido, prima della lista (T3.2)", function (array $campi) {
     $finto = BackofficeFinto::attiva()->consenti('@example.com')->accendiTurnstile();
 
@@ -245,14 +269,16 @@ it('guasto, Cloudflare non risponde: una risposta ben formata è 503 turnstile_n
         ->and($finto->ultimoCodice('anna@example.com'))->toBeNull();
 });
 
-it('apri() lascia registrare ogni email; con Turnstile acceso, con la sua risposta (T3.2)', function () {
-    $finto = BackofficeFinto::attiva()->apri();
+it('apri() apre a ogni email solo con Turnstile acceso, come il backoffice che si apre solo col segreto: spento, resta la lista (T3.2)', function () {
+    $finto = BackofficeFinto::attiva()->consenti('@example.com')->apri();
 
-    expect(registra(registrazione(['email' => 'chiunque@altro.it']))->status())->toBe(202)
-        ->and($finto->ultimoCodice('chiunque@altro.it'))->toMatch('/^[0-9]{6}$/');
+    expect(registra(registrazione(['email' => 'chiunque@altro.it']))->json('codice'))->toBe('registrazione_non_aperta')
+        ->and(registra(registrazione())->status())->toBe(202)
+        ->and($finto->ultimoCodice('chiunque@altro.it'))->toBeNull();
 
     $finto->accendiTurnstile();
 
     expect(registra(registrazione(['email' => 'altra@altro.it']))->json('codice'))->toBe('turnstile_non_valido')
-        ->and(registra(registrazione(['email' => 'altra@altro.it', 'turnstile' => 'XXXX.DUMMY.TOKEN.XXXX']))->status())->toBe(202);
+        ->and(registra(registrazione(['email' => 'altra@altro.it', 'turnstile' => 'XXXX.DUMMY.TOKEN.XXXX']))->status())->toBe(202)
+        ->and($finto->ultimoCodice('altra@altro.it'))->toMatch('/^[0-9]{6}$/');
 });
