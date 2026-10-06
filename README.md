@@ -8,9 +8,61 @@ Lo scrive l'agente `zr-backoffice`: è l'altra metà del suo contratto (`openapi
 `docs.zeiras.com`).
 
 **Repo pubblico di proposito**: i frontend lo installano da Composer senza credenziali. Quindi qui dentro **nessun
-segreto, mai**, e nessun indirizzo interno. La CI fallisce su un file sensibile, su una chiave privata, su un valore di
-riserva per una variabile segreta e su un valore segreto scritto come in un `.env` o in un file YAML: lo script è
-`.github/nessun-segreto.sh`, si lancia anche in locale.
+segreto, mai**, e nessun indirizzo interno. La guardia è `.github/nessun-segreto.sh`: la lancia la CI a ogni push, su ogni
+ramo, e a ogni pull request; si lancia anche in locale dalla radice del repo, ed esce 1 dicendo file, riga e nome della
+variabile, o la forma trovata (mai il valore); esce 2, e lo dice, quando non ha letto tutto (fuori da un repo git, git che
+fallisce, un file che non si apre o che si apre e non si legge, come un sottomodulo). Le sue prove, un repo git temporaneo
+per caso, sono `.github/prova-nessun-segreto.sh`, e le lancia la CI. La CI vede un segreto quando è già pubblicato: prima
+di un push, la guardia si lancia in locale.
+
+### Cosa vede la guardia, e cosa no
+
+Un nome è segreto se contiene SECRET, KEY, TOKEN, PASSWORD, PASSWD, PWD, SEGRETO, SEGRETI, CHIAVE, CHIAVI, GETTONE,
+GETTONI, WEBHOOK, DSN, CREDENTIAL o CREDENZIAL, o PASS come parola intera del nome (`DB_PASS` sì, `BYPASS` e `PASSO` no),
+in maiuscolo o in minuscolo; fra virgolette può avere anche `-` e `.` (`X-Api-Key`, `zr-auth.chiave`). La guardia legge i
+file che git conosce, e vede:
+
+- un file sensibile, dal nome: `.env` e `.env.*`, `*.key`, `*.pem`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `*.ppk`,
+  `auth.json`, e un archivio (`*.zip`, `*.tar`, `*.gz`, `*.tgz`, `*.bz2`, `*.xz`, `*.7z`, `*.rar`, `*.jar`, `*.phar`),
+  che non sa leggere;
+- una chiave privata (`BEGIN … PRIVATE KEY`, PEM e OpenSSH, o una chiave PuTTY), in qualunque file di testo;
+- nel PHP, un valore di riserva per un nome segreto: `env('…', valore)`, `env('…') ?: valore`, `env('…') ?? valore`, lo
+  stesso con `getenv()` e `Env::get()`, e `$_ENV['…']` o `$_SERVER['…']` seguiti da `?:` o `??`;
+- nella configurazione di PHPUnit, un valore non vuoto per un nome segreto (`<env>`, `<server>`, `<var>`, `<const>`,
+  `<ini>`);
+- in ogni file di testo, un valore per un nome segreto scritto:
+  - come in un `.env` o in una riga di comando, `NOME=valore` senza spazi intorno all'uguale;
+  - in un file YAML, `NOME: valore` a inizio riga, anche con la chiave fra virgolette o uno spazio prima dei due punti
+    (anche `key:`: la chiave di `actions/cache` si scrive come un'espressione sola, `${{ steps.x.outputs.chiave }}`);
+  - con la chiave fra virgolette, come in un JSON (`"nome": "valore"`) o in un array PHP (`'nome' => 'valore'`), e in
+    `config('nome', 'valore')`, `Config::set()`, `define()` e `->withHeader()`, anche col valore a capo;
+  - con la chiave senza virgolette e il valore fra virgolette, come negli argomenti con nome del PHP e negli oggetti JS
+    (`nome: 'valore'`);
+- in ogni file di testo, dalla forma e senza un nome accanto: un gettone di Zeiras (`zr_` e 48 lettere o cifre), un
+  webhook di Slack, un gettone dopo `Bearer` (almeno 8 segni, con una cifra o un `_`), un indirizzo interno (la rete 10/8,
+  il loopback che non è `127.0.0.1`, i nomi ssh dei server, i domini interni di Management Academy).
+
+Passano i segnaposto, ma solo come valore intero: vuoto, `""`, `''`, `<valore>`, `$VAR`, `${VAR}`, `${{ secrets.X }}`,
+`{{ x }}`, `…`, `...`, `null`, `~`, anche fra virgolette. Dopo un segnaposto la riga finisce o viene uno spazio (in YAML,
+un commento); dopo il vuoto, la riga finisce o viene un commento (uno spazio e `#`); e passa la virgoletta, o il backtick,
+che apriva l'assegnazione (`"NOME=$VAR"`, `` `NOME=` ``). Tutto il resto è il valore: `~…`, `...…`, `null-…`, `null,…`,
+`''…`, `" …`, `".…`, un backtick, `#…`, `)…`, `,…`, uno spazio e un testo, `$` seguito da minuscole, `{…}` scattano.
+
+Non vede:
+
+- un file con un carattere NUL (un file binario), e quello che c'è dentro un archivio (che però scatta dal nome);
+- un valore con uno spazio prima dell'uguale (`NOME = valore`), quindi un'assegnazione nel codice (`$password = '…'`);
+- con la chiave fra virgolette, un valore che non è fra virgolette (una costante, una variabile, un numero), un valore
+  costruito che comincia con un segnaposto (`''.'…'`), e la stessa coppia in una chiamata diversa da `config()`,
+  `Config::set()`, `define()` e `->withHeader()` (`Arr::set($a, 'nome', '…')`);
+- `NOME: valore` senza virgolette fuori da un file YAML, e in un YAML se non sta a inizio riga (`{nome: valore}`);
+- `nome: 'valore'` dopo un `$`, un `->`, un `::`, un `.` o una virgoletta (una variabile, una proprietà, una stringa);
+- le traduzioni (`resources/lang/`) con la chiave fra virgolette: le loro chiavi sono i nomi dei messaggi
+  (`current_password`), e sono le copie di quelle del backoffice;
+- un segreto senza un nome segreto accanto e senza una delle forme di sopra (un gettone di un altro servizio), un
+  `Bearer` con meno di 8 segni o di sole lettere, un indirizzo di un'altra rete privata (192.168/16, 172.16/12);
+- la storia di git: solo i file di adesso. In locale legge i file come sono sul disco, non come sono nell'indice; nella
+  CI sono la stessa cosa.
 
 ## Installazione
 
@@ -18,13 +70,14 @@ Da GitHub, a un tag (le versioni sono semver; prima della 1.0 un minore nuovo pu
 
 ```json
 "repositories": [{"type": "vcs", "url": "https://github.com/ma-cpmakers/zr-auth"}],
-"require": {"zeiras/zr-auth": "^0.3"}
+"require": {"zeiras/zr-auth": "^0.4"}
 ```
 
 Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`io.mostra`, `io.workspace.elenca`,
 `app.elenca`, `workspace.membri.elenca`) e lo `slug` del workspace: il backoffice le ha da quando le loro righe sono in
 `https://docs.zeiras.com/v1/novita`, che esce col deploy. Con la 0.2 il finto non le conosce, e lancia
-`RichiestaSconosciuta`.
+`RichiestaSconosciuta`. La 0.4 porta la registrazione (`utenti.crea`) con Turnstile, e i testi dei suoi due codici
+nuovi, `turnstile_non_valido` e `turnstile_non_disponibile`.
 
 | Variabile | Default | Cosa |
 |---|---|---|
@@ -111,25 +164,45 @@ expect(Rotte::senzaGuardia(['GET accedi', 'POST accedi']))->toBe([]);
 
 `Zeiras\Auth\Testing\BackofficeFinto` risponde alle chiamate di `/v1` come il backoffice, senza rete e senza database: le
 forme del contratto, i codici d'errore del catalogo, i testi del backoffice (it, en, es: le copie di `resources/lang/`) e
-i suoi freni. Con lui un frontend prova nella sua CI l'ingresso, l'uscita e la verifica dell'email.
+i suoi freni. Con lui un frontend prova nella sua CI la registrazione, l'ingresso, l'uscita e la verifica dell'email.
 
 ```php
 use Zeiras\Auth\Testing\BackofficeFinto;
 
 $finto = BackofficeFinto::attiva();
-$anna = $finto->persona('anna@example.com', 'una password lunga e sicura');  // la persona, come la dà il backoffice
+$password = 'una password lunga e sicura';
+$anna = $finto->persona('anna@example.com', $password);                     // la persona, come la dà il backoffice
 $studio = $finto->workspace('Studio Anna', $anna);                          // {id, nome, slug}: Anna è la proprietaria
 $finto->membro($studio, $finto->persona('bruno@example.com', '…', nome: 'Bruno'), 'membro');
 
-$this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una password lunga e sicura']);
+$this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password]);
 ```
 
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
-- Fa `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea` e `io.email.verifica.crea`, e le
-  letture: `io.mostra`, `io.workspace.elenca`, `app.elenca` e `workspace.membri.elenca`. Una chiamata di `/v1` che non
+- Fa `utenti.crea`, `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea` e
+  `io.email.verifica.crea`, e le letture: `io.mostra`, `io.workspace.elenca`, `app.elenca` e `workspace.membri.elenca`. Una chiamata di `/v1` che non
   conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- La registrazione è chiusa come nel backoffice: ogni `utenti.crea` è `403` `registrazione_non_aperta`, finché il test
+  non dà la lista dei consentiti con `consenti('bruno@altro.it', '@example.com')` (un'email intera o un dominio, per
+  uguaglianza) o la apre a tutti con `apri()`, che vale solo con Turnstile acceso, come il backoffice che si apre solo
+  col segreto. Una registrazione riuscita è `202` con l'email, la stessa risposta per un'email che ha già un account,
+  che non cambia; la persona nuova nasce con l'email da verificare, e il suo primo codice è in `ultimoCodice()`. Al
+  posto di Have I Been Pwned, il finto dà per trapelata una password sola, `BackofficeFinto::PASSWORD_TRAPELATA`: `422`
+  `dati_non_validi` su `#/password`.
+- Turnstile è spento, come nel backoffice senza il segreto: la risposta non si controlla, ma si valida come la dichiara
+  il contratto, e una che non è una stringa o supera 2048 caratteri è `422` `dati_non_validi` su `#/turnstile`.
+  `accendiTurnstile()` lo accende: una registrazione vuole `turnstile` uguale a `BackofficeFinto::TURNSTILE_VALIDO`,
+  `XXXX.DUMMY.TOKEN.XXXX` (la risposta che danno i tasti di prova di Cloudflare), e senza o con un altro valore è `422`
+  `turnstile_non_valido`, prima della lista. `guastaTurnstile()` fa il Cloudflare che non risponde: una risposta ben
+  formata è `503` `turnstile_non_disponibile`. La registrazione aperta come in produzione è `apri()` con
+  `accendiTurnstile()`.
+- Via `Api` il `503` `turnstile_non_disponibile` arriva come `BackofficeNonRisponde`, come ogni 5xx: la pagina non lo
+  distingue da un backoffice che non risponde, e chiede alla persona di rifare il controllo e riprovare fra poco.
+- In produzione una risposta del widget vale una volta: Cloudflare respinge la seconda (`422` `turnstile_non_valido`), e
+  dopo ogni invio, riuscito o no, la pagina rifà il controllo. Il finto, come i tasti di prova di Cloudflare, accetta
+  `TURNSTILE_VALIDO` ogni volta: una risposta usata due volte, nei test, passa.
 - `workspace($nome, $proprietaria)` dà il workspace con lo slug del backoffice: il nome in slug, al più 40 caratteri, poi
   un trattino e sei caratteri casuali (`studio-anna-k3x9q2`). `membro($workspace, $persona, $ruolo)` mette una persona in
   un workspace, o le cambia il ruolo: `io.mostra` lo rilegge a ogni chiamata.
@@ -141,8 +214,8 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una passwo
   `Http::fake()` senza indirizzo, che risponderebbe a tutto. Le chiamate verso altri indirizzi restano agli altri fake.
 - Il tempo è `now()`, e un test lo sposta con `travel()`: i gettoni valgono 12 ore dall'accesso, un codice 10 minuti, un
   freno fino alla fine della sua finestra.
-- I freni sono quelli del backoffice: 5 richieste al minuto per email in `accessi.crea` (un accesso riuscito azzera il
-  conto), `io.email.codice.crea` e `io.email.verifica.crea`, poi `429` con `Retry-After`; fra un codice e l'altro 60
+- I freni sono quelli del backoffice: 5 richieste al minuto per email in `utenti.crea`, `accessi.crea` (un accesso
+  riuscito azzera il conto), `io.email.codice.crea` e `io.email.verifica.crea`, poi `429` con `Retry-After`; fra un codice e l'altro 60
   secondi, al più 5 codici in un'ora e 10 in un giorno; un codice vale 5 tentativi, e una persona ha 10 codici sbagliati
   al giorno; `gettoni.crea` dà al più 60 gettoni in un'ora a una persona, e un gettone fa al più 600 chiamate al minuto.
 - Che risponda come il contratto lo prova la CI del backoffice: ogni sua risposta passa la validazione del contratto vero,

@@ -77,7 +77,7 @@ it('una password sbagliata, un\'email sconosciuta e una non verificata sono lo s
     $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno', verificata: false);
 
     $risposte = [
-        alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => 'una password sbagliata']),
+        alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD_SBAGLIATA]),
         alFinto('POST', '/v1/accessi', ['email' => 'nessuno@example.com', 'password' => PASSWORD]),
         alFinto('POST', '/v1/accessi', ['email' => 'bruno@example.com', 'password' => PASSWORD]),
     ];
@@ -113,7 +113,7 @@ it('il sesto tentativo in un minuto per la stessa email è 429 anche con la pass
     $this->freezeTime();
 
     foreach (range(1, 5) as $tentativo) {
-        expect(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => 'sbagliata'])->status())->toBe(422);
+        expect(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD_SBAGLIATA])->status())->toBe(422);
     }
 
     $frenata = alFinto('POST', '/v1/accessi', ['email' => ' ANNA@example.com', 'password' => PASSWORD]);
@@ -139,7 +139,7 @@ it('un accesso riuscito azzera il conto dei tentativi (T2.2)', function () {
     $finto = BackofficeFinto::attiva();
     $finto->persona('anna@example.com', PASSWORD);
     $this->freezeTime();
-    $sbagliato = fn () => alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => 'sbagliata'])->status();
+    $sbagliato = fn () => alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD_SBAGLIATA])->status();
 
     foreach (range(1, 4) as $tentativo) {
         expect($sbagliato())->toBe(422);

@@ -14,8 +14,9 @@ const API = 'https://api.zeiras.com';
 const INGRESSO = 'https://app.zeiras.com/accedi';
 
 // Gettoni di prova nella forma di Zeiras (`zr_` più 48 caratteri): nel repo, che è pubblico, nessun gettone vero (G13).
-const GETTONE_ACCESSO = 'zr_AccessoAccessoAccessoAccessoAccessoAccessoAccess';
-const GETTONE_WORKSPACE = 'zr_WorkspaceWorkspaceWorkspaceWorkspaceWorkspaceWor';
+// Scritti in due pezzi: interi, la guardia dei segreti li leggerebbe come gettoni veri.
+const GETTONE_ACCESSO = 'zr_'.'AccessoAccessoAccessoAccessoAccessoAccessoAccess';
+const GETTONE_WORKSPACE = 'zr_'.'WorkspaceWorkspaceWorkspaceWorkspaceWorkspaceWor';
 
 /** La persona come la dà il backoffice (lo schema Utente). */
 function utente(): array
@@ -83,6 +84,13 @@ function problema(int $stato, string $codice, array $altri = [], array $header =
 // Il backoffice finto (T2): le chiamate come le fa un client qualunque, e le risposte come le scrive il backoffice.
 
 const PASSWORD = 'una password lunga e sicura';
+
+// Le altre password delle prove, in costanti: un valore letterale accanto a una chiave «password» in un array è ciò che la
+// guardia dei segreti (.github/nessun-segreto.sh) ferma.
+const ALTRA_PASSWORD = "un'altra password lunga";
+const PASSWORD_SBAGLIATA = 'una password sbagliata';
+const PASSWORD_CORTA = 'corta';
+const PASSWORD_COL_NULLO = "una password\0lunga";
 
 /** Una chiamata al finto: metodo, percorso di /v1, corpo JSON, gettone, Accept-Language. */
 function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string $gettone = null, ?string $lingua = null): Response

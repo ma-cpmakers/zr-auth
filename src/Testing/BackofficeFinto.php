@@ -12,6 +12,7 @@ use Illuminate\Cache\Repository;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 use LogicException;
 use Random\Randomizer;
@@ -30,8 +31,11 @@ use Zeiras\Auth\Testing\Finto\Testi;
  *     $anna = $finto->persona('anna@example.com', 'una password lunga e sicura');
  *     $studio = $finto->workspace('Studio Anna', $anna);
  *
- * Fa i metodi del nucleo (entrare, uscire, il gettone di un workspace, la verifica dell'email) e le letture della
- * persona e del workspace: io.mostra, io.workspace.elenca, app.elenca, workspace.membri.elenca.
+ * Fa i metodi del nucleo (registrarsi, entrare, uscire, il gettone di un workspace, la verifica dell'email) e le letture
+ * della persona e del workspace: io.mostra, io.workspace.elenca, app.elenca, workspace.membri.elenca. La registrazione è
+ * chiusa come nel backoffice, finché il test non dà la lista dei consentiti (consenti()) o la apre (apri(), che vale solo
+ * con Turnstile acceso); Turnstile è spento, finché il test non lo accende (accendiTurnstile()) o lo guasta
+ * (guastaTurnstile()).
  *
  * I dati nascono dai metodi del finto, mai da campi comodi nelle risposte: il codice di verifica si legge da
  * ultimoCodice(), che fa da casella di posta. Il tempo è now(): un test lo sposta con travel(). Una chiamata di /v1 che il
@@ -39,6 +43,12 @@ use Zeiras\Auth\Testing\Finto\Testi;
  */
 final class BackofficeFinto
 {
+    /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
+    public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';
+
+    /** La password che il finto dà per trapelata, al posto di Have I Been Pwned: utenti.crea la rifiuta. */
+    public const PASSWORD_TRAPELATA = 'una password trapelata';
+
     private const DOCUMENTAZIONE = 'https://docs.zeiras.com/v1/';
 
     /** I metodi che il finto fa: verbo, percorso, operationId. */
@@ -51,6 +61,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
         ['POST', '#^/v1/io/email/verifica$#', 'io.email.verifica.crea'],
         ['GET', '#^/v1/io/workspace$#', 'io.workspace.elenca'],
+        ['POST', '#^/v1/utenti$#', 'utenti.crea'],
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
     ];
 
@@ -83,7 +94,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'verifiche' => 5, 'gettone' => 600, 'gettoni' => 60];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'gettone' => 600, 'gettoni' => 60];
 
     private const ORA = 3600;
 
@@ -103,6 +114,9 @@ final class BackofficeFinto
 
     /** Utente::REGOLE_EMAIL del backoffice. */
     private const REGOLE_EMAIL = ['bail', 'required', 'string', 'max:254', 'email:rfc,filter'];
+
+    /** Quanti caratteri può avere la risposta del widget (Turnstile::LUNGHEZZA). */
+    private const LUNGHEZZA_TURNSTILE = 2048;
 
     /** @var array<string, array{nome: string, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
     private array $persone = [];
@@ -124,6 +138,15 @@ final class BackofficeFinto
 
     /** @var array<string, string> l'ultimo codice partito, per email */
     private array $posta = [];
+
+    /** @var list<string> la lista dei consentiti (zeiras.registrazione.consentiti): email intere o «@dominio» */
+    private array $consentiti = [];
+
+    /** La registrazione aperta a tutti (RegistrazioneConsentita::aperta()). */
+    private bool $aperta = false;
+
+    /** Turnstile in utenti.crea: spento (null), `acceso`, o `guasto` (Cloudflare non risponde). */
+    private ?string $turnstile = null;
 
     /** I freni, con RateLimiter come nel backoffice: in memoria, e col tempo di now(). */
     private readonly RateLimiter $freni;
@@ -229,6 +252,52 @@ final class BackofficeFinto
         $this->membri[$idWorkspace][$idPersona] = $ruolo;
     }
 
+    /**
+     * Mette indirizzi nella lista dei consentiti di utenti.crea (ZR_REGISTRAZIONE_CONSENTITI del backoffice): un'email
+     * intera o «@dominio», per uguaglianza. Di norma la lista è vuota, e ogni registrazione è 403 registrazione_non_aperta.
+     */
+    public function consenti(string ...$voci): self
+    {
+        foreach ($voci as $voce) {
+            $this->consentiti[] = self::normalizza($voce);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Apre la registrazione a tutti, come l'interruttore del backoffice: vale solo con Turnstile acceso (accendiTurnstile()
+     * o guastaTurnstile()), perché il backoffice senza il segreto resta alla lista.
+     */
+    public function apri(): self
+    {
+        $this->aperta = true;
+
+        return $this;
+    }
+
+    /**
+     * Accende Turnstile in utenti.crea, come il backoffice col segreto: una registrazione vuole `turnstile` uguale a
+     * TURNSTILE_VALIDO, e senza o con un altro valore è 422 turnstile_non_valido.
+     */
+    public function accendiTurnstile(): self
+    {
+        $this->turnstile = 'acceso';
+
+        return $this;
+    }
+
+    /**
+     * Turnstile acceso, e Cloudflare che non risponde: una risposta del widget ben formata è 503 turnstile_non_disponibile,
+     * una mancante o malformata resta 422 turnstile_non_valido.
+     */
+    public function guastaTurnstile(): self
+    {
+        $this->turnstile = 'guasto';
+
+        return $this;
+    }
+
     /** L'ultimo codice di verifica partito per l'email, null se nessuno: la casella di posta del finto. */
     public function ultimoCodice(string $email): ?string
     {
@@ -283,6 +352,7 @@ final class BackofficeFinto
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
+                'utenti.crea' => $this->creaUtente($corpo),
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
             };
             $header = $dati === null ? [] : ['Content-Type' => 'application/json'];
@@ -373,6 +443,102 @@ final class BackofficeFinto
         $this->frena('gettoni:'.$chi['persona'], self::FRENI['gettoni'], self::ORA);
 
         return [201, ['data' => $this->emetti($chi['accesso'], $workspace)]];
+    }
+
+    /**
+     * utenti.crea (UtentiController::crea): 202 con l'email, la stessa risposta per un'email nuova e per una che ha già un
+     * account, che non cambia. Nell'ordine del backoffice: l'email, il suo freno, Turnstile, la lista dei consentiti, poi
+     * il resto. La persona nuova nasce con l'email da verificare, i valori predefiniti del backoffice e il primo codice.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaUtente(array $corpo): array
+    {
+        $email = self::normalizza($this->testi->valida($corpo, ['email' => self::REGOLE_EMAIL])['email']);
+        $this->frena('registrazioni:'.$email, self::FRENI['registrazioni'], self::MINUTO);
+        // Dal corpo pulito come lo legge il backoffice, dopo TrimStrings e ConvertEmptyStringsToNull.
+        $this->controllaTurnstile(Testi::pulisci($corpo)['turnstile'] ?? null);
+
+        if (! $this->consente($email)) {
+            throw new Problema('registrazione_non_aperta');
+        }
+
+        // Password::min(12)->uncompromised() del backoffice: la lunghezza, e la password trapelata al posto di HIBP.
+        $dati = $this->testi->valida($corpo, [
+            'password' => ['required', 'string', new SenzaCarattereNullo, 'min:12', function (string $campo, mixed $valore, Closure $fail) {
+                if ($valore === self::PASSWORD_TRAPELATA) {
+                    $fail('validation.password.uncompromised')->translate();
+                }
+            }],
+            'nome' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'lingua' => ['sometimes', 'nullable', 'string', Rule::in(Testi::LINGUE)],
+            'fuso_orario' => ['sometimes', 'nullable', 'string', 'timezone:all'],
+            'termini_accettati' => ['required', 'boolean', 'accepted'],
+            // La risposta del widget come la dichiara il contratto, anche a Turnstile spento; per ultima, come nel backoffice.
+            'turnstile' => ['sometimes', 'nullable', 'string', 'max:'.self::LUNGHEZZA_TURNSTILE],
+        ]);
+
+        if ($this->conEmail($email) === null) {
+            $id = self::id();
+            $this->persone[$id] = [
+                'nome' => $dati['nome'] ?? Str::before($email, '@'),
+                'email' => $email,
+                'email_verificata_il' => null,
+                // La predefinita di config/lingue.php del backoffice, e il fuso di chi non lo sceglie.
+                'lingua' => $dati['lingua'] ?? 'it',
+                'fuso_orario' => $dati['fuso_orario'] ?? 'Europe/Rome',
+                'password' => $dati['password'],
+            ];
+            $this->chiediCodice($id);
+        }
+
+        return [202, ['data' => ['email' => $email]]];
+    }
+
+    /**
+     * Turnstile come il backoffice (Turnstile::controlla): spento, niente. Acceso, una risposta assente, vuota, che non è
+     * una stringa o è troppo lunga è 422 turnstile_non_valido, e Cloudflare passa solo TURNSTILE_VALIDO; guasto, la
+     * risposta ben formata arriva a un Cloudflare che non risponde, 503 turnstile_non_disponibile.
+     */
+    private function controllaTurnstile(mixed $risposta): void
+    {
+        if ($this->turnstile === null) {
+            return;
+        }
+
+        if (! is_string($risposta) || $risposta === '' || mb_strlen($risposta) > self::LUNGHEZZA_TURNSTILE) {
+            throw new Problema('turnstile_non_valido');
+        }
+
+        if ($this->turnstile === 'guasto') {
+            throw new Problema('turnstile_non_disponibile');
+        }
+
+        if ($risposta !== self::TURNSTILE_VALIDO) {
+            throw new Problema('turnstile_non_valido');
+        }
+    }
+
+    /**
+     * La lista dei consentiti (RegistrazioneConsentita::consente): aperta e con Turnstile acceso, ogni email; altrimenti
+     * un'email intera della lista o il suo dominio dopo «@», per uguaglianza.
+     */
+    private function consente(string $email): bool
+    {
+        if ($this->aperta && $this->turnstile !== null) {
+            return true;
+        }
+
+        $dominio = Str::afterLast($email, '@');
+
+        foreach ($this->consentiti as $voce) {
+            if ($voce !== '' && (str_starts_with($voce, '@') ? $dominio === substr($voce, 1) : $email === $voce)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

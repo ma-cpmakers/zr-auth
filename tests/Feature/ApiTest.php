@@ -35,7 +35,7 @@ it('persona() manda il gettone dell\'accesso, senzaGettone() nessun gettone', fu
     apriSessione();
 
     Api::persona()->post('/v1/gettoni', ['workspace_id' => 'w']);
-    Api::senzaGettone()->post('/v1/accessi', ['email' => 'anna@example.com', 'password' => 'x']);
+    Api::senzaGettone()->post('/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD]);
 
     $inviate = Http::recorded()->map(fn (array $coppia) => $coppia[0]);
     expect($inviate[0]->header('Authorization'))->toBe(['Bearer '.GETTONE_ACCESSO])

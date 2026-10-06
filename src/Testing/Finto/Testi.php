@@ -185,12 +185,12 @@ final class Testi
 
     /**
      * TrimStrings e ConvertEmptyStringsToNull di Laravel: le chiavi sono a punti, e solo le password in cima non si
-     * tagliano.
+     * tagliano. È il corpo come lo legge il backoffice, anche fuori dalla validazione (la risposta del widget Turnstile).
      *
      * @param  array<mixed>  $dati
      * @return array<mixed>
      */
-    private static function pulisci(array $dati, string $prefisso = ''): array
+    public static function pulisci(array $dati, string $prefisso = ''): array
     {
         foreach ($dati as $chiave => $valore) {
             if (is_array($valore)) {

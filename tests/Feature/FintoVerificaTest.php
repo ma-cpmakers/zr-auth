@@ -126,7 +126,7 @@ it('un\'email non valida, una password assente o col carattere nullo sono 422 da
     BackofficeFinto::attiva();
 
     $spagnolo = alFinto('POST', '/v1/io/email/codice', ['email' => 'anna@', 'password' => null], lingua: 'es');
-    $italiano = alFinto('POST', '/v1/io/email/codice', ['email' => 'anna@example.com', 'password' => "una\0password"]);
+    $italiano = alFinto('POST', '/v1/io/email/codice', ['email' => 'anna@example.com', 'password' => PASSWORD_COL_NULLO]);
 
     // In spagnolo il backoffice non ha i messaggi della validazione: escono in inglese, il ripiego.
     expect($spagnolo->status())->toBe(422)
