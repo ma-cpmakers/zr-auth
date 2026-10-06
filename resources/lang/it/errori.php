@@ -38,7 +38,7 @@ return [
     ],
     'app_non_attiva' => [
         'title' => 'App non attiva',
-        'detail' => "Questo metodo è di un'app che non è attiva nel workspace del gettone: la attiva un proprietario o un amministratore, con app.modifica.",
+        'detail' => "Questo metodo è di un'app che non è attiva nel workspace del gettone: se è disponibile, la attiva un proprietario o un amministratore, con app.modifica.",
     ],
     'percorso_inesistente' => [
         'title' => 'Percorso inesistente',

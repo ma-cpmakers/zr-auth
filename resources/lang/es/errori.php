@@ -38,7 +38,7 @@ return [
     ],
     'app_non_attiva' => [
         'title' => 'Aplicación no activa',
-        'detail' => 'Este método es de una aplicación que no está activa en el espacio de trabajo del token: la activa un propietario o un administrador, con app.modifica.',
+        'detail' => 'Este método es de una aplicación que no está activa en el espacio de trabajo del token: si está disponible, la activa un propietario o un administrador, con app.modifica.',
     ],
     'percorso_inesistente' => [
         'title' => 'Ruta inexistente',

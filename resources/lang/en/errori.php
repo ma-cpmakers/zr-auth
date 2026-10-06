@@ -38,7 +38,7 @@ return [
     ],
     'app_non_attiva' => [
         'title' => 'App not active',
-        'detail' => "This method belongs to an app that is not active in the token's workspace: an owner or an administrator can activate it with app.modifica.",
+        'detail' => "This method belongs to an app that is not active in the token's workspace: if it is available, an owner or an administrator can activate it with app.modifica.",
     ],
     'percorso_inesistente' => [
         'title' => 'Path not found',
