@@ -96,6 +96,27 @@ final class Sessione
     }
 
     /**
+     * Dove tornare dopo l'accesso, al posto di redirect()->intended(): la pagina che la guardia ha ricordato (`url.intended`,
+     * solo da un GET) se ha l'origine della richiesta, cioè lo stesso schema, lo stesso host e la stessa porta; se no
+     * `$predefinita`, la pagina che sceglie il modulo. Il ritorno esce dalla sessione in ogni caso: vale una volta.
+     */
+    public static function ritorno(string $predefinita): string
+    {
+        $ritorno = session()->pull('url.intended');
+        $origine = request()->getSchemeAndHttpHost();
+
+        // Dopo l'origine viene il percorso, la query, il frammento o niente: così «https://sito.evil.example»,
+        // «https://sito@evil.example» e «https://evil.example\@sito» (che il browser legge con l'host evil.example) sono di
+        // un altro host, e un indirizzo relativo come «//evil.example/» non comincia con l'origine.
+        if (is_string($ritorno) && str_starts_with($ritorno, $origine)
+            && in_array(substr($ritorno, strlen($origine), 1), ['', '/', '?', '#'], true)) {
+            return $ritorno;
+        }
+
+        return $predefinita;
+    }
+
+    /**
      * Chiude la sessione, come il logout di Laravel: escono i gettoni e ogni altro dato della sessione, che non passa a chi
      * entra dopo dallo stesso browser; l'id e il token CSRF sono nuovi, e la sessione di prima è distrutta: chi ha il cookie
      * di prima dell'uscita non la riapre.

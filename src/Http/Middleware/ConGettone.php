@@ -10,8 +10,8 @@ use Zeiras\Auth\Sessione;
 
 /**
  * La guardia di zr-auth: ogni rotta dei gruppi `web` e `api` vuole una sessione con un gettone che non è scaduto
- * (ZrAuthServiceProvider la mette nei gruppi da sé). Senza, una pagina rimanda all'ingresso e ricorda dove voleva
- * andare; una visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401.
+ * (ZrAuthServiceProvider la mette nei gruppi da sé). Senza, una pagina rimanda all'ingresso e, se è un GET, ricorda dove
+ * voleva andare; una visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401.
  */
 final class ConGettone
 {
@@ -34,19 +34,19 @@ final class ConGettone
     public static function versoLIngresso(Request $richiesta): Response
     {
         $ingresso = (string) config('zr-auth.ingresso');
+        $inertia = $richiesta->header('X-Inertia') !== null;
 
-        if ($richiesta->header('X-Inertia') !== null) {
-            if ($richiesta->hasSession() && $richiesta->isMethod('GET')) {
-                $richiesta->session()->put('url.intended', $richiesta->fullUrl());
-            }
-
-            return new Response('', 409, ['X-Inertia-Location' => $ingresso]);
-        }
-
-        if ($richiesta->expectsJson()) {
+        if (! $inertia && $richiesta->expectsJson()) {
             return new JsonResponse(['message' => 'Unauthenticated.'], 401);
         }
 
-        return redirect()->guest($ingresso);
+        // La pagina chiesta si ricorda solo da un GET, ed è l'indirizzo della richiesta. Mai redirect()->guest(): per ogni
+        // altro metodo, HEAD compreso, ricorderebbe il Referer, la pagina di un altro sito, dove la persona tornerebbe dopo
+        // l'accesso. Il ritorno lo legge Sessione::ritorno().
+        if ($richiesta->hasSession() && $richiesta->isMethod('GET')) {
+            $richiesta->session()->put('url.intended', $richiesta->fullUrl());
+        }
+
+        return $inertia ? new Response('', 409, ['X-Inertia-Location' => $ingresso]) : redirect()->to($ingresso);
     }
 }

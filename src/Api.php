@@ -2,7 +2,7 @@
 
 namespace Zeiras\Auth;
 
-use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
@@ -18,7 +18,8 @@ use Zeiras\Auth\Errori\IndirizzoNonSicuro;
  * Il client delle API /v1 del backoffice (spec S01, «zr-auth»): `ZR_API_URL`, il gettone nell'header, timeout corto.
  * Ogni metodo torna il JSON della risposta (`[]` per un 204). Un errore di /v1 (RFC 9457) diventa ErroreApi; un 401 diventa
  * GettoneRifiutato, che chiude la sessione e rimanda all'ingresso, senza ripetere la chiamata; un backoffice che non
- * risponde, un 5xx o una risposta senza JSON diventano BackofficeNonRisponde.
+ * risponde, un trasporto che cade (anche dopo lo stato), un 3xx, un 5xx o una risposta senza JSON diventano
+ * BackofficeNonRisponde. Un redirect non si segue.
  *
  *     Api::senzaGettone()->post('/v1/accessi', ['email' => $email, 'password' => $password]);
  *     Api::workspace()->tutti('/v1/workspace/membri');
@@ -147,6 +148,9 @@ final class Api
         $richiesta = Http::baseUrl(self::indirizzo())
             ->timeout((int) config('zr-auth.timeout'))
             ->connectTimeout((int) config('zr-auth.connessione'))
+            // Un redirect non si segue (R31): un 307 rimanderebbe il corpo, una password compresa, al Location, e il tetto
+            // di tempo varrebbe per ogni salto.
+            ->withoutRedirecting()
             ->acceptJson()
             ->withHeaders(['Accept-Language' => app()->getLocale()]);
 
@@ -156,11 +160,14 @@ final class Api
 
         try {
             $risposta = $invia($richiesta);
-        } catch (ConnectionException $e) {
+        } catch (HttpClientException $e) {
+            // Ogni guasto del trasporto (R30): la connessione che non si apre o che cade, anche dopo lo stato. Con Guzzle 8 un
+            // trasferimento che si rompe dopo lo stato di un 4xx o di un 5xx arriva come RequestException, non come
+            // ConnectionException.
             throw new BackofficeNonRisponde('Il backoffice non risponde.', previous: $e);
         }
 
-        if ($risposta->serverError()) {
+        if ($risposta->serverError() || $risposta->redirect()) {
             throw new BackofficeNonRisponde("Il backoffice ha risposto {$risposta->status()}.");
         }
 
