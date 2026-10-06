@@ -18,13 +18,14 @@ Da GitHub, a un tag (le versioni sono semver; prima della 1.0 un minore nuovo pu
 
 ```json
 "repositories": [{"type": "vcs", "url": "https://github.com/ma-cpmakers/zr-auth"}],
-"require": {"zeiras/zr-auth": "^0.3"}
+"require": {"zeiras/zr-auth": "^0.4"}
 ```
 
 Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`io.mostra`, `io.workspace.elenca`,
 `app.elenca`, `workspace.membri.elenca`) e lo `slug` del workspace: il backoffice le ha da quando le loro righe sono in
 `https://docs.zeiras.com/v1/novita`, che esce col deploy. Con la 0.2 il finto non le conosce, e lancia
-`RichiestaSconosciuta`.
+`RichiestaSconosciuta`. La 0.4 porta la registrazione (`utenti.crea`) con Turnstile, e i testi dei suoi due codici
+nuovi, `turnstile_non_valido` e `turnstile_non_disponibile`.
 
 | Variabile | Default | Cosa |
 |---|---|---|
@@ -111,7 +112,7 @@ expect(Rotte::senzaGuardia(['GET accedi', 'POST accedi']))->toBe([]);
 
 `Zeiras\Auth\Testing\BackofficeFinto` risponde alle chiamate di `/v1` come il backoffice, senza rete e senza database: le
 forme del contratto, i codici d'errore del catalogo, i testi del backoffice (it, en, es: le copie di `resources/lang/`) e
-i suoi freni. Con lui un frontend prova nella sua CI l'ingresso, l'uscita e la verifica dell'email.
+i suoi freni. Con lui un frontend prova nella sua CI la registrazione, l'ingresso, l'uscita e la verifica dell'email.
 
 ```php
 use Zeiras\Auth\Testing\BackofficeFinto;
@@ -127,9 +128,20 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una passwo
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
-- Fa `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea` e `io.email.verifica.crea`, e le
-  letture: `io.mostra`, `io.workspace.elenca`, `app.elenca` e `workspace.membri.elenca`. Una chiamata di `/v1` che non
+- Fa `utenti.crea`, `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea` e
+  `io.email.verifica.crea`, e le letture: `io.mostra`, `io.workspace.elenca`, `app.elenca` e `workspace.membri.elenca`. Una chiamata di `/v1` che non
   conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- La registrazione è chiusa come nel backoffice: ogni `utenti.crea` è `403` `registrazione_non_aperta`, finché il test
+  non dà la lista dei consentiti con `consenti('bruno@altro.it', '@example.com')` (un'email intera o un dominio, per
+  uguaglianza) o la apre a tutti con `apri()`. Una registrazione riuscita è `202` con l'email, la stessa risposta per
+  un'email che ha già un account, che non cambia; la persona nuova nasce con l'email da verificare, e il suo primo
+  codice è in `ultimoCodice()`. Al posto di Have I Been Pwned, il finto dà per trapelata una password sola,
+  `BackofficeFinto::PASSWORD_TRAPELATA`: `422` `dati_non_validi` su `#/password`.
+- Turnstile è spento, come nel backoffice senza il segreto. `accendiTurnstile()` lo accende: una registrazione vuole
+  `turnstile` uguale a `BackofficeFinto::TURNSTILE_VALIDO`, `XXXX.DUMMY.TOKEN.XXXX` (la risposta che danno i tasti di
+  prova di Cloudflare), e senza o con un altro valore è `422` `turnstile_non_valido`, prima della lista. `guastaTurnstile()`
+  fa il Cloudflare che non risponde: una risposta ben formata è `503` `turnstile_non_disponibile`. Il backoffice si apre a
+  tutti solo col segreto: la registrazione aperta come in produzione è `apri()` con `accendiTurnstile()`.
 - `workspace($nome, $proprietaria)` dà il workspace con lo slug del backoffice: il nome in slug, al più 40 caratteri, poi
   un trattino e sei caratteri casuali (`studio-anna-k3x9q2`). `membro($workspace, $persona, $ruolo)` mette una persona in
   un workspace, o le cambia il ruolo: `io.mostra` lo rilegge a ogni chiamata.
@@ -141,8 +153,8 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una passwo
   `Http::fake()` senza indirizzo, che risponderebbe a tutto. Le chiamate verso altri indirizzi restano agli altri fake.
 - Il tempo è `now()`, e un test lo sposta con `travel()`: i gettoni valgono 12 ore dall'accesso, un codice 10 minuti, un
   freno fino alla fine della sua finestra.
-- I freni sono quelli del backoffice: 5 richieste al minuto per email in `accessi.crea` (un accesso riuscito azzera il
-  conto), `io.email.codice.crea` e `io.email.verifica.crea`, poi `429` con `Retry-After`; fra un codice e l'altro 60
+- I freni sono quelli del backoffice: 5 richieste al minuto per email in `utenti.crea`, `accessi.crea` (un accesso
+  riuscito azzera il conto), `io.email.codice.crea` e `io.email.verifica.crea`, poi `429` con `Retry-After`; fra un codice e l'altro 60
   secondi, al più 5 codici in un'ora e 10 in un giorno; un codice vale 5 tentativi, e una persona ha 10 codici sbagliati
   al giorno; `gettoni.crea` dà al più 60 gettoni in un'ora a una persona, e un gettone fa al più 600 chiamate al minuto.
 - Che risponda come il contratto lo prova la CI del backoffice: ogni sua risposta passa la validazione del contratto vero,
