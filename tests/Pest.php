@@ -84,6 +84,13 @@ function problema(int $stato, string $codice, array $altri = [], array $header =
 
 const PASSWORD = 'una password lunga e sicura';
 
+// Le altre password delle prove, in costanti: un valore letterale accanto a una chiave «password» in un array è ciò che la
+// guardia dei segreti (.github/nessun-segreto.sh) ferma.
+const ALTRA_PASSWORD = "un'altra password lunga";
+const PASSWORD_SBAGLIATA = 'una password sbagliata';
+const PASSWORD_CORTA = 'corta';
+const PASSWORD_COL_NULLO = "una password\0lunga";
+
 /** Una chiamata al finto: metodo, percorso di /v1, corpo JSON, gettone, Accept-Language. */
 function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string $gettone = null, ?string $lingua = null): Response
 {

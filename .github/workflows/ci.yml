@@ -20,6 +20,9 @@ jobs:
       # Pacchetto pubblico: un segreto qui dentro e' pubblicato. Il controllo e' grezzo apposta, e si lancia anche in locale.
       - name: Nessun segreto nel repo
         run: bash .github/nessun-segreto.sh
+      # Le prove della guardia: ogni caso in un repo git temporaneo, con l'uscita attesa (0, 1 col nome, 2).
+      - name: Prove della guardia dei segreti
+        run: bash .github/prova-nessun-segreto.sh
       # Libreria: nessun composer.lock nel repo, le dipendenze si risolvono a ogni run.
       - name: Dipendenze
         run: composer update --no-interaction --no-progress --prefer-dist

@@ -8,9 +8,41 @@ Lo scrive l'agente `zr-backoffice`: è l'altra metà del suo contratto (`openapi
 `docs.zeiras.com`).
 
 **Repo pubblico di proposito**: i frontend lo installano da Composer senza credenziali. Quindi qui dentro **nessun
-segreto, mai**, e nessun indirizzo interno. La CI fallisce su un file sensibile, su una chiave privata, su un valore di
-riserva per una variabile segreta e su un valore segreto scritto come in un `.env` o in un file YAML: lo script è
-`.github/nessun-segreto.sh`, si lancia anche in locale.
+segreto, mai**, e nessun indirizzo interno. La guardia è `.github/nessun-segreto.sh`: la lancia la CI, si lancia anche
+in locale dalla radice del repo, ed esce 1 dicendo file, riga e nome della variabile (mai il valore); esce 2, e lo dice,
+quando non ha letto tutto (fuori da un repo git, git che fallisce, un file che non si apre). Le sue prove, un repo git
+temporaneo per caso, sono `.github/prova-nessun-segreto.sh`, e le lancia la CI.
+
+### Cosa vede la guardia, e cosa no
+
+Un nome è segreto se contiene SECRET, KEY, TOKEN, PASSWORD, PASSWD, PWD, SEGRETO, SEGRETI, CHIAVE o CHIAVI, in
+maiuscolo o in minuscolo. La guardia legge i file che git conosce, e vede:
+
+- un file sensibile, dal nome: `.env` e `.env.*`, `*.key`, `*.pem`, `*.p12`, `*.pfx`, `auth.json`;
+- una chiave privata (`BEGIN … PRIVATE KEY`), in qualunque file;
+- nel PHP, un valore di riserva per un nome segreto: `env('…', valore)`, `env('…') ?: valore`, `env('…') ?? valore`, lo
+  stesso con `getenv()` e `Env::get()`, e `$_ENV['…']` o `$_SERVER['…']` seguiti da `?:` o `??`;
+- nella configurazione di PHPUnit, un valore non vuoto per un nome segreto (`<env>`, `<server>`, `<var>`, `<const>`,
+  `<ini>`);
+- in ogni file di testo, un valore scritto come in un `.env` o in una riga di comando, `NOME=valore` senza spazi intorno
+  all'uguale; in un file YAML, `NOME: valore` a inizio riga; come in un JSON, `"nome": "valore"`; come in un array PHP,
+  `'nome' => 'valore'`.
+
+Passano i segnaposto, ma solo come valore intero: vuoto, `""`, `''`, `<valore>`, `$VAR`, `${VAR}`, `${{ secrets.X }}`,
+`{{ x }}`, `…`, `...`, `null`, `~`, anche fra virgolette; dopo di loro la riga finisce, o viene uno spazio (e un
+commento) o un segno che chiude. In testa a un valore non lo sono: `~…`, `...…`, `null-…`, `''…`, un backtick, `#…`,
+`$` seguito da minuscole, `{…}` scattano. La fine di un codice in linea (`` `NOME=` ``) passa.
+
+Non vede:
+
+- un file con un carattere NUL (un file binario);
+- un valore con uno spazio prima dell'uguale (`NOME = valore`), quindi un'assegnazione nel codice;
+- in un JSON o in un array PHP, un valore che non è fra virgolette (una costante, una variabile, un numero), e una chiave
+  senza virgolette (`{nome: "…"}`);
+- `NOME: valore` fuori da un file YAML, e `NOME: valore` in un YAML se non sta a inizio riga;
+- le traduzioni (`resources/lang/`) come JSON o come array: le loro chiavi sono i nomi dei messaggi (`current_password`),
+  e sono le copie di quelle del backoffice;
+- un segreto senza un nome segreto accanto, e la storia di git: solo i file di adesso.
 
 ## Installazione
 
@@ -118,11 +150,12 @@ i suoi freni. Con lui un frontend prova nella sua CI la registrazione, l'ingress
 use Zeiras\Auth\Testing\BackofficeFinto;
 
 $finto = BackofficeFinto::attiva();
-$anna = $finto->persona('anna@example.com', 'una password lunga e sicura');  // la persona, come la dà il backoffice
+$password = 'una password lunga e sicura';
+$anna = $finto->persona('anna@example.com', $password);                     // la persona, come la dà il backoffice
 $studio = $finto->workspace('Studio Anna', $anna);                          // {id, nome, slug}: Anna è la proprietaria
 $finto->membro($studio, $finto->persona('bruno@example.com', '…', nome: 'Bruno'), 'membro');
 
-$this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una password lunga e sicura']);
+$this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password]);
 ```
 
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da

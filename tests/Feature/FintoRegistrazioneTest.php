@@ -77,8 +77,8 @@ it("un'email che ha già un account risponde 202 come una nuova: l'account non c
     $this->travel(120)->seconds();
 
     $nuova = registra(registrazione(['email' => 'carla@example.com']));
-    $anna = registra(registrazione(['email' => 'Anna@example.com', 'password' => "un'altra password lunga", 'nome' => 'Altra']));
-    $bruno = registra(registrazione(['email' => 'bruno@example.com', 'password' => "un'altra password lunga"]));
+    $anna = registra(registrazione(['email' => 'Anna@example.com', 'password' => ALTRA_PASSWORD, 'nome' => 'Altra']));
+    $bruno = registra(registrazione(['email' => 'bruno@example.com', 'password' => ALTRA_PASSWORD]));
 
     expect($nuova->status())->toBe(202)
         ->and($anna->status())->toBe(202)
@@ -95,7 +95,7 @@ it("un'email che ha già un account risponde 202 come una nuova: l'account non c
 
     expect($accesso->status())->toBe(201)
         ->and($accesso->json('data.gettone.utente.nome'))->toBe('Anna')
-        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => "un'altra password lunga"])->json('codice'))
+        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => ALTRA_PASSWORD])->json('codice'))
         ->toBe('credenziali_non_valide')
         // Bruno si verifica col suo primo codice e la sua password.
         ->and(alFinto('POST', '/v1/io/email/verifica', ['email' => 'bruno@example.com', 'password' => PASSWORD, 'codice' => $primo])->status())
@@ -132,17 +132,17 @@ it("a registrazione chiusa un'email fuori lista è 403 registrazione_non_aperta,
 it("un corpo non valido è 422 dati_non_validi coi testi del backoffice: prima l'email da sola, poi il resto (T3.1)", function () {
     $finto = BackofficeFinto::attiva()->consenti('@example.com');
 
-    $email = registra(['email' => 'anna@', 'password' => 'corta']);
+    $email = registra(['email' => 'anna@', 'password' => PASSWORD_CORTA]);
     $resto = registra([
         'email' => 'anna@example.com',
-        'password' => 'corta',
+        'password' => PASSWORD_CORTA,
         'nome' => str_repeat('a', 256),
         'lingua' => 'de',
         'fuso_orario' => 'Europe/Atlantide',
         'termini_accettati' => false,
     ]);
     $mancanti = registra(['email' => 'anna@example.com'], lingua: 'es');
-    $nullo = registra(registrazione(['password' => "una password\0lunga"]));
+    $nullo = registra(registrazione(['password' => PASSWORD_COL_NULLO]));
     $trapelata = registra(registrazione(['password' => BackofficeFinto::PASSWORD_TRAPELATA]));
 
     expect($email->status())->toBe(422)
@@ -179,7 +179,7 @@ it("oltre 5 richieste in un minuto per un'email è 429 coi secondi nel detail e 
     foreach (range(1, 5) as $richiesta) {
         expect(registra(registrazione(['email' => 'nessuno@example.com']))->status())->toBe(403);
     }
-    $frenata = registra(registrazione(['email' => ' Nessuno@example.com', 'password' => 'corta']));
+    $frenata = registra(registrazione(['email' => ' Nessuno@example.com', 'password' => PASSWORD_CORTA]));
 
     expect($frenata->status())->toBe(429)
         ->and($frenata->header('Retry-After'))->toBe('60')
