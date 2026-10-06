@@ -18,8 +18,13 @@ Da GitHub, a un tag (le versioni sono semver; prima della 1.0 un minore nuovo pu
 
 ```json
 "repositories": [{"type": "vcs", "url": "https://github.com/ma-cpmakers/zr-auth"}],
-"require": {"zeiras/zr-auth": "^0.2"}
+"require": {"zeiras/zr-auth": "^0.3"}
 ```
+
+Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`io.mostra`, `io.workspace.elenca`,
+`app.elenca`, `workspace.membri.elenca`) e lo `slug` del workspace: il backoffice le ha da quando le loro righe sono in
+`https://docs.zeiras.com/v1/novita`, che esce col deploy. Con la 0.2 il finto non le conosce, e lancia
+`RichiestaSconosciuta`.
 
 | Variabile | Default | Cosa |
 |---|---|---|
@@ -50,7 +55,7 @@ $gettone = Api::persona()->post('/v1/gettoni', ['workspace_id' => $id]);
 Sessione::entra($gettone['data']);           // da qui Api::workspace() manda il gettone di quel workspace
 
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
-Sessione::workspace();  // {id, nome}; null prima di entra()
+Sessione::workspace();  // {id, nome, slug}; null prima di entra()
 Sessione::ruolo();      // proprietario, amministratore o membro
 
 // L'uscita: accessi.elimina chiude l'accesso e ogni gettone che ne discende. La sessione si chiude comunque, anche se
@@ -113,7 +118,7 @@ use Zeiras\Auth\Testing\BackofficeFinto;
 
 $finto = BackofficeFinto::attiva();
 $anna = $finto->persona('anna@example.com', 'una password lunga e sicura');  // la persona, come la dà il backoffice
-$studio = $finto->workspace('Studio Anna', $anna);                          // {id, nome}: Anna è la proprietaria
+$studio = $finto->workspace('Studio Anna', $anna);                          // {id, nome, slug}: Anna è la proprietaria
 $finto->membro($studio, $finto->persona('bruno@example.com', '…', nome: 'Bruno'), 'membro');
 
 $this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una password lunga e sicura']);
@@ -122,8 +127,16 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => 'una passwo
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
-- Fa `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea` e `io.email.verifica.crea`. Una chiamata di
-  `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- Fa `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea` e `io.email.verifica.crea`, e le
+  letture: `io.mostra`, `io.workspace.elenca`, `app.elenca` e `workspace.membri.elenca`. Una chiamata di `/v1` che non
+  conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- `workspace($nome, $proprietaria)` dà il workspace con lo slug del backoffice: il nome in slug, al più 40 caratteri, poi
+  un trattino e sei caratteri casuali (`studio-anna-k3x9q2`). `membro($workspace, $persona, $ruolo)` mette una persona in
+  un workspace, o le cambia il ruolo: `io.mostra` lo rilegge a ogni chiamata.
+- Le liste sono quelle del backoffice: in ordine di nome (maiuscole e accenti non contano) e poi di `id`, le app in
+  ordine di codice, tutte `in_arrivo`; a pagine con `limite` (da 1 a 100, 50 se manca) e `cursore`, il `successivo`
+  della pagina prima, firmato per quella lista. `app.elenca` e `workspace.membri.elenca` vogliono il gettone di un
+  workspace: al gettone dell'accesso rispondono `403` `gettone_senza_workspace`.
 - Acceso il finto, alle API risponde solo lui: niente altri `Http::fake` che rispondano a `api.zeiras.com`, né un
   `Http::fake()` senza indirizzo, che risponderebbe a tutto. Le chiamate verso altri indirizzi restano agli altri fake.
 - Il tempo è `now()`, e un test lo sposta con `travel()`: i gettoni valgono 12 ore dall'accesso, un codice 10 minuti, un

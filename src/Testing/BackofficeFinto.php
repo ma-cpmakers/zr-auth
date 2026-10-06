@@ -4,6 +4,7 @@ namespace Zeiras\Auth\Testing;
 
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Closure;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Cache\ArrayStore;
 use Illuminate\Cache\RateLimiter;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
+use Random\Randomizer;
 use SensitiveParameter;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
@@ -28,6 +30,9 @@ use Zeiras\Auth\Testing\Finto\Testi;
  *     $anna = $finto->persona('anna@example.com', 'una password lunga e sicura');
  *     $studio = $finto->workspace('Studio Anna', $anna);
  *
+ * Fa i metodi del nucleo (entrare, uscire, il gettone di un workspace, la verifica dell'email) e le letture della
+ * persona e del workspace: io.mostra, io.workspace.elenca, app.elenca, workspace.membri.elenca.
+ *
  * I dati nascono dai metodi del finto, mai da campi comodi nelle risposte: il codice di verifica si legge da
  * ultimoCodice(), che fa da casella di posta. Il tempo è now(): un test lo sposta con travel(). Una chiamata di /v1 che il
  * finto non conosce lancia RichiestaSconosciuta; una chiamata che non va alle API resta agli altri Http::fake del test.
@@ -40,10 +45,36 @@ final class BackofficeFinto
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
+        ['GET', '#^/v1/app$#', 'app.elenca'],
         ['POST', '#^/v1/gettoni$#', 'gettoni.crea'],
+        ['GET', '#^/v1/io$#', 'io.mostra'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
         ['POST', '#^/v1/io/email/verifica$#', 'io.email.verifica.crea'],
+        ['GET', '#^/v1/io/workspace$#', 'io.workspace.elenca'],
+        ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
     ];
+
+    /** Il catalogo delle app (config/catalogo.php del backoffice, D15): lo stato di ogni app, per codice. */
+    private const CATALOGO = [
+        'automations' => 'in_arrivo',
+        'bookings' => 'in_arrivo',
+        'content' => 'in_arrivo',
+        'crm' => 'in_arrivo',
+        'pm' => 'in_arrivo',
+        'reports' => 'in_arrivo',
+    ];
+
+    /** Gli elementi di una pagina di una lista, se `limite` manca, e al più (ListaRequest). */
+    private const LIMITE_PREDEFINITO = 50;
+
+    private const LIMITE_MASSIMO = 100;
+
+    /** Lo slug di un workspace (Workspace::nuovoSlug, D13): quanti caratteri del nome, poi quanti casuali, e da dove. */
+    private const SLUG_DAL_NOME = 40;
+
+    private const SLUG_CASUALI = 6;
+
+    private const ALFABETO = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
     /** Quante ore valgono i gettoni di un accesso, dalla sua nascita (Gettoni::ORE). */
     private const ORE = 12;
@@ -82,7 +113,7 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: ?string}> per gettone, in chiaro: il finto vive nella memoria del test */
     private array $gettoni = [];
 
-    /** @var array<string, array{id: string, nome: string}> per id */
+    /** @var array<string, array{id: string, nome: string, slug: string}> per id */
     private array $workspace = [];
 
     /** @var array<string, array<string, string>> il ruolo, per workspace e per persona */
@@ -99,10 +130,18 @@ final class BackofficeFinto
 
     private readonly Testi $testi;
 
+    /** La chiave con cui il finto firma i suoi cursori, come Cursori con APP_KEY: nasce col finto, e vale solo per lui. */
+    private readonly string $chiaveDeiCursori;
+
+    /** Il caso dei caratteri casuali degli slug; non è readonly perché un test del finto lo fissa, per provare l'unicità. */
+    private Randomizer $caso;
+
     private function __construct()
     {
         $this->freni = new RateLimiter(new Repository(new ArrayStore));
         $this->testi = new Testi;
+        $this->chiaveDeiCursori = random_bytes(32);
+        $this->caso = new Randomizer;
     }
 
     /** Accende il finto: da qui le chiamate alle API di `zr-auth.api` le riceve lui. */
@@ -150,15 +189,15 @@ final class BackofficeFinto
     }
 
     /**
-     * Fa nascere un workspace, con la persona come proprietaria.
+     * Fa nascere un workspace, con la persona come proprietaria, e lo slug del backoffice (D13).
      *
      * @param  array<string, mixed>  $proprietaria  una persona di persona()
-     * @return array{id: string, nome: string}
+     * @return array{id: string, nome: string, slug: string} il workspace, come lo dà il backoffice (lo schema Workspace)
      */
     public function workspace(string $nome, array $proprietaria): array
     {
         $id = self::id();
-        $this->workspace[$id] = ['id' => $id, 'nome' => $nome];
+        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome)];
         $this->membro($this->workspace[$id], $proprietaria, 'proprietario');
 
         return $this->workspace[$id];
@@ -238,9 +277,13 @@ final class BackofficeFinto
             [$stato, $dati] = match ($operazione) {
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
+                'app.elenca' => $this->elencaApp($richiesta),
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
+                'io.mostra' => $this->mostraIo($richiesta),
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
+                'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
+                'workspace.membri.elenca' => $this->elencaMembri($richiesta),
             };
             $header = $dati === null ? [] : ['Content-Type' => 'application/json'];
         } catch (Problema $problema) {
@@ -374,6 +417,186 @@ final class BackofficeFinto
         }
 
         return [200, ['data' => $this->utente($persona)]];
+    }
+
+    /**
+     * io.mostra (IoController::mostra): la persona del gettone e, col gettone di un workspace, quel workspace e il ruolo
+     * della persona lì, letto a questa chiamata.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraIo(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $workspace = $chi['workspace'];
+
+        return [200, ['data' => [
+            'utente' => $this->utente($chi['persona']),
+            'workspace' => $workspace === null ? null : $this->workspace[$workspace],
+            'ruolo' => $workspace === null ? null : $this->membri[$workspace][$chi['persona']],
+        ]]];
+    }
+
+    /**
+     * io.workspace.elenca (IoWorkspaceController::elenca): i workspace di cui la persona del gettone è membro, col ruolo che
+     * ha lì, in ordine di nome e poi di id. Vale ogni gettone della persona. Il cursore porta l'id, e la sua posizione si
+     * rilegge fra tutti i workspace del finto.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaWorkspace(Request $richiesta): array
+    {
+        $persona = $this->autentica($richiesta)['persona'];
+        $voci = [];
+
+        foreach ($this->membri as $workspace => $ruoli) {
+            if (isset($ruoli[$persona])) {
+                $voci[] = [...$this->workspace[$workspace], 'ruolo' => $ruoli[$persona]];
+            }
+        }
+
+        return $this->pagina($richiesta, 'io.workspace.elenca', 'id', $voci, self::perNomeEId(...),
+            fn (string $id) => isset($this->workspace[$id]) ? self::perNomeEId($this->workspace[$id]) : null);
+    }
+
+    /**
+     * app.elenca (AppController::elenca): le app del catalogo in ordine di codice, ognuna col suo stato nel workspace del
+     * gettone; finché l'attivazione non c'è, quello del catalogo. Il cursore porta il codice, e la pagina dopo parte dal
+     * codice dopo.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaApp(Request $richiesta): array
+    {
+        $this->delWorkspace($richiesta);
+        $voci = [];
+
+        foreach (self::CATALOGO as $codice => $stato) {
+            $voci[] = ['codice' => $codice, 'stato' => $stato];
+        }
+
+        return $this->pagina($richiesta, 'app.elenca', 'codice', $voci, fn (array $app) => [$app['codice']], fn (string $codice) => [$codice]);
+    }
+
+    /**
+     * workspace.membri.elenca (MembriController::elenca): le persone del workspace del gettone, ognuna con l'id della
+     * persona, il nome, l'email e il ruolo, in ordine di nome e poi di id. Il cursore porta l'id della persona, e la sua
+     * posizione si rilegge fra tutte le persone del finto.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaMembri(Request $richiesta): array
+    {
+        $workspace = $this->delWorkspace($richiesta);
+        $voci = [];
+
+        foreach ($this->membri[$workspace] as $persona => $ruolo) {
+            $voci[] = ['id' => $persona, 'nome' => $this->persone[$persona]['nome'], 'email' => $this->persone[$persona]['email'], 'ruolo' => $ruolo];
+        }
+
+        return $this->pagina($richiesta, 'workspace.membri.elenca', 'id', $voci, self::perNomeEId(...),
+            fn (string $id) => isset($this->persone[$id]) ? self::perNomeEId(['id' => $id, 'nome' => $this->persone[$id]['nome']]) : null);
+    }
+
+    /**
+     * Il workspace del gettone della richiesta, per un metodo che lavora sui dati di un workspace (il middleware
+     * `workspace` del backoffice): al gettone dell'accesso 403 gettone_senza_workspace, prima di guardare la query.
+     */
+    private function delWorkspace(Request $richiesta): string
+    {
+        return $this->autentica($richiesta)['workspace'] ?? throw new Problema('gettone_senza_workspace');
+    }
+
+    /**
+     * Una pagina di una lista (ListaRequest del backoffice): `limite` da 1 a 100, 50 se manca; `cursore` il `successivo`
+     * della pagina prima, firmato per questa lista, che porta la sola chiave dell'ultima voce. Le voci vanno in ordine di
+     * posizione, e la pagina parte dalla prima voce dopo quella del cursore. Un valore che non va è 422 sul parametro; un
+     * cursore la cui posizione non si trova più non vale. Nel finto quel ramo non si raggiunge (nessuna voce sparisce, e la
+     * chiave dei cursori è del finto): resta per rispondere come il backoffice, dove la voce del cursore si può archiviare.
+     *
+     * @param  list<array<string, mixed>>  $voci
+     * @param  Closure(array<string, mixed>): list<string>  $posizione  la posizione di una voce nell'ordine della lista
+     * @param  Closure(string): (list<string>|null)  $posizioneDelCursore  la posizione dalla chiave di un cursore
+     * @return array{int, array<string, mixed>}
+     */
+    private function pagina(Request $richiesta, string $lista, string $chiave, array $voci, Closure $posizione, Closure $posizioneDelCursore): array
+    {
+        $query = $this->testi->validaQuery(self::query($richiesta), [
+            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO],
+            'cursore' => ['sometimes', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($lista, $chiave) {
+                if ($this->leggiCursore($lista, $chiave, $valore) === null) {
+                    $fail('regole.cursore')->translate();
+                }
+            }],
+        ]);
+        $limite = (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO);
+        usort($voci, fn (array $una, array $altra) => self::confronta($posizione($una), $posizione($altra)));
+
+        if (isset($query['cursore'])) {
+            $dopo = $posizioneDelCursore((string) $this->leggiCursore($lista, $chiave, $query['cursore']))
+                ?? throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.cursore', ['attribute' => 'cursore']), 'parameter' => 'cursore']]);
+            $voci = array_values(array_filter($voci, fn (array $voce) => self::confronta($posizione($voce), $dopo) > 0));
+        }
+
+        $pagina = array_slice($voci, 0, $limite);
+
+        return [200, [
+            'data' => $pagina,
+            'successivo' => count($voci) > $limite ? $this->firmaCursore($lista, [$chiave => $pagina[$limite - 1][$chiave]]) : null,
+        ]];
+    }
+
+    /**
+     * Un `successivo` (Cursori::firma del backoffice): la posizione in JSON e in base64url, un punto, la firma per la
+     * lista.
+     *
+     * @param  array<string, string>  $posizione
+     */
+    private function firmaCursore(string $lista, array $posizione): string
+    {
+        $dati = self::base64url(json_encode($posizione, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        return $dati.'.'.$this->impronta($lista, $dati);
+    }
+
+    /** Il valore della chiave in un cursore che questa lista ha dato (Cursori::leggi), o null: inventato, ritoccato, di un'altra lista. */
+    private function leggiCursore(string $lista, string $chiave, mixed $valore): ?string
+    {
+        if (! is_string($valore) || substr_count($valore, '.') !== 1) {
+            return null;
+        }
+
+        [$dati, $firma] = explode('.', $valore);
+
+        if (! hash_equals($this->impronta($lista, $dati), $firma)) {
+            return null;
+        }
+
+        $posizione = json_decode((string) base64_decode(strtr($dati, '-_', '+/'), true), true);
+
+        return is_array($posizione) && array_keys($posizione) === [$chiave] && is_string($posizione[$chiave]) ? $posizione[$chiave] : null;
+    }
+
+    private function impronta(string $lista, string $dati): string
+    {
+        return self::base64url(hash_hmac('sha256', "{$lista}\n{$dati}", $this->chiaveDeiCursori, true));
+    }
+
+    /**
+     * Lo slug di un workspace nuovo (Workspace::nuovoSlug, D13): il nome in slug, al più 40 caratteri e senza un trattino
+     * in fondo, o `workspace` se del nome non resta niente; poi un trattino e 6 caratteri [a-z0-9] casuali, unico nel finto.
+     */
+    private function nuovoSlug(string $nome): string
+    {
+        $dalNome = rtrim(substr(Str::slug($nome), 0, self::SLUG_DAL_NOME), '-');
+        $dalNome = $dalNome === '' ? 'workspace' : $dalNome;
+        $presi = array_column($this->workspace, 'slug');
+
+        do {
+            $slug = $dalNome.'-'.$this->caso->getBytesFromString(self::ALFABETO, self::SLUG_CASUALI);
+        } while (in_array($slug, $presi, true));
+
+        return $slug;
     }
 
     /**
@@ -570,6 +793,55 @@ final class BackofficeFinto
         $valore = $richiesta->toPsrRequest()->getHeaderLine($nome);
 
         return $valore === '' ? null : $valore;
+    }
+
+    /**
+     * La posizione di una voce in una lista in ordine di nome e poi di id: il nome senza maiuscole e senza accenti, che non
+     * contano, poi l'id. Per i nomi in lettere latine è l'ordine del backoffice; segni, emoji e scritture non latine possono
+     * andare in un altro ordine (il backoffice ordina con la collazione del database).
+     *
+     * @param  array<string, mixed>  $voce  con `id` e `nome`
+     * @return list<string>
+     */
+    private static function perNomeEId(array $voce): array
+    {
+        return [Str::lower(Str::ascii($voce['nome'])), $voce['id']];
+    }
+
+    /**
+     * Due posizioni, un campo alla volta e come testi: decide il primo che differisce.
+     *
+     * @param  list<string>  $una
+     * @param  list<string>  $altra
+     */
+    private static function confronta(array $una, array $altra): int
+    {
+        foreach ($una as $i => $valore) {
+            $ordine = strcmp($valore, $altra[$i]);
+
+            if ($ordine !== 0) {
+                return $ordine;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * I parametri della query di una richiesta, come `$request->query()` nel backoffice.
+     *
+     * @return array<mixed>
+     */
+    private static function query(Request $richiesta): array
+    {
+        parse_str((string) parse_url($richiesta->url(), PHP_URL_QUERY), $parametri);
+
+        return $parametri;
+    }
+
+    private static function base64url(string $testo): string
+    {
+        return rtrim(strtr(base64_encode($testo), '+/', '-_'), '=');
     }
 
     /** Utente::normalizzaEmail del backoffice. */

@@ -2,6 +2,7 @@
 
 namespace Zeiras\Auth\Testing\Finto;
 
+use Closure;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use Illuminate\Translation\FileLoader;
@@ -101,24 +102,33 @@ final class Testi
      */
     public function valida(array $corpo, array $regole): array
     {
-        $validatore = $this->validatori->make(self::pulisci($corpo), $regole);
-
-        if (! $validatore->fails()) {
-            return $validatore->validated();
-        }
-
-        $errori = [];
-        foreach ($validatore->errors()->messages() as $chiave => $messaggi) {
-            $errori[] = ['detail' => $messaggi[0], 'pointer' => self::puntatore(explode('.', $chiave))];
-        }
-
-        throw new Problema('dati_non_validi', $errori);
+        return $this->validaDati($corpo, $regole, fn (array $segmenti) => ['pointer' => self::puntatore($segmenti)]);
     }
 
-    /** Un testo di lang/ nella lingua di adesso, come __() nel backoffice. */
-    public function testo(string $chiave): string
+    /**
+     * Valida la query come il backoffice in una GET, che non ha corpo: con le stesse pulizie di valida(), e un valore
+     * rifiutato è dati_non_validi col primo messaggio di ogni parametro e il suo nome nell'indirizzo (`filtro[stato]`).
+     *
+     * @param  array<mixed>  $query
+     * @param  array<string, mixed>  $regole
+     * @return array<string, mixed> i valori validati
+     */
+    public function validaQuery(array $query, array $regole): array
     {
-        return (string) $this->traduttore->get($chiave);
+        return $this->validaDati($query, $regole, fn (array $segmenti) => ['parameter' => array_shift($segmenti).implode('', array_map(
+            fn (string $segmento) => '['.$segmento.']',
+            $segmenti,
+        ))]);
+    }
+
+    /**
+     * Un testo di lang/ nella lingua di adesso, come __() nel backoffice.
+     *
+     * @param  array<string, string>  $sostituzioni
+     */
+    public function testo(string $chiave, array $sostituzioni = []): string
+    {
+        return (string) $this->traduttore->get($chiave, $sostituzioni);
     }
 
     /**
@@ -147,6 +157,30 @@ final class Testi
         }
 
         return $corpo;
+    }
+
+    /**
+     * Le pulizie, le regole e, per ogni valore rifiutato, il primo messaggio e dove sta.
+     *
+     * @param  array<mixed>  $dati
+     * @param  array<string, mixed>  $regole
+     * @param  Closure(list<string>): array<string, string>  $dove  il campo dell'errore che dice dove sta il valore
+     * @return array<string, mixed>
+     */
+    private function validaDati(array $dati, array $regole, Closure $dove): array
+    {
+        $validatore = $this->validatori->make(self::pulisci($dati), $regole);
+
+        if (! $validatore->fails()) {
+            return $validatore->validated();
+        }
+
+        $errori = [];
+        foreach ($validatore->errors()->messages() as $chiave => $messaggi) {
+            $errori[] = ['detail' => $messaggi[0], ...$dove(explode('.', $chiave))];
+        }
+
+        throw new Problema('dati_non_validi', $errori);
     }
 
     /**
