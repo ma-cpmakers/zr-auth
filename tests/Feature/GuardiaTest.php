@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 use Zeiras\Auth\Sessione;
 
 // T1.4 (Z3): un 401 del backoffice chiude la sessione e rimanda all'ingresso, con una chiamata sola.
@@ -58,3 +59,20 @@ it('l\'ingresso si sceglie con ZR_AUTH_INGRESSO', function () {
 
     $this->get('/pagina')->assertRedirect(url('/accedi'));
 });
+
+// T6.1 (ZB1): il ritorno si ricorda solo da un GET, ed è l'indirizzo della richiesta; mai il Referer.
+
+it('senza sessione un GET ricorda l\'indirizzo della richiesta, non il Referer', function () {
+    $this->get(FRONTEND.'/pagina?vista=2', ['Referer' => 'https://altro.zeiras.com/x'])->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe('https://board.zeiras.com/pagina?vista=2');
+});
+
+it('senza sessione HEAD, POST, PUT, PATCH e DELETE rimandano all\'ingresso e non ricordano niente, nemmeno il Referer', function (string $metodo) {
+    Route::middleware('web')->any('modulo', fn () => 'ok');
+
+    $this->call($metodo, FRONTEND.'/modulo', [], [], [], ['HTTP_REFERER' => 'https://altro.zeiras.com/x'])
+        ->assertRedirect(INGRESSO);
+
+    expect(session()->has('url.intended'))->toBeFalse();
+})->with(['HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);

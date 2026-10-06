@@ -141,13 +141,26 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   `$e->dettaglio` si mostra.
 - Un **401** (gettone scaduto o revocato) diventa `GettoneRifiutato`: zr-auth chiude la sessione e rimanda all'ingresso,
   senza ripetere la chiamata.
-- Un backoffice che non risponde, un 5xx o una risposta senza JSON diventano `BackofficeNonRisponde`: mai una lista vuota.
+- Un backoffice che non risponde, un trasporto che cade (anche dopo lo stato: con Guzzle 8 è una `RequestException`), un
+  3xx, un 5xx o una risposta senza JSON diventano `BackofficeNonRisponde`, col guasto del trasporto in `getPrevious()`: mai
+  una lista vuota, e mai un'eccezione del client HTTP che esce.
+- Un redirect non si segue: un 307 rimanderebbe il corpo, una password compresa, al `Location`.
 
 ## La guardia, e il suo test
 
-`ConGettone` entra da sé nei gruppi `web` e `api`: senza una sessione col gettone, una pagina rimanda all'ingresso e
-ricorda la pagina chiesta (`url.intended`, da usare con `redirect()->intended()` dopo l'accesso); una visita di Inertia
-riceve 409 con `X-Inertia-Location`; una richiesta JSON 401.
+`ConGettone` entra da sé nei gruppi `web` e `api`: senza una sessione col gettone, una pagina rimanda all'ingresso; una
+visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401. Solo un GET ricorda la pagina chiesta
+(`url.intended`, l'indirizzo della richiesta): ogni altro metodo, HEAD compreso, non ricorda niente, e mai il `Referer`.
+
+Dopo l'accesso si torna lì con `Sessione::ritorno()`, **al posto di `redirect()->intended()`**, che manderebbe la persona
+a qualunque indirizzo ci sia in `url.intended`, anche di un altro sito:
+
+```php
+// Dopo Sessione::apri() (ed entra()): la pagina ricordata, se ha lo schema, l'host e la porta di questa richiesta; se no
+// (un altro host, «//altro.host/», http:// al posto di https://, nessun ritorno) la pagina predefinita del modulo.
+// Il ritorno esce dalla sessione: vale una volta.
+return redirect(Sessione::ritorno(route('bacheca')));
+```
 
 Una pagina pubblica (l'accesso, la registrazione) se la toglie, e il test del frontend la nomina:
 

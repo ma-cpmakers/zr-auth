@@ -77,6 +77,28 @@ it('una sessione scaduta non è aperta e non dice niente della persona', functio
         ->and(Sessione::accesso())->toBeNull();
 });
 
+// T6.2 (ZB2): il ritorno dopo l'accesso, al posto di redirect()->intended().
+
+it('ritorno() dà la pagina ricordata solo se ha lo schema e l\'host della richiesta, se no la predefinita, e la toglie dalla sessione', function (?string $ricordata, string $atteso) {
+    Route::middleware('web')->get('dopo-l-accesso', fn () => Sessione::ritorno('/bacheca'))->withoutMiddleware(ConGettone::class);
+    if ($ricordata !== null) {
+        session()->put('url.intended', $ricordata);
+    }
+
+    $this->get(FRONTEND.'/dopo-l-accesso')->assertOk()->assertContent($atteso);
+
+    expect(session()->has('url.intended'))->toBeFalse();
+})->with([
+    'stesso schema e host' => ['https://board.zeiras.com/pagina?vista=2', 'https://board.zeiras.com/pagina?vista=2'],
+    'un altro host' => ['https://evil.example/', '/bacheca'],
+    'relativo, di un altro host' => ['//evil.example/', '/bacheca'],
+    'http al posto di https' => ['http://board.zeiras.com/pagina', '/bacheca'],
+    'senza ritorno' => [null, '/bacheca'],
+    'l\'host come inizio di un altro' => ['https://board.zeiras.com.evil.example/', '/bacheca'],
+    'l\'host come utente di un altro' => ['https://board.zeiras.com@evil.example/', '/bacheca'],
+    'la barra rovescia, che il browser legge come una barra' => ['https://evil.example\\@board.zeiras.com/', '/bacheca'],
+]);
+
 // Il controllo stesso, per i test dei frontend: se il gettone arriva al browser, lo dice.
 
 it('Gettone::assenteDa vede il gettone nel corpo, in un header e in un cookie cifrato', function (string $dove) {

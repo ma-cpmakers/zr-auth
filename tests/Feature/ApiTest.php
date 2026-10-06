@@ -1,7 +1,12 @@
 <?php
 
+use GuzzleHttp\Exception\ResponseTimeoutException;
+use GuzzleHttp\Exception\ResponseTransferException;
+use GuzzleHttp\Promise\Create;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Zeiras\Auth\Api;
 use Zeiras\Auth\Errori\BackofficeNonRisponde;
@@ -103,6 +108,40 @@ it('un timeout, un 5xx o una risposta senza JSON danno BackofficeNonRisponde', f
     '200 html' => fn () => fn () => Http::response('<html>ok</html>', 200, ['Content-Type' => 'text/html']),
     '413 di nginx' => fn () => fn () => Http::response('<html>413</html>', 413, ['Content-Type' => 'text/html']),
 ]);
+
+// T6.3 (ZB3, R30): un trasporto che cade dopo lo stato è un backoffice che non risponde; mai una RequestException che esce.
+
+it('un trasporto che cade dopo lo stato dà BackofficeNonRisponde, col guasto in previous', function (Closure $guasto, string $previous) {
+    Http::fake(['*' => $guasto]);
+
+    expect(fn () => Api::senzaGettone()->get('/v1/x'))
+        ->toThrow(fn (BackofficeNonRisponde $e) => expect($e->getPrevious())->toBeInstanceOf($previous));
+})->with([
+    'RequestException' => [fn () => fn () => throw new RequestException(new Response(Http::psr7Response('', 502))), RequestException::class],
+    'trasferimento rotto dopo un 422' => [fn () => fn (Request $r) => Create::rejectionFor(new ResponseTransferException(
+        'Connessione chiusa a metà del corpo.', $r->toPsrRequest(), Http::psr7Response('{"codice":', 422, ['Content-Type' => 'application/problem+json']),
+    )), RequestException::class],
+    'timeout dopo un 200' => [fn () => fn (Request $r) => Create::rejectionFor(new ResponseTimeoutException(
+        'cURL error 28: timeout', $r->toPsrRequest(), Http::psr7Response('', 200),
+    )), ConnectionException::class],
+]);
+
+it('un 4xx del backoffice resta ErroreApi', function () {
+    Http::fake(['*' => problema(404, 'non_trovato')]);
+
+    expect(fn () => Api::senzaGettone()->get('/v1/x'))
+        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(404)->and($e->codice)->toBe('non_trovato'));
+});
+
+// R31: il client non segue i redirect, e un 3xx non è una risposta da usare.
+
+it('un 3xx dà BackofficeNonRisponde, e il corpo non va al Location', function () {
+    Http::fake(['*' => Http::response('{"data":{}}', 307, ['Location' => 'https://altrove.example/v1/accessi', 'Content-Type' => 'application/json'])]);
+
+    expect(fn () => Api::senzaGettone()->post('/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD]))
+        ->toThrow(BackofficeNonRisponde::class);
+    Http::assertSentCount(1);
+});
 
 // T1.8 (B2.4): tutte le pagine di una lista.
 
