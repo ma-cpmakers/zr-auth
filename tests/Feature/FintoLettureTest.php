@@ -1,5 +1,7 @@
 <?php
 
+use Random\Engine\Mt19937;
+use Random\Randomizer;
 use Zeiras\Auth\Testing\BackofficeFinto;
 
 // T6.1 e T6.4 (#1171: B1.4, B1.6; #1172: B2.4): il finto legge come il backoffice — io.mostra, io.workspace.elenca,
@@ -84,6 +86,20 @@ it('workspace() dà lo slug del backoffice: il nome in slug, al più 40 caratter
         ->and($senzaLettere['slug'])->toMatch('/^workspace-[a-z0-9]{6}$/')
         ->and($tagliato['slug'])->toMatch('/^aaaaaaaaa-bbbbbbbbb-ccccccccc-ddddddddd-[a-z0-9]{6}$/')
         ->and($gettone->json('data.workspace'))->toBe($studio);
+});
+
+it('lo slug è unico nel finto: se i caratteri casuali ridanno uno slug già preso, se ne estraggono altri (T6.4)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $caso = new ReflectionProperty(BackofficeFinto::class, 'caso');
+    // La stessa sequenza due volte: la prima estrazione del secondo workspace ridà lo slug del primo.
+    $caso->setValue($finto, new Randomizer(new Mt19937(83)));
+    $primo = $finto->workspace('Studio Anna', $anna);
+    $caso->setValue($finto, new Randomizer(new Mt19937(83)));
+    $secondo = $finto->workspace('Studio Anna', $anna);
+
+    expect($primo['slug'])->toMatch('/^studio-anna-[a-z0-9]{6}$/')
+        ->and($secondo['slug'])->toMatch('/^studio-anna-[a-z0-9]{6}$/')->not->toBe($primo['slug']);
 });
 
 it('io.mostra dà la persona del gettone e, col gettone di un workspace, il workspace con lo slug e il ruolo letto a ogni chiamata (T6.1)', function () {
@@ -183,13 +199,16 @@ it('workspace.membri.elenca dà le persone del workspace del gettone, con id del
     $finto->membro($studio, $altroBruno, 'membro');
     // Un altro workspace, coi suoi membri: Bruno è anche lì, con un altro ruolo.
     $altro = $finto->workspace('Altro', $elena);
-    $finto->membro($altro, $finto->persona('franco@example.com', PASSWORD, nome: 'Franco'), 'membro');
+    $franco = $finto->persona('franco@example.com', PASSWORD, nome: 'Franco');
+    $finto->membro($altro, $franco, 'membro');
     $finto->membro($altro, $bruno, 'amministratore');
     $chi = ['proprietario' => 'anna@example.com', 'amministratore' => 'carla@example.com', 'membro' => 'bruno@example.com'][$ruolo];
     $membro = fn (array $persona, string $ruolo) => ['id' => $persona['id'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => $ruolo];
 
     $gettone = gettoneDelFinto($chi, $studio);
     $risposta = alFinto('GET', '/v1/workspace/membri', gettone: $gettone);
+    // Col gettone dell'altro workspace, che non è il primo nato, i membri di quello: Bruno col ruolo che ha lì.
+    $diAltro = alFinto('GET', '/v1/workspace/membri', gettone: gettoneDelFinto('elena@example.com', $altro));
 
     expect($risposta->status())->toBe(200)
         ->and($risposta->header('Link'))->toBe(linkDi('workspace.membri.elenca'))
@@ -198,8 +217,34 @@ it('workspace.membri.elenca dà le persone del workspace del gettone, con id del
             ...perId($membro($bruno, 'membro'), $membro($altroBruno, 'membro')),
             $membro($carla, 'amministratore'),
         ], 'successivo' => null])
-        ->and(tutteLePagine('/v1/workspace/membri', $gettone, 1))->toBe($risposta->json('data'));
+        ->and(tutteLePagine('/v1/workspace/membri', $gettone, 1))->toBe($risposta->json('data'))
+        ->and($diAltro->json())->toBe(['data' => [
+            $membro($bruno, 'amministratore'),
+            $membro($elena, 'proprietario'),
+            $membro($franco, 'membro'),
+        ], 'successivo' => null]);
 })->with(['proprietario', 'amministratore', 'membro']);
+
+it('una lista senza limite dà pagine di 50 voci, e la pagina dopo parte dalla cinquantunesima (T6.1)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $nomi = array_map(fn (int $n) => sprintf('Workspace %02d', $n), range(1, 51));
+
+    foreach ($nomi as $nome) {
+        $finto->workspace($nome, $anna);
+    }
+
+    $gettone = gettoneDelFinto('anna@example.com');
+    $prima = alFinto('GET', '/v1/io/workspace', gettone: $gettone);
+    $seconda = alFinto('GET', '/v1/io/workspace?cursore='.$prima->json('successivo'), gettone: $gettone);
+
+    expect($prima->status())->toBe(200)
+        ->and(array_column($prima->json('data'), 'nome'))->toBe(array_slice($nomi, 0, 50))
+        ->and($prima->json('successivo'))->toBeString()
+        ->and($seconda->status())->toBe(200)
+        ->and(array_column($seconda->json('data'), 'nome'))->toBe(['Workspace 51'])
+        ->and($seconda->json('successivo'))->toBeNull();
+});
 
 it("app.elenca e workspace.membri.elenca rispondono 403 gettone_senza_workspace al gettone dell'accesso, nella lingua della persona (T6.1)", function (string $percorso, string $metodo) {
     $finto = BackofficeFinto::attiva();

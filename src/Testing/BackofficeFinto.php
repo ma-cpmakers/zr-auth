@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
+use Random\Randomizer;
 use SensitiveParameter;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
@@ -132,11 +133,15 @@ final class BackofficeFinto
     /** La chiave con cui il finto firma i suoi cursori, come Cursori con APP_KEY: nasce col finto, e vale solo per lui. */
     private readonly string $chiaveDeiCursori;
 
+    /** Il caso dei caratteri casuali degli slug; non è readonly perché un test del finto lo fissa, per provare l'unicità. */
+    private Randomizer $caso;
+
     private function __construct()
     {
         $this->freni = new RateLimiter(new Repository(new ArrayStore));
         $this->testi = new Testi;
         $this->chiaveDeiCursori = random_bytes(32);
+        $this->caso = new Randomizer;
     }
 
     /** Accende il finto: da qui le chiamate alle API di `zr-auth.api` le riceve lui. */
@@ -506,7 +511,8 @@ final class BackofficeFinto
      * Una pagina di una lista (ListaRequest del backoffice): `limite` da 1 a 100, 50 se manca; `cursore` il `successivo`
      * della pagina prima, firmato per questa lista, che porta la sola chiave dell'ultima voce. Le voci vanno in ordine di
      * posizione, e la pagina parte dalla prima voce dopo quella del cursore. Un valore che non va è 422 sul parametro; un
-     * cursore la cui posizione non si trova più non vale.
+     * cursore la cui posizione non si trova più non vale. Nel finto quel ramo non si raggiunge (nessuna voce sparisce, e la
+     * chiave dei cursori è del finto): resta per rispondere come il backoffice, dove la voce del cursore si può archiviare.
      *
      * @param  list<array<string, mixed>>  $voci
      * @param  Closure(array<string, mixed>): list<string>  $posizione  la posizione di una voce nell'ordine della lista
@@ -587,13 +593,7 @@ final class BackofficeFinto
         $presi = array_column($this->workspace, 'slug');
 
         do {
-            $casuali = '';
-
-            for ($i = 0; $i < self::SLUG_CASUALI; $i++) {
-                $casuali .= self::ALFABETO[random_int(0, strlen(self::ALFABETO) - 1)];
-            }
-
-            $slug = $dalNome.'-'.$casuali;
+            $slug = $dalNome.'-'.$this->caso->getBytesFromString(self::ALFABETO, self::SLUG_CASUALI);
         } while (in_array($slug, $presi, true));
 
         return $slug;
@@ -796,8 +796,9 @@ final class BackofficeFinto
     }
 
     /**
-     * La posizione di una voce in una lista in ordine di nome e poi di id: il nome come lo ordina la collazione
-     * utf8mb4_unicode_ci del backoffice in MySQL, dove maiuscole e accenti non contano, poi l'id.
+     * La posizione di una voce in una lista in ordine di nome e poi di id: il nome senza maiuscole e senza accenti, che non
+     * contano, poi l'id. Per i nomi in lettere latine è l'ordine del backoffice; segni, emoji e scritture non latine possono
+     * andare in un altro ordine (il backoffice ordina con la collazione del database).
      *
      * @param  array<string, mixed>  $voce  con `id` e `nome`
      * @return list<string>

@@ -18,8 +18,13 @@ Da GitHub, a un tag (le versioni sono semver; prima della 1.0 un minore nuovo pu
 
 ```json
 "repositories": [{"type": "vcs", "url": "https://github.com/ma-cpmakers/zr-auth"}],
-"require": {"zeiras/zr-auth": "^0.2"}
+"require": {"zeiras/zr-auth": "^0.3"}
 ```
+
+Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`io.mostra`, `io.workspace.elenca`,
+`app.elenca`, `workspace.membri.elenca`) e lo `slug` del workspace: il backoffice le ha da quando le loro righe sono in
+`https://docs.zeiras.com/v1/novita`, che esce col deploy. Con la 0.2 il finto non le conosce, e lancia
+`RichiestaSconosciuta`.
 
 | Variabile | Default | Cosa |
 |---|---|---|
@@ -50,7 +55,7 @@ $gettone = Api::persona()->post('/v1/gettoni', ['workspace_id' => $id]);
 Sessione::entra($gettone['data']);           // da qui Api::workspace() manda il gettone di quel workspace
 
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
-Sessione::workspace();  // {id, nome}; null prima di entra()
+Sessione::workspace();  // {id, nome, slug}; null prima di entra()
 Sessione::ruolo();      // proprietario, amministratore o membro
 
 // L'uscita: accessi.elimina chiude l'accesso e ogni gettone che ne discende. La sessione si chiude comunque, anche se
