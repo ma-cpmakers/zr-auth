@@ -168,7 +168,7 @@ it("un corpo non valido è 422 dati_non_validi coi testi del backoffice: prima l
         ->toBe([['detail' => 'Il campo password non può contenere il carattere nullo (U+0000).', 'pointer' => '#/password']])
         // Al posto di Have I Been Pwned: la password trapelata del finto.
         ->and($trapelata->json('errors'))
-        ->toBe([['detail' => 'Il valore di password è comparso in una fuga di dati: scegline un altro.', 'pointer' => '#/password']])
+        ->toBe([['detail' => 'Il valore del campo password è comparso in una fuga di dati: scegline un altro.', 'pointer' => '#/password']])
         ->and($finto->ultimoCodice('anna@example.com'))->toBeNull();
 });
 
