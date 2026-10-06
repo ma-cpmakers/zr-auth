@@ -93,6 +93,7 @@ it('ritorno() dà la pagina ricordata solo se ha lo schema e l\'host della richi
     'un altro host' => ['https://evil.example/', '/bacheca'],
     'relativo, di un altro host' => ['//evil.example/', '/bacheca'],
     'http al posto di https' => ['http://board.zeiras.com/pagina', '/bacheca'],
+    'un\'altra porta' => ['https://board.zeiras.com:8443/pagina', '/bacheca'],
     'senza ritorno' => [null, '/bacheca'],
     'l\'host come inizio di un altro' => ['https://board.zeiras.com.evil.example/', '/bacheca'],
     'l\'host come utente di un altro' => ['https://board.zeiras.com@evil.example/', '/bacheca'],
