@@ -14,8 +14,9 @@ const API = 'https://api.zeiras.com';
 const INGRESSO = 'https://app.zeiras.com/accedi';
 
 // Gettoni di prova nella forma di Zeiras (`zr_` più 48 caratteri): nel repo, che è pubblico, nessun gettone vero (G13).
-const GETTONE_ACCESSO = 'zr_AccessoAccessoAccessoAccessoAccessoAccessoAccess';
-const GETTONE_WORKSPACE = 'zr_WorkspaceWorkspaceWorkspaceWorkspaceWorkspaceWor';
+// Scritti in due pezzi: interi, la guardia dei segreti li leggerebbe come gettoni veri.
+const GETTONE_ACCESSO = 'zr_'.'AccessoAccessoAccessoAccessoAccessoAccessoAccess';
+const GETTONE_WORKSPACE = 'zr_'.'WorkspaceWorkspaceWorkspaceWorkspaceWorkspaceWor';
 
 /** La persona come la dà il backoffice (lo schema Utente). */
 function utente(): array

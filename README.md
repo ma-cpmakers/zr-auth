@@ -8,41 +8,61 @@ Lo scrive l'agente `zr-backoffice`: è l'altra metà del suo contratto (`openapi
 `docs.zeiras.com`).
 
 **Repo pubblico di proposito**: i frontend lo installano da Composer senza credenziali. Quindi qui dentro **nessun
-segreto, mai**, e nessun indirizzo interno. La guardia è `.github/nessun-segreto.sh`: la lancia la CI, si lancia anche
-in locale dalla radice del repo, ed esce 1 dicendo file, riga e nome della variabile (mai il valore); esce 2, e lo dice,
-quando non ha letto tutto (fuori da un repo git, git che fallisce, un file che non si apre). Le sue prove, un repo git
-temporaneo per caso, sono `.github/prova-nessun-segreto.sh`, e le lancia la CI.
+segreto, mai**, e nessun indirizzo interno. La guardia è `.github/nessun-segreto.sh`: la lancia la CI a ogni push, su ogni
+ramo, e a ogni pull request; si lancia anche in locale dalla radice del repo, ed esce 1 dicendo file, riga e nome della
+variabile, o la forma trovata (mai il valore); esce 2, e lo dice, quando non ha letto tutto (fuori da un repo git, git che
+fallisce, un file che non si apre o che si apre e non si legge, come un sottomodulo). Le sue prove, un repo git temporaneo
+per caso, sono `.github/prova-nessun-segreto.sh`, e le lancia la CI. La CI vede un segreto quando è già pubblicato: prima
+di un push, la guardia si lancia in locale.
 
 ### Cosa vede la guardia, e cosa no
 
-Un nome è segreto se contiene SECRET, KEY, TOKEN, PASSWORD, PASSWD, PWD, SEGRETO, SEGRETI, CHIAVE o CHIAVI, in
-maiuscolo o in minuscolo. La guardia legge i file che git conosce, e vede:
+Un nome è segreto se contiene SECRET, KEY, TOKEN, PASSWORD, PASSWD, PWD, SEGRETO, SEGRETI, CHIAVE, CHIAVI, GETTONE,
+GETTONI, WEBHOOK, DSN, CREDENTIAL o CREDENZIAL, o PASS come parola intera del nome (`DB_PASS` sì, `BYPASS` e `PASSO` no),
+in maiuscolo o in minuscolo; fra virgolette può avere anche `-` e `.` (`X-Api-Key`, `zr-auth.chiave`). La guardia legge i
+file che git conosce, e vede:
 
-- un file sensibile, dal nome: `.env` e `.env.*`, `*.key`, `*.pem`, `*.p12`, `*.pfx`, `auth.json`;
-- una chiave privata (`BEGIN … PRIVATE KEY`), in qualunque file;
+- un file sensibile, dal nome: `.env` e `.env.*`, `*.key`, `*.pem`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `*.ppk`,
+  `auth.json`, e un archivio (`*.zip`, `*.tar`, `*.gz`, `*.tgz`, `*.bz2`, `*.xz`, `*.7z`, `*.rar`, `*.jar`, `*.phar`),
+  che non sa leggere;
+- una chiave privata (`BEGIN … PRIVATE KEY`, PEM e OpenSSH, o una chiave PuTTY), in qualunque file di testo;
 - nel PHP, un valore di riserva per un nome segreto: `env('…', valore)`, `env('…') ?: valore`, `env('…') ?? valore`, lo
   stesso con `getenv()` e `Env::get()`, e `$_ENV['…']` o `$_SERVER['…']` seguiti da `?:` o `??`;
 - nella configurazione di PHPUnit, un valore non vuoto per un nome segreto (`<env>`, `<server>`, `<var>`, `<const>`,
   `<ini>`);
-- in ogni file di testo, un valore scritto come in un `.env` o in una riga di comando, `NOME=valore` senza spazi intorno
-  all'uguale; in un file YAML, `NOME: valore` a inizio riga; come in un JSON, `"nome": "valore"`; come in un array PHP,
-  `'nome' => 'valore'`.
+- in ogni file di testo, un valore per un nome segreto scritto:
+  - come in un `.env` o in una riga di comando, `NOME=valore` senza spazi intorno all'uguale;
+  - in un file YAML, `NOME: valore` a inizio riga, anche con la chiave fra virgolette o uno spazio prima dei due punti
+    (anche `key:`: la chiave di `actions/cache` si scrive come un'espressione sola, `${{ steps.x.outputs.chiave }}`);
+  - con la chiave fra virgolette, come in un JSON (`"nome": "valore"`) o in un array PHP (`'nome' => 'valore'`), e in
+    `config('nome', 'valore')`, `Config::set()`, `define()` e `->withHeader()`, anche col valore a capo;
+  - con la chiave senza virgolette e il valore fra virgolette, come negli argomenti con nome del PHP e negli oggetti JS
+    (`nome: 'valore'`);
+- in ogni file di testo, dalla forma e senza un nome accanto: un gettone di Zeiras (`zr_` e 48 lettere o cifre), un
+  webhook di Slack, un gettone dopo `Bearer` (almeno 8 segni, con una cifra o un `_`), un indirizzo interno (la rete 10/8,
+  il loopback che non è `127.0.0.1`, i nomi ssh dei server, i domini interni di Management Academy).
 
 Passano i segnaposto, ma solo come valore intero: vuoto, `""`, `''`, `<valore>`, `$VAR`, `${VAR}`, `${{ secrets.X }}`,
-`{{ x }}`, `…`, `...`, `null`, `~`, anche fra virgolette; dopo di loro la riga finisce, o viene uno spazio (e un
-commento) o un segno che chiude. In testa a un valore non lo sono: `~…`, `...…`, `null-…`, `''…`, un backtick, `#…`,
-`$` seguito da minuscole, `{…}` scattano. La fine di un codice in linea (`` `NOME=` ``) passa.
+`{{ x }}`, `…`, `...`, `null`, `~`, anche fra virgolette. Dopo un segnaposto la riga finisce o viene uno spazio (in YAML,
+un commento); dopo il vuoto, la riga finisce o viene un commento (uno spazio e `#`); e passa la virgoletta, o il backtick,
+che apriva l'assegnazione (`"NOME=$VAR"`, `` `NOME=` ``). Tutto il resto è il valore: `~…`, `...…`, `null-…`, `null,…`,
+`''…`, `" …`, `".…`, un backtick, `#…`, `)…`, `,…`, uno spazio e un testo, `$` seguito da minuscole, `{…}` scattano.
 
 Non vede:
 
-- un file con un carattere NUL (un file binario);
-- un valore con uno spazio prima dell'uguale (`NOME = valore`), quindi un'assegnazione nel codice;
-- in un JSON o in un array PHP, un valore che non è fra virgolette (una costante, una variabile, un numero), e una chiave
-  senza virgolette (`{nome: "…"}`);
-- `NOME: valore` fuori da un file YAML, e `NOME: valore` in un YAML se non sta a inizio riga;
-- le traduzioni (`resources/lang/`) come JSON o come array: le loro chiavi sono i nomi dei messaggi (`current_password`),
-  e sono le copie di quelle del backoffice;
-- un segreto senza un nome segreto accanto, e la storia di git: solo i file di adesso.
+- un file con un carattere NUL (un file binario), e quello che c'è dentro un archivio (che però scatta dal nome);
+- un valore con uno spazio prima dell'uguale (`NOME = valore`), quindi un'assegnazione nel codice (`$password = '…'`);
+- con la chiave fra virgolette, un valore che non è fra virgolette (una costante, una variabile, un numero), un valore
+  costruito che comincia con un segnaposto (`''.'…'`), e la stessa coppia in una chiamata diversa da `config()`,
+  `Config::set()`, `define()` e `->withHeader()` (`Arr::set($a, 'nome', '…')`);
+- `NOME: valore` senza virgolette fuori da un file YAML, e in un YAML se non sta a inizio riga (`{nome: valore}`);
+- `nome: 'valore'` dopo un `$`, un `->`, un `::`, un `.` o una virgoletta (una variabile, una proprietà, una stringa);
+- le traduzioni (`resources/lang/`) con la chiave fra virgolette: le loro chiavi sono i nomi dei messaggi
+  (`current_password`), e sono le copie di quelle del backoffice;
+- un segreto senza un nome segreto accanto e senza una delle forme di sopra (un gettone di un altro servizio), un
+  `Bearer` con meno di 8 segni o di sole lettere, un indirizzo di un'altra rete privata (192.168/16, 172.16/12);
+- la storia di git: solo i file di adesso. In locale legge i file come sono sul disco, non come sono nell'indice; nella
+  CI sono la stessa cosa.
 
 ## Installazione
 

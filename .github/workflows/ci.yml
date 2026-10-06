@@ -1,8 +1,8 @@
 name: CI
 
+# A ogni push, su ogni ramo: la guardia dei segreti deve vedere anche un ramo senza pull request.
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
