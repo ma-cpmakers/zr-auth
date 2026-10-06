@@ -68,6 +68,10 @@ return [
         'title' => 'App coming soon',
         'detail' => 'This app cannot be activated or deactivated yet: app.elenca tells which apps are available.',
     ],
+    'cartella_non_vuota' => [
+        'title' => 'Folder not empty',
+        'detail' => 'This folder still has boards, and it can be deleted only when empty: board.board.elenca tells which they are.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursor expired',
         'detail' => 'The events after this point can no longer be read: read everything again and start over from the last event, with eventi.ultimo.mostra.',

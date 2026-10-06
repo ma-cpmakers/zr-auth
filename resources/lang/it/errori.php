@@ -68,6 +68,10 @@ return [
         'title' => 'App in arrivo',
         'detail' => 'Questa app non si può ancora attivare né disattivare: app.elenca dice quali sono disponibili.',
     ],
+    'cartella_non_vuota' => [
+        'title' => 'Cartella non vuota',
+        'detail' => 'Questa cartella ha ancora delle board, e si elimina solo vuota: board.board.elenca dice quali sono.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursore scaduto',
         'detail' => "Gli eventi dopo questo punto non si leggono più: rileggi tutto e riparti dall'ultimo evento, con eventi.ultimo.mostra.",

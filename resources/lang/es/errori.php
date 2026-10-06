@@ -68,6 +68,10 @@ return [
         'title' => 'Aplicación próximamente',
         'detail' => 'Esta aplicación todavía no se puede activar ni desactivar: app.elenca indica cuáles están disponibles.',
     ],
+    'cartella_non_vuota' => [
+        'title' => 'Carpeta no vacía',
+        'detail' => 'Esta carpeta todavía tiene tableros, y solo se puede eliminar vacía: board.board.elenca indica cuáles son.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursor caducado',
         'detail' => 'Los eventos después de este punto ya no se pueden leer: vuelve a leerlo todo y empieza de nuevo desde el último evento, con eventi.ultimo.mostra.',
