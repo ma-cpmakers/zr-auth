@@ -588,8 +588,9 @@ final class BackofficeFinto
     }
 
     /**
-     * io.mostra (IoController::mostra): la persona del gettone e, col gettone di un workspace, quel workspace e il ruolo
-     * della persona lì, letto a questa chiamata.
+     * io.mostra (IoController::mostra): la persona del gettone e, col gettone di un workspace, quel workspace, il
+     * ruolo della persona lì, letto a questa chiamata, e le sue notifiche non lette (#1260): il finto non ha
+     * notifiche, quindi è sempre 0 con un workspace, null senza, come `workspace` e `ruolo`.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -602,6 +603,7 @@ final class BackofficeFinto
             'utente' => $this->utente($chi['persona']),
             'workspace' => $workspace === null ? null : $this->workspace[$workspace],
             'ruolo' => $workspace === null ? null : $this->membri[$workspace][$chi['persona']],
+            'notifiche_non_lette' => $workspace === null ? null : 0,
         ]]];
     }
 
