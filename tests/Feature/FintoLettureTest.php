@@ -116,9 +116,9 @@ it('io.mostra dà la persona del gettone e, col gettone di un workspace, il work
     expect($senzaWorkspace->status())->toBe(200)
         ->and($senzaWorkspace->header('Content-Type'))->toBe('application/json')
         ->and($senzaWorkspace->header('Link'))->toBe(linkDi('io.mostra'))
-        ->and($senzaWorkspace->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => null, 'ruolo' => null]])
-        ->and($prima->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => $studio, 'ruolo' => 'membro']])
-        ->and($dopo->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => $studio, 'ruolo' => 'amministratore']]);
+        ->and($senzaWorkspace->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => null, 'ruolo' => null, 'notifiche_non_lette' => null]])
+        ->and($prima->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => $studio, 'ruolo' => 'membro', 'notifiche_non_lette' => 0]])
+        ->and($dopo->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => $studio, 'ruolo' => 'amministratore', 'notifiche_non_lette' => 0]]);
 });
 
 it('io.workspace.elenca dà i workspace della persona, col ruolo e lo slug, in ordine di nome — maiuscole e accenti non contano — e poi di id, con ogni suo gettone (T6.1)', function () {
