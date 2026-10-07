@@ -76,7 +76,7 @@ it('workspace() dà lo slug del backoffice: il nome in slug, al più 40 caratter
 
     $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone']);
 
-    expect(array_keys($studio))->toBe(['id', 'nome', 'slug'])
+    expect(array_keys($studio))->toBe(['id', 'nome', 'slug', 'azienda_id'])
         ->and($studio['nome'])->toBe('Studio Anna')
         ->and($studio['slug'])->toMatch('/^studio-anna-[a-z0-9]{6}$/')
         ->and($altroStudio['slug'])->toMatch('/^studio-anna-[a-z0-9]{6}$/')->not->toBe($studio['slug'])

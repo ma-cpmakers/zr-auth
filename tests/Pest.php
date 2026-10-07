@@ -54,7 +54,7 @@ function gettoneDelWorkspace(?string $scadeIl = null): array
         'gettone' => GETTONE_WORKSPACE,
         'scade_il' => $scadeIl ?? now()->addHours(12)->toJSON(),
         'utente' => utente(),
-        'workspace' => ['id' => '01k6r3a7c2e6g0j4m8p2s6v0x4', 'nome' => 'Studio Anna', 'slug' => 'studio-anna-k3x9q2'],
+        'workspace' => ['id' => '01k6r3a7c2e6g0j4m8p2s6v0x4', 'nome' => 'Studio Anna', 'slug' => 'studio-anna-k3x9q2', 'azienda_id' => '01k6r3a7c2e6g0j4m8p2s6v0x5'],
         'ruolo' => 'proprietario',
     ];
 }
