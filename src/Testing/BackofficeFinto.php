@@ -127,7 +127,7 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: ?string}> per gettone, in chiaro: il finto vive nella memoria del test */
     private array $gettoni = [];
 
-    /** @var array<string, array{id: string, nome: string, slug: string}> per id */
+    /** @var array<string, array{id: string, nome: string, slug: string, azienda_id: string}> per id */
     private array $workspace = [];
 
     /** @var array<string, array<string, string>> il ruolo, per workspace e per persona */
@@ -215,12 +215,14 @@ final class BackofficeFinto
      * Fa nascere un workspace, con la persona come proprietaria, e lo slug del backoffice (D13).
      *
      * @param  array<string, mixed>  $proprietaria  una persona di persona()
-     * @return array{id: string, nome: string, slug: string} il workspace, come lo dà il backoffice (lo schema Workspace)
+     * @return array{id: string, nome: string, slug: string, azienda_id: string} il workspace, come lo dà il backoffice (lo schema Workspace)
      */
     public function workspace(string $nome, array $proprietaria): array
     {
         $id = self::id();
-        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome)];
+        // Un'azienda sua, come fa il backoffice vero senza azienda_id passato (#1259, decisione 5612 del #76): il
+        // finto non modella aziende condivise fra workspace, nessun test gliene ha ancora chiesta una.
+        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => self::id()];
         $this->membro($this->workspace[$id], $proprietaria, 'proprietario');
 
         return $this->workspace[$id];

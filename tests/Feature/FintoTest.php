@@ -244,7 +244,7 @@ it('gettoni.crea dà il gettone di un workspace della persona, col suo ruolo, ch
         ->and($risposta->json('data.gettone'))->not->toBe($accesso['gettone']['gettone'])
         ->and($risposta->json('data.scade_il'))->toBe($accesso['gettone']['scade_il'])
         ->and($risposta->json('data.utente'))->toBe($bruno)
-        ->and($risposta->json('data.workspace'))->toBe(['id' => $studio['id'], 'nome' => 'Studio Anna', 'slug' => $studio['slug']])
+        ->and($risposta->json('data.workspace'))->toBe(['id' => $studio['id'], 'nome' => 'Studio Anna', 'slug' => $studio['slug'], 'azienda_id' => $studio['azienda_id']])
         ->and($risposta->json('data.ruolo'))->toBe('membro')
         ->and($studio['slug'])->toMatch('/^studio-anna-[a-z0-9]{6}$/');
 
