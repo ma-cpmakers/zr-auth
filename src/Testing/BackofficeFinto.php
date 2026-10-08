@@ -75,6 +75,19 @@ final class BackofficeFinto
         'reports' => 'in_arrivo',
     ];
 
+    /**
+     * Il nome di ogni app (config/catalogo.php del backoffice, `nomi`, #1204): per codice e per lingua. Il nome del
+     * prodotto è lo stesso nelle tre lingue.
+     */
+    private const NOMI = [
+        'automations' => ['it' => 'Automations', 'en' => 'Automations', 'es' => 'Automations'],
+        'bookings' => ['it' => 'Bookings', 'en' => 'Bookings', 'es' => 'Bookings'],
+        'content' => ['it' => 'Content', 'en' => 'Content', 'es' => 'Content'],
+        'crm' => ['it' => 'CRM', 'en' => 'CRM', 'es' => 'CRM'],
+        'pm' => ['it' => 'Project Management', 'en' => 'Project Management', 'es' => 'Project Management'],
+        'reports' => ['it' => 'Reports', 'en' => 'Reports', 'es' => 'Reports'],
+    ];
+
     /** Gli elementi di una pagina di una lista, se `limite` manca, e al più (ListaRequest). */
     private const LIMITE_PREDEFINITO = 50;
 
@@ -642,7 +655,13 @@ final class BackofficeFinto
         $voci = [];
 
         foreach (self::CATALOGO as $codice => $stato) {
-            $voci[] = ['codice' => $codice, 'stato' => $stato];
+            $nome = [];
+
+            foreach (Testi::LINGUE as $lingua) {
+                $nome[$lingua] = self::NOMI[$codice][$lingua] ?? self::NOMI[$codice]['en'] ?? $codice;
+            }
+
+            $voci[] = ['codice' => $codice, 'stato' => $stato, 'nome' => $nome];
         }
 
         return $this->pagina($richiesta, 'app.elenca', 'codice', $voci, fn (array $app) => [$app['codice']], fn (string $codice) => [$codice]);
