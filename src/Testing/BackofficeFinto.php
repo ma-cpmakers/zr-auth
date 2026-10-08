@@ -793,8 +793,8 @@ final class BackofficeFinto
 
     /**
      * io.modifica (IoController::modifica): il nome, la lingua e il fuso orario della persona del gettone, come JSON Merge
-     * Patch sotto `utente`. Nell'ordine del backoffice: il gettone di un workspace (403 gettone_senza_workspace) prima del
-     * corpo; poi tutti i campi insieme, un valore sbagliato non ne lascia salvato nessuno (422 sul pointer del campo, anche
+     * Patch sotto `utente`. Vale ogni gettone della persona, anche quello dell'accesso (workspace, ruolo e notifiche
+     * null nella risposta); nell'ordine del backoffice: tutti i campi insieme, un valore sbagliato non ne lascia salvato nessuno (422 sul pointer del campo, anche
      * per un campo di altre risposte o che non esiste); un corpo senza campi da cambiare è un errore sul corpo. La persona è
      * sempre quella del gettone. Risponde con la forma di io.mostra, già aggiornata; la lingua nuova vale dalla chiamata dopo.
      *
@@ -803,7 +803,7 @@ final class BackofficeFinto
      */
     private function modificaIo(Request $richiesta, array $corpo): array
     {
-        $chi = $this->conWorkspace($richiesta);
+        $chi = $this->autentica($richiesta);
         $regole = [
             'utente' => ['sometimes', 'array'],
             'utente.nome' => ['filled', 'string', 'max:255'],
