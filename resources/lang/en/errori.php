@@ -54,7 +54,7 @@ return [
     ],
     'verifica_non_riuscita' => [
         'title' => 'Verification failed',
-        'detail' => 'The code does not verify the request: for the email, check the code, the email and the password, or ask for a new code; for the password, check the code and the email, or ask for a new code; for entering an app, start again from the sign-in.',
+        'detail' => 'The code does not verify the request: for the email, check the code, the email and the password, or ask for a new code; for the password, check the code and the email, or ask for a new code; for entering an app, start again from the sign-in; for an invitation, check the code and that you are using the email it was sent to, or ask whoever invited you for a new one.',
     ],
     'turnstile_non_valido' => [
         'title' => 'Turnstile check failed',

@@ -80,7 +80,9 @@ Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`
 nuovi, `turnstile_non_valido` e `turnstile_non_disponibile`. La 0.5 porta `Sessione::ritorno()`, il ritorno dopo l'ingresso solo da un
 GET e dallo stesso sito; un 3xx del backoffice, che non si segue, diventa `BackofficeNonRisponde`; nel finto `pm` è
 `disponibile`, e ci sono i testi dei due codici nuovi, `app_non_attiva` e `app_in_arrivo`. La 0.6 porta l'ingresso nei moduli
-dal lato del modulo (`Ingresso::verso()` e il ricevitore, sotto), e ha il finto di password e ingressi.
+dal lato del modulo (`Ingresso::verso()` e il ricevitore, sotto), e ha il finto di password e ingressi. La 0.6.1 porta nel
+finto le lingue (`lingue.elenca`), la persona (`io.modifica`, `io.password.modifica`) e il workspace (`workspace.modifica`,
+i membri e gli inviti, con `ultimoInvito()`); un testo cambia: `verifica_non_riuscita` dice anche gli inviti.
 
 | Variabile | Default | Cosa |
 |---|---|---|
@@ -198,6 +200,10 @@ Il ricevitore non ha la guardia, e il test del frontend lo nomina fra le rotte p
 expect(Rotte::senzaGuardia(['GET ingresso/ritorno']))->toBe([]);
 ```
 
+Un frontend che l'ingresso lo fa altrove (zr-home, che lo *dà* ai moduli e non lo riceve) mette `'ricevitore' => null` nella
+config pubblicata: zr-auth non registra nessuna rotta, `Rotte::senzaGuardia()` non nomina `GET ingresso/ritorno`, e il
+pacchetto si avvia anche senza `ZR_APP` (che serve solo a `Ingresso::verso()`).
+
 Nei test del modulo il giro intero si fa col finto, senza un `Http::fake` per lo scambio:
 `BackofficeFinto::attiva()->ritorno('pm', 'https://<modulo>/ingresso/ritorno')`, un workspace con `attivaApp($workspace, 'pm')`,
 `Ingresso::verso()`, poi `ingressi.crea` del finto con la `sfida` della partenza (è ciò che fa zr-home) e un GET al `ritorno`
@@ -253,9 +259,40 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
 - Fa `utenti.crea`, `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
-  `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea` e `app.modifica`, e le
-  letture: `io.mostra`, `io.workspace.elenca`, `app.elenca` e `workspace.membri.elenca`. Una chiamata di `/v1` che non
-  conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+  `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
+  `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
+  `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
+  `io.workspace.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Una chiamata
+  di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- **La persona.** `lingue.elenca` dà le lingue di Zeiras (`it`, `en`, `es`) col nome scritto in ognuna, a ogni gettone.
+  `io.modifica` cambia nome, lingua e fuso orario sotto `utente` (JSON Merge Patch): un campo sbagliato o di un'altra
+  risposta è `422` sul suo pointer e non ne lascia salvato nessuno; la lingua nuova vale dalla chiamata dopo.
+  `io.password.modifica` è `204`: vale la password nuova, e i gettoni degli altri accessi della persona non valgono più
+  (`401`), quelli dell'accesso che chiama sì; la password attuale sbagliata è `422` su `#/password_attuale`, e dopo cinque
+  errori in un'ora `429`.
+- **Il workspace.** `workspace.modifica` (`{"nome"}`, 1-255 caratteri senza spazi ai bordi) è del proprietario e
+  dell'amministratore, `403` `permesso_negato` a un membro prima del corpo; lo slug non cambia, e la risposta è un elemento
+  di `io.workspace.elenca`. `workspace.membri.modifica` (`{"ruolo"}`, `amministratore` o `membro`) e
+  `workspace.membri.elimina` rispondono nell'ordine del backoffice: il ruolo di chi chiama `403`, il membro `404`, il corpo
+  `422`, il proprietario `409` `proprietario_intoccabile`, e un amministratore che tocca un amministratore, o ne fa uno, `403`.
+  Togliere un membro toglie i suoi gettoni **di quel workspace** (`401`, anche se rientra); quello dell'accesso e gli altri
+  workspace restano.
+- **Gli inviti.** `workspace.inviti.crea` (`{"email", "ruolo"}`) è `201` con l'invito (`id`, `email`, `ruolo`, `scade_il`,
+  `creato_il`) e la `Location`, uguale per un'email con un account e per una senza, e **mai con il codice**: il codice è
+  nella mail, e il test lo legge da `ultimoInvito($email)`, la casella di posta degli inviti (l'ultimo partito, `null` se
+  nessuno; non è il codice di `ultimoCodice()`). Un amministratore invita solo `membro` (`403`), il proprietario non si
+  invita (`422` su `#/ruolo`), chi è già membro è `409` `gia_membro`, un invito vivo per la stessa email `409`
+  `invito_esistente` (uno scaduto si rifà), 100 inviti vivi `409` `limite_raggiunto`; oltre 5 inviti in un'ora verso la
+  stessa email, o 50 dal workspace, `429` con `Retry-After`. Un invito vale 7 giorni. Con `Idempotency-Key` la stessa chiave
+  e lo stesso corpo danno la stessa risposta per 24 ore, senza un secondo invito (con un altro corpo `422`
+  `chiave_idempotenza_riusata`). `workspace.inviti.elenca` dà i vivi dal più recente, a cursore; `workspace.inviti.elimina`
+  è `204` e poi `404`, e il codice non vale più (l'invito a un amministratore lo revoca il proprietario).
+  `inviti.accettazione.crea` (`{"codice"}`, col gettone dell'accesso: `403` `gettone_con_workspace` a uno di un workspace)
+  è `201` nella forma di un membro se l'email dell'invito è la persona del gettone ed è verificata; ogni altro caso è la
+  stessa `422` `verifica_non_riuscita`, e chi è già membro `409`. `utenti.crea` accetta `invito`: con un invito vivo per
+  quell'email la registrazione si apre anche se è chiusa e senza Turnstile, la persona nasce con l'email verificata (nessun
+  codice in `ultimoCodice()`) ed entra nel workspace; un invito che non vale è la stessa `422`. Per un'email che ha già un
+  account l'invito non si accetta: lo accetta la persona, con `inviti.accettazione.crea`.
 - **La password.** `password.recupero.crea` è `202` con la sola email, uguale per un'email con un account e per una senza;
   il codice di 6 cifre parte solo a un account, e si legge da `ultimoCodice($email)` (l'ultimo partito, di verifica o di
   recupero). Un codice di recupero vale 10 minuti e 5 tentativi, e non è il codice di verifica dell'email: l'uno non fa
