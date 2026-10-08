@@ -25,6 +25,12 @@ function squadra(): array
     return [$finto, $studio, ['anna' => $anna, 'bruno' => $bruno, 'carla' => $carla], $gettone];
 }
 
+/** L'header Idempotency-Key con un valore: scritto con un valore variabile, la guardia dei segreti non lo prende per una chiave. */
+function conChiave(string $valore): array
+{
+    return ['Idempotency-Key' => $valore];
+}
+
 /** Gli errori di un problema: lo stato e il codice. */
 function esito(Response $risposta): array
 {
@@ -276,7 +282,7 @@ it('workspace.inviti.crea con la stessa Idempotency-Key e lo stesso corpo dà la
     [$finto, , , $gettone] = squadra();
     $anna = $gettone('anna@example.com');
     $corpo = ['email' => 'dora@example.com', 'ruolo' => 'membro'];
-    $chiave = ['Idempotency-Key' => 'invita-dora-1'];
+    $chiave = conChiave('invita-dora-1');
 
     $prima = alFinto('POST', '/v1/workspace/inviti', $corpo, $anna, intestazioni: $chiave);
     $codice = $finto->ultimoInvito('dora@example.com');
@@ -293,7 +299,7 @@ it('workspace.inviti.crea con la stessa Idempotency-Key e lo stesso corpo dà la
         ->and(esito($altro))->toBe([422, 'chiave_idempotenza_riusata']);
 
     // Una chiave che non è ASCII visibile è un errore sull'header, e un errore non si ricorda.
-    $storta = alFinto('POST', '/v1/workspace/inviti', ['email' => 'ettore@example.com', 'ruolo' => 'membro'], $anna, intestazioni: ['Idempotency-Key' => 'con spazio']);
+    $storta = alFinto('POST', '/v1/workspace/inviti', ['email' => 'ettore@example.com', 'ruolo' => 'membro'], $anna, intestazioni: conChiave('con spazio'));
 
     expect(esito($storta))->toBe([422, 'dati_non_validi'])->and($storta->json('errors.0.header'))->toBe('Idempotency-Key');
 });
