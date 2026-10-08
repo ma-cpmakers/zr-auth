@@ -10,4 +10,12 @@ return [
     'carattere_nullo' => 'The :attribute field cannot contain the null character (U+0000).',
     'almeno_un_campo' => 'The body needs at least one of these fields: :campi.',
     'cartella_del_workspace' => 'There is no folder with this id in the workspace: the ids of the folders are given by board.cartelle.elenca.',
+    'board_del_workspace' => 'There is no board with this id in the workspace: the ids of the boards are given by board.board.elenca.',
+    'lista_del_workspace' => 'There is no list with this id in the workspace: the ids of the lists are given by board.board.mostra.',
+    'lista_della_board' => 'This list is not of the same board as the card: the ids of the lists are given by board.board.mostra.',
+    'scheda_della_board' => 'This card is not of the same board: the ids of the cards are given by board.schede.elenca.',
+    'una_posizione_o_un_ancora' => 'The body wants exactly one of posizione and dopo_scheda_id, not none and not both.',
+    'lista_della_stessa_board' => 'This list is not of the same board as the list to move: the ids of the lists are given by board.board.mostra.',
+    'una_posizione_o_una_lista' => 'The body wants exactly one of posizione and dopo_lista_id, not none and not both.',
+    'troppe_board' => 'At most :max boards per call.',
 ];

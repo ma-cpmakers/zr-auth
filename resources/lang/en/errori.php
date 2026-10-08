@@ -72,6 +72,18 @@ return [
         'title' => 'Folder not empty',
         'detail' => 'This folder still has boards, and it can be deleted only when empty: board.board.elenca tells which they are.',
     ],
+    'posizione_cambiata' => [
+        'title' => 'Position changed',
+        'detail' => 'The card given as the anchor is no longer where the request expected: read the list again and repeat the move.',
+    ],
+    'scheda_archiviata' => [
+        'title' => 'Card archived',
+        'detail' => 'This card is archived: restore it with board.schede.archiviazione.elimina before changing it.',
+    ],
+    'lista_archiviata' => [
+        'title' => 'List archived',
+        'detail' => 'This list is archived: restore it with board.liste.archiviazione.elimina before changing it or its cards.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursor expired',
         'detail' => 'The events after this point can no longer be read: read everything again and start over from the last event, with eventi.ultimo.mostra.',
