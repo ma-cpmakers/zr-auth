@@ -28,6 +28,9 @@ final class Testi
     /** La pagina di un codice d'errore: il `type` di un problema. */
     private const ERRORI = 'https://docs.zeiras.com/v1/errori/';
 
+    /** I campi estranei che un errore elenca, al più (Corpo::ESTRANEI). */
+    private const ESTRANEI = 10;
+
     /** I campi che TrimStrings di Laravel non tocca. */
     private const NON_SI_TAGLIANO = ['current_password', 'password', 'password_confirmation'];
 
@@ -103,6 +106,36 @@ final class Testi
     public function valida(array $corpo, array $regole): array
     {
         return $this->validaDati($corpo, $regole, fn (array $segmenti) => ['pointer' => self::puntatore($segmenti)]);
+    }
+
+    /**
+     * Valida il corpo di una scrittura come Corpo::valida() del backoffice: le regole di valida(), e un campo che le
+     * regole non nominano è un errore sul suo pointer (`validation.prohibited`), al più ESTRANEI, dopo quelli dei campi.
+     *
+     * @param  array<mixed>  $corpo
+     * @param  array<string, mixed>  $regole  senza chiavi a punti: sono i soli campi ammessi
+     * @return array<string, mixed> i valori validati
+     */
+    public function validaStretta(array $corpo, array $regole): array
+    {
+        $validatore = $this->validatori->make(self::pulisci($corpo), $regole);
+        $errori = [];
+
+        foreach ($validatore->errors()->messages() as $chiave => $messaggi) {
+            $errori[] = ['detail' => $messaggi[0], 'pointer' => self::puntatore(explode('.', (string) $chiave))];
+        }
+
+        $sbagliati = array_map('strval', array_keys($validatore->errors()->messages()));
+
+        foreach (array_slice(array_values(array_diff(array_map('strval', array_keys($corpo)), array_keys($regole), $sbagliati)), 0, self::ESTRANEI) as $estraneo) {
+            $errori[] = ['detail' => (string) $this->traduttore->get('validation.prohibited', ['attribute' => $estraneo]), 'pointer' => self::puntatore([$estraneo])];
+        }
+
+        if ($errori !== []) {
+            throw new Problema('dati_non_validi', $errori);
+        }
+
+        return $validatore->validated();
     }
 
     /**

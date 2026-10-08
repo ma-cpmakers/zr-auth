@@ -182,7 +182,8 @@ expect(Rotte::senzaGuardia(['GET accedi', 'POST accedi']))->toBe([]);
 
 `Zeiras\Auth\Testing\BackofficeFinto` risponde alle chiamate di `/v1` come il backoffice, senza rete e senza database: le
 forme del contratto, i codici d'errore del catalogo, i testi del backoffice (it, en, es: le copie di `resources/lang/`) e
-i suoi freni. Con lui un frontend prova nella sua CI la registrazione, l'ingresso, l'uscita e la verifica dell'email.
+i suoi freni. Con lui un frontend prova nella sua CI la registrazione, l'ingresso, l'uscita, la verifica dell'email, il
+recupero della password e l'ingresso nei moduli.
 
 ```php
 use Zeiras\Auth\Testing\BackofficeFinto;
@@ -199,9 +200,27 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
-- Fa `utenti.crea`, `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea` e
-  `io.email.verifica.crea`, e le letture: `io.mostra`, `io.workspace.elenca`, `app.elenca` e `workspace.membri.elenca`. Una chiamata di `/v1` che non
+- Fa `utenti.crea`, `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
+  `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea` e `app.modifica`, e le
+  letture: `io.mostra`, `io.workspace.elenca`, `app.elenca` e `workspace.membri.elenca`. Una chiamata di `/v1` che non
   conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- **La password.** `password.recupero.crea` è `202` con la sola email, uguale per un'email con un account e per una senza;
+  il codice di 6 cifre parte solo a un account, e si legge da `ultimoCodice($email)` (l'ultimo partito, di verifica o di
+  recupero). Un codice di recupero vale 10 minuti e 5 tentativi, e non è il codice di verifica dell'email: l'uno non fa
+  l'altro. `password.reimpostazione.crea` è `204`: la password nuova vale, la vecchia no, e ogni accesso della persona si
+  chiude coi suoi gettoni (`401` `gettone_non_valido`); ogni altro esito è la stessa `422` `verifica_non_riuscita`. Una
+  password che non va è `422` su `#/password` e non consuma il codice. Turnstile, acceso o guasto, vale per il recupero come
+  per `utenti.crea`; il freno è di 5 richieste al minuto per email in tutti e due i metodi.
+- **Le app.** Un'app `disponibile` del catalogo (oggi `pm`) è `attivo` in un workspace dopo `app.modifica`
+  (`{"stato": "attivo"}`, del proprietario o dell'amministratore) o, nel test, dopo `attivaApp($workspace, 'pm')`;
+  `app.elenca` lo dice. Un membro è `403` `permesso_negato`, un'app `in_arrivo` `409` `app_in_arrivo`.
+- **L'ingresso nei moduli.** `ritorno($app, $indirizzo)` dice dove `pm` riceve il codice (nel backoffice
+  `ZR_RITORNO_PM`); senza, `ingressi.crea` è `503` `servizio_non_disponibile`, e con `''` si toglie. `ingressi.crea`
+  (`{"app", "sfida"}`, gettone di un workspace, app attiva: `403` `app_non_attiva` altrimenti) dà `{codice, ritorno,
+  scade_il}` con il ritorno detto dal test e mai uno del corpo (un campo `ritorno` è `422`). `ingressi.scambio.crea`
+  (`{"codice", "verificatore"}`, senza gettone) dà il gettone del workspace: il codice vale una volta e 60 secondi, la
+  `sfida` è `base64url(SHA-256(verificatore))`, un verificatore sbagliato consuma il codice, ogni fallimento è la stessa
+  `422` `verifica_non_riuscita`, e il freno è di 5 richieste al minuto per codice.
 - La registrazione è chiusa come nel backoffice: ogni `utenti.crea` è `403` `registrazione_non_aperta`, finché il test
   non dà la lista dei consentiti con `consenti('bruno@altro.it', '@example.com')` (un'email intera o un dominio, per
   uguaglianza) o la apre a tutti con `apri()`, che vale solo con Turnstile acceso, come il backoffice che si apre solo
@@ -225,7 +244,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   un trattino e sei caratteri casuali (`studio-anna-k3x9q2`). `membro($workspace, $persona, $ruolo)` mette una persona in
   un workspace, o le cambia il ruolo: `io.mostra` lo rilegge a ogni chiamata.
 - Le liste sono quelle del backoffice: in ordine di nome (maiuscole e accenti non contano) e poi di `id`, le app in
-  ordine di codice, tutte `in_arrivo`; a pagine con `limite` (da 1 a 100, 50 se manca) e `cursore`, il `successivo`
+  ordine di codice (`pm` disponibile o attiva, le altre `in_arrivo`); a pagine con `limite` (da 1 a 100, 50 se manca) e `cursore`, il `successivo`
   della pagina prima, firmato per quella lista. `app.elenca` e `workspace.membri.elenca` vogliono il gettone di un
   workspace: al gettone dell'accesso rispondono `403` `gettone_senza_workspace`.
 - Acceso il finto, alle API risponde solo lui: niente altri `Http::fake` che rispondano a `api.zeiras.com`, né un
