@@ -54,7 +54,7 @@ return [
     ],
     'verifica_non_riuscita' => [
         'title' => 'Verifica non riuscita',
-        'detail' => "Il codice non verifica la richiesta: per l'email controlla il codice, l'email e la password, o chiedi un codice nuovo; per la password controlla il codice e l'email, o chiedi un codice nuovo; per l'ingresso in un'app riparti dall'accesso; per un invito controlla il codice e di usare l'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato.",
+        'detail' => "Il codice non verifica la richiesta: per l'email controlla il codice, l'email e la password, o chiedi un codice nuovo; per la password controlla il codice e l'email, o chiedi un codice nuovo; per l'ingresso in un'app riparti dall'accesso; per un invito controlla il codice e usa l'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato.",
     ],
     'turnstile_non_valido' => [
         'title' => 'Controllo Turnstile non superato',
