@@ -72,6 +72,18 @@ return [
         'title' => 'Carpeta no vacía',
         'detail' => 'Esta carpeta todavía tiene tableros, y solo se puede eliminar vacía: board.board.elenca indica cuáles son.',
     ],
+    'posizione_cambiata' => [
+        'title' => 'Posición cambiada',
+        'detail' => 'La tarjeta dada como ancla ya no está donde la solicitud esperaba: vuelve a leer la lista y repite el movimiento.',
+    ],
+    'scheda_archiviata' => [
+        'title' => 'Tarjeta archivada',
+        'detail' => 'Esta tarjeta está archivada: restáurala con board.schede.archiviazione.elimina antes de modificarla.',
+    ],
+    'lista_archiviata' => [
+        'title' => 'Lista archivada',
+        'detail' => 'Esta lista está archivada: restáurala con board.liste.archiviazione.elimina antes de modificarla o de modificar sus tarjetas.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursor caducado',
         'detail' => 'Los eventos después de este punto ya no se pueden leer: vuelve a leerlo todo y empieza de nuevo desde el último evento, con eventi.ultimo.mostra.',

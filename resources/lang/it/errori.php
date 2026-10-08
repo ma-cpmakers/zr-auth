@@ -72,6 +72,18 @@ return [
         'title' => 'Cartella non vuota',
         'detail' => 'Questa cartella ha ancora delle board, e si elimina solo vuota: board.board.elenca dice quali sono.',
     ],
+    'posizione_cambiata' => [
+        'title' => 'Posizione cambiata',
+        'detail' => 'La scheda data come ancora non è più dove la richiesta pensava: rileggi la lista e ripeti lo spostamento.',
+    ],
+    'scheda_archiviata' => [
+        'title' => 'Scheda archiviata',
+        'detail' => 'Questa scheda è archiviata: ripristinala con board.schede.archiviazione.elimina prima di cambiarla.',
+    ],
+    'lista_archiviata' => [
+        'title' => 'Lista archiviata',
+        'detail' => 'Questa lista è archiviata: ripristinala con board.liste.archiviazione.elimina prima di cambiarla o di cambiare le sue schede.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursore scaduto',
         'detail' => "Gli eventi dopo questo punto non si leggono più: rileggi tutto e riparti dall'ultimo evento, con eventi.ultimo.mostra.",
