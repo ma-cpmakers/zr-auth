@@ -182,10 +182,17 @@ guardia**: è il valore che chi gestisce il backoffice mette in `ZR_RITORNO_<COD
 Riceve `codice` (43 caratteri `[A-Za-z0-9_-]`) e `state` (al più 512, `[A-Za-z0-9._~-]`):
 
 - è un GET e basta (gli altri metodi sono 405) e solo dallo stesso sito: un `Sec-Fetch-Site` diverso da `same-site`,
-  `same-origin` o `none`, o un `Origin` che non è né il modulo né zr-home, non scambia niente;
+  `same-origin` o `none`, o un `Origin` che non è né il modulo né zr-home, non apre la sessione né tocca la partenza della
+  persona;
 - lo `state` deve essere quello della partenza (`hash_equals`) e vale una volta; `state` e verificatore escono dalla
   sessione a ogni ritorno che li tocca, anche se lo scambio fallisce;
-- un `codice` o uno `state` che non hanno la forma non partono nemmeno verso il backoffice;
+- **un ritorno rifiutato brucia il codice.** Per ogni motivo del rifiuto (altro sito, `state` assente, diverso o fuori forma,
+  nessuna partenza in sessione) il ricevitore, se il `codice` ha la forma giusta, fa uno scambio a vuoto
+  (`ingressi.scambio.crea`) con un verificatore casuale di 64 caratteri: il backoffice lo tratta come «verificatore
+  sbagliato» e consuma il codice, così chi ha mandato la persona qui con una sua sfida (e ha il suo verificatore) non
+  può scambiarlo se l'indirizzo trapela, nei 60 secondi in cui varrebbe. Un `codice` che non ha la forma non parte nemmeno
+  verso il backoffice; un 429, un 5xx o il trasporto che cade nello scambio a vuoto non cambiano la risposta alla persona
+  (la stessa pagina d'errore, gli stessi header) e non sono mai `BackofficeNonRisponde`;
 - lo scambio (`ingressi.scambio.crea`) dà il gettone del workspace: la sessione si apre con `Sessione::entra()` e la
   persona torna a `Sessione::ritorno(url(config('zr-auth.dopo')))`: la pagina che la guardia ricordava, se è del modulo,
   senza `codice` né `state`; mai un indirizzo che viene dalla richiesta;

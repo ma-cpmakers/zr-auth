@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Zeiras\Auth\Api;
 use Zeiras\Auth\Errori\BackofficeNonRisponde;
 use Zeiras\Auth\Errori\ErroreApi;
+use Zeiras\Auth\Errori\GettoneRifiutato;
 use Zeiras\Auth\Ingresso;
 use Zeiras\Auth\Sessione;
 
@@ -20,20 +21,27 @@ final class RicevitoreController
 {
     public function __invoke(Request $richiesta): RedirectResponse
     {
-        // Prima di toccare la sessione: un ritorno da un altro sito non consuma la partenza della persona.
+        $codice = $richiesta->query('codice');
+        $codice = is_string($codice) && preg_match('/^[A-Za-z0-9_-]{43}$/', $codice) === 1 ? $codice : null;
+
+        // Prima di toccare la sessione: un ritorno da un altro sito non consuma la partenza della persona. Il codice sì
+        // (brucia()): chi lo ha mandato qui ha la sfida, e il codice varrebbe 60 secondi.
         if (! self::delloStessoSito($richiesta)) {
+            self::brucia($codice);
+
             return self::errore();
         }
 
         // Lo state e il verificatore escono dalla sessione in ogni caso: valgono per un ritorno solo.
         $partenza = $richiesta->session()->pull(Ingresso::CHIAVE);
-        $codice = $richiesta->query('codice');
         $state = $richiesta->query('state');
 
         if (! is_array($partenza) || ! is_string($partenza['state'] ?? null) || ! is_string($partenza['verificatore'] ?? null)
-            || ! is_string($codice) || preg_match('/^[A-Za-z0-9_-]{43}$/', $codice) !== 1
+            || $codice === null
             || ! is_string($state) || strlen($state) > 512 || preg_match('/^[A-Za-z0-9._~-]+$/', $state) !== 1
             || ! hash_equals($partenza['state'], $state)) {
+            self::brucia($codice);
+
             return self::errore();
         }
 
@@ -52,6 +60,26 @@ final class RicevitoreController
         Sessione::entra(self::gettone($risposta));
 
         return redirect()->away(Sessione::ritorno(url((string) config('zr-auth.dopo'))))->withHeaders(Ingresso::INTESTAZIONI);
+    }
+
+    /**
+     * Un ritorno rifiutato brucia il suo codice: uno scambio a vuoto con un verificatore che nessuno ha, che il backoffice
+     * tratta come «verificatore sbagliato» e per questo consuma il codice (ingressi.scambio.crea, nessun metodo nuovo). Chi
+     * ha la sfida di quel codice è chi ha mandato la persona qui, e non deve poterlo scambiare se l'indirizzo trapela.
+     * Un codice senza la forma giusta non parte. L'esito non conta: un 429, un 5xx o il trasporto che cade non cambiano la
+     * risposta alla persona, che è già la pagina d'errore. La sessione non si tocca.
+     */
+    private static function brucia(?string $codice): void
+    {
+        if ($codice === null) {
+            return;
+        }
+
+        try {
+            Api::senzaGettone()->post('/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => bin2hex(random_bytes(32))]);
+        } catch (ErroreApi|BackofficeNonRisponde|GettoneRifiutato) {
+            // Il codice è bruciato o non c'è più da bruciare: la persona vede la stessa pagina in ogni caso.
+        }
     }
 
     /** Il ritorno viene dal browser della persona, da zr-home: Sec-Fetch-Site e Origin, quando ci sono, lo dicono. */
