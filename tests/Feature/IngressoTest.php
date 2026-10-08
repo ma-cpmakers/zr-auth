@@ -232,7 +232,7 @@ it('un guasto del backoffice è BackofficeNonRisponde, mai una sessione a metà 
     'un 5xx col suo problema' => [fn () => fn () => problema(503, 'servizio_non_disponibile')],
     'un 5xx senza JSON' => [fn () => fn () => Http::response('Bad Gateway', 502)],
     'il trasporto che cade' => [fn () => fn () => throw new ConnectionException('cURL error 28: timeout')],
-    'una risposta senza la forma' => [fn () => fn () => Http::response(['data' => ['gettone' => 'un-gettone-senza-il-resto']], 201)],
+    'una risposta senza la forma' => [fn () => fn () => Http::response(['data' => ['gettone' => GETTONE_WORKSPACE]], 201)],
     'una risposta senza data' => [fn () => fn () => Http::response(['ok' => true], 201)],
 ]);
 
