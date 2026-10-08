@@ -153,7 +153,7 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   `versione` che non è un entity-tag (`"abc"`, `W/"abc"`) lancia `InvalidArgumentException` senza chiamare.
 
   ```php
-  // zr-board: il polling di una board
+  // zr-board: il polling di una board. Il Redis di Zeiras è uno solo e senza evizione: poco, e sempre con un TTL
   $ultimo = Cache::get("board.$id");                       // ['etag' => …, 'corpo' => …] o null
   $r = Api::workspace()->condizionale("/v1/board/board/$id", $ultimo['etag'] ?? null);
 

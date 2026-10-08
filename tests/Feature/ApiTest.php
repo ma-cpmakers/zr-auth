@@ -290,7 +290,7 @@ it('una versione che non è un entity-tag non parte: InvalidArgumentException pr
     Http::fake();
     apriSessione();
 
-    expect(fn () => Api::workspace()->condizionale('/v1/x', $versione))->toThrow(InvalidArgumentException::class); // T5.2
+    expect(fn () => Api::workspace()->condizionale('/v1/x', $versione))->toThrow(InvalidArgumentException::class, 'entity-tag'); // T5.2: il messaggio è il nostro, non quello di Guzzle
     Http::assertNothingSent();
 })->with([
     'CR LF' => ["\"a\"\r\nX-Altro: 1"],
