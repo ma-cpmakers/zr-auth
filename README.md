@@ -266,7 +266,8 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `io.workspace.crea` (vedi «Il workspace»). Una chiamata
   di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
 - **La persona.** `lingue.elenca` dà le lingue di Zeiras (`it`, `en`, `es`) col nome scritto in ognuna, a ogni gettone.
-  `io.modifica` cambia nome, lingua e fuso orario sotto `utente` (JSON Merge Patch): un campo sbagliato o di un'altra
+  `io.modifica` cambia nome, lingua e fuso orario sotto `utente` (JSON Merge Patch) con ogni gettone della persona, anche quello
+  dell'accesso, di chi non ha ancora un workspace (nella risposta `workspace`, `ruolo` e `notifiche_non_lette` sono `null`): un campo sbagliato o di un'altra
   risposta è `422` sul suo pointer e non ne lascia salvato nessuno; la lingua nuova vale dalla chiamata dopo.
   `io.password.modifica` è `204`: vale la password nuova, e i gettoni degli altri accessi della persona non valgono più
   (`401`), quelli dell'accesso che chiama sì; la password attuale sbagliata è `422` su `#/password_attuale`, e dopo cinque

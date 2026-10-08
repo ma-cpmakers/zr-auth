@@ -118,13 +118,21 @@ it('io.modifica con un corpo senza campi da cambiare è un errore sul corpo (T3.
     'utente vuoto' => [['utente' => []], '#/utente'],
 ]);
 
-it('io.modifica col gettone dell\'accesso è 403 gettone_senza_workspace, prima del corpo (T3.2)', function () {
+it('io.modifica col gettone dell\'accesso cambia la persona, con workspace e ruolo null, e ha gli stessi errori del gettone di un workspace (#1363, T2.1, T2.3)', function () {
     [, , $accesso] = fintoDellaPersona();
 
-    foreach ([['utente' => ['nome' => 'Nuovo']], ['utente' => ['lingua' => 'de']], []] as $corpo) {
-        $risposta = alFinto('PATCH', '/v1/io', $corpo, $accesso);
+    $risposta = alFinto('PATCH', '/v1/io', ['utente' => ['nome' => 'Nuovo', 'lingua' => 'en']], $accesso);
 
-        expect($risposta->status())->toBe(403)->and($risposta->json('codice'))->toBe('gettone_senza_workspace');
+    expect($risposta->status())->toBe(200)
+        ->and($risposta->json('data.utente.nome'))->toBe('Nuovo')
+        ->and($risposta->json('data.utente.lingua'))->toBe('en')
+        ->and($risposta->json('data.workspace'))->toBeNull()
+        ->and($risposta->json('data.ruolo'))->toBeNull()
+        ->and($risposta->json('data.notifiche_non_lette'))->toBeNull()
+        ->and(alFinto('GET', '/v1/io', gettone: $accesso)->json('data.utente.nome'))->toBe('Nuovo');
+
+    foreach ([['utente' => []], ['utente' => ['lingua' => 'de']], []] as $corpo) {
+        expect(alFinto('PATCH', '/v1/io', $corpo, $accesso)->status())->toBe(422);
     }
 });
 
