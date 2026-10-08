@@ -61,9 +61,12 @@ final class BackofficeFinto
         ['POST', '#^/v1/ingressi$#', 'ingressi.crea'],
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
+        ['PATCH', '#^/v1/io$#', 'io.modifica'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
         ['POST', '#^/v1/io/email/verifica$#', 'io.email.verifica.crea'],
+        ['PATCH', '#^/v1/io/password$#', 'io.password.modifica'],
         ['GET', '#^/v1/io/workspace$#', 'io.workspace.elenca'],
+        ['GET', '#^/v1/lingue$#', 'lingue.elenca'],
         ['POST', '#^/v1/password/recupero$#', 'password.recupero.crea'],
         ['POST', '#^/v1/password/reimpostazione$#', 'password.reimpostazione.crea'],
         ['POST', '#^/v1/utenti$#', 'utenti.crea'],
@@ -92,6 +95,27 @@ final class BackofficeFinto
         'pm' => ['it' => 'Project Management', 'en' => 'Project Management', 'es' => 'Project Management'],
         'reports' => ['it' => 'Reports', 'en' => 'Reports', 'es' => 'Reports'],
     ];
+
+    /**
+     * Il nome di ogni lingua scritto in quella lingua (config/lingue.php del backoffice, `nomi`, #1204): lingue.elenca le
+     * dà in ordine di codice.
+     */
+    private const NOMI_LINGUE = ['it' => 'Italiano', 'en' => 'English', 'es' => 'Español'];
+
+    /**
+     * I campi della risposta di io.mostra che io.modifica non cambia, col metodo che li cambia (null: nessuno, li dà il
+     * sistema): un campo di questi nel corpo è un errore sul suo pointer che dice dove andare (IoController::ALTRI_CAMPI).
+     */
+    private const ALTRI_CAMPI_DI_IO = [
+        'utente.id' => null,
+        'utente.email' => null,
+        'utente.email_verificata_il' => null,
+        'workspace' => 'workspace.modifica',
+        'ruolo' => 'workspace.membri.modifica',
+    ];
+
+    /** Gli errori sulla password attuale che una persona può fare in un'ora (IoPasswordController::ERRORI). */
+    private const ERRORI_DELLA_PASSWORD = 5;
 
     /** Gli elementi di una pagina di una lista, se `limite` manca, e al più (ListaRequest). */
     private const LIMITE_PREDEFINITO = 50;
@@ -431,9 +455,12 @@ final class BackofficeFinto
                 'ingressi.crea' => $this->creaIngresso($richiesta, $corpo),
                 'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
+                'io.modifica' => $this->modificaIo($richiesta, $corpo),
+                'io.password.modifica' => $this->modificaPassword($richiesta, $corpo),
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
+                'lingue.elenca' => $this->elencaLingue($richiesta),
                 'password.recupero.crea' => $this->creaRecupero($corpo),
                 'password.reimpostazione.crea' => $this->reimposta($corpo),
                 'utenti.crea' => $this->creaUtente($corpo),
@@ -678,15 +705,132 @@ final class BackofficeFinto
      */
     private function mostraIo(Request $richiesta): array
     {
-        $chi = $this->autentica($richiesta);
+        return [200, ['data' => $this->io($this->autentica($richiesta))]];
+    }
+
+    /**
+     * La forma di io.mostra (Forme::io), per la persona e il workspace del gettone: anche la risposta di io.modifica.
+     *
+     * @param  array{persona: string, workspace: ?string}  $chi
+     * @return array<string, mixed>
+     */
+    private function io(array $chi): array
+    {
         $workspace = $chi['workspace'];
 
-        return [200, ['data' => [
+        return [
             'utente' => $this->utente($chi['persona']),
             'workspace' => $workspace === null ? null : $this->workspace[$workspace],
             'ruolo' => $workspace === null ? null : $this->membri[$workspace][$chi['persona']],
             'notifiche_non_lette' => $workspace === null ? null : 0,
-        ]]];
+        ];
+    }
+
+    /**
+     * io.modifica (IoController::modifica): il nome, la lingua e il fuso orario della persona del gettone, come JSON Merge
+     * Patch sotto `utente`. Nell'ordine del backoffice: il gettone di un workspace (403 gettone_senza_workspace) prima del
+     * corpo; poi tutti i campi insieme, un valore sbagliato non ne lascia salvato nessuno (422 sul pointer del campo, anche
+     * per un campo di altre risposte o che non esiste); un corpo senza campi da cambiare è un errore sul corpo. La persona è
+     * sempre quella del gettone. Risponde con la forma di io.mostra, già aggiornata; la lingua nuova vale dalla chiamata dopo.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaIo(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $regole = [
+            'utente' => ['sometimes', 'array'],
+            'utente.nome' => ['filled', 'string', 'max:255'],
+            'utente.lingua' => ['filled', 'string', Rule::in(Testi::LINGUE)],
+            'utente.fuso_orario' => ['filled', 'string', 'timezone:all'],
+        ];
+
+        foreach (self::ALTRI_CAMPI_DI_IO as $campo => $metodo) {
+            $regole[$campo] = [function (string $attributo, mixed $valore, Closure $rifiuta) use ($metodo) {
+                $rifiuta($metodo === null ? 'regole.campo_di_nessun_metodo' : 'regole.campo_di_un_altro_metodo')
+                    ->translate(['attribute' => $attributo, 'metodo' => (string) $metodo]);
+            }];
+        }
+
+        $campi = $this->testi->validaCorpo($corpo, $regole);
+        $utente = $campi['utente'] ?? [];
+
+        if (! is_array($utente) || $utente === []) {
+            throw new Problema('dati_non_validi', [[
+                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.lingua, utente.fuso_orario']),
+                'pointer' => array_key_exists('utente', $campi) ? '#/utente' : '#',
+            ]]);
+        }
+
+        foreach ($utente as $campo => $valore) {
+            $this->persone[$chi['persona']][$campo] = $valore;
+        }
+
+        return [200, ['data' => $this->io($chi)]];
+    }
+
+    /**
+     * io.password.modifica (IoPasswordController::modifica): la persona del gettone cambia la sua password, con un gettone
+     * qualunque (anche dell'accesso). Nell'ordine del backoffice: il corpo, poi il freno degli errori sulla password
+     * attuale (per persona, al sesto in un'ora 429 anche con quella giusta; una giusta lo azzera), poi la password attuale
+     * (422 sul campo), poi la nuova trapelata. 204; i gettoni degli altri accessi della persona non valgono più, quelli
+     * dell'accesso che chiama sì.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, null}
+     */
+    private function modificaPassword(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+        $persona = $chi['persona'];
+        $dati = $this->testi->validaCorpo($corpo, [
+            'password_attuale' => ['required', 'string', new SenzaCarattereNullo],
+            'password_nuova' => ['required', 'string', new SenzaCarattereNullo, 'min:12'],
+        ]);
+
+        $this->frena('password:'.$persona, self::ERRORI_DELLA_PASSWORD, self::ORA);
+
+        if (! hash_equals($this->persone[$persona]['password'], (string) $dati['password_attuale'])) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.password_attuale'), 'pointer' => '#/password_attuale']]);
+        }
+
+        $this->freni->clear('password:'.$persona);
+
+        // Have I Been Pwned del backoffice (PasswordNuova::controlla), dopo il freno: la password trapelata è del finto.
+        $this->testi->valida(['password_nuova' => $dati['password_nuova']], ['password_nuova' => [function (string $campo, mixed $valore, Closure $fail) {
+            if ($valore === self::PASSWORD_TRAPELATA) {
+                $fail('validation.password.uncompromised')->translate();
+            }
+        }]]);
+
+        $this->persone[$persona]['password'] = $dati['password_nuova'];
+
+        foreach ($this->accessi as $id => $accesso) {
+            if ($accesso['utente'] === $persona && $id !== $chi['accesso']) {
+                $this->accessi[$id]['chiuso'] = true;
+            }
+        }
+
+        return [204, null];
+    }
+
+    /**
+     * lingue.elenca (LingueController::elenca): le lingue di Zeiras in ordine di codice, ognuna col codice e il suo nome
+     * scritto in quella lingua. Vale ogni gettone, anche dell'accesso. Il cursore porta il codice dell'ultima lingua.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaLingue(Request $richiesta): array
+    {
+        $this->autentica($richiesta);
+        $voci = [];
+
+        foreach (self::NOMI_LINGUE as $codice => $nome) {
+            $voci[] = ['codice' => $codice, 'nome' => $nome];
+        }
+
+        return $this->pagina($richiesta, 'lingue.elenca', 'codice', $voci, fn (array $lingua) => [$lingua['codice']], fn (string $codice) => [$codice]);
     }
 
     /**

@@ -139,6 +139,43 @@ final class Testi
     }
 
     /**
+     * Valida il corpo di una scrittura con campi annidati come Corpo::valida() del backoffice: le regole dei campi in cima si
+     * guardano prima, quelle dei loro elementi (`utente.nome`) dopo e solo per i campi giusti; un campo che le regole non
+     * nominano, a qualunque livello, è un errore sul suo pointer (`validation.prohibited`), al più ESTRANEI, dopo gli altri.
+     *
+     * @param  array<mixed>  $corpo
+     * @param  array<string, mixed>  $regole  le regole di Laravel, con le chiavi a punti: sono i soli campi ammessi, a ogni livello
+     * @return array<string, mixed> i valori validati
+     */
+    public function validaCorpo(array $corpo, array $regole): array
+    {
+        $corpo = self::pulisci($corpo);
+        $campi = $this->validatori->make($corpo, array_filter($regole, fn (string|int $chiave) => ! str_contains((string) $chiave, '.'), ARRAY_FILTER_USE_KEY));
+        $sbagliati = array_map('strval', array_keys($campi->errors()->messages()));
+        $elementi = array_filter($regole, fn (string|int $chiave) => str_contains((string) $chiave, '.') && ! in_array(explode('.', (string) $chiave, 2)[0], $sbagliati, true), ARRAY_FILTER_USE_KEY);
+        $errori = $this->errori($campi);
+
+        if ($elementi !== []) {
+            $errori = [...$errori, ...$this->errori($this->validatori->make($corpo, $elementi))];
+        }
+
+        // Dentro un campo sbagliato non si cercano gli estranei: l'errore è già sul campo.
+        $ammessi = array_replace(self::albero(array_map('strval', array_keys($regole))), array_fill_keys($sbagliati, []));
+        $estranei = [];
+        self::estranei($corpo, $ammessi, [], $estranei);
+
+        foreach ($estranei as $percorso) {
+            $errori[] = ['detail' => (string) $this->traduttore->get('validation.prohibited', ['attribute' => implode('.', $percorso)]), 'pointer' => self::puntatore($percorso)];
+        }
+
+        if ($errori !== []) {
+            throw new Problema('dati_non_validi', $errori);
+        }
+
+        return $campi->validated();
+    }
+
+    /**
      * Valida la query come il backoffice in una GET, che non ha corpo: con le stesse pulizie di valida(), e un valore
      * rifiutato è dati_non_validi col primo messaggio di ogni parametro e il suo nome nell'indirizzo (`filtro[stato]`).
      *
@@ -243,6 +280,66 @@ final class Testi
     }
 
     /**
+     * Un errore per valore rifiutato, col primo messaggio delle sue regole e il suo pointer.
+     *
+     * @return list<array{detail: string, pointer: string}>
+     */
+    private function errori(\Illuminate\Contracts\Validation\Validator $validatore): array
+    {
+        $errori = [];
+
+        foreach ($validatore->errors()->messages() as $chiave => $messaggi) {
+            $errori[] = ['detail' => $messaggi[0], 'pointer' => self::puntatore(explode('.', (string) $chiave))];
+        }
+
+        return $errori;
+    }
+
+    /**
+     * I campi ammessi come albero delle chiavi delle regole (Corpo::albero): `liste.*.nome` è `['liste' => ['*' => ['nome' => []]]]`.
+     *
+     * @param  list<string>  $chiavi
+     * @return array<string, mixed>
+     */
+    private static function albero(array $chiavi): array
+    {
+        $figli = [];
+
+        foreach ($chiavi as $chiave) {
+            $segmenti = explode('.', $chiave, 2);
+            $figli[$segmenti[0]] = [...($figli[$segmenti[0]] ?? []), ...array_slice($segmenti, 1)];
+        }
+
+        return array_map(self::albero(...), $figli);
+    }
+
+    /**
+     * I percorsi dei campi che l'albero non ammette, nell'ordine del corpo, al più ESTRANEI (Corpo::estranei).
+     *
+     * @param  array<array-key, mixed>  $valore
+     * @param  array<string, mixed>  $ammessi
+     * @param  list<string>  $percorso
+     * @param  list<list<string>>  $estranei
+     */
+    private static function estranei(array $valore, array $ammessi, array $percorso, array &$estranei): void
+    {
+        foreach ($valore as $chiave => $figlio) {
+            if (count($estranei) === self::ESTRANEI) {
+                return;
+            }
+
+            $chiave = (string) $chiave;
+            $sotto = $ammessi[$chiave] ?? $ammessi['*'] ?? null;
+
+            if (! is_array($sotto)) {
+                $estranei[] = [...$percorso, $chiave];
+            } elseif ($sotto !== [] && is_array($figlio)) {
+                self::estranei($figlio, $sotto, [...$percorso, $chiave], $estranei);
+            }
+        }
+    }
+
+    /**
      * Il pointer di un valore del corpo (ErroreDiCampo::pointer): ogni segmento come in RFC 6901, poi codificato per un
      * frammento di URI.
      *
@@ -250,6 +347,11 @@ final class Testi
      */
     private static function puntatore(array $segmenti): string
     {
+        // Senza segmenti è il corpo intero, `#`: `#/` sarebbe il campo con la chiave vuota.
+        if ($segmenti === []) {
+            return '#';
+        }
+
         return '#/'.implode('/', array_map(fn (string $segmento) => rawurlencode(str_replace(['~', '/'], ['~0', '~1'], $segmento)), $segmenti));
     }
 }
