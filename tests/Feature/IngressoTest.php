@@ -174,7 +174,7 @@ it('con lo state giusto scambia il codice, apre la sessione e torna a un indiriz
 
     $risposta->assertStatus(302)->assertHeader('Referrer-Policy', 'no-referrer');
     expect($risposta->headers->get('Cache-Control'))->toContain('no-store')
-        ->and($risposta->headers->get('Location'))->toBe(FRONTEND.'/')
+        ->and($risposta->headers->get('Location'))->toBe(FRONTEND)
         ->and(Sessione::aperta())->toBeTrue()
         ->and(Sessione::workspace()['id'])->toBe($studio['id'])
         ->and(Sessione::ruolo())->toBe('proprietario')
@@ -194,7 +194,7 @@ it('state e verificatore escono dalla sessione, e lo stesso state non vale due v
     $partenza = queryDi((string) $this->get('/parti/'.$studio['slug'])->headers->get('Location'));
     $indirizzo = ritornoDiHome($studio, $partenza);
 
-    $this->get($indirizzo)->assertRedirect(FRONTEND.'/');
+    $this->get($indirizzo)->assertRedirect(FRONTEND);
 
     expect(session()->has(Ingresso::CHIAVE))->toBeFalse();
 
@@ -264,7 +264,7 @@ it('partenza, ingressi.crea del finto, ricevitore: la sessione si apre col works
     [, $studio] = fintoDelModulo();
 
     $partenza = queryDi((string) $this->get('/parti/'.$studio['slug'])->headers->get('Location'));
-    $this->get(ritornoDiHome($studio, $partenza))->assertRedirect(FRONTEND.'/');
+    $this->get(ritornoDiHome($studio, $partenza))->assertRedirect(FRONTEND);
 
     expect(Sessione::aperta())->toBeTrue()
         ->and(Sessione::utente()['email'])->toBe('anna@example.com')
