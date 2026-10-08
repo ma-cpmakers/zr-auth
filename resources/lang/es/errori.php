@@ -84,6 +84,18 @@ return [
         'title' => 'Lista archivada',
         'detail' => 'Esta lista está archivada: restáurala con board.liste.archiviazione.elimina antes de modificarla o de modificar sus tarjetas.',
     ],
+    'board_chiusa' => [
+        'title' => 'Tablero no activo',
+        'detail' => 'Este tablero está cerrado o en la papelera: vuelve a activarlo con board.board.modifica antes de modificar sus listas, sus tarjetas o sus etiquetas.',
+    ],
+    'limite_raggiunto' => [
+        'title' => 'Límite alcanzado',
+        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación. Libera un lugar (cierra un tablero, archiva una lista o una tarjeta, quita una etiqueta o un elemento) y repite.',
+    ],
+    'transizione_non_valida' => [
+        'title' => 'Transición de estado no válida',
+        'detail' => 'El estado pedido no se alcanza desde el estado en que está ahora el recurso: en un tablero, de activo se pasa a cerrado, de cerrado a activo o a papelera, y de la papelera a cerrado.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursor caducado',
         'detail' => 'Los eventos después de este punto ya no se pueden leer: vuelve a leerlo todo y empieza de nuevo desde el último evento, con eventi.ultimo.mostra.',

@@ -84,6 +84,18 @@ return [
         'title' => 'Lista archiviata',
         'detail' => 'Questa lista è archiviata: ripristinala con board.liste.archiviazione.elimina prima di cambiarla o di cambiare le sue schede.',
     ],
+    'board_chiusa' => [
+        'title' => 'Board non attiva',
+        'detail' => 'Questa board è chiusa o nel cestino: riportala allo stato attivo con board.board.modifica prima di cambiare le sue liste, le sue schede o le sue etichette.',
+    ],
+    'limite_raggiunto' => [
+        'title' => 'Limite raggiunto',
+        'detail' => 'La risorsa ha già il massimo consentito: 100 board attive e 100 cartelle per workspace, 50 liste per board, 500 schede per lista, 3 etichette per scheda, 100 voci per checklist. Libera un posto (chiudi una board, archivia una lista o una scheda, togli un\'etichetta o una voce) e ripeti.',
+    ],
+    'transizione_non_valida' => [
+        'title' => 'Transizione di stato non valida',
+        'detail' => 'Lo stato chiesto non si raggiunge da quello in cui la risorsa sta ora: per una board, da attiva si passa a chiusa, da chiusa ad attiva o a cestino, dal cestino a chiusa.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursore scaduto',
         'detail' => "Gli eventi dopo questo punto non si leggono più: rileggi tutto e riparti dall'ultimo evento, con eventi.ultimo.mostra.",
