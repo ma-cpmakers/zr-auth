@@ -84,6 +84,18 @@ return [
         'title' => 'List archived',
         'detail' => 'This list is archived: restore it with board.liste.archiviazione.elimina before changing it or its cards.',
     ],
+    'board_chiusa' => [
+        'title' => 'Board not active',
+        'detail' => 'This board is closed or in the trash: make it active again with board.board.modifica before changing its lists, cards or labels.',
+    ],
+    'limite_raggiunto' => [
+        'title' => 'Limit reached',
+        'detail' => 'The resource already has the maximum allowed: 100 active boards and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card. Free a slot (close a board, archive a list or a card, remove a label or an item) and try again.',
+    ],
+    'transizione_non_valida' => [
+        'title' => 'Invalid state transition',
+        'detail' => 'The requested state cannot be reached from the state the resource is in now: for a board, active goes to closed, closed goes to active or to trash, and trash goes to closed.',
+    ],
     'cursore_scaduto' => [
         'title' => 'Cursor expired',
         'detail' => 'The events after this point can no longer be read: read everything again and start over from the last event, with eventi.ultimo.mostra.',
