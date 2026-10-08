@@ -262,7 +262,8 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
   `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
-  `io.workspace.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Una chiamata
+  `io.workspace.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
+  `io.workspace.crea` (vedi «Il workspace»). Una chiamata
   di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
 - **La persona.** `lingue.elenca` dà le lingue di Zeiras (`it`, `en`, `es`) col nome scritto in ognuna, a ogni gettone.
   `io.modifica` cambia nome, lingua e fuso orario sotto `utente` (JSON Merge Patch): un campo sbagliato o di un'altra
@@ -277,6 +278,13 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `422`, il proprietario `409` `proprietario_intoccabile`, e un amministratore che tocca un amministratore, o ne fa uno, `403`.
   Togliere un membro toglie i suoi gettoni **di quel workspace** (`401`, anche se rientra); quello dell'accesso e gli altri
   workspace restano.
+- **La nascita di un workspace.** `io.workspace.crea` (`{"nome"}`, 1-255 caratteri; `azienda_id` facoltativo) vale con
+  ogni gettone della persona, anche quello dell'accesso, e risponde `201` con il workspace e il ruolo `proprietario` (senza
+  `Location`: il contratto ha il solo `Link`). Il workspace compare in `io.workspace.elenca`, `gettoni.crea` ne dà il
+  gettone, e `app.elenca` non ha app `attivo`. Un `nome` sbagliato è `422` su `#/nome` e non conta nel freno; un campo in
+  più nel corpo si ignora; un'`azienda_id` che non è della persona è `404`; dieci workspace all'ora per persona, poi `429`
+  con `Retry-After`. Con `Idempotency-Key` la stessa chiave dà la stessa risposta senza un secondo workspace, con qualunque
+  gettone della persona.
 - **Gli inviti.** `workspace.inviti.crea` (`{"email", "ruolo"}`) è `201` con l'invito (`id`, `email`, `ruolo`, `scade_il`,
   `creato_il`) e la `Location`, uguale per un'email con un account e per una senza, e **mai con il codice**: il codice è
   nella mail, e il test lo legge da `ultimoInvito($email)`, la casella di posta degli inviti (l'ultimo partito, `null` se
