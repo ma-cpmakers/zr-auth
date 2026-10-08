@@ -56,11 +56,16 @@ final class BackofficeFinto
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
         ['GET', '#^/v1/app$#', 'app.elenca'],
+        ['PATCH', '#^/v1/app/([^/]+)$#', 'app.modifica'],
         ['POST', '#^/v1/gettoni$#', 'gettoni.crea'],
+        ['POST', '#^/v1/ingressi$#', 'ingressi.crea'],
+        ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
         ['POST', '#^/v1/io/email/verifica$#', 'io.email.verifica.crea'],
         ['GET', '#^/v1/io/workspace$#', 'io.workspace.elenca'],
+        ['POST', '#^/v1/password/recupero$#', 'password.recupero.crea'],
+        ['POST', '#^/v1/password/reimpostazione$#', 'password.reimpostazione.crea'],
         ['POST', '#^/v1/utenti$#', 'utenti.crea'],
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
     ];
@@ -107,7 +112,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'gettone' => 600, 'gettoni' => 60];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60];
 
     private const ORA = 3600;
 
@@ -120,6 +125,11 @@ final class BackofficeFinto
     private const MINUTI_DEL_CODICE = 10;
 
     private const TENTATIVI = 5;
+
+    /** Quanto vale il codice di un ingresso, in secondi (Ingresso::TTL), e quanti scambi ammette in un minuto (IngressiController). */
+    private const SECONDI_DELL_INGRESSO = 60;
+
+    private const SCAMBI = 5;
 
     private const ERRORI_AL_GIORNO = 10;
 
@@ -149,8 +159,20 @@ final class BackofficeFinto
     /** @var array<string, array{codice: string, tentativi: int, scade: int}> il codice che vale, per persona */
     private array $codici = [];
 
+    /** @var array<string, array{codice: string, tentativi: int, scade: int}> il codice di recupero che vale, per persona */
+    private array $recuperi = [];
+
     /** @var array<string, string> l'ultimo codice partito, per email */
     private array $posta = [];
+
+    /** @var array<string, array<string, true>> le app che il workspace ha attivato (app.modifica), per workspace e per codice */
+    private array $attive = [];
+
+    /** @var array<string, string> dove un'app riceve il codice di un ingresso (ZR_RITORNO_<CODICE>), per codice dell'app */
+    private array $ritorni = [];
+
+    /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
+    private array $ingressi = [];
 
     /** @var list<string> la lista dei consentiti (zeiras.registrazione.consentiti): email intere o «@dominio» */
     private array $consentiti = [];
@@ -313,7 +335,49 @@ final class BackofficeFinto
         return $this;
     }
 
-    /** L'ultimo codice di verifica partito per l'email, null se nessuno: la casella di posta del finto. */
+    /**
+     * Attiva delle app in un workspace, come app.modifica del proprietario: solo un'app che il catalogo dà disponibile.
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     */
+    public function attivaApp(array $workspace, string ...$app): self
+    {
+        $id = $workspace['id'] ?? null;
+
+        if (! is_string($id) || ! isset($this->workspace[$id])) {
+            throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
+        }
+
+        foreach ($app as $codice) {
+            if ((self::CATALOGO[$codice] ?? null) !== 'disponibile') {
+                throw new InvalidArgumentException("L'app «{$codice}» non c'è fra quelle disponibili del catalogo: ".implode(', ', array_keys(array_filter(self::CATALOGO, fn (string $stato) => $stato === 'disponibile'))).'.');
+            }
+
+            $this->attive[$id][$codice] = true;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Dove un'app riceve il codice di un ingresso (ZR_RITORNO_<CODICE> del backoffice): ingressi.crea lo dà in `ritorno`.
+     * Senza, l'app non riceve ingressi e ingressi.crea è 503 servizio_non_disponibile.
+     */
+    public function ritorno(string $app, string $indirizzo): self
+    {
+        if (! isset(self::CATALOGO[$app])) {
+            throw new InvalidArgumentException("L'app «{$app}» non c'è nel catalogo: ".implode(', ', array_keys(self::CATALOGO)).'.');
+        }
+
+        $this->ritorni[$app] = $indirizzo;
+
+        return $this;
+    }
+
+    /**
+     * L'ultimo codice partito per l'email, null se nessuno: la casella di posta del finto. È di verifica o di recupero
+     * della password, quello partito per ultimo.
+     */
     public function ultimoCodice(string $email): ?string
     {
         return $this->posta[self::normalizza($email)] ?? null;
@@ -362,11 +426,16 @@ final class BackofficeFinto
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
                 'app.elenca' => $this->elencaApp($richiesta),
+                'app.modifica' => $this->modificaApp($richiesta, $corpo, $parametri[0]),
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
+                'ingressi.crea' => $this->creaIngresso($richiesta, $corpo),
+                'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
+                'password.recupero.crea' => $this->creaRecupero($corpo),
+                'password.reimpostazione.crea' => $this->reimposta($corpo),
                 'utenti.crea' => $this->creaUtente($corpo),
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
             };
@@ -644,27 +713,284 @@ final class BackofficeFinto
 
     /**
      * app.elenca (AppController::elenca): le app del catalogo in ordine di codice, ognuna col suo stato nel workspace del
-     * gettone; finché l'attivazione non c'è, quello del catalogo. Il cursore porta il codice, e la pagina dopo parte dal
+     * gettone: `attivo` se il catalogo la dà disponibile e il workspace l'ha attivata (app.modifica, attivaApp()), se no
+     * quello del catalogo. Il cursore porta il codice, e la pagina dopo parte dal
      * codice dopo.
      *
      * @return array{int, array<string, mixed>}
      */
     private function elencaApp(Request $richiesta): array
     {
-        $this->delWorkspace($richiesta);
+        $workspace = $this->delWorkspace($richiesta);
         $voci = [];
 
         foreach (self::CATALOGO as $codice => $stato) {
-            $nome = [];
-
-            foreach (Testi::LINGUE as $lingua) {
-                $nome[$lingua] = self::NOMI[$codice][$lingua] ?? self::NOMI[$codice]['en'] ?? $codice;
-            }
-
-            $voci[] = ['codice' => $codice, 'stato' => $stato, 'nome' => $nome];
+            $voci[] = $this->voceApp($codice, $this->appAttiva($workspace, $codice) ? 'attivo' : $stato);
         }
 
         return $this->pagina($richiesta, 'app.elenca', 'codice', $voci, fn (array $app) => [$app['codice']], fn (string $codice) => [$codice]);
+    }
+
+    /**
+     * app.modifica (AppController::modifica): attiva o disattiva un'app nel workspace del gettone. Nell'ordine del
+     * backoffice: il ruolo (il middleware `workspace:proprietario,amministratore`, prima dell'app e del corpo), l'app del
+     * catalogo (404), il corpo (422), e un'app in arrivo non cambia (409). Lo stato che ha già non scrive niente.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaApp(Request $richiesta, array $corpo, string $app): array
+    {
+        $workspace = $this->conWorkspace($richiesta, ['proprietario', 'amministratore'])['workspace'];
+
+        if (! isset(self::CATALOGO[$app])) {
+            throw new Problema('non_trovato');
+        }
+
+        $stato = (string) $this->testi->validaStretta($corpo, ['stato' => ['required', 'string', Rule::in(['attivo', 'disponibile'])]])['stato'];
+
+        if (self::CATALOGO[$app] !== 'disponibile') {
+            throw new Problema('app_in_arrivo');
+        }
+
+        if ($stato === 'attivo') {
+            $this->attive[$workspace][$app] = true;
+        } else {
+            unset($this->attive[$workspace][$app]);
+        }
+
+        return [200, ['data' => $this->voceApp($app, $stato)]];
+    }
+
+    /**
+     * ingressi.crea (IngressiController::crea): il codice monouso per un'app attiva nel workspace del gettone, per la
+     * persona del gettone. L'indirizzo di ritorno è quello dell'app (ritorno()), mai della richiesta: un campo `ritorno`
+     * nel corpo è 422 come ogni altro. Il corpo si guarda prima, poi l'app attiva (403), poi l'indirizzo (503).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaIngresso(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $workspace = $chi['workspace'];
+        $campi = $this->testi->validaStretta($corpo, [
+            'app' => ['required', 'string', 'regex:/^[a-z][a-z0-9_]*$/', Rule::in(array_keys(self::CATALOGO))],
+            'sfida' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
+        ]);
+        $app = (string) $campi['app'];
+
+        if (! $this->appAttiva($workspace, $app)) {
+            throw new Problema('app_non_attiva');
+        }
+
+        $ritorno = $this->ritorni[$app] ?? '';
+
+        if ($ritorno === '') {
+            throw new Problema('servizio_non_disponibile');
+        }
+
+        $codice = self::base64url(random_bytes(32));
+        $scade = now()->getTimestamp() + self::SECONDI_DELL_INGRESSO;
+        $this->ingressi[$codice] = ['accesso' => $chi['accesso'], 'workspace' => $workspace, 'app' => $app, 'sfida' => (string) $campi['sfida'], 'scade' => $scade];
+
+        return [201, ['data' => ['codice' => $codice, 'ritorno' => $ritorno, 'scade_il' => self::iso(CarbonImmutable::createFromTimestampUTC($scade))]]];
+    }
+
+    /**
+     * ingressi.scambio.crea (IngressiController::scambio), senza gettone: il codice vale una volta e per 60 secondi, e il
+     * verificatore deve avere la sfida data (SHA-256, base64url). Il freno è per codice, mai per IP. Ogni scambio che non
+     * riesce è la stessa 422 verifica_non_riuscita: un verificatore sbagliato consuma il codice, come uno scaduto.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function scambiaIngresso(array $corpo): array
+    {
+        $campi = $this->testi->validaStretta($corpo, [
+            'codice' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
+            'verificatore' => ['required', 'string', 'min:43', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
+        ]);
+        $codice = (string) $campi['codice'];
+        $this->frena('ingresso:'.$codice, self::SCAMBI, self::MINUTO);
+
+        $ingresso = $this->ingressi[$codice] ?? null;
+        unset($this->ingressi[$codice]);
+
+        if ($ingresso === null || $ingresso['scade'] <= now()->getTimestamp()
+            || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))) {
+            throw new Problema('verifica_non_riuscita');
+        }
+
+        $accesso = $this->accessi[$ingresso['accesso']] ?? null;
+
+        if ($accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now())
+            || ! isset($this->membri[$ingresso['workspace']][$accesso['utente']]) || ! $this->appAttiva($ingresso['workspace'], $ingresso['app'])) {
+            throw new Problema('verifica_non_riuscita');
+        }
+
+        return [201, ['data' => $this->emetti($ingresso['accesso'], $ingresso['workspace'])]];
+    }
+
+    /**
+     * password.recupero.crea (PasswordController::recupero), senza gettone: 202 con la sola email, la stessa risposta per
+     * un'email con un account e per una senza. Nell'ordine del backoffice: l'email, il suo freno, Turnstile prima di
+     * cercare l'account, poi il codice, che parte solo a un account e se i freni degli invii lo ammettono.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaRecupero(array $corpo): array
+    {
+        $dati = $this->testi->validaStretta($corpo, [
+            'email' => self::REGOLE_EMAIL,
+            'turnstile' => ['sometimes', 'nullable', 'string', 'max:'.self::LUNGHEZZA_TURNSTILE],
+        ]);
+        $email = self::normalizza($dati['email']);
+        $this->frena('recuperi:'.$email, self::FRENI['recuperi'], self::MINUTO);
+        $this->controllaTurnstile($dati['turnstile'] ?? null);
+
+        // I freni contano ogni email, con o senza account (RecuperoPassword::chiedi).
+        foreach (self::INVII as $freno => [$invii]) {
+            if ($this->freni->tooManyAttempts("recupero-{$freno}:{$email}", $invii)) {
+                return [202, ['data' => ['email' => $email]]];
+            }
+        }
+
+        foreach (self::INVII as $freno => [, $secondi]) {
+            $this->freni->hit("recupero-{$freno}:{$email}", $secondi);
+        }
+
+        $persona = $this->conEmail($email);
+
+        if ($persona !== null) {
+            $this->recuperi[$persona] = ['codice' => $this->codiceNuovo($email), 'tentativi' => 0, 'scade' => now()->getTimestamp() + self::MINUTI_DEL_CODICE * 60];
+            $this->posta[$email] = $this->recuperi[$persona]['codice'];
+        }
+
+        return [202, ['data' => ['email' => $email]]];
+    }
+
+    /**
+     * password.reimpostazione.crea (PasswordController::reimpostazione), senza gettone: 204 se il codice è giusto. La
+     * password nuova vale, la vecchia no, e tutti gli accessi della persona si chiudono coi loro gettoni. Ogni altro esito
+     * (un'email senza account, un codice sbagliato, scaduto, già usato o esaurito) è la stessa 422 verifica_non_riuscita.
+     * Una password che non va è 422 sul campo prima di toccare il codice, che resta buono; il freno si conta prima.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, null}
+     */
+    private function reimposta(array $corpo): array
+    {
+        $dati = $this->testi->validaStretta($corpo, [
+            'email' => self::REGOLE_EMAIL,
+            'codice' => ['required', 'string', 'digits:6'],
+            'password' => ['required', 'string', new SenzaCarattereNullo, 'min:12'],
+        ]);
+        $email = self::normalizza($dati['email']);
+        $this->frena('reimpostazioni:'.$email, self::FRENI['reimpostazioni'], self::MINUTO);
+
+        // Have I Been Pwned del backoffice (PasswordNuova::controlla), dopo il freno: la password trapelata è del finto.
+        $this->testi->valida(['password' => $dati['password']], ['password' => [function (string $campo, mixed $valore, Closure $fail) {
+            if ($valore === self::PASSWORD_TRAPELATA) {
+                $fail('validation.password.uncompromised')->translate();
+            }
+        }]]);
+
+        $persona = $this->conEmail($email);
+
+        if ($persona === null || ! $this->provaRecupero($persona, $dati['codice'])) {
+            throw new Problema('verifica_non_riuscita');
+        }
+
+        $this->persone[$persona]['password'] = $dati['password'];
+
+        if ($this->persone[$persona]['email_verificata_il'] === null) {
+            $this->persone[$persona]['email_verificata_il'] = now()->toImmutable();
+        }
+
+        foreach ($this->accessi as $id => $accesso) {
+            if ($accesso['utente'] === $persona) {
+                $this->accessi[$id]['chiuso'] = true;
+            }
+        }
+
+        unset($this->recuperi[$persona]);
+
+        return [204, null];
+    }
+
+    /**
+     * Prova il codice di recupero (RecuperoPassword::reimposta): true se è giusto; false se è sbagliato, scaduto, già
+     * usato, esaurito, o se la persona ha già sbagliato 10 codici nel giorno. Il tentativo si conta prima del confronto,
+     * e il codice si consuma solo dalla reimpostazione che riesce.
+     */
+    private function provaRecupero(string $persona, #[SensitiveParameter] string $codice): bool
+    {
+        $stato = $this->recuperi[$persona] ?? null;
+        $errori = "errori-recupero:{$persona}";
+
+        if ($stato === null || $stato['scade'] - now()->getTimestamp() <= 0 || $stato['tentativi'] >= self::TENTATIVI
+            || $this->freni->tooManyAttempts($errori, self::ERRORI_AL_GIORNO)) {
+            return false;
+        }
+
+        $this->recuperi[$persona]['tentativi']++;
+
+        if (! hash_equals($stato['codice'], $codice)) {
+            $this->freni->hit($errori, 86400);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /** Un codice di 6 cifre, mai uguale all'ultimo partito per l'email: un test che ne chiede uno nuovo lo vede da ultimoCodice(). */
+    private function codiceNuovo(string $email): string
+    {
+        do {
+            $codice = str_pad((string) random_int(0, 999_999), 6, '0', STR_PAD_LEFT);
+        } while ($codice === ($this->posta[$email] ?? null));
+
+        return $codice;
+    }
+
+    /**
+     * Il workspace del gettone della richiesta, e col ruolo il middleware `workspace:<ruoli>` del backoffice: al gettone
+     * dell'accesso 403 gettone_senza_workspace, a chi ha un altro ruolo 403 permesso_negato, prima del corpo e delle risorse.
+     *
+     * @param  list<string>  $ruoli  vuoto: tutti
+     * @return array{persona: string, accesso: string, workspace: string}
+     */
+    private function conWorkspace(Request $richiesta, array $ruoli = []): array
+    {
+        $chi = $this->autentica($richiesta);
+        $workspace = $chi['workspace'] ?? throw new Problema('gettone_senza_workspace');
+
+        if ($ruoli !== [] && ! in_array($this->membri[$workspace][$chi['persona']], $ruoli, true)) {
+            throw new Problema('permesso_negato');
+        }
+
+        return ['persona' => $chi['persona'], 'accesso' => $chi['accesso'], 'workspace' => $workspace];
+    }
+
+    /** Se il workspace ha l'app attiva (AppNelWorkspace::attiva): disponibile nel catalogo e attivata da lui. */
+    private function appAttiva(string $workspace, string $app): bool
+    {
+        return (self::CATALOGO[$app] ?? null) === 'disponibile' && isset($this->attive[$workspace][$app]);
+    }
+
+    /** @return array{codice: string, stato: string, nome: array<string, string>} un'app come la dà il backoffice (Forme::app) */
+    private function voceApp(string $codice, string $stato): array
+    {
+        $nome = [];
+
+        foreach (Testi::LINGUE as $lingua) {
+            $nome[$lingua] = self::NOMI[$codice][$lingua] ?? self::NOMI[$codice]['en'] ?? $codice;
+        }
+
+        return ['codice' => $codice, 'stato' => $stato, 'nome' => $nome];
     }
 
     /**

@@ -16,13 +16,17 @@ final class Problema extends RuntimeException
         'gettone_non_valido' => 401,
         'gettone_con_workspace' => 403,
         'gettone_senza_workspace' => 403,
+        'permesso_negato' => 403,
+        'app_non_attiva' => 403,
         'registrazione_non_aperta' => 403,
         'non_trovato' => 404,
+        'app_in_arrivo' => 409,
         'dati_non_validi' => 422,
         'credenziali_non_valide' => 422,
         'verifica_non_riuscita' => 422,
         'turnstile_non_valido' => 422,
         'troppe_richieste' => 429,
+        'servizio_non_disponibile' => 503,
         'turnstile_non_disponibile' => 503,
     ];
 
