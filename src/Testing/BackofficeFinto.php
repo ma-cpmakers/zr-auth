@@ -923,8 +923,8 @@ final class BackofficeFinto
     /**
      * io.workspace.crea (IoWorkspaceController::crea): un workspace nuovo, di cui la persona del gettone è proprietaria.
      * Nell'ordine del backoffice: la Idempotency-Key (il metodo è della persona, non del workspace del gettone: la stessa
-     * chiave vale con ogni suo gettone), l'email non verificata (403, prima del corpo), il corpo (422 su `nome`, e su ogni
-     * campo che non è `nome` o `azienda_id`), l'azienda che non è della persona (404, come un id altrui), il freno di
+     * chiave vale con ogni suo gettone), l'email non verificata (403, prima del corpo), il corpo (422 su `nome`; un campo in più
+     * si ignora, come Corpo::soloCorpo, perché un corpo con un campo in più non rompe una rotta nata prima della regola), l'azienda che non è della persona (404, come un id altrui), il freno di
      * workspace nuovi all'ora per persona (429; una risposta ripetuta dalla chiave non arriva al freno); poi nasce, con
      * un'azienda sua se non ne dà una. Il workspace non ha app attive. La risposta è lo schema WorkspaceConRuolo, senza
      * `Location` (il contratto ha il solo `Link`).
@@ -944,7 +944,7 @@ final class BackofficeFinto
                 throw new Problema('email_non_verificata');
             }
 
-            $campi = $this->testi->validaStretta($corpo, [
+            $campi = $this->testi->valida($corpo, [
                 'nome' => ['required', 'string', 'max:255'],
                 'azienda_id' => ['sometimes', 'string'],
             ]);
