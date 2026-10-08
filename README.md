@@ -70,7 +70,7 @@ Da GitHub, a un tag (le versioni sono semver; prima della 1.0 un minore nuovo pu
 
 ```json
 "repositories": [{"type": "vcs", "url": "https://github.com/ma-cpmakers/zr-auth"}],
-"require": {"zeiras/zr-auth": "^0.5"}
+"require": {"zeiras/zr-auth": "^0.6"}
 ```
 
 Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`io.mostra`, `io.workspace.elenca`,
@@ -79,12 +79,19 @@ Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`
 `RichiestaSconosciuta`. La 0.4 porta la registrazione (`utenti.crea`) con Turnstile, e i testi dei suoi due codici
 nuovi, `turnstile_non_valido` e `turnstile_non_disponibile`. La 0.5 porta `Sessione::ritorno()`, il ritorno dopo l'ingresso solo da un
 GET e dallo stesso sito; un 3xx del backoffice, che non si segue, diventa `BackofficeNonRisponde`; nel finto `pm` è
-`disponibile`, e ci sono i testi dei due codici nuovi, `app_non_attiva` e `app_in_arrivo`.
+`disponibile`, e ci sono i testi dei due codici nuovi, `app_non_attiva` e `app_in_arrivo`. La 0.6 porta l'ingresso nei moduli
+dal lato del modulo (`Ingresso::verso()` e il ricevitore, sotto), e ha il finto di password e ingressi.
 
 | Variabile | Default | Cosa |
 |---|---|---|
 | `ZR_API_URL` | `https://api.zeiras.com` | le API del backoffice; solo `https://` (sulla porta 80 il server risponde 301, e un 301 trasforma un POST in GET) |
 | `ZR_AUTH_INGRESSO` | `https://app.zeiras.com/accedi` | la pagina d'accesso, dove la guardia rimanda chi non ha una sessione |
+| `ZR_HOME_URL` | `https://app.zeiras.com` | zr-home, a cui il modulo manda la persona (`/ingresso`); solo `https://` |
+| `ZR_APP` | — | il codice dell'app del modulo nel catalogo (`pm`, …): obbligatorio per `Ingresso::verso()` |
+| `ZR_AUTH_ERRORE` | la pagina d'accesso | la pagina per ogni ritorno che non vale (config `zr-auth.errore`) |
+
+Nella config pubblicata (`zr-auth-config`) altre due chiavi: `ricevitore` (`/ingresso/ritorno`) e `dopo` (`/`, dove si va
+se la guardia non ricordava una pagina).
 
 La sessione del frontend sta **lato server** (Redis, con un TTL): con `SESSION_DRIVER=cookie` zr-auth si rifiuta di
 salvare il gettone (`SessioneNelBrowser`).
@@ -150,6 +157,51 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   troncata, che porta quello stato e non il guasto. Un 3xx, un 5xx o una risposta senza JSON arrivati per intero non
   hanno un `getPrevious()`.
 - Un redirect non si segue: un 307 rimanderebbe il corpo, una password compresa, al `Location`.
+
+## L'ingresso da zr-home: la partenza e il ricevitore
+
+Un modulo non ha una pagina di accesso sua: la persona entra da zr-home e torna con un codice monouso. zr-auth fa le due
+metà del modulo. Il protocollo (codice con PKCE, S256) lo fanno `ingressi.crea` (zr-home) e `ingressi.scambio.crea` (il
+ricevitore); il modulo non lo scrive.
+
+```php
+// La partenza: una pagina del modulo (pubblica o no) che manda la persona a entrare nel workspace, per slug.
+Route::get('entra/{workspace}', fn (string $workspace) => Ingresso::verso($workspace))->withoutMiddleware(ConGettone::class);
+```
+
+`Ingresso::verso($slug)` risponde 302 a `ZR_HOME_URL/ingresso?app=<ZR_APP>&workspace=<slug>&state=<state>&sfida=<sfida>`.
+`state` (43 caratteri) e verificatore (64, `[A-Za-z0-9._~-]`) nascono lì e stanno **solo** nella sessione del modulo;
+`sfida` è `base64url(SHA-256(verificatore))`, 43 caratteri. Il verificatore non esce mai: né nell'indirizzo, né in un
+header, né in un log. La risposta ha `Cache-Control: no-store` e `Referrer-Policy: no-referrer`. Una partenza nuova prende
+il posto della precedente.
+
+Il ricevitore è la rotta `GET /ingresso/ritorno` (config `zr-auth.ricevitore`), che zr-auth registra da sé, **senza la
+guardia**: è il valore che ma-devops mette in `ZR_RITORNO_<CODICE>` del backoffice (`https://<modulo>/ingresso/ritorno`).
+Riceve `codice` (43 caratteri `[A-Za-z0-9_-]`) e `state` (al più 512, `[A-Za-z0-9._~-]`):
+
+- è un GET e basta (gli altri metodi sono 405) e solo dallo stesso sito: un `Sec-Fetch-Site` diverso da `same-site`,
+  `same-origin` o `none`, o un `Origin` che non è né il modulo né zr-home, non scambia niente;
+- lo `state` deve essere quello della partenza (`hash_equals`) e vale una volta; `state` e verificatore escono dalla
+  sessione a ogni ritorno che li tocca, anche se lo scambio fallisce;
+- un `codice` o uno `state` che non hanno la forma non partono nemmeno verso il backoffice;
+- lo scambio (`ingressi.scambio.crea`) dà il gettone del workspace: la sessione si apre con `Sessione::entra()` e la
+  persona torna a `Sessione::ritorno(url(config('zr-auth.dopo')))`: la pagina che la guardia ricordava, se è del modulo,
+  senza `codice` né `state`; mai un indirizzo che viene dalla richiesta;
+- ogni ritorno che non vale (stato diverso, codice rifiutato `verifica_non_riuscita`, freno `429`, forma sbagliata) va alla
+  **stessa** pagina d'errore (`ZR_AUTH_ERRORE`, senza: la pagina d'accesso), che a chi arriva da fuori non dice il perché;
+- un guasto del backoffice (5xx, trasporto che cade, risposta senza la forma di un gettone) è `BackofficeNonRisponde`:
+  mai una sessione a metà.
+
+Il ricevitore non ha la guardia, e il test del frontend lo nomina fra le rotte pubbliche:
+
+```php
+expect(Rotte::senzaGuardia(['GET ingresso/ritorno']))->toBe([]);
+```
+
+Nei test del modulo il giro intero si fa col finto, senza un `Http::fake` per lo scambio:
+`BackofficeFinto::attiva()->ritorno('pm', 'https://<modulo>/ingresso/ritorno')`, un workspace con `attivaApp($workspace, 'pm')`,
+`Ingresso::verso()`, poi `ingressi.crea` del finto con la `sfida` della partenza (è ciò che fa zr-home) e un GET al `ritorno`
+che dà, con `codice` e `state`. Un esempio per intero: `tests/Feature/IngressoTest.php` di questo repo.
 
 ## La guardia, e il suo test
 

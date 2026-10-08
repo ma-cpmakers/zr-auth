@@ -136,7 +136,7 @@ final class Sessione
     }
 
     /** Con la sessione nel cookie il gettone finirebbe nel browser, anche se cifrato: zr-auth non lo scrive. */
-    private static function controllaIlDriver(): void
+    public static function controllaIlDriver(): void
     {
         if (config('session.driver') === 'cookie' || session()->getHandler() instanceof CookieSessionHandler) {
             throw new SessioneNelBrowser;

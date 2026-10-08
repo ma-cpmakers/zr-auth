@@ -15,4 +15,14 @@ return [
     // guardia rimanda qui (ConGettone).
     'ingresso' => env('ZR_AUTH_INGRESSO', 'https://app.zeiras.com/accedi'),
 
+    // L'ingresso nei moduli (Ingresso::verso e il ricevitore). `home` è zr-home, a cui il modulo manda la persona
+    // (`/ingresso`, solo https); `app` è il codice dell'app del modulo nel catalogo (pm, …); `ricevitore` è il percorso
+    // dove zr-home rimanda col codice: lo stesso che ma-devops mette in ZR_RITORNO_<CODICE> del backoffice; `dopo` dove si
+    // va se la guardia non ricordava una pagina; `errore` la pagina per ogni ritorno che non vale (senza, la pagina d'accesso).
+    'home' => env('ZR_HOME_URL', 'https://app.zeiras.com'),
+    'app' => env('ZR_APP'),
+    'ricevitore' => '/ingresso/ritorno',
+    'dopo' => '/',
+    'errore' => env('ZR_AUTH_ERRORE'),
+
 ];
