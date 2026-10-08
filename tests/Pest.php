@@ -92,8 +92,8 @@ const PASSWORD_SBAGLIATA = 'una password sbagliata';
 const PASSWORD_CORTA = 'corta';
 const PASSWORD_COL_NULLO = "una password\0lunga";
 
-/** Una chiamata al finto: metodo, percorso di /v1, corpo JSON, gettone, Accept-Language. */
-function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string $gettone = null, ?string $lingua = null): Response
+/** Una chiamata al finto: metodo, percorso di /v1, corpo JSON, gettone, Accept-Language, altri header (Idempotency-Key). */
+function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string $gettone = null, ?string $lingua = null, array $intestazioni = []): Response
 {
     $richiesta = Http::baseUrl(API)->acceptJson();
 
@@ -103,6 +103,10 @@ function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string
 
     if ($lingua !== null) {
         $richiesta = $richiesta->withHeaders(['Accept-Language' => $lingua]);
+    }
+
+    if ($intestazioni !== []) {
+        $richiesta = $richiesta->withHeaders($intestazioni);
     }
 
     return $richiesta->send($metodo, $percorso, $corpo === null ? [] : ['json' => $corpo]);
