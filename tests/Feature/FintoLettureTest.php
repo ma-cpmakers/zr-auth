@@ -176,13 +176,14 @@ it('app.elenca dà il catalogo delle app in ordine di codice, pm disponibile e l
     $gettone = gettoneDelFinto($chi, $studio);
     $risposta = alFinto('GET', '/v1/app', gettone: $gettone);
     // Lo stato di ogni app, scritto per intero (R23): pm è disponibile dallo sprint 5 del backoffice (#1289, AP3).
+    $nome = fn (string $testo) => ['it' => $testo, 'en' => $testo, 'es' => $testo];
     $catalogo = [
-        ['codice' => 'automations', 'stato' => 'in_arrivo'],
-        ['codice' => 'bookings', 'stato' => 'in_arrivo'],
-        ['codice' => 'content', 'stato' => 'in_arrivo'],
-        ['codice' => 'crm', 'stato' => 'in_arrivo'],
-        ['codice' => 'pm', 'stato' => 'disponibile'],
-        ['codice' => 'reports', 'stato' => 'in_arrivo'],
+        ['codice' => 'automations', 'stato' => 'in_arrivo', 'nome' => $nome('Automations')],
+        ['codice' => 'bookings', 'stato' => 'in_arrivo', 'nome' => $nome('Bookings')],
+        ['codice' => 'content', 'stato' => 'in_arrivo', 'nome' => $nome('Content')],
+        ['codice' => 'crm', 'stato' => 'in_arrivo', 'nome' => $nome('CRM')],
+        ['codice' => 'pm', 'stato' => 'disponibile', 'nome' => $nome('Project Management')],
+        ['codice' => 'reports', 'stato' => 'in_arrivo', 'nome' => $nome('Reports')],
     ];
 
     expect($risposta->status())->toBe(200)

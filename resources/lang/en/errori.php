@@ -54,7 +54,7 @@ return [
     ],
     'verifica_non_riuscita' => [
         'title' => 'Verification failed',
-        'detail' => 'The code does not verify the email: check the code, the email and the password, or ask for a new code.',
+        'detail' => 'The code does not verify the request: for the email, check the code, the email and the password, or ask for a new code; for the password, check the code and the email, or ask for a new code; for entering an app, start again from the sign-in.',
     ],
     'turnstile_non_valido' => [
         'title' => 'Turnstile check failed',
@@ -71,6 +71,18 @@ return [
     'cartella_non_vuota' => [
         'title' => 'Folder not empty',
         'detail' => 'This folder still has boards, and it can be deleted only when empty: board.board.elenca tells which they are.',
+    ],
+    'proprietario_intoccabile' => [
+        'title' => 'The owner cannot be touched',
+        'detail' => 'A workspace has one owner and no method removes them or changes their role: do not repeat the request.',
+    ],
+    'gia_membro' => [
+        'title' => 'Already a member',
+        'detail' => 'The person is already a member of this workspace: do not repeat the request. workspace.membri.elenca says who the members are.',
+    ],
+    'invito_esistente' => [
+        'title' => 'Invitation already sent',
+        'detail' => 'This email already has a live invitation in this workspace: wait for it to expire, or revoke it with workspace.inviti.elimina and send a new one.',
     ],
     'posizione_cambiata' => [
         'title' => 'Position changed',
@@ -90,7 +102,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Limit reached',
-        'detail' => 'The resource already has the maximum allowed: 100 active boards and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card. Free a slot (close a board, archive a list or a card, remove a label or an item) and try again.',
+        'detail' => 'The resource already has the maximum allowed: 100 active boards and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 100 live invitations per workspace. Free a slot (close a board, archive a list or a card, remove a label or an item, revoke an invitation) and try again.',
     ],
     'transizione_non_valida' => [
         'title' => 'Invalid state transition',

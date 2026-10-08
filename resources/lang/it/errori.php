@@ -54,7 +54,7 @@ return [
     ],
     'verifica_non_riuscita' => [
         'title' => 'Verifica non riuscita',
-        'detail' => "Il codice non verifica l'email: controlla il codice, l'email e la password, o chiedi un codice nuovo.",
+        'detail' => "Il codice non verifica la richiesta: per l'email controlla il codice, l'email e la password, o chiedi un codice nuovo; per la password controlla il codice e l'email, o chiedi un codice nuovo; per l'ingresso in un'app riparti dall'accesso.",
     ],
     'turnstile_non_valido' => [
         'title' => 'Controllo Turnstile non superato',
@@ -71,6 +71,18 @@ return [
     'cartella_non_vuota' => [
         'title' => 'Cartella non vuota',
         'detail' => 'Questa cartella ha ancora delle board, e si elimina solo vuota: board.board.elenca dice quali sono.',
+    ],
+    'proprietario_intoccabile' => [
+        'title' => 'Il proprietario non si tocca',
+        'detail' => 'Il proprietario del workspace è uno solo e nessun metodo lo toglie né ne cambia il ruolo: non ripetere la richiesta.',
+    ],
+    'gia_membro' => [
+        'title' => 'Già membro',
+        'detail' => 'La persona è già membro di questo workspace: non ripetere la richiesta. Chi sono i membri lo dice workspace.membri.elenca.',
+    ],
+    'invito_esistente' => [
+        'title' => 'Invito già inviato',
+        'detail' => 'Questa email ha già un invito vivo in questo workspace: aspetta che scada, o revocalo con workspace.inviti.elimina e inviane uno nuovo.',
     ],
     'posizione_cambiata' => [
         'title' => 'Posizione cambiata',
@@ -90,7 +102,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Limite raggiunto',
-        'detail' => 'La risorsa ha già il massimo consentito: 100 board attive e 100 cartelle per workspace, 50 liste per board, 500 schede per lista, 3 etichette per scheda, 100 voci per checklist. Libera un posto (chiudi una board, archivia una lista o una scheda, togli un\'etichetta o una voce) e ripeti.',
+        'detail' => 'La risorsa ha già il massimo consentito: 100 board attive e 100 cartelle per workspace, 50 liste per board, 500 schede per lista, 3 etichette per scheda, 100 voci per checklist, 100 inviti vivi per workspace. Libera un posto (chiudi una board, archivia una lista o una scheda, togli un\'etichetta o una voce, revoca un invito) e ripeti.',
     ],
     'transizione_non_valida' => [
         'title' => 'Transizione di stato non valida',

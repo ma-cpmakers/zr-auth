@@ -54,7 +54,7 @@ return [
     ],
     'verifica_non_riuscita' => [
         'title' => 'Verificación fallida',
-        'detail' => 'El código no verifica el correo: revisa el código, el correo y la contraseña, o pide un código nuevo.',
+        'detail' => 'El código no verifica la solicitud: para el correo, revisa el código, el correo y la contraseña, o pide un código nuevo; para la contraseña, revisa el código y el correo, o pide un código nuevo; para entrar en una app, vuelve a empezar desde el acceso.',
     ],
     'turnstile_non_valido' => [
         'title' => 'Comprobación de Turnstile no superada',
@@ -71,6 +71,18 @@ return [
     'cartella_non_vuota' => [
         'title' => 'Carpeta no vacía',
         'detail' => 'Esta carpeta todavía tiene tableros, y solo se puede eliminar vacía: board.board.elenca indica cuáles son.',
+    ],
+    'proprietario_intoccabile' => [
+        'title' => 'El propietario no se toca',
+        'detail' => 'Un workspace tiene un solo propietario y ningún método lo quita ni le cambia el rol: no repitas la solicitud.',
+    ],
+    'gia_membro' => [
+        'title' => 'Ya es miembro',
+        'detail' => 'La persona ya es miembro de este workspace: no repitas la solicitud. workspace.membri.elenca dice quiénes son los miembros.',
+    ],
+    'invito_esistente' => [
+        'title' => 'Invitación ya enviada',
+        'detail' => 'Este correo ya tiene una invitación vigente en este workspace: espera a que caduque, o revócala con workspace.inviti.elimina y envía una nueva.',
     ],
     'posizione_cambiata' => [
         'title' => 'Posición cambiada',
@@ -90,7 +102,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Límite alcanzado',
-        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación. Libera un lugar (cierra un tablero, archiva una lista o una tarjeta, quita una etiqueta o un elemento) y repite.',
+        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación, 100 invitaciones vigentes por workspace. Libera un lugar (cierra un tablero, archiva una lista o una tarjeta, quita una etiqueta o un elemento, revoca una invitación) y repite.',
     ],
     'transizione_non_valida' => [
         'title' => 'Transición de estado no válida',
