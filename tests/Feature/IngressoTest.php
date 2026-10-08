@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
@@ -10,7 +9,6 @@ use Zeiras\Auth\Http\Middleware\ConGettone;
 use Zeiras\Auth\Ingresso;
 use Zeiras\Auth\Sessione;
 use Zeiras\Auth\Testing\BackofficeFinto;
-use Zeiras\Auth\Testing\Rotte;
 
 // T2.1-T2.5 dello sprint 10 (#1347; per zr-home #1210): l'ingresso nei moduli dal lato del modulo, cioè la partenza verso
 // `ZR_HOME_URL/ingresso` e il ricevitore del codice. Il backoffice è il finto (T1): nessun Http::fake scritto a mano per
@@ -68,7 +66,7 @@ function ritornoDiHome(array $workspace, array $partenza): string
 /** Da qui il backoffice risponde come dice il test: il finto, che ha già fatto il suo giro, si toglie di mezzo. */
 function ilBackofficeRisponde(mixed $risposta): void
 {
-    Http::swap(new Factory);
+    Http::swap(new Illuminate\Http\Client\Factory);
     Http::fake(['*' => $risposta]);
 }
 
@@ -210,7 +208,7 @@ it('torna alla pagina che la guardia ricordava, se è del modulo, senza codice n
     $this->get(ritornoDiHome($studio, $partenza))->assertRedirect(FRONTEND.'/schede/7');
 });
 
-it('state e verificatore escono dalla sessione, e lo stesso state non vale due volte (T2.3)', function () {
+it('state e verificatore escono dalla sessione, e lo stesso state non vale due volte: il secondo ritorno è rifiutato e brucia il codice, già usato (T2.3; #1359, T4.1)', function () {
     [, $studio] = fintoDelModulo();
     $partenza = queryDi((string) $this->get('/parti/'.$studio['slug'])->headers->get('Location'));
     $indirizzo = ritornoDiHome($studio, $partenza);
@@ -221,7 +219,9 @@ it('state e verificatore escono dalla sessione, e lo stesso state non vale due v
 
     $this->get($indirizzo)->assertRedirect(INGRESSO);
 
-    expect(scambiPartiti())->toBe(1);
+    // Il primo scambio dà la sessione; il secondo è lo scambio a vuoto del ritorno rifiutato, su un codice già speso.
+    expect(scambiPartiti())->toBe(2)
+        ->and(verificatoriMandati()[1])->toMatch('/^[0-9a-f]{64}$/');
 });
 
 it('un codice che il backoffice rifiuta o frena va alla pagina d\'errore, e state e verificatore escono lo stesso (T2.3)', function (string $codice, int $stato) {
@@ -311,7 +311,7 @@ it('lo scambio a vuoto porta un verificatore casuale di 64 caratteri, diverso a 
     }
 });
 
-it('un guasto dello scambio a vuoto non cambia la risposta alla persona: la stessa pagina d\'errore, mai BackofficeNonRisponde (T4.3)', function (Closure $risposta) {
+it('un guasto dello scambio a vuoto non cambia la risposta alla persona: la stessa pagina d\'errore, mai BackofficeNonRisponde (T4.3)', function (Closure $risposta, int $partiti) {
     [, $studio] = fintoDelModulo();
     $partenza = queryDi((string) $this->get('/parti/'.$studio['slug'])->headers->get('Location'));
     $indirizzo = ritornoDiHome($studio, $partenza);
@@ -323,14 +323,15 @@ it('un guasto dello scambio a vuoto non cambia la risposta alla persona: la stes
 
     $esito->assertRedirect(INGRESSO)->assertHeader('Referrer-Policy', 'no-referrer');
     expect($esito->headers->get('Cache-Control'))->toContain('no-store')
-        ->and(scambiPartiti())->toBe(1)
+        ->and(scambiPartiti())->toBe($partiti)
         ->and(session(Ingresso::CHIAVE))->toBe($tenuta)
         ->and(Sessione::aperta())->toBeFalse();
 })->with([
-    'un 429 con Retry-After' => [fn () => fn () => problema(429, 'troppe_richieste', header: ['Retry-After' => '30'])],
-    'un 5xx col suo problema' => [fn () => fn () => problema(503, 'servizio_non_disponibile')],
-    'un 5xx senza JSON' => [fn () => fn () => Http::response('Bad Gateway', 502)],
-    'il trasporto che cade' => [fn () => fn () => throw new ConnectionException('cURL error 28: timeout')],
+    'un 429 con Retry-After' => [fn () => fn () => problema(429, 'troppe_richieste', header: ['Retry-After' => '30']), 1],
+    'un 5xx col suo problema' => [fn () => fn () => problema(503, 'servizio_non_disponibile'), 1],
+    'un 5xx senza JSON' => [fn () => fn () => Http::response('Bad Gateway', 502), 1],
+    // Il trasporto che cade non lascia una risposta: Http::recorded non la conta.
+    'il trasporto che cade' => [fn () => fn () => throw new ConnectionException('cURL error 28: timeout'), 0],
 ]);
 
 it('la pagina d\'errore di un ritorno rifiutato è la stessa di prima, con gli stessi header, con o senza il codice bruciato (T4.1)', function () {
@@ -359,8 +360,8 @@ it('partenza, ingressi.crea del finto, ricevitore: la sessione si apre col works
 });
 
 it('la rotta del ricevitore è pubblica, e il test del frontend la nomina (T2.5)', function () {
-    $scoperte = Rotte::senzaGuardia();
+    $scoperte = Zeiras\Auth\Testing\Rotte::senzaGuardia();
 
     expect($scoperte)->toContain('GET ingresso/ritorno')
-        ->and(Rotte::senzaGuardia(['GET ingresso/ritorno']))->not->toContain('GET ingresso/ritorno');
+        ->and(Zeiras\Auth\Testing\Rotte::senzaGuardia(['GET ingresso/ritorno']))->not->toContain('GET ingresso/ritorno');
 });
