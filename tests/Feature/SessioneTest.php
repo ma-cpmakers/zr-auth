@@ -111,3 +111,20 @@ it('Gettone::assenteDa vede il gettone nel corpo, in un header e in un cookie ci
 
     expect(fn () => Gettone::assenteDa($this->get('/perde')))->toThrow(AssertionFailedError::class);
 })->with(['corpo', 'header', 'cookie']);
+
+it('entra() con un\'altra persona scarta l\'accesso e i gettoni di prima; con la stessa li tiene', function () {
+    Sessione::apri(accesso());
+    Sessione::entra(gettoneDelWorkspace());
+
+    expect(session(Sessione::CHIAVE.'.accesso'))->not->toBeNull()
+        ->and(session(Sessione::CHIAVE.'.gettoni'))->toHaveKeys(['accesso', 'workspace']);
+
+    $altra = gettoneDelWorkspace();
+    $altra['utente']['id'] = '01k6r2t5b9d3f7h1k5m9n3q7r2';
+    $altra['utente']['email'] = 'bruno@example.com';
+    Sessione::entra($altra);
+
+    expect(session(Sessione::CHIAVE.'.accesso'))->toBeNull()
+        ->and(array_keys(session(Sessione::CHIAVE.'.gettoni')))->toBe(['workspace'])
+        ->and(session(Sessione::CHIAVE.'.utente.email'))->toBe('bruno@example.com');
+});
