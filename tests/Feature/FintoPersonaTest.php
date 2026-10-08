@@ -132,7 +132,7 @@ it('la lingua cambiata vale per le risposte dopo, anche per gli errori (T3.2)', 
     [, , , $gettone] = fintoDellaPersona();
     $inItaliano = alFinto('PATCH', '/v1/io', ['utente' => []], $gettone)->json('errors.0.detail');
 
-    alFinto('PATCH', '/v1/io', ['utente' => ['lingua' => 'en']], $gettone)->assertOk();
+    expect(alFinto('PATCH', '/v1/io', ['utente' => ['lingua' => 'en']], $gettone)->status())->toBe(200);
     $inInglese = alFinto('PATCH', '/v1/io', ['utente' => []], $gettone)->json('errors.0.detail');
 
     expect($inItaliano)->toContain('almeno uno')
@@ -158,9 +158,8 @@ it('io.password.modifica lascia vivi i gettoni dell\'accesso che chiama e uccide
     $altro = entraNelFinto('anna@example.com')['gettone']['gettone'];
     $delAltro = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $altro)->json('data.gettone');
 
-    alFinto('PATCH', '/v1/io/password', ['password_attuale' => PASSWORD, 'password_nuova' => PASSWORD_DEL_CAMBIO], $delWorkspace)->assertNoContent();
-
-    expect(alFinto('GET', '/v1/io', gettone: $delWorkspace)->status())->toBe(200)
+    expect(alFinto('PATCH', '/v1/io/password', ['password_attuale' => PASSWORD, 'password_nuova' => PASSWORD_DEL_CAMBIO], $delWorkspace)->status())->toBe(204)
+        ->and(alFinto('GET', '/v1/io', gettone: $delWorkspace)->status())->toBe(200)
         ->and(alFinto('GET', '/v1/io', gettone: $accesso)->status())->toBe(200)
         ->and(alFinto('GET', '/v1/io', gettone: $altro)->status())->toBe(401)
         ->and(alFinto('GET', '/v1/io', gettone: $delAltro)->status())->toBe(401);
@@ -213,7 +212,7 @@ it('io.password.modifica: una password attuale giusta azzera il conto degli erro
     }
 
     // La giusta passa e azzera; la nuova diventa quella di adesso, e altri quattro errori non bastano a frenare.
-    alFinto('PATCH', '/v1/io/password', ['password_attuale' => PASSWORD, 'password_nuova' => PASSWORD_DEL_CAMBIO], $accesso)->assertNoContent();
+    expect(alFinto('PATCH', '/v1/io/password', ['password_attuale' => PASSWORD, 'password_nuova' => PASSWORD_DEL_CAMBIO], $accesso)->status())->toBe(204);
 
     for ($tentativo = 1; $tentativo <= 4; $tentativo++) {
         expect(alFinto('PATCH', '/v1/io/password', ['password_attuale' => PASSWORD_SBAGLIATA, 'password_nuova' => PASSWORD], $accesso)->status())->toBe(422);
