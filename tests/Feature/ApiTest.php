@@ -247,26 +247,23 @@ it('condizionale() accetta un ETag debole', function () {
     expect(Api::workspace()->condizionale('/v1/io', 'W/"abc"')['etag'])->toBe('W/"abc"');
 });
 
-it('condizionale() ha gli errori di get(): 404, 429, 401, 5xx e trasporto', function () {
+it('condizionale() ha gli errori di get(): 404, 429, 401, 5xx e trasporto', function (Closure $risposta, Closure $atteso) {
+    Http::fake(['*' => $risposta]);
     apriSessione();
 
-    Http::fake(['*' => problema(404, 'non_trovato')]);
-    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))
-        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(404)->and($e->codice)->toBe('non_trovato')); // T5.2
-
-    Http::fake(['*' => problema(429, 'troppe_richieste', header: ['Retry-After' => '30'])]);
-    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))
-        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(429)->and($e->riprovaFra)->toBe(30));
-
-    Http::fake(['*' => problema(401, 'non_autenticato')]);
-    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))->toThrow(GettoneRifiutato::class);
-
-    Http::fake(['*' => Http::response('<html>503</html>', 503, ['Content-Type' => 'text/html'])]);
-    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))->toThrow(BackofficeNonRisponde::class);
-
-    Http::fake(['*' => fn () => throw new ConnectionException('cURL error 28: timeout')]);
-    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))->toThrow(BackofficeNonRisponde::class);
-});
+    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))->toThrow($atteso); // T5.2
+})->with([
+    '404' => [fn () => fn () => problema(404, 'non_trovato'),
+        fn () => fn (ErroreApi $e) => expect($e->stato)->toBe(404)->and($e->codice)->toBe('non_trovato')],
+    '429' => [fn () => fn () => problema(429, 'troppe_richieste', header: ['Retry-After' => '30']),
+        fn () => fn (ErroreApi $e) => expect($e->stato)->toBe(429)->and($e->riprovaFra)->toBe(30)],
+    '401' => [fn () => fn () => problema(401, 'non_autenticato'),
+        fn () => fn (GettoneRifiutato $e) => expect($e)->toBeInstanceOf(GettoneRifiutato::class)],
+    '503 html' => [fn () => fn () => Http::response('<html>503</html>', 503, ['Content-Type' => 'text/html']),
+        fn () => fn (BackofficeNonRisponde $e) => expect($e)->toBeInstanceOf(BackofficeNonRisponde::class)],
+    'trasporto' => [fn () => fn () => throw new ConnectionException('cURL error 28: timeout'),
+        fn () => fn (BackofficeNonRisponde $e) => expect($e)->toBeInstanceOf(BackofficeNonRisponde::class)],
+]);
 
 it('condizionale() rifiuta un 3xx diverso dal 304, un 204 e un 200 senza JSON', function (Closure $risposta) {
     Http::fake(['*' => $risposta]);
