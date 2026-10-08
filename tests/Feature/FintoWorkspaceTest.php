@@ -454,3 +454,53 @@ it('ultimoInvito() è la casella di posta del finto: l\'ultimo codice partito pe
     expect($primo)->not->toBe($finto->ultimoInvito('dora@example.com'))
         ->and($finto->ultimoCodice('dora@example.com'))->toBeNull();
 });
+
+// #1361 (sprint 11, per zr-home #1213): io.workspace.crea. Che la risposta e gli errori siano quelli del backoffice lo prova
+// il FintoTest (G12); qui ciò che un frontend vede dal suo lato.
+
+it('io.workspace.crea fa nascere il workspace con la persona proprietaria, e il frontend lo trova nell\'elenco e ne prende il gettone (T1.1, T1.4)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+
+    $nato = alFinto('POST', '/v1/io/workspace', ['nome' => 'Studio nuovo'], $accesso);
+
+    expect($nato->status())->toBe(201)
+        ->and($nato->json('data.nome'))->toBe('Studio nuovo')
+        ->and($nato->json('data.ruolo'))->toBe('proprietario')
+        ->and($nato->header('Link'))->toContain('io.workspace.crea')
+        ->and(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data.0.id'))->toBe($nato->json('data.id'));
+
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $nato->json('data.id')], $accesso);
+    expect($gettone->status())->toBe(201)->and($gettone->json('data.ruolo'))->toBe('proprietario');
+
+    $app = alFinto('GET', '/v1/app', gettone: $gettone->json('data.gettone'))->json('data');
+    expect(collect($app)->pluck('stato')->contains('attivo'))->toBeFalse();
+});
+
+it('io.workspace.crea con la stessa Idempotency-Key non fa nascere un secondo workspace (T1.3)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+
+    $prima = alFinto('POST', '/v1/io/workspace', ['nome' => 'Studio'], $accesso, intestazioni: conChiave('prima-nascita'));
+    $seconda = alFinto('POST', '/v1/io/workspace', ['nome' => 'Studio'], $accesso, intestazioni: conChiave('prima-nascita'));
+
+    expect($seconda->status())->toBe(201)->and($seconda->json('data'))->toBe($prima->json('data'))
+        ->and(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->toHaveCount(1);
+});
+
+it('io.workspace.crea: dieci all\'ora per persona, l\'undicesimo è 429 con Retry-After, e un nome sbagliato non conta (T1.2, T1.3)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+
+    expect(alFinto('POST', '/v1/io/workspace', ['nome' => '   '], $accesso)->status())->toBe(422);
+
+    foreach (range(1, 10) as $n) {
+        expect(alFinto('POST', '/v1/io/workspace', ['nome' => "Studio {$n}"], $accesso)->status())->toBe(201);
+    }
+
+    $oltre = alFinto('POST', '/v1/io/workspace', ['nome' => 'Uno di troppo'], $accesso);
+    expect($oltre->status())->toBe(429)->and($oltre->header('Retry-After'))->toMatch('/^\d+$/');
+});
