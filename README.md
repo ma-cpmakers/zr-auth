@@ -147,6 +147,24 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
 
 - Ogni chiamata porta `Authorization: Bearer <gettone>`, `Accept: application/json` e `Accept-Language` = la lingua
   dell'app: senza gettone i testi degli errori arrivano in quella lingua. Timeout 5 secondi, connessione 2.
+- `condizionale($percorso, $versione = null, $query = [])` è la GET del polling: manda `If-None-Match` con la `versione`
+  (l'`etag` della risposta precedente, com'è) e torna `['stato' => 200|304, 'etag' => ?string, 'corpo' => ?array]`.
+  Un 304 non è un errore: `corpo` è `null` e quello che hai è ancora valido. Gli errori sono quelli di `get()`; una
+  `versione` che non è un entity-tag (`"abc"`, `W/"abc"`) lancia `InvalidArgumentException` senza chiamare.
+
+  ```php
+  // zr-board: il polling di una board
+  $ultimo = Cache::get("board.$id");                       // ['etag' => …, 'corpo' => …] o null
+  $r = Api::workspace()->condizionale("/v1/board/board/$id", $ultimo['etag'] ?? null);
+
+  if ($r['stato'] === 200) {
+      Cache::put("board.$id", $r, 300);                    // con un TTL, sempre
+      $ultimo = $r;
+  }
+
+  return $ultimo['corpo'];                                 // 304: si serve ciò che si aveva
+  ```
+
 - Il percorso è sempre di `/v1` (`'/v1/io'`): un indirizzo intero non parte, perché il gettone va solo al backoffice.
 - Un errore di `/v1` (RFC 9457, `application/problem+json`) diventa `ErroreApi`: si decide su `$e->codice`, e
   `$e->dettaglio` si mostra.

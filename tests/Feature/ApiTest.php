@@ -188,3 +188,146 @@ it('tutti() si ferma oltre 100 pagine', function () {
     expect(fn () => Api::workspace()->tutti('/v1/workspace/membri'))->toThrow(BackofficeNonRisponde::class);
     Http::assertSentCount(100);
 });
+
+// #1364 (T5): la GET condizionale. Il 304 non è un errore; l'ETag di un 200 si legge e si rimanda com'è.
+
+it('condizionale() manda If-None-Match e torna 200 con l\'ETag e il corpo', function () {
+    Http::fake(['*' => Http::response(['data' => ['id' => 'b']], 200, ['ETag' => '"abc"'])]);
+    apriSessione();
+
+    expect(Api::workspace()->condizionale('/v1/board/board/b', '"vecchio"', ['x' => 1]))
+        ->toBe(['stato' => 200, 'etag' => '"abc"', 'corpo' => ['data' => ['id' => 'b']]]); // T5.1
+
+    Http::assertSent(fn (Request $r) => $r->method() === 'GET' && $r->url() === API.'/v1/board/board/b?x=1'
+        && $r->header('If-None-Match') === ['"vecchio"']
+        && $r->header('Authorization') === ['Bearer '.GETTONE_WORKSPACE]);
+});
+
+it('condizionale() senza versione non manda If-None-Match, e un 200 senza ETag torna etag null', function () {
+    Http::fake(['*' => Http::response(['data' => []])]);
+    apriSessione();
+
+    expect(Api::persona()->condizionale('/v1/io'))->toBe(['stato' => 200, 'etag' => null, 'corpo' => ['data' => []]]);
+    Http::assertSent(fn (Request $r) => ! $r->hasHeader('If-None-Match'));
+});
+
+it('un 304 torna stato 304, senza corpo, e non lancia', function () {
+    Http::fake(['*' => Http::response('', 304, ['ETag' => '"abc"'])]);
+    apriSessione();
+
+    expect(Api::workspace()->condizionale('/v1/board/board/b', '"abc"'))
+        ->toBe(['stato' => 304, 'etag' => '"abc"', 'corpo' => null]); // T5.1: deve fallire se un 304 lancia
+});
+
+it('un 304 a una GET senza condizione è un backoffice che non risponde bene', function () {
+    Http::fake(['*' => Http::response('', 304)]);
+    apriSessione();
+
+    expect(fn () => Api::workspace()->condizionale('/v1/board/board/b'))->toThrow(BackofficeNonRisponde::class);
+});
+
+it('get() continua a rifiutare un 304', function () {
+    Http::fake(['*' => Http::response('', 304)]);
+    apriSessione();
+
+    expect(fn () => Api::workspace()->get('/v1/board/board/b'))->toThrow(BackofficeNonRisponde::class);
+});
+
+it('un ETag che non è un entity-tag torna null, e non arriva a chi chiama', function (string $etag) {
+    Http::fake(['*' => Http::response(['data' => []], 200, ['ETag' => $etag])]);
+    apriSessione();
+
+    expect(Api::workspace()->condizionale('/v1/io')['etag'])->toBeNull();
+})->with(['senza virgolette' => ['abc'], 'virgolette di mezzo' => ['"a"b"'], 'due tag' => ['"a", "b"']]);
+
+it('condizionale() accetta un ETag debole', function () {
+    Http::fake(['*' => Http::response(['data' => []], 200, ['ETag' => 'W/"abc"'])]);
+    apriSessione();
+
+    expect(Api::workspace()->condizionale('/v1/io', 'W/"abc"')['etag'])->toBe('W/"abc"');
+});
+
+it('condizionale() ha gli errori di get(): 404, 429, 401, 5xx e trasporto', function () {
+    apriSessione();
+
+    Http::fake(['*' => problema(404, 'non_trovato')]);
+    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))
+        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(404)->and($e->codice)->toBe('non_trovato')); // T5.2
+
+    Http::fake(['*' => problema(429, 'troppe_richieste', header: ['Retry-After' => '30'])]);
+    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))
+        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(429)->and($e->riprovaFra)->toBe(30));
+
+    Http::fake(['*' => problema(401, 'non_autenticato')]);
+    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))->toThrow(GettoneRifiutato::class);
+
+    Http::fake(['*' => Http::response('<html>503</html>', 503, ['Content-Type' => 'text/html'])]);
+    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))->toThrow(BackofficeNonRisponde::class);
+
+    Http::fake(['*' => fn () => throw new ConnectionException('cURL error 28: timeout')]);
+    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))->toThrow(BackofficeNonRisponde::class);
+});
+
+it('condizionale() rifiuta un 3xx diverso dal 304, un 204 e un 200 senza JSON', function (Closure $risposta) {
+    Http::fake(['*' => $risposta]);
+    apriSessione();
+
+    expect(fn () => Api::workspace()->condizionale('/v1/x', '"a"'))->toThrow(BackofficeNonRisponde::class);
+})->with([
+    '301' => fn () => fn () => Http::response('', 301, ['Location' => 'https://altrove.example/v1/x']),
+    '204' => fn () => fn () => Http::response('', 204),
+    '200 html' => fn () => fn () => Http::response('<html>ok</html>', 200, ['Content-Type' => 'text/html']),
+]);
+
+it('una versione che non è un entity-tag non parte: InvalidArgumentException prima della chiamata', function (string $versione) {
+    Http::fake();
+    apriSessione();
+
+    expect(fn () => Api::workspace()->condizionale('/v1/x', $versione))->toThrow(InvalidArgumentException::class); // T5.2
+    Http::assertNothingSent();
+})->with([
+    'CR LF' => ["\"a\"\r\nX-Altro: 1"],
+    'LF' => ["\"a\"\n"],
+    'senza virgolette' => ['abc'],
+    'virgolette di mezzo' => ['"a"b"'],
+    'spazio dentro' => ['"a b"'],
+    'due tag' => ['"a", "b"'],
+    'asterisco' => ['*'],
+    'vuota' => [''],
+]);
+
+it('condizionale() rifiuta un percorso fuori da /v1, come get()', function () {
+    Http::fake();
+    apriSessione();
+
+    expect(fn () => Api::workspace()->condizionale('https://altrove.example/v1/x', '"a"'))->toThrow(InvalidArgumentException::class);
+    Http::assertNothingSent();
+});
+
+it('né il gettone né l\'ETag finiscono nel messaggio di un\'eccezione', function () {
+    apriSessione();
+    $messaggi = [];
+
+    foreach ([
+        fn () => Api::workspace()->condizionale('/v1/x', "\"segreto-etag\"\r\n"),
+        fn () => Api::workspace()->condizionale('/v1/x', 'segreto-etag'),
+    ] as $chiamata) {
+        try {
+            $chiamata();
+        } catch (InvalidArgumentException $e) {
+            $messaggi[] = $e->getMessage();
+        }
+    }
+
+    Http::fake(['*' => Http::response('<html>503</html>', 503, ['ETag' => '"segreto-etag"', 'Content-Type' => 'text/html'])]);
+    try {
+        Api::workspace()->condizionale('/v1/x', '"segreto-etag"');
+    } catch (BackofficeNonRisponde $e) {
+        $messaggi[] = $e->getMessage();
+    }
+
+    expect($messaggi)->toHaveCount(3);
+    foreach ($messaggi as $messaggio) {
+        expect($messaggio)->not->toContain('segreto-etag')->not->toContain(GETTONE_WORKSPACE);
+    }
+}); // T5.3

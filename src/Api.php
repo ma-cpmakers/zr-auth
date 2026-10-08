@@ -24,6 +24,8 @@ use Zeiras\Auth\Errori\IndirizzoNonSicuro;
  *
  *     Api::senzaGettone()->post('/v1/accessi', ['email' => $email, 'password' => $password]);
  *     Api::workspace()->tutti('/v1/workspace/membri');
+ *
+ * condizionale() è la GET che il polling può ripetere a buon mercato: manda `If-None-Match` e un 304 non è un errore.
  */
 final class Api
 {
@@ -71,6 +73,33 @@ final class Api
     public function get(string $percorso, array $query = []): array
     {
         return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->get($percorso, $query), $percorso);
+    }
+
+    /**
+     * Una GET condizionale (RFC 9110 §13.1.2): con la `versione` che chi chiama ha avuto (l'`etag` della risposta
+     * precedente, com'è: `"abc"` o `W/"abc"`) manda `If-None-Match`; un 304 torna `['stato' => 304, 'etag' => …, 'corpo' => null]`
+     * e vuol dire «ciò che hai è ancora valido». Un 200 torna `['stato' => 200, 'etag' => ?string, 'corpo' => il JSON]`.
+     * Gli errori sono quelli di get(). Una `versione` che non è un entity-tag non parte: InvalidArgumentException.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array{stato: 200|304, etag: ?string, corpo: ?array<mixed>}
+     */
+    public function condizionale(string $percorso, ?string $versione = null, array $query = []): array
+    {
+        if ($versione !== null && ! self::entityTag($versione)) {
+            throw new InvalidArgumentException('La versione dev\'essere un entity-tag («"abc"» o «W/"abc"»), com\'è arrivata nell\'etag.');
+        }
+
+        $esito = $this->chiama(
+            fn (PendingRequest $richiesta) => ($versione === null ? $richiesta : $richiesta->withHeaders(['If-None-Match' => $versione]))
+                ->get($percorso, $query),
+            $percorso,
+            condizionale: true,
+            versione: $versione,
+        );
+
+        /** @var array{stato: 200|304, etag: ?string, corpo: ?array<mixed>} $esito */
+        return $esito;
     }
 
     /**
@@ -138,7 +167,7 @@ final class Api
      * @param  \Closure(PendingRequest): Response  $invia
      * @return array<mixed>
      */
-    private function chiama(\Closure $invia, string $percorso): array
+    private function chiama(\Closure $invia, string $percorso, bool $condizionale = false, ?string $versione = null): array
     {
         // Il gettone va solo al backoffice: un percorso che porta altrove (un indirizzo intero, `//host`) non parte. La query
         // sta in `$query`: in un GET Guzzle sostituirebbe in silenzio quella scritta nel percorso.
@@ -168,6 +197,16 @@ final class Api
             throw new BackofficeNonRisponde('Il backoffice non risponde.', previous: $e);
         }
 
+        // Il 304 di una GET condizionale non è un redirect e non è un errore: la versione di chi chiama è ancora quella buona.
+        // Senza una versione mandata nessuno lo ha chiesto, e quel 304 è un backoffice che sbaglia.
+        if ($condizionale && $risposta->status() === 304) {
+            if ($versione === null) {
+                throw new BackofficeNonRisponde('Il backoffice ha risposto 304 a una GET senza condizione.');
+            }
+
+            return ['stato' => 304, 'etag' => self::etag($risposta), 'corpo' => null];
+        }
+
         // Un redirect non è mai un problema di /v1 (RFC 9457): è nginx o il trasporto, non il backoffice che risponde
         // nella forma giusta. Un 5xx invece può portare un problema leggibile (es. 503 turnstile_non_disponibile, con
         // `codice`, `title` e `detail`): si guarda il corpo prima di arrendersi.
@@ -189,11 +228,33 @@ final class Api
             throw ErroreApi::daRisposta($risposta, $corpo);
         }
 
+        if ($condizionale) {
+            if ($risposta->status() !== 200 || $corpo === null) {
+                throw new BackofficeNonRisponde("Il backoffice ha risposto {$risposta->status()} a una GET condizionale, non un 200 con JSON.");
+            }
+
+            return ['stato' => 200, 'etag' => self::etag($risposta), 'corpo' => $corpo];
+        }
+
         if ($risposta->status() === 204) {
             return [];
         }
 
         return $corpo ?? throw new BackofficeNonRisponde("Il backoffice ha risposto {$risposta->status()} senza JSON.");
+    }
+
+    /** L'ETag della risposta, se è un entity-tag; altrimenti `null`: un valore strano non passa a chi chiama. */
+    private static function etag(Response $risposta): ?string
+    {
+        $etag = trim($risposta->header('ETag'));
+
+        return self::entityTag($etag) ? $etag : null;
+    }
+
+    /** RFC 9110 §8.8.3: `"` + caratteri visibili senza `"` + `"`, con `W/` davanti se è debole. Niente spazi, CR o LF. */
+    private static function entityTag(string $valore): bool
+    {
+        return preg_match('#^(?:W/)?"[\x21\x23-\x7E]*"\z#', $valore) === 1;
     }
 
     /** Il corpo, se è JSON: `application/json`, e ogni `application/*+json` (application/problem+json, RFC 9457). */
