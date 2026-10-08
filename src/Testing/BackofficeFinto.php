@@ -32,7 +32,7 @@ use Zeiras\Auth\Testing\Finto\Testi;
  *     $studio = $finto->workspace('Studio Anna', $anna);
  *
  * Fa i metodi del nucleo (registrarsi, entrare, uscire, il gettone di un workspace, la verifica dell'email) e le letture
- * della persona e del workspace: io.mostra, io.workspace.elenca, app.elenca, workspace.membri.elenca. La registrazione è
+ * della persona e del workspace: io.mostra, io.workspace.elenca, app.elenca, workspace.membri.elenca, e la nascita di un workspace, io.workspace.crea. La registrazione è
  * chiusa come nel backoffice, finché il test non dà la lista dei consentiti (consenti()) o la apre (apri(), che vale solo
  * con Turnstile acceso); Turnstile è spento, finché il test non lo accende (accendiTurnstile()) o lo guasta
  * (guastaTurnstile()).
@@ -67,6 +67,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/io/email/verifica$#', 'io.email.verifica.crea'],
         ['PATCH', '#^/v1/io/password$#', 'io.password.modifica'],
         ['GET', '#^/v1/io/workspace$#', 'io.workspace.elenca'],
+        ['POST', '#^/v1/io/workspace$#', 'io.workspace.crea'],
         ['GET', '#^/v1/lingue$#', 'lingue.elenca'],
         ['POST', '#^/v1/password/recupero$#', 'password.recupero.crea'],
         ['POST', '#^/v1/password/reimpostazione$#', 'password.reimpostazione.crea'],
@@ -143,7 +144,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10];
 
     private const ORA = 3600;
 
@@ -494,6 +495,7 @@ final class BackofficeFinto
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
+                'io.workspace.crea' => $this->creaWorkspaceDellaPersona($richiesta, $corpo),
                 'lingue.elenca' => $this->elencaLingue($richiesta),
                 'password.recupero.crea' => $this->creaRecupero($corpo),
                 'password.reimpostazione.crea' => $this->reimposta($corpo),
@@ -916,6 +918,62 @@ final class BackofficeFinto
 
         return $this->pagina($richiesta, 'io.workspace.elenca', 'id', $voci, self::perNomeEId(...),
             fn (string $id) => isset($this->workspace[$id]) ? self::perNomeEId($this->workspace[$id]) : null);
+    }
+
+    /**
+     * io.workspace.crea (IoWorkspaceController::crea): un workspace nuovo, di cui la persona del gettone è proprietaria.
+     * Nell'ordine del backoffice: la Idempotency-Key (il metodo è della persona, non del workspace del gettone: la stessa
+     * chiave vale con ogni suo gettone), l'email non verificata (403, prima del corpo), il corpo (422 su `nome`; un campo in più
+     * si ignora, come Corpo::soloCorpo, perché un corpo con un campo in più non rompe una rotta nata prima della regola), l'azienda che non è della persona (404, come un id altrui), il freno di
+     * workspace nuovi all'ora per persona (429; una risposta ripetuta dalla chiave non arriva al freno); poi nasce, con
+     * un'azienda sua se non ne dà una. Il workspace non ha app attive. La risposta è lo schema WorkspaceConRuolo, senza
+     * `Location` (il contratto ha il solo `Link`).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaWorkspaceDellaPersona(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+        $chi['workspace'] = '';
+
+        return $this->conIdempotenza($richiesta, 'io.workspace.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $persona = $chi['persona'];
+
+            if ($this->persone[$persona]['email_verificata_il'] === null) {
+                throw new Problema('email_non_verificata');
+            }
+
+            $campi = $this->testi->valida($corpo, [
+                'nome' => ['required', 'string', 'max:255'],
+                'azienda_id' => ['sometimes', 'string'],
+            ]);
+            $azienda = $campi['azienda_id'] ?? null;
+
+            if ($azienda !== null && ! $this->appartieneAllAzienda($persona, $azienda)) {
+                throw new Problema('non_trovato');
+            }
+
+            $this->frena('freni:persona:io.workspace.crea:'.$persona, self::FRENI['workspace'], self::ORA);
+
+            $id = self::id();
+            $this->workspace[$id] = ['id' => $id, 'nome' => $campi['nome'], 'slug' => $this->nuovoSlug($campi['nome']), 'azienda_id' => $azienda ?? self::id()];
+            $this->membri[$id][$persona] = 'proprietario';
+
+            return [201, ['data' => [...$this->workspace[$id], 'ruolo' => 'proprietario']], []];
+        });
+    }
+
+    /** Se la persona appartiene già all'azienda data: è membro di un workspace con quella azienda_id. */
+    private function appartieneAllAzienda(string $persona, string $azienda): bool
+    {
+        foreach ($this->workspace as $id => $workspace) {
+            if ($workspace['azienda_id'] === $azienda && isset($this->membri[$id][$persona])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
