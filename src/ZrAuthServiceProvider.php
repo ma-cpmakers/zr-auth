@@ -5,7 +5,9 @@ namespace Zeiras\Auth;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Foundation\Http\Kernel;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Zeiras\Auth\Http\Controllers\RicevitoreController;
 use Zeiras\Auth\Http\Middleware\ConGettone;
 
 final class ZrAuthServiceProvider extends ServiceProvider
@@ -23,6 +25,14 @@ final class ZrAuthServiceProvider extends ServiceProvider
         // gira prima dei binding delle rotte. Dal kernel, non dal router: il kernel ricopia i suoi gruppi nel router, e
         // cancellerebbe un middleware messo solo lì. Una pagina pubblica se lo toglie con withoutMiddleware, e il test del
         // frontend la nomina (Testing\Rotte::senzaGuardia).
+        // Il ricevitore del codice dell'ingresso è l'unica rotta di zr-auth, ed è pubblica: arriva da zr-home prima della
+        // sessione. Il test del frontend la nomina fra le pubbliche (Testing\Rotte::senzaGuardia(['GET ingresso/ritorno'])).
+        if (! $this->app->routesAreCached() && is_string(config('zr-auth.ricevitore')) && config('zr-auth.ricevitore') !== '') {
+            Route::middleware('web')->get(config('zr-auth.ricevitore'), RicevitoreController::class)
+                ->name('zr-auth.ricevitore')
+                ->withoutMiddleware(ConGettone::class);
+        }
+
         $this->callAfterResolving(HttpKernel::class, function (HttpKernel $kernel): void {
             if (! $kernel instanceof Kernel) {
                 return;
