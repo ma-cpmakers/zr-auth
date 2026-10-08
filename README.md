@@ -178,7 +178,7 @@ header, né in un log. La risposta ha `Cache-Control: no-store` e `Referrer-Poli
 il posto della precedente.
 
 Il ricevitore è la rotta `GET /ingresso/ritorno` (config `zr-auth.ricevitore`), che zr-auth registra da sé, **senza la
-guardia**: è il valore che ma-devops mette in `ZR_RITORNO_<CODICE>` del backoffice (`https://<modulo>/ingresso/ritorno`).
+guardia**: è il valore che chi gestisce il backoffice mette in `ZR_RITORNO_<CODICE>` (`https://<modulo>/ingresso/ritorno`).
 Riceve `codice` (43 caratteri `[A-Za-z0-9_-]`) e `state` (al più 512, `[A-Za-z0-9._~-]`):
 
 - è un GET e basta (gli altri metodi sono 405) e solo dallo stesso sito: un `Sec-Fetch-Site` diverso da `same-site`,

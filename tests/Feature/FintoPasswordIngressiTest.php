@@ -159,6 +159,19 @@ it("un verificatore sbagliato consuma il codice, e l'ingresso a un'app spenta o 
     expect(alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('codice'))->toBe('servizio_non_disponibile');
 });
 
+it("lo scambio di una persona che non è più nel workspace è la stessa verifica_non_riuscita (T1.5)", function () {
+    [$finto, $studio] = fintoConPm();
+    $bruno = $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
+    $finto->membro($studio, $bruno, 'membro');
+    $anna = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('bruno@example.com')['gettone']['gettone'])->json('data.gettone');
+    $verificatore = str_repeat('v', 64);
+    $codice = alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('data.codice');
+
+    expect(alFinto('DELETE', "/v1/workspace/membri/{$bruno['id']}", gettone: $anna)->status())->toBe(204)
+        ->and(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
+});
+
 it('un codice dell\'ingresso scade dopo 60 secondi (T1.5)', function () {
     [, $studio] = fintoConPm();
     $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');

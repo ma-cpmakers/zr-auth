@@ -43,7 +43,8 @@ final class Sessione
 
     /**
      * Entra in un workspace coi `data` della risposta di gettoni.crea (lo schema Gettone): da qui Api::workspace() manda
-     * il gettone di quel workspace. Il gettone dell'accesso, se c'è, resta.
+     * il gettone di quel workspace. Il gettone dell'accesso, se c'è, resta, ma solo se è della stessa persona: se lo scambio
+     * dà un'altra persona (il ricevitore dell'ingresso), l'accesso e i gettoni di prima si scartano.
      *
      * @param  array<string, mixed>  $gettone
      */
@@ -51,6 +52,10 @@ final class Sessione
     {
         self::controllaIlDriver();
         $stato = self::stato() ?? ['accesso' => null, 'gettoni' => []];
+
+        if (isset($stato['utente']['id']) && $stato['utente']['id'] !== ($gettone['utente']['id'] ?? null)) {
+            $stato = ['accesso' => null, 'gettoni' => []];
+        }
 
         session()->regenerate(true);
         session()->put(self::CHIAVE, [
