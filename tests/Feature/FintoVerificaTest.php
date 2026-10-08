@@ -22,7 +22,7 @@ function verifica(string $email, ?string $codice, string $password = PASSWORD, ?
 }
 
 const VERIFICA_NON_RIUSCITA_IT = ['Verifica non riuscita',
-    "Il codice non verifica la richiesta: per l'email controlla il codice, l'email e la password, o chiedi un codice nuovo; per la password controlla il codice e l'email, o chiedi un codice nuovo; per l'ingresso in un'app riparti dall'accesso; per un invito controlla il codice e di usare l'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato."];
+    "Il codice non verifica la richiesta: per l'email controlla il codice, l'email e la password, o chiedi un codice nuovo; per la password controlla il codice e l'email, o chiedi un codice nuovo; per l'ingresso in un'app riparti dall'accesso; per un invito controlla il codice e usa l'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato."];
 
 // T2.6
 
