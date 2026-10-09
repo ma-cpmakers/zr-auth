@@ -42,14 +42,15 @@ test('le chiavi di zr-auth.eventi che il README nomina ci sono nella config, e q
 test('i metodi del finto che il README nomina esistono', function () {
     $readme = file_get_contents(__DIR__.'/../../README.md');
 
-    preg_match_all('/`(?:BackofficeFinto::)?([a-zA-Z]+)\(/', sezioneEventi(), $nominati);
-    $metodi = array_intersect($nominati[1], ['consegna', 'attiva', 'persona', 'workspace', 'membro']);
-    expect($metodi)->toContain('consegna');
+    // `BackofficeFinto::nome(` ovunque nel README, e `nome(` da solo nella sezione degli eventi: nessun nome inventato.
+    preg_match_all('/BackofficeFinto::([a-zA-Z]+)\(/', $readme, $qualificati);
+    preg_match_all('/`([a-zA-Z]+)\(/', sezioneEventi(), $nudi);
+    $nominati = array_unique([...$qualificati[1], ...$nudi[1]]);
+    expect($nominati)->toContain('consegna');
 
-    foreach ($metodi as $metodo) {
-        expect(method_exists(BackofficeFinto::class, $metodo))->toBeTrue("il README nomina {$metodo}()");
+    foreach ($nominati as $metodo) {
+        expect(method_exists(BackofficeFinto::class, $metodo))->toBeTrue("il README nomina {$metodo}() e il finto non ce l'ha");
     }
-    expect($readme)->toContain('BackofficeFinto::consegna(');
 });
 
 test('le variabili d’ambiente del README sono quelle della config', function () {

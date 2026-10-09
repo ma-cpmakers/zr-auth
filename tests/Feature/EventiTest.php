@@ -93,6 +93,21 @@ final class EventiTest extends TestCase
         return $this->call('POST', self::PERCORSO, [], [], [], array_filter($header, fn ($valore) => $valore !== null), $corpo);
     }
 
+    /** Tutto ciò che un rifiuto dice a chi chiama: stato, corpo e ogni header con il suo valore (meno Date). */
+    private function impronta(TestResponse $risposta): array
+    {
+        $header = $risposta->headers->allPreserveCase();
+        unset($header['Date']);
+
+        return [$risposta->getStatusCode(), $risposta->getContent(), $header];
+    }
+
+    /** Il rifiuto di una firma sbagliata: ciò a cui ogni altro rifiuto deve somigliare. */
+    private function rifiutoDiRiferimento(): array
+    {
+        return $this->impronta($this->manda(firma: 'v1,'.base64_encode(random_bytes(32))));
+    }
+
     private function assertRifiutata(TestResponse $risposta): void
     {
         $risposta->assertStatus(401);
@@ -162,27 +177,28 @@ final class EventiTest extends TestCase
             'istante di 301 secondi dopo' => fn () => $this->manda(istante: $adesso + 301),
         ];
 
-        $viste = [];
+        $riferimento = $this->rifiutoDiRiferimento();
         foreach ($casi as $nome => $caso) {
             $risposta = $caso();
             $this->assertRifiutata($risposta);
-            $header = array_keys($risposta->headers->allPreserveCase());
-            $viste[$nome] = [$risposta->getContent(), $risposta->headers->get('Content-Type'), array_values(array_diff($header, ['Date']))];
+            $this->assertSame($riferimento, $this->impronta($risposta), "il rifiuto «{$nome}» si distingue dagli altri");
         }
 
-        $this->assertCount(1, array_unique(array_map('serialize', $viste)), 'i rifiuti si distinguono: '.json_encode($viste));
         $this->assertSame([], $this->visti);
     }
 
     public function test_rv1_un_segreto_assente_o_non_valido_rifiuta_come_ogni_altro_caso(): void
     {
         $altro = 'whsec_'.base64_encode(str_repeat('a', 32));
+        $riferimento = $this->rifiutoDiRiferimento();
 
         foreach ([null, '', 'whsec_', 'non-un-segreto', 'whsec_'.base64_encode('troppo corto'), 'whsec_'.base64_encode(str_repeat('a', 65))] as $segreto) {
             config()->set('zr-auth.eventi.segreto', $segreto);
 
             // Firmato con un altro segreto, valido: senza una chiave valida in configurazione non c'è firma che valga.
-            $this->assertRifiutata($this->manda(segreto: $altro));
+            $rifiutata = $this->manda(segreto: $altro);
+            $this->assertRifiutata($rifiutata);
+            $this->assertSame($riferimento, $this->impronta($rifiutata));
         }
         $this->assertSame([], $this->visti);
     }
@@ -221,7 +237,7 @@ final class EventiTest extends TestCase
         $this->assertCount(1, $this->visti);
     }
 
-    public function test_rv2_la_chiave_ha_un_tempo_e_dopo_300_secondi_l_evento_si_riceve_di_nuovo(): void
+    public function test_rv2_la_chiave_ha_un_tempo_e_dopo_quel_tempo_l_evento_si_riceve_di_nuovo(): void
     {
         $this->manda()->assertNoContent();
 
@@ -229,9 +245,37 @@ final class EventiTest extends TestCase
         $this->manda()->assertNoContent();
         $this->assertCount(1, $this->visti, 'a 299 secondi il doppione è ancora ricordato');
 
-        Carbon::setTestNow(Carbon::now()->addSeconds(2));
+        // Con le impostazioni di fabbrica il tempo è il doppio della tolleranza, più un secondo: 601 secondi.
+        Carbon::setTestNow(Carbon::now()->addSeconds(303));
         $this->manda()->assertNoContent();
-        $this->assertCount(2, $this->visti, 'a 301 secondi la chiave è scaduta: aveva un TTL');
+        $this->assertCount(2, $this->visti, 'a 602 secondi la chiave è scaduta: aveva un TTL');
+    }
+
+    public function test_rv2_un_doppione_non_rientra_finche_la_sua_firma_vale(): void
+    {
+        // Un istante 300 secondi nel futuro: la firma vale fino a 600 secondi dopo l'arrivo. Il marcatore deve durare quanto lei.
+        $adesso = Carbon::now()->getTimestamp();
+        $this->manda(istante: $adesso + 300)->assertNoContent();
+        $this->assertCount(1, $this->visti);
+
+        foreach ([301, 450, 599, 600] as $dopo) {
+            Carbon::setTestNow(Carbon::createFromTimestampUTC($adesso + $dopo));
+            $this->manda(istante: $adesso + 300)->assertNoContent();
+        }
+
+        $this->assertCount(1, $this->visti, 'la stessa consegna rimandata mentre la firma vale ha passato l’evento di nuovo');
+    }
+
+    public function test_rv2_un_tempo_dei_doppioni_troppo_corto_non_accorcia_la_finestra(): void
+    {
+        config()->set('zr-auth.eventi.doppioni', 10);
+        $adesso = Carbon::now()->getTimestamp();
+        $this->manda(istante: $adesso + 300)->assertNoContent();
+
+        Carbon::setTestNow(Carbon::createFromTimestampUTC($adesso + 600));
+        $this->manda(istante: $adesso + 300)->assertNoContent();
+
+        $this->assertCount(1, $this->visti);
     }
 
     public function test_rv2_la_chiave_sta_nella_cache_del_modulo_sotto_zr_auth_evento(): void
@@ -252,8 +296,12 @@ final class EventiTest extends TestCase
 
     public function test_rv2_un_webhook_id_che_non_ha_la_forma_giusta_e_un_rifiuto_come_gli_altri(): void
     {
+        $riferimento = $this->rifiutoDiRiferimento();
+
         foreach (['evt con spazio', 'evt.punto', 'evt/barra', str_repeat('a', 129), "evt\nacapo"] as $id) {
-            $this->assertRifiutata($this->manda(cambia: ['id' => $id]));
+            $rifiutata = $this->manda(cambia: ['id' => $id]);
+            $this->assertRifiutata($rifiutata);
+            $this->assertSame($riferimento, $this->impronta($rifiutata));
         }
         $this->manda(cambia: ['id' => str_repeat('a', 128)])->assertNoContent();
         $this->manda(cambia: ['id' => 'A-b_9'])->assertNoContent();
