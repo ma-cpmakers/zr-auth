@@ -261,6 +261,73 @@ expect(Rotte::senzaGuardia(['GET accedi', 'POST accedi']))->toBe([]);
 
 `GET up` è già un'eccezione. E per la prova 8: `Zeiras\Auth\Testing\Gettone::assenteDa($this->get('/dashboard'))`.
 
+## Gli eventi del backoffice: il ricevitore
+
+Il backoffice consegna ogni evento di un workspace al modulo che ha l'app attiva: un `POST` firmato con Standard Webhooks,
+su un indirizzo che chi gestisce il backoffice ha in configurazione. zr-auth ne è il ricevitore: verifica la firma, scarta
+i doppioni e dà l'evento al modulo come evento di Laravel. **È opt-in**: senza `zr-auth.eventi.percorso` il pacchetto non
+registra nessuna rotta.
+
+```php
+// config/zr-auth.php del modulo
+'eventi' => [
+    'percorso' => '/webhook/backoffice',   // POST; senza, nessuna rotta
+    'segreto' => env('ZR_EVENTI_SEGRETO'), // whsec_ e da 24 a 64 byte in base64: lo stesso dell'.env del backoffice
+    'tolleranza' => 300,                   // secondi di scarto fra l'evento e l'ora del modulo, nei due versi
+    'doppioni' => 300,                     // quanto si ricorda un webhook-id già visto
+],
+```
+
+```php
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Zeiras\Auth\Eventi\EventoDelBackoffice;
+
+final class RiceviEvento implements ShouldQueue
+{
+    public function handle(EventoDelBackoffice $evento): void
+    {
+        // $evento->id, ->type, ->subject, ->sequence (la stringa di 12 cifre), ->data (array), ->time, ->corpo (tutto il JSON)
+    }
+}
+```
+
+La rotta si chiama `zr-auth.eventi`, risponde solo a `POST`, sta nel gruppo `api` (nessun CSRF, nessuna sessione) e **non ha
+la guardia del gettone**: chi chiama è il backoffice, e la firma fa da guardia. Il test del frontend la nomina fra le
+pubbliche: `Rotte::senzaGuardia(['POST webhook/backoffice'])`.
+
+**Cosa fa il ricevitore.** Tutto sul corpo come è arrivato, mai ricodificato: la firma è l'HMAC-SHA256 di
+`webhook-id.webhook-timestamp.corpo`, confrontata a tempo costante con ogni firma `v1,…` dell'header; un'altra versione non
+conta. Un istante a più di `tolleranza` secondi, nei due versi, non vale. Ogni rifiuto per la firma, l'istante o gli header
+mancanti è lo stesso `401` (`{"status":401}` come `application/problem+json`, senza un motivo). Un corpo firmato bene che
+non è un evento (un oggetto con `id` e `type` stringhe e `data` oggetto) è un `400` e non brucia l'id. Un evento verificato
+è un `204` senza corpo.
+
+**I doveri di chi riceve.**
+
+- **La firma prima di tutto.** Niente si fa su un evento che non l'ha: lo fa il ricevitore, e il modulo non legge mai il corpo
+  da un'altra strada.
+- **Il `204` subito, il lavoro dopo.** La rotta risponde quando gli ascoltatori sincroni hanno finito, e il backoffice aspetta
+  poco: l'ascoltatore va in coda (`ShouldQueue`) e fa il lavoro lì. Se un ascoltatore sincrono lancia, la rotta risponde
+  `5xx`, il pacchetto toglie il marcatore del doppione e il backoffice riprova: l'evento non si perde per un guasto del modulo.
+- **I doppioni.** Lo stesso `webhook-id` entro `doppioni` secondi è un `204` senza passare l'evento di nuovo (`Cache::add`
+  sulla cache del modulo, con un tempo: mai una chiave senza). Oltre quel tempo, o con un altro `webhook-id`, l'ascoltatore
+  deve reggere un evento già trattato: lo riconosce da `sequence`.
+- **L'ordine e i buchi.** Gli eventi di un workspace hanno un `sequence` che cresce, ma arrivano in qualunque ordine e
+  qualcuno può mancare. Il modulo tiene l'ultimo `sequence` trattato per workspace, non applica un evento più vecchio e, se
+  vede un buco, rilegge.
+- **Il recupero.** Si rilegge col gettone del workspace: `GET /v1/eventi?dopo=<ultimo sequence trattato>` (`eventi.elenca`),
+  a pagine. Se risponde `410` `cursore_scaduto` (l'evento dopo è più vecchio di 30 giorni, o `dopo` sta oltre l'ultimo), il
+  modulo rilegge tutto ciò che gli serve dal suo stato e riparte da `eventi.ultimo.mostra`.
+- **Un tipo mai visto, un id sconosciuto.** Un `type` nuovo arriva invariato, e un `eliminata` di un id che il modulo non ha
+  non è un errore: il pacchetto non guarda mai se l'id esiste, e l'ascoltatore lo ignora.
+- **Nei log, niente.** Il pacchetto non scrive mai nei log il corpo, il segreto o l'header della firma, e l'ascoltatore del
+  modulo nemmeno: l'evento dice quale risorsa è cambiata, e i dati personali si rileggono col gettone.
+
+**Come si prova.** `BackofficeFinto::consegna($tipo, $subject, $data = [], $timestamp = null)` fa la consegna come il
+backoffice: dà `intestazioni` (`webhook-id`, `webhook-timestamp`, `webhook-signature`) e `corpo`, firmati col segreto di
+`zr-auth.eventi.segreto`. Il test la manda alla rotta e prova il suo ascoltatore (vedi «Il backoffice finto»); senza un segreto
+in configurazione (`ZR_EVENTI_SEGRETO`) il metodo lancia una `LogicException`.
+
 ## Il backoffice finto, per i test
 
 `Zeiras\Auth\Testing\BackofficeFinto` risponde alle chiamate di `/v1` come il backoffice, senza rete e senza database: le
@@ -348,6 +415,10 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   (`{"codice", "verificatore"}`, senza gettone) dà il gettone del workspace: il codice vale una volta e 60 secondi, la
   `sfida` è `base64url(SHA-256(verificatore))`, un verificatore sbagliato consuma il codice, ogni fallimento è la stessa
   `422` `verifica_non_riuscita`, e il freno è di 5 richieste al minuto per codice.
+- **Le consegne.** `consegna($tipo, $subject, $data = [], $timestamp = null)` fa la consegna di un evento a un modulo, come
+  la fa il backoffice: `['intestazioni' => [...], 'corpo' => '...']`, con i tre header di Standard Webhooks e il corpo nella
+  forma di un evento del backoffice. L'`id` è un ULID nuovo a ogni chiamata, `sequence` cresce di uno a 12 cifre, e la firma
+  è quella del ricevitore col segreto di `zr-auth.eventi.segreto`. Vedi «Gli eventi del backoffice: il ricevitore».
 - La registrazione è chiusa come nel backoffice: ogni `utenti.crea` è `403` `registrazione_non_aperta`, finché il test
   non dà la lista dei consentiti con `consenti('bruno@altro.it', '@example.com')` (un'email intera o un dominio, per
   uguaglianza) o la apre a tutti con `apri()`, che vale solo con Turnstile acceso, come il backoffice che si apre solo
