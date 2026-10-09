@@ -293,7 +293,7 @@ it('gettoni.crea col gettone di un workspace è 403 gettone_con_workspace, prima
     expect($risposta->status())->toBe(403)
         ->and($risposta->header('Link'))->toBe(linkDi('gettoni.crea'))
         ->and($risposta->json())->toBe(problemaAtteso('gettone_con_workspace', 403, 'Token with workspace',
-            'This method wants the token of the access, without workspace, and the token is of a workspace: repeat the request with the token that accessi.crea gave you.'));
+            'This method wants the token of the access, without workspace, and the token is of a workspace: repeat the request with the token of the access.'));
 });
 
 it('un workspace di cui la persona non è membro, o che non esiste, è lo stesso 422 su #/workspace_id (T2.4)', function () {
