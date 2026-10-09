@@ -94,7 +94,10 @@ final class Sessione
         return self::aperta() ? self::stato()['ruolo'] : null;
     }
 
-    /** L'id dell'accesso, per uscire con accessi.elimina (DELETE /v1/accessi/{accesso}). */
+    /**
+     * L'id dell'accesso, se la sessione lo conosce: per chiudere un altro accesso con accessi.elimina (DELETE
+     * /v1/accessi/{accesso}). Per uscire non serve: accessi.corrente.elimina (DELETE /v1/accessi/corrente) chiude quello della sessione.
+     */
     public static function accesso(): ?string
     {
         return self::aperta() ? self::stato()['accesso'] : null;

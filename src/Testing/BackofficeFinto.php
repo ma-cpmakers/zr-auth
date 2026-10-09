@@ -55,6 +55,7 @@ final class BackofficeFinto
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
+        ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
         ['GET', '#^/v1/app$#', 'app.elenca'],
         ['PATCH', '#^/v1/app/([^/]+)$#', 'app.modifica'],
@@ -536,6 +537,7 @@ final class BackofficeFinto
         try {
             $esito = match ($operazione) {
                 'accessi.crea' => $this->creaAccesso($corpo),
+                'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
                 'app.elenca' => $this->elencaApp($richiesta),
                 'app.modifica' => $this->modificaApp($richiesta, $corpo, $parametri[0]),
@@ -624,6 +626,22 @@ final class BackofficeFinto
         }
 
         $this->accessi[$accesso]['chiuso'] = true;
+
+        return [204, null];
+    }
+
+    /**
+     * accessi.corrente.elimina (AccessiController::eliminaCorrente): chiude l'accesso da cui discende il gettone che chiama,
+     * senza id. Da lì ogni suo gettone è 401 gettone_non_valido (la guardia lo guarda a ogni chiamata, anche una seconda
+     * uscita); un altro accesso della stessa persona resta.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaAccessoCorrente(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+
+        $this->accessi[$chi['accesso']]['chiuso'] = true;
 
         return [204, null];
     }
