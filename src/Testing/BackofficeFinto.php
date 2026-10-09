@@ -62,6 +62,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
+        ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
         ['POST', '#^/v1/io/email/verifica$#', 'io.email.verifica.crea'],
@@ -193,6 +194,9 @@ final class BackofficeFinto
     /** @var array<string, array{id: string, nome: string, slug: string, azienda_id: string}> per id */
     private array $workspace = [];
 
+    /** @var array<string, string> il nome di ogni azienda, per id: quello del primo workspace che l'ha fatta nascere, mai aggiornato */
+    private array $aziende = [];
+
     /** @var array<string, array<string, string>> il ruolo, per workspace e per persona */
     private array $membri = [];
 
@@ -306,7 +310,7 @@ final class BackofficeFinto
         $id = self::id();
         // Un'azienda sua, come fa il backoffice vero senza azienda_id passato (#1259, decisione 5612 del #76): il
         // finto non modella aziende condivise fra workspace, nessun test gliene ha ancora chiesta una.
-        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => self::id()];
+        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => $this->nuovaAzienda($nome)];
         $this->membro($this->workspace[$id], $proprietaria, 'proprietario');
 
         return $this->workspace[$id];
@@ -494,6 +498,7 @@ final class BackofficeFinto
                 'io.password.modifica' => $this->modificaPassword($richiesta, $corpo),
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
+                'io.aziende.elenca' => $this->elencaAziende($richiesta),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
                 'io.workspace.crea' => $this->creaWorkspaceDellaPersona($richiesta, $corpo),
                 'lingue.elenca' => $this->elencaLingue($richiesta),
@@ -921,6 +926,38 @@ final class BackofficeFinto
     }
 
     /**
+     * io.aziende.elenca (IoAziendeController::elenca): le aziende dei workspace di cui la persona del gettone è membro, una
+     * volta sola ciascuna, in ordine di nome (maiuscole e accenti non contano) e poi di id, a pagine col solo id. Vale ogni
+     * gettone della persona, anche quello dell'accesso. Il nome è quello che l'azienda ebbe alla nascita.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaAziende(Request $richiesta): array
+    {
+        $persona = $this->autentica($richiesta)['persona'];
+        $voci = [];
+
+        foreach ($this->membri as $workspace => $ruoli) {
+            if (isset($ruoli[$persona])) {
+                $id = $this->workspace[$workspace]['azienda_id'];
+                $voci[$id] = ['id' => $id, 'nome' => $this->aziende[$id]];
+            }
+        }
+
+        return $this->pagina($richiesta, 'io.aziende.elenca', 'id', array_values($voci), self::perNomeEId(...),
+            fn (string $id) => isset($this->aziende[$id]) ? self::perNomeEId(['id' => $id, 'nome' => $this->aziende[$id]]) : null);
+    }
+
+    /** Un'azienda nuova, col nome del workspace che la fa nascere (Workspace::booted del backoffice), e il suo id. */
+    private function nuovaAzienda(string $nome): string
+    {
+        $id = self::id();
+        $this->aziende[$id] = $nome;
+
+        return $id;
+    }
+
+    /**
      * io.workspace.crea (IoWorkspaceController::crea): un workspace nuovo, di cui la persona del gettone è proprietaria.
      * Nell'ordine del backoffice: la Idempotency-Key (il metodo è della persona, non del workspace del gettone: la stessa
      * chiave vale con ogni suo gettone), l'email non verificata (403, prima del corpo), il corpo (422 su `nome`; un campo in più
@@ -957,7 +994,7 @@ final class BackofficeFinto
             $this->frena('freni:persona:io.workspace.crea:'.$persona, self::FRENI['workspace'], self::ORA);
 
             $id = self::id();
-            $this->workspace[$id] = ['id' => $id, 'nome' => $campi['nome'], 'slug' => $this->nuovoSlug($campi['nome']), 'azienda_id' => $azienda ?? self::id()];
+            $this->workspace[$id] = ['id' => $id, 'nome' => $campi['nome'], 'slug' => $this->nuovoSlug($campi['nome']), 'azienda_id' => $azienda ?? $this->nuovaAzienda($campi['nome'])];
             $this->membri[$id][$persona] = 'proprietario';
 
             return [201, ['data' => [...$this->workspace[$id], 'ruolo' => 'proprietario']], []];

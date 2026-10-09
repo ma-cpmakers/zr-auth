@@ -296,3 +296,61 @@ it('rifiuta un limite fuori da 1-100 e un cursore che non è un successivo di qu
     "cursore di un'altra lista" => ['/v1/io/workspace', fn (string $gettone) => 'cursore='.alFinto('GET', '/v1/app?limite=1', gettone: $gettone)->json('successivo'), ['detail' => TESTO_DEL_CURSORE, 'parameter' => 'cursore']],
     'cursore ritoccato' => ['/v1/io/workspace', fn (string $gettone) => 'cursore=x'.alFinto('GET', '/v1/io/workspace?limite=1', gettone: $gettone)->json('successivo'), ['detail' => TESTO_DEL_CURSORE, 'parameter' => 'cursore']],
 ]);
+
+it("io.aziende.elenca dà le aziende dei workspace della persona, una volta sola, col nome del primo workspace che l'ha fatta nascere, in ordine di nome e poi di id, con ogni suo gettone (AZ1, AZ2)", function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $bruno = $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
+    $beta = $finto->workspace('beta', $anna);
+    $albero = $finto->workspace('Àlbero', $bruno);
+    $finto->membro($albero, $anna, 'amministratore');
+    $alfa = $finto->workspace('Alfa', $anna);
+    $finto->workspace('Studio Bruno', $bruno);
+
+    // Un secondo workspace nella stessa azienda di beta (io.workspace.crea con il suo azienda_id): l'azienda non raddoppia.
+    $secondo = alFinto('POST', '/v1/io/workspace', ['nome' => 'Beta due', 'azienda_id' => $beta['azienda_id']], gettoneDelFinto('anna@example.com'));
+    expect($secondo->status())->toBe(201)
+        ->and($secondo->json('data.azienda_id'))->toBe($beta['azienda_id']);
+
+    // Rinominare il workspace non rinomina l'azienda (il backoffice la nomina una volta, alla nascita).
+    expect(alFinto('PATCH', '/v1/workspace', ['nome' => 'Tutt’altro nome'], gettoneDelFinto('anna@example.com', $beta))->status())->toBe(200);
+
+    $attese = [
+        ['id' => $albero['azienda_id'], 'nome' => 'Àlbero'],
+        ['id' => $alfa['azienda_id'], 'nome' => 'Alfa'],
+        ['id' => $beta['azienda_id'], 'nome' => 'beta'],
+    ];
+
+    foreach ([gettoneDelFinto('anna@example.com'), gettoneDelFinto('anna@example.com', $beta)] as $gettone) {
+        $risposta = alFinto('GET', '/v1/io/aziende', gettone: $gettone);
+
+        expect($risposta->status())->toBe(200)
+            ->and($risposta->header('Link'))->toBe(linkDi('io.aziende.elenca'))
+            ->and($risposta->json())->toBe(['data' => $attese, 'successivo' => null]);
+    }
+
+    // Studio Bruno non è di Anna: la sua azienda non compare. Per Bruno compaiono le due sue.
+    $diBruno = alFinto('GET', '/v1/io/aziende', gettone: gettoneDelFinto('bruno@example.com'));
+
+    expect(array_column($diBruno->json('data'), 'nome'))->toBe(['Àlbero', 'Studio Bruno']);
+});
+
+it('io.aziende.elenca dà le pagine a cursore col solo id; chi non ha workspace non ha aziende; un limite fuori misura è un 422 e nessun gettone un 401 (AZ1, AZ3)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
+
+    foreach (['Delta', 'Alfa', 'Gamma', 'Alfa', 'Beta'] as $nome) {
+        $finto->workspace($nome, $anna);
+    }
+
+    $gettone = gettoneDelFinto('anna@example.com');
+    $tutte = alFinto('GET', '/v1/io/aziende', gettone: $gettone)->json('data');
+
+    expect(array_column($tutte, 'nome'))->toBe(['Alfa', 'Alfa', 'Beta', 'Delta', 'Gamma'])
+        ->and(tutteLePagine('/v1/io/aziende', $gettone, 2))->toBe($tutte)
+        ->and(alFinto('GET', '/v1/io/aziende', gettone: gettoneDelFinto('bruno@example.com'))->json())->toBe(['data' => [], 'successivo' => null])
+        ->and(alFinto('GET', '/v1/io/aziende?limite=0', gettone: $gettone)->status())->toBe(422)
+        ->and(alFinto('GET', '/v1/io/aziende?cursore=inventato', gettone: $gettone)->status())->toBe(422)
+        ->and(alFinto('GET', '/v1/io/aziende')->status())->toBe(401);
+});

@@ -287,9 +287,13 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
   `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
-  `io.workspace.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
+  `io.workspace.elenca`, `io.aziende.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
   `io.workspace.crea` (vedi «Il workspace»). Una chiamata
   di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- **Le aziende.** `io.aziende.elenca` dà le aziende dei workspace di cui la persona è membro (con ogni suo gettone, anche
+  quello dell'accesso), una volta sola ciascuna, in ordine di nome e poi di id, a pagine col solo id. Un'azienda nasce con
+  il workspace e prende il suo nome di allora (`workspace()` e `io.workspace.crea` senza `azienda_id`): una rinomina del
+  workspace non la cambia, come nel backoffice. Il finto non ha un metodo per cambiare il nome di un'azienda.
 - **La persona.** `lingue.elenca` dà le lingue di Zeiras (`it`, `en`, `es`) col nome scritto in ognuna, a ogni gettone.
   `io.modifica` cambia nome, lingua e fuso orario sotto `utente` (JSON Merge Patch) con ogni gettone della persona, anche quello
   dell'accesso, di chi non ha ancora un workspace (nella risposta `workspace`, `ruolo` e `notifiche_non_lette` sono `null`): un campo sbagliato o di un'altra
