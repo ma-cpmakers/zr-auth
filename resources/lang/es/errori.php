@@ -22,11 +22,11 @@ return [
     ],
     'gettone_senza_workspace' => [
         'title' => 'Token sin workspace',
-        'detail' => 'Este método trabaja con los datos de un workspace, y el token no es de un workspace: pide el token del workspace con gettoni.crea.',
+        'detail' => 'Este método trabaja con los datos de un workspace, y el token no es de un workspace: pide el token del workspace.',
     ],
     'gettone_con_workspace' => [
         'title' => 'Token con workspace',
-        'detail' => 'Este método quiere el token del acceso, sin workspace, y el token es de un workspace: repite la solicitud con el token que te dio accessi.crea.',
+        'detail' => 'Este método quiere el token del acceso, sin workspace, y el token es de un workspace: repite la solicitud con el token del acceso.',
     ],
     'registrazione_non_aperta' => [
         'title' => 'Registro no abierto',
@@ -38,7 +38,7 @@ return [
     ],
     'app_non_attiva' => [
         'title' => 'Aplicación no activa',
-        'detail' => 'Este método es de una aplicación que no está activa en el espacio de trabajo del token: si está disponible, la activa un propietario o un administrador, con app.modifica.',
+        'detail' => 'Este método es de una aplicación que no está activa en el espacio de trabajo del token: si está disponible, la activa un propietario o un administrador.',
     ],
     'percorso_inesistente' => [
         'title' => 'Ruta inexistente',
@@ -66,11 +66,11 @@ return [
     ],
     'app_in_arrivo' => [
         'title' => 'Aplicación próximamente',
-        'detail' => 'Esta aplicación todavía no se puede activar ni desactivar: app.elenca indica cuáles están disponibles.',
+        'detail' => 'Esta aplicación todavía no se puede activar ni desactivar: solo algunas de las aplicaciones están disponibles.',
     ],
     'cartella_non_vuota' => [
         'title' => 'Carpeta no vacía',
-        'detail' => 'Esta carpeta todavía tiene tableros, y solo se puede eliminar vacía: board.board.elenca indica cuáles son.',
+        'detail' => 'Esta carpeta todavía tiene tableros, y solo se puede eliminar vacía: mueve o quita antes sus tableros.',
     ],
     'proprietario_intoccabile' => [
         'title' => 'El propietario no se toca',
@@ -78,11 +78,11 @@ return [
     ],
     'gia_membro' => [
         'title' => 'Ya es miembro',
-        'detail' => 'La persona ya es miembro de este workspace: no repitas la solicitud. workspace.membri.elenca dice quiénes son los miembros.',
+        'detail' => 'La persona ya es miembro de este workspace: no repitas la solicitud. La encuentras entre los miembros del workspace.',
     ],
     'invito_esistente' => [
         'title' => 'Invitación ya enviada',
-        'detail' => 'Este correo ya tiene una invitación vigente en este workspace: espera a que caduque, o revócala con workspace.inviti.elimina y envía una nueva.',
+        'detail' => 'Este correo ya tiene una invitación vigente en este workspace: espera a que caduque, o revócala desde las invitaciones pendientes y envía una nueva.',
     ],
     'posizione_cambiata' => [
         'title' => 'Posición cambiada',
@@ -90,15 +90,15 @@ return [
     ],
     'scheda_archiviata' => [
         'title' => 'Tarjeta archivada',
-        'detail' => 'Esta tarjeta está archivada: restáurala con board.schede.archiviazione.elimina antes de modificarla.',
+        'detail' => 'Esta tarjeta está archivada: restáurala antes de modificarla.',
     ],
     'lista_archiviata' => [
         'title' => 'Lista archivada',
-        'detail' => 'Esta lista está archivada: restáurala con board.liste.archiviazione.elimina antes de modificarla o de modificar sus tarjetas.',
+        'detail' => 'Esta lista está archivada: restáurala antes de modificarla o de modificar sus tarjetas.',
     ],
     'board_chiusa' => [
         'title' => 'Tablero no activo',
-        'detail' => 'Este tablero está cerrado o en la papelera: vuelve a activarlo con board.board.modifica antes de modificar sus listas, sus tarjetas o sus etiquetas.',
+        'detail' => 'Este tablero está cerrado o en la papelera: vuelve a activarlo antes de modificar sus listas, sus tarjetas o sus etiquetas.',
     ],
     'limite_raggiunto' => [
         'title' => 'Límite alcanzado',
@@ -110,7 +110,7 @@ return [
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor caducado',
-        'detail' => 'Los eventos después de este punto ya no se pueden leer: vuelve a leerlo todo y empieza de nuevo desde el último evento, con eventi.ultimo.mostra.',
+        'detail' => 'Los eventos después de este punto ya no se pueden leer: vuelve a leerlo todo y empieza de nuevo desde el último evento.',
     ],
     'corpo_troppo_grande' => [
         'title' => 'Cuerpo demasiado grande',

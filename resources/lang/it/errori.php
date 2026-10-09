@@ -22,11 +22,11 @@ return [
     ],
     'gettone_senza_workspace' => [
         'title' => 'Gettone senza workspace',
-        'detail' => 'Questo metodo lavora sui dati di un workspace, e il gettone non è di un workspace: chiedi il gettone del workspace con gettoni.crea.',
+        'detail' => 'Questo metodo lavora sui dati di un workspace, e il gettone non è di un workspace: chiedi il gettone del workspace.',
     ],
     'gettone_con_workspace' => [
         'title' => 'Gettone con workspace',
-        'detail' => "Questo metodo vuole il gettone dell'accesso, senza workspace, e il gettone è di un workspace: ripeti la richiesta col gettone che ti ha dato accessi.crea.",
+        'detail' => "Questo metodo vuole il gettone dell'accesso, senza workspace, e il gettone è di un workspace: ripeti la richiesta col gettone dell'accesso.",
     ],
     'registrazione_non_aperta' => [
         'title' => 'Registrazione non aperta',
@@ -38,7 +38,7 @@ return [
     ],
     'app_non_attiva' => [
         'title' => 'App non attiva',
-        'detail' => "Questo metodo è di un'app che non è attiva nel workspace del gettone: se è disponibile, la attiva un proprietario o un amministratore, con app.modifica.",
+        'detail' => "Questo metodo è di un'app che non è attiva nel workspace del gettone: se è disponibile, la attiva un proprietario o un amministratore.",
     ],
     'percorso_inesistente' => [
         'title' => 'Percorso inesistente',
@@ -66,11 +66,11 @@ return [
     ],
     'app_in_arrivo' => [
         'title' => 'App in arrivo',
-        'detail' => 'Questa app non si può ancora attivare né disattivare: app.elenca dice quali sono disponibili.',
+        'detail' => 'Questa app non si può ancora attivare né disattivare: solo alcune delle app sono disponibili.',
     ],
     'cartella_non_vuota' => [
         'title' => 'Cartella non vuota',
-        'detail' => 'Questa cartella ha ancora delle board, e si elimina solo vuota: board.board.elenca dice quali sono.',
+        'detail' => 'Questa cartella ha ancora delle board, e si elimina solo vuota: sposta o togli prima le sue board.',
     ],
     'proprietario_intoccabile' => [
         'title' => 'Il proprietario non si tocca',
@@ -78,11 +78,11 @@ return [
     ],
     'gia_membro' => [
         'title' => 'Già membro',
-        'detail' => 'La persona è già membro di questo workspace: non ripetere la richiesta. Chi sono i membri lo dice workspace.membri.elenca.',
+        'detail' => 'La persona è già membro di questo workspace: non ripetere la richiesta. La trovi fra i membri del workspace.',
     ],
     'invito_esistente' => [
         'title' => 'Invito già inviato',
-        'detail' => 'Questa email ha già un invito vivo in questo workspace: aspetta che scada, o revocalo con workspace.inviti.elimina e inviane uno nuovo.',
+        'detail' => 'Questa email ha già un invito vivo in questo workspace: aspetta che scada, o revocalo dagli inviti in attesa e inviane uno nuovo.',
     ],
     'posizione_cambiata' => [
         'title' => 'Posizione cambiata',
@@ -90,15 +90,15 @@ return [
     ],
     'scheda_archiviata' => [
         'title' => 'Scheda archiviata',
-        'detail' => 'Questa scheda è archiviata: ripristinala con board.schede.archiviazione.elimina prima di cambiarla.',
+        'detail' => 'Questa scheda è archiviata: ripristinala prima di cambiarla.',
     ],
     'lista_archiviata' => [
         'title' => 'Lista archiviata',
-        'detail' => 'Questa lista è archiviata: ripristinala con board.liste.archiviazione.elimina prima di cambiarla o di cambiare le sue schede.',
+        'detail' => 'Questa lista è archiviata: ripristinala prima di cambiarla o di cambiare le sue schede.',
     ],
     'board_chiusa' => [
         'title' => 'Board non attiva',
-        'detail' => 'Questa board è chiusa o nel cestino: riportala allo stato attivo con board.board.modifica prima di cambiare le sue liste, le sue schede o le sue etichette.',
+        'detail' => 'Questa board è chiusa o nel cestino: riportala allo stato attivo prima di cambiare le sue liste, le sue schede o le sue etichette.',
     ],
     'limite_raggiunto' => [
         'title' => 'Limite raggiunto',
@@ -110,7 +110,7 @@ return [
     ],
     'cursore_scaduto' => [
         'title' => 'Cursore scaduto',
-        'detail' => "Gli eventi dopo questo punto non si leggono più: rileggi tutto e riparti dall'ultimo evento, con eventi.ultimo.mostra.",
+        'detail' => "Gli eventi dopo questo punto non si leggono più: rileggi tutto e riparti dall'ultimo evento.",
     ],
     'corpo_troppo_grande' => [
         'title' => 'Corpo troppo grande',
