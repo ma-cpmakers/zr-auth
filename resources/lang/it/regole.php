@@ -8,6 +8,7 @@ return [
     'chiave_idempotenza' => "L'header Idempotency-Key vuole da 1 a 255 caratteri ASCII visibili, senza spazi.",
     'workspace_non_tuo' => "Non sei membro di un workspace con questo id: l'id lo dà io.workspace.crea, alla nascita del workspace.",
     'sequenza' => 'Il campo :attribute vuole il sequence di un evento: da 1 a 12 cifre.',
+    'troppi_byte' => 'Il campo :attribute può essere lungo al più :max byte (le lettere accentate ne valgono 2).',
     'carattere_nullo' => 'Il campo :attribute non può contenere il carattere nullo (U+0000).',
     'almeno_un_campo' => 'Il corpo vuole almeno uno di questi campi: :campi.',
     'cartella_del_workspace' => "Nel workspace non c'è una cartella con questo id: gli id delle cartelle li dà board.cartelle.elenca.",
