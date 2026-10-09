@@ -7,6 +7,7 @@ use Illuminate\Foundation\Http\Kernel;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Zeiras\Auth\Http\Controllers\EventiController;
 use Zeiras\Auth\Http\Controllers\RicevitoreController;
 use Zeiras\Auth\Http\Middleware\ConGettone;
 
@@ -30,6 +31,15 @@ final class ZrAuthServiceProvider extends ServiceProvider
         if (! $this->app->routesAreCached() && is_string(config('zr-auth.ricevitore')) && config('zr-auth.ricevitore') !== '') {
             Route::middleware('web')->get(config('zr-auth.ricevitore'), RicevitoreController::class)
                 ->name('zr-auth.ricevitore')
+                ->withoutMiddleware(ConGettone::class);
+        }
+
+        // Gli eventi del backoffice, solo se il modulo ha scelto un percorso: una consegna firmata da un server, nel gruppo
+        // `api` (nel gruppo `web` un POST senza il cookie sarebbe un 419). Senza la guardia: chi chiama è il backoffice, e la
+        // firma fa da guardia. Il test del frontend la nomina fra le pubbliche (Testing\Rotte::senzaGuardia(['POST <percorso>'])).
+        if (! $this->app->routesAreCached() && is_string(config('zr-auth.eventi.percorso')) && config('zr-auth.eventi.percorso') !== '') {
+            Route::middleware('api')->post(config('zr-auth.eventi.percorso'), EventiController::class)
+                ->name('zr-auth.eventi')
                 ->withoutMiddleware(ConGettone::class);
         }
 

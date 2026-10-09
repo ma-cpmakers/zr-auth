@@ -25,4 +25,15 @@ return [
     'dopo' => '/',
     'errore' => env('ZR_AUTH_ERRORE'),
 
+    // Gli eventi del backoffice (Eventi\EventoDelBackoffice). Il modulo che li riceve sceglie il `percorso` (POST, es.
+    // '/webhook/backoffice'): senza, zr-auth non registra nessuna rotta. Il `segreto` è `whsec_` più da 24 a 64 byte in
+    // base64, lo stesso che ma-devops mette nell'.env del backoffice per l'app; `tolleranza` è lo scarto ammesso fra
+    // l'istante dell'evento e l'ora del modulo, nei due versi; `doppioni` quanto si ricorda un `webhook-id` già visto.
+    'eventi' => [
+        'percorso' => null,
+        'segreto' => env('ZR_EVENTI_SEGRETO'),
+        'tolleranza' => 300,
+        'doppioni' => 300,
+    ],
+
 ];
