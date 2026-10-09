@@ -66,11 +66,17 @@ final class BackofficeFinto
 
     private const SCHEDE_VISITATE = 2000;
 
+    /** L'id della lista di ogni scheda del finto, che non modella le liste. */
+    private const LISTA_DI_PROVA = 'lista-di-prova';
+
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
+        ['GET', '#^/v1/board/schede/([^/]+)$#', 'board.schede.mostra'],
+        ['POST', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.elimina'],
         ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/collegamenti/([^/]+)$#', 'board.schede.collegamenti.elimina'],
@@ -263,7 +269,7 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
     private array $ingressi = [];
 
-    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable}> le schede (scheda()), per id */
+    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
     private array $schede = [];
 
     /** @var array<string, array{id: string, scheda: string, aspettata: string, creato_il: CarbonImmutable}> i collegamenti «aspetta» vivi, per id */
@@ -384,7 +390,8 @@ final class BackofficeFinto
 
         $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
         $id = self::id();
-        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'completata_il' => null, 'archiviata_il' => null];
+        $ora = now()->toImmutable()->startOfMillisecond();
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
         return ['id' => $id, 'board_id' => $board, 'numero' => $numero, 'titolo' => $titolo];
     }
@@ -745,6 +752,9 @@ final class BackofficeFinto
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
                 'accessi.provider.crea' => $this->creaAccessoDalProvider($corpo, $parametri[0]),
+                'board.schede.mostra' => $this->mostraScheda($richiesta, $parametri[0]),
+                'board.schede.completamento.crea' => $this->completaScheda($richiesta, $parametri[0], true),
+                'board.schede.completamento.elimina' => $this->completaScheda($richiesta, $parametri[0], false),
                 'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
                 'board.schede.collegamenti.crea' => $this->creaCollegamento($richiesta, $corpo, $parametri[0]),
                 'board.schede.collegamenti.elimina' => $this->eliminaCollegamento($richiesta, $parametri[0], $parametri[1]),
@@ -814,6 +824,141 @@ final class BackofficeFinto
         $scheda = $this->schede[$id] ?? null;
 
         return $scheda !== null && $scheda['workspace'] === $workspace ? $scheda : throw new Problema('non_trovato');
+    }
+
+    /** Cambia `aggiornata_il` delle schede date, come ogni scrittura di un collegamento nel backoffice (T3.8). */
+    private function tocca(string ...$schede): void
+    {
+        $ora = now()->toImmutable()->startOfMillisecond();
+
+        foreach ($schede as $scheda) {
+            $this->schede[$scheda]['aggiornata_il'] = $ora;
+        }
+    }
+
+    /**
+     * Una scheda aperta: né completata né archiviata. Solo una scheda aperta tiene ferma qualcuno, e solo una aperta si sblocca.
+     *
+     * @param  array<string, mixed>  $scheda
+     */
+    private static function aperta(array $scheda): bool
+    {
+        return $scheda['completata_il'] === null && $scheda['archiviata_il'] === null;
+    }
+
+    /**
+     * Le schede che `$scheda` aspetta e che sono ancora aperte (`attese_aperte`), nell'ordine in cui sono state collegate.
+     *
+     * @return list<array{id: string, numero: int}>
+     */
+    private function atteseAperte(string $scheda): array
+    {
+        $attese = [];
+
+        foreach ($this->collegamenti as $collegamento) {
+            if ($collegamento['scheda'] === $scheda && self::aperta($this->schede[$collegamento['aspettata']])) {
+                $attese[] = ['id' => $collegamento['aspettata'], 'numero' => $this->schede[$collegamento['aspettata']]['numero']];
+            }
+        }
+
+        return $attese;
+    }
+
+    /**
+     * La scheda intera come la dà il backoffice (Forme::scheda). Il finto non modella liste, etichette, assegnatari, checklist
+     * né commenti: `lista_id` è un id fisso di prova e le altre parti sono vuote. Ciò che le attese guardano c'è tutto.
+     *
+     * @param  array<string, mixed>  $scheda
+     * @return array<string, mixed>
+     */
+    private function voceScheda(array $scheda): array
+    {
+        return [
+            'id' => $scheda['id'],
+            'board_id' => $scheda['board'],
+            'lista_id' => self::LISTA_DI_PROVA,
+            'numero' => $scheda['numero'],
+            'titolo' => $scheda['titolo'],
+            'descrizione' => '',
+            'inizio' => null,
+            'scadenza' => null,
+            'copertina' => null,
+            'etichette' => [],
+            'assegnatari' => [],
+            'numero_voci' => 0,
+            'numero_voci_spuntate' => 0,
+            'numero_commenti' => 0,
+            'attese_aperte' => $this->atteseAperte($scheda['id']),
+            'completata_il' => $scheda['completata_il'] === null ? null : self::iso($scheda['completata_il']),
+            'archiviata_il' => $scheda['archiviata_il'] === null ? null : self::iso($scheda['archiviata_il']),
+            'creata_il' => self::iso($scheda['creata_il']),
+            'aggiornata_il' => self::iso($scheda['aggiornata_il']),
+        ];
+    }
+
+    /**
+     * board.schede.mostra (SchedeController::mostra): la scheda intera, anche archiviata, con le sue `attese_aperte`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraScheda(Request $richiesta, string $scheda): array
+    {
+        $chi = $this->conPm($richiesta);
+
+        return [200, ['data' => $this->voceScheda($this->schedaDelPercorso($chi['workspace'], $scheda))]];
+    }
+
+    /**
+     * board.schede.completamento.crea e .elimina (SchedeController::completamento): completa o riapre la scheda, senza
+     * cambiare niente se è già com'è. Una scheda archiviata è 409. `sbloccate` sono le schede aperte per cui questa era
+     * l'ultima attesa aperta, per numero, e solo se la scheda si completa adesso; riaprire non sblocca mai nessuno.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function completaScheda(Request $richiesta, string $scheda, bool $completa): array
+    {
+        $chi = $this->conPm($richiesta);
+        $voce = $this->schedaDelPercorso($chi['workspace'], $scheda);
+
+        if ($voce['archiviata_il'] !== null) {
+            throw new Problema('scheda_archiviata');
+        }
+
+        $sbloccate = [];
+
+        if (($voce['completata_il'] !== null) !== $completa) {
+            $ora = now()->toImmutable()->startOfMillisecond();
+            $this->schede[$scheda]['completata_il'] = $completa ? $ora : null;
+            $this->schede[$scheda]['aggiornata_il'] = $ora;
+
+            if ($completa) {
+                $sbloccate = $this->sbloccate($scheda);
+            }
+        }
+
+        return [200, ['data' => $this->voceScheda($this->schede[$scheda]), 'sbloccate' => $sbloccate]];
+    }
+
+    /**
+     * Le schede aperte che aspettavano `$scheda` (appena completata) e non hanno più nessuna attesa aperta, per numero.
+     *
+     * @return list<array{id: string, numero: int, titolo: string}>
+     */
+    private function sbloccate(string $scheda): array
+    {
+        $sbloccate = [];
+
+        foreach ($this->collegamenti as $collegamento) {
+            $chi = $this->schede[$collegamento['scheda']];
+
+            if ($collegamento['aspettata'] === $scheda && self::aperta($chi) && $this->atteseAperte($chi['id']) === []) {
+                $sbloccate[$chi['id']] = ['id' => $chi['id'], 'numero' => $chi['numero'], 'titolo' => $chi['titolo']];
+            }
+        }
+
+        usort($sbloccate, fn (array $a, array $b) => $a['numero'] <=> $b['numero']);
+
+        return array_slice($sbloccate, 0, self::ATTESE_IN_ENTRATA);
     }
 
     /**
@@ -915,6 +1060,7 @@ final class BackofficeFinto
 
             $id = self::id();
             $this->collegamenti[$id] = ['id' => $id, 'scheda' => $mia['id'], 'aspettata' => $aspettata['id'], 'creato_il' => now()->toImmutable()->startOfMillisecond()];
+            $this->tocca($mia['id'], $aspettata['id']);
 
             return [201, ['data' => $this->voceCollegamento($this->collegamenti[$id])], ['Location' => "/v1/board/schede/{$mia['id']}/collegamenti/{$id}"]];
         });
@@ -941,6 +1087,7 @@ final class BackofficeFinto
         }
 
         unset($this->collegamenti[$collegamento]);
+        $this->tocca($voce['scheda'], $voce['aspettata']);
 
         return [204, null];
     }

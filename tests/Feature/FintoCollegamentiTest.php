@@ -108,3 +108,51 @@ it('con l\'app pm spenta è 403 app_non_attiva (T3.9)', function () {
 
     expect(aspettaNelFinto($gettone, $a, $b)->json('codice'))->toBe('app_non_attiva');
 });
+
+// #1457 T4 (T4.6, G28): le attese aperte e le schede sbloccate nel finto. Che siano quelle del backoffice lo prova il FintoTest.
+
+it('mostra dà attese_aperte, e una aspettata completata o archiviata esce dalle attese (T4.6)', function () {
+    [$finto, [$a, $b, $c], $gettone] = conLeSchede(3);
+    aspettaNelFinto($gettone, $a, $b, 201);
+    aspettaNelFinto($gettone, $a, $c, 201);
+    $mostra = fn () => alFinto('GET', "/v1/board/schede/{$a['id']}", null, $gettone)->json('data.attese_aperte');
+
+    expect($mostra())->toBe([['id' => $b['id'], 'numero' => 2], ['id' => $c['id'], 'numero' => 3]]);
+
+    $finto->segnaScheda($b, 'completata');
+    expect($mostra())->toBe([['id' => $c['id'], 'numero' => 3]]);
+
+    $finto->segnaScheda($c, 'archiviata');
+    expect($mostra())->toBe([])
+        ->and(alFinto('GET', "/v1/board/schede/{$b['id']}", null, $gettone)->json('data.attese_aperte'))->toBe([]);
+});
+
+it('il completamento dice chi sblocca: solo chi non ha altre attese aperte; già completata e riapertura danno [] (T4.6)', function () {
+    [, [$x, $solo, $due, $altra], $gettone] = conLeSchede(4);
+    aspettaNelFinto($gettone, $solo, $x, 201);
+    aspettaNelFinto($gettone, $due, $x, 201);
+    aspettaNelFinto($gettone, $due, $altra, 201);
+
+    $prima = alFinto('POST', "/v1/board/schede/{$x['id']}/completamento", null, $gettone);
+
+    expect($prima->status())->toBe(200)
+        ->and(array_keys($prima->json()))->toBe(['data', 'sbloccate'])
+        ->and($prima->json('sbloccate'))->toBe([['id' => $solo['id'], 'numero' => 2, 'titolo' => 'Scheda 2']])
+        ->and(alFinto('POST', "/v1/board/schede/{$x['id']}/completamento", null, $gettone)->json('sbloccate'))->toBe([])
+        ->and(alFinto('DELETE', "/v1/board/schede/{$x['id']}/completamento", null, $gettone)->json('sbloccate'))->toBe([])
+        ->and(alFinto('POST', "/v1/board/schede/{$altra['id']}/completamento", null, $gettone)->json('sbloccate'))->toBe([['id' => $due['id'], 'numero' => 3, 'titolo' => 'Scheda 3']]);
+});
+
+it('mostra e completamento: scheda archiviata 409, scheda che non c\'è 404, app pm spenta 403 (T4.6)', function () {
+    [$finto, [$a], $gettone] = conLeSchede(1);
+    $finto->segnaScheda($a, 'archiviata');
+
+    expect(alFinto('POST', "/v1/board/schede/{$a['id']}/completamento", null, $gettone)->json('codice'))->toBe('scheda_archiviata')
+        ->and(alFinto('GET', "/v1/board/schede/{$a['id']}", null, $gettone)->status())->toBe(200)
+        ->and(alFinto('GET', '/v1/board/schede/01k6w6a2c4e6g8j0m2p4r6t8v2', null, $gettone)->json('codice'))->toBe('non_trovato')
+        ->and(alFinto('DELETE', '/v1/board/schede/01k6w6a2c4e6g8j0m2p4r6t8v2/completamento', null, $gettone)->json('codice'))->toBe('non_trovato');
+
+    [, [$b], $gettoneSpento] = conLeSchede(1, pm: false);
+    expect(alFinto('GET', "/v1/board/schede/{$b['id']}", null, $gettoneSpento)->json('codice'))->toBe('app_non_attiva')
+        ->and(alFinto('POST', "/v1/board/schede/{$b['id']}/completamento", null, $gettoneSpento)->json('codice'))->toBe('app_non_attiva');
+});
