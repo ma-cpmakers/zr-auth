@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Client\Response;
 use Zeiras\Auth\Testing\BackofficeFinto;
 
 // #1457 T3 (T3.9, G28): i collegamenti «aspetta» nel finto. Qui ciò che un frontend vede dal suo lato (i tetti, il giro, la
@@ -27,15 +28,22 @@ function conLeSchede(int $quante, bool $pm = true): array
     return [$finto, $schede, $gettone];
 }
 
-function aspettaNelFinto(string $gettone, array $da, array $a)
+/** La richiesta di «da aspetta a»; con `$stato` ne controlla lo stato (la Response del client HTTP non ha gli assert di Laravel). */
+function aspettaNelFinto(string $gettone, array $da, array $a, ?int $stato = null): Response
 {
-    return alFinto('POST', "/v1/board/schede/{$da['id']}/collegamenti", ['scheda_aspettata_id' => $a['id']], $gettone);
+    $risposta = alFinto('POST', "/v1/board/schede/{$da['id']}/collegamenti", ['scheda_aspettata_id' => $a['id']], $gettone);
+
+    if ($stato !== null) {
+        expect($risposta->status())->toBe($stato);
+    }
+
+    return $risposta;
 }
 
 it('una scheda aspetta un\'altra: 201, la Location e la forma del backoffice; il doppione è 409 e l\'elenco la dà nei due versi', function () {
     [, [$a, $b], $gettone] = conLeSchede(2);
 
-    $prima = aspettaNelFinto($gettone, $a, $b)->assertCreated();
+    $prima = aspettaNelFinto($gettone, $a, $b, 201);
 
     expect($prima->header('Location'))->toBe("/v1/board/schede/{$a['id']}/collegamenti/".$prima->json('data.id'))
         ->and(array_keys($prima->json('data')))->toBe(['id', 'scheda_id', 'scheda_aspettata_id', 'creato_il', 'scheda', 'scheda_aspettata'])
@@ -51,10 +59,10 @@ it('l\'undicesima attesa in uscita è 409 limite_raggiunto con limite 10 e direz
     $prima = array_shift($schede);
 
     foreach (array_slice($schede, 0, 10) as $altra) {
-        aspettaNelFinto($gettone, $prima, $altra)->assertCreated();
+        aspettaNelFinto($gettone, $prima, $altra, 201);
     }
 
-    $fermata = aspettaNelFinto($gettone, $prima, $schede[10])->assertStatus(409);
+    $fermata = aspettaNelFinto($gettone, $prima, $schede[10], 409);
     expect($fermata->json('codice'))->toBe('limite_raggiunto')->and($fermata->json('limite'))->toBe(10)->and($fermata->json('direzione'))->toBe('in_uscita');
 });
 
@@ -64,7 +72,7 @@ it('il giro e la catena: sé stessa e il ritorno sono 422 collegamento_circolare
     expect(aspettaNelFinto($gettone, $schede[0], $schede[0])->json('codice'))->toBe('collegamento_circolare');
 
     foreach (range(0, 19) as $i) {
-        aspettaNelFinto($gettone, $schede[$i], $schede[$i + 1])->assertCreated();
+        aspettaNelFinto($gettone, $schede[$i], $schede[$i + 1], 201);
     }
 
     expect(aspettaNelFinto($gettone, $schede[20], $schede[0])->json('codice'))->toBe('collegamento_circolare')
@@ -76,10 +84,10 @@ it('la cinquantunesima attesa in entrata è 409 limite_raggiunto con limite 50 e
     $aspettata = array_shift($schede);
 
     foreach (array_slice($schede, 0, 50) as $altra) {
-        aspettaNelFinto($gettone, $altra, $aspettata)->assertCreated();
+        aspettaNelFinto($gettone, $altra, $aspettata, 201);
     }
 
-    $fermata = aspettaNelFinto($gettone, $schede[50], $aspettata)->assertStatus(409);
+    $fermata = aspettaNelFinto($gettone, $schede[50], $aspettata, 409);
     expect($fermata->json('codice'))->toBe('limite_raggiunto')->and($fermata->json('limite'))->toBe(50)->and($fermata->json('direzione'))->toBe('in_entrata');
 });
 
@@ -87,7 +95,7 @@ it('elimina toglie l\'attesa (204), e la stessa coppia si ricollega; una scheda 
     [$finto, [$a, $b, $c], $gettone] = conLeSchede(3);
     $id = aspettaNelFinto($gettone, $a, $b)->json('data.id');
 
-    alFinto('DELETE', "/v1/board/schede/{$a['id']}/collegamenti/{$id}", null, $gettone)->assertNoContent();
+    expect(alFinto('DELETE', "/v1/board/schede/{$a['id']}/collegamenti/{$id}", null, $gettone)->status())->toBe(204);
     expect(alFinto('DELETE', "/v1/board/schede/{$a['id']}/collegamenti/{$id}", null, $gettone)->status())->toBe(404)
         ->and(aspettaNelFinto($gettone, $a, $b)->status())->toBe(201);
 
