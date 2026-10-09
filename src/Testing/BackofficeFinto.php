@@ -57,11 +57,23 @@ final class BackofficeFinto
 
     private const DOCUMENTAZIONE = 'https://docs.zeiras.com/v1/';
 
+    /** I tetti delle attese di una scheda e della catena (Tetti del backoffice, #1457). */
+    private const ATTESE_IN_USCITA = 10;
+
+    private const ATTESE_IN_ENTRATA = 50;
+
+    private const CATENA = 20;
+
+    private const SCHEDE_VISITATE = 2000;
+
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
+        ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
+        ['POST', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/collegamenti/([^/]+)$#', 'board.schede.collegamenti.elimina'],
         ['GET', '#^/v1/accessi/provider$#', 'accessi.provider.elenca'],
         ['POST', '#^/v1/accessi/provider/([^/]+)/autorizzazioni$#', 'accessi.provider.autorizzazioni.crea'],
         ['POST', '#^/v1/accessi/provider/([^/]+)$#', 'accessi.provider.crea'],
@@ -168,7 +180,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     private const ORA = 3600;
 
@@ -250,6 +262,12 @@ final class BackofficeFinto
 
     /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
     private array $ingressi = [];
+
+    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable}> le schede (scheda()), per id */
+    private array $schede = [];
+
+    /** @var array<string, array{id: string, scheda: string, aspettata: string, creato_il: CarbonImmutable}> i collegamenti «aspetta» vivi, per id */
+    private array $collegamenti = [];
 
     /** @var array<string, true> i provider accesi (provider()), per slug */
     private array $provider = [];
@@ -345,6 +363,53 @@ final class BackofficeFinto
         }
 
         return $this->utente($id);
+    }
+
+    /**
+     * Una scheda di una board del workspace, per provare i collegamenti «aspetta» (`board.schede.collegamenti.*`): il finto non
+     * modella boards, liste né schede vere, solo il minimo che le attese guardano (la board, il numero, il titolo, se è
+     * completata o archiviata). Il `numero` parte da 1 per ogni board e non si riusa. Le schede di una stessa `$board` si
+     * possono collegare fra loro; una scheda di un'altra board è «di un'altra board».
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     * @return array{id: string, board_id: string, numero: int, titolo: string}
+     */
+    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova'): array
+    {
+        $idWorkspace = $workspace['id'] ?? null;
+
+        if (! is_string($idWorkspace) || ! isset($this->workspace[$idWorkspace])) {
+            throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
+        }
+
+        $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
+        $id = self::id();
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'completata_il' => null, 'archiviata_il' => null];
+
+        return ['id' => $id, 'board_id' => $board, 'numero' => $numero, 'titolo' => $titolo];
+    }
+
+    /**
+     * Completa o archivia una scheda del finto (`completata_il`, `archiviata_il` ora): una scheda completata o archiviata conta
+     * ancora nei tetti, nel giro e nella catena, e una archiviata è 409 scheda_archiviata per ogni scrittura.
+     *
+     * @param  array<string, mixed>  $scheda  una scheda di scheda()
+     */
+    public function segnaScheda(array $scheda, string $stato): self
+    {
+        $id = $scheda['id'] ?? null;
+
+        if (! is_string($id) || ! isset($this->schede[$id])) {
+            throw new InvalidArgumentException('La scheda non è del finto: nasce con scheda().');
+        }
+
+        if (! in_array($stato, ['completata', 'archiviata'], true)) {
+            throw new InvalidArgumentException("Lo stato «{$stato}» non c'è: sono completata e archiviata.");
+        }
+
+        $this->schede[$id][$stato.'_il'] = now()->toImmutable()->startOfMillisecond();
+
+        return $this;
     }
 
     /**
@@ -680,6 +745,9 @@ final class BackofficeFinto
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
                 'accessi.provider.crea' => $this->creaAccessoDalProvider($corpo, $parametri[0]),
+                'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
+                'board.schede.collegamenti.crea' => $this->creaCollegamento($richiesta, $corpo, $parametri[0]),
+                'board.schede.collegamenti.elimina' => $this->eliminaCollegamento($richiesta, $parametri[0], $parametri[1]),
                 'app.elenca' => $this->elencaApp($richiesta),
                 'app.modifica' => $this->modificaApp($richiesta, $corpo, $parametri[0]),
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
@@ -717,6 +785,210 @@ final class BackofficeFinto
         $header['Link'] = '<'.self::DOCUMENTAZIONE.$operazione.'>; rel="describedby"';
 
         return Http::response($dati === null ? null : json_encode($dati, JSON_THROW_ON_ERROR), $stato, $header);
+    }
+
+    /**
+     * Il workspace del gettone col suo metodo dell'app `pm` (i middleware `workspace` e `app:pm` del backoffice): al gettone
+     * dell'accesso 403 gettone_senza_workspace, con l'app spenta 403 app_non_attiva, prima di guardare la scheda del percorso.
+     *
+     * @return array{persona: string, accesso: string, workspace: string}
+     */
+    private function conPm(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+
+        if (! $this->appAttiva($chi['workspace'], 'pm')) {
+            throw new Problema('app_non_attiva');
+        }
+
+        return $chi;
+    }
+
+    /**
+     * La scheda del percorso, nel workspace del gettone: una di un altro workspace, o che non c'è, è 404.
+     *
+     * @return array<string, mixed>
+     */
+    private function schedaDelPercorso(string $workspace, string $id): array
+    {
+        $scheda = $this->schede[$id] ?? null;
+
+        return $scheda !== null && $scheda['workspace'] === $workspace ? $scheda : throw new Problema('non_trovato');
+    }
+
+    /**
+     * Un collegamento come lo dà il backoffice (Forme::collegamento): le due schede con quanto serve a riconoscerle.
+     *
+     * @param  array<string, mixed>  $collegamento
+     * @return array<string, mixed>
+     */
+    private function voceCollegamento(array $collegamento): array
+    {
+        $estremo = fn (string $id) => [
+            'id' => $id,
+            'numero' => $this->schede[$id]['numero'],
+            'titolo' => $this->schede[$id]['titolo'],
+            'completata_il' => $this->schede[$id]['completata_il'] === null ? null : self::iso($this->schede[$id]['completata_il']),
+            'archiviata_il' => $this->schede[$id]['archiviata_il'] === null ? null : self::iso($this->schede[$id]['archiviata_il']),
+        ];
+
+        return [
+            'id' => $collegamento['id'],
+            'scheda_id' => $collegamento['scheda'],
+            'scheda_aspettata_id' => $collegamento['aspettata'],
+            'creato_il' => self::iso($collegamento['creato_il']),
+            'scheda' => $estremo($collegamento['scheda']),
+            'scheda_aspettata' => $estremo($collegamento['aspettata']),
+        ];
+    }
+
+    /**
+     * board.schede.collegamenti.elenca (CollegamentiController::elenca): le attese della scheda, per id, a cursore;
+     * `in_uscita` (il default) le schede che aspetta, `in_entrata` quelle che la aspettano. Una scheda archiviata si legge.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaCollegamenti(Request $richiesta, string $scheda): array
+    {
+        $chi = $this->conPm($richiesta);
+        $this->schedaDelPercorso($chi['workspace'], $scheda);
+        $query = $this->testi->validaQuery(self::query($richiesta), ['direzione' => ['sometimes', 'string', 'in:in_uscita,in_entrata']]);
+        $verso = ($query['direzione'] ?? 'in_uscita') === 'in_uscita' ? 'scheda' : 'aspettata';
+        $voci = array_map(
+            $this->voceCollegamento(...),
+            array_filter($this->collegamenti, fn (array $collegamento) => $collegamento[$verso] === $scheda),
+        );
+
+        return $this->pagina($richiesta, 'board.schede.collegamenti.elenca', 'id', array_values($voci), fn (array $voce) => [$voce['id']], fn (string $id) => [$id]);
+    }
+
+    /**
+     * board.schede.collegamenti.crea (CollegamentiController::crea): la scheda del percorso aspetta `scheda_aspettata_id`, della
+     * stessa board. Nell'ordine del backoffice: il ruolo e l'app (403), la scheda del percorso (404), la Idempotency-Key, il
+     * freno per persona (429), la scheda archiviata (409), il corpo (422), la aspettata che non c'è, è di un altro workspace o
+     * di un'altra board (422, un testo solo), la aspettata archiviata (409), la scheda che aspetta sé stessa (422), il
+     * doppione (409), i tetti (409 con `limite` e `direzione`), il giro e la catena (422).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaCollegamento(Request $richiesta, array $corpo, string $scheda): array
+    {
+        $chi = $this->conPm($richiesta);
+        $mia = $this->schedaDelPercorso($chi['workspace'], $scheda);
+
+        return $this->conIdempotenza($richiesta, 'board.schede.collegamenti.crea', $chi, ['corpo' => $corpo, 'percorso' => ['scheda' => $scheda]], function () use ($chi, $corpo, $mia) {
+            $this->frena('collegamenti.crea:persona:'.$chi['persona'], self::FRENI['board_collegamenti_persona'], self::MINUTO);
+
+            if ($mia['archiviata_il'] !== null) {
+                throw new Problema('scheda_archiviata');
+            }
+
+            $campi = $this->testi->validaStretta($corpo, ['scheda_aspettata_id' => ['bail', 'required', 'string', 'ulid']]);
+            $aspettata = $this->schede[strtolower($campi['scheda_aspettata_id'])] ?? null;
+
+            if ($aspettata === null || $aspettata['workspace'] !== $mia['workspace'] || $aspettata['board'] !== $mia['board']) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.scheda_della_board'), 'pointer' => '#/scheda_aspettata_id']]);
+            }
+
+            if ($aspettata['archiviata_il'] !== null) {
+                throw new Problema('scheda_archiviata');
+            }
+
+            if ($aspettata['id'] === $mia['id']) {
+                throw new Problema('collegamento_circolare');
+            }
+
+            if (array_filter($this->collegamenti, fn (array $c) => $c['scheda'] === $mia['id'] && $c['aspettata'] === $aspettata['id']) !== []) {
+                throw new Problema('collegamento_esistente');
+            }
+
+            if (count(array_filter($this->collegamenti, fn (array $c) => $c['scheda'] === $mia['id'])) >= self::ATTESE_IN_USCITA) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ATTESE_IN_USCITA, 'direzione' => 'in_uscita']);
+            }
+
+            if (count(array_filter($this->collegamenti, fn (array $c) => $c['aspettata'] === $aspettata['id'])) >= self::ATTESE_IN_ENTRATA) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ATTESE_IN_ENTRATA, 'direzione' => 'in_entrata']);
+            }
+
+            $this->controllaLaCatena($mia['id'], $aspettata['id']);
+
+            $id = self::id();
+            $this->collegamenti[$id] = ['id' => $id, 'scheda' => $mia['id'], 'aspettata' => $aspettata['id'], 'creato_il' => now()->toImmutable()->startOfMillisecond()];
+
+            return [201, ['data' => $this->voceCollegamento($this->collegamenti[$id])], ['Location' => "/v1/board/schede/{$mia['id']}/collegamenti/{$id}"]];
+        });
+    }
+
+    /**
+     * board.schede.collegamenti.elimina (CollegamentiController::elimina): toglie l'attesa, 204. Un collegamento che non è della
+     * scheda del percorso (che aspetta) o non c'è più è 404; una scheda archiviata, quella del percorso o la aspettata, è 409.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaCollegamento(Request $richiesta, string $scheda, string $collegamento): array
+    {
+        $chi = $this->conPm($richiesta);
+        $mia = $this->schedaDelPercorso($chi['workspace'], $scheda);
+        $voce = $this->collegamenti[$collegamento] ?? null;
+
+        if ($voce === null || $voce['scheda'] !== $mia['id']) {
+            throw new Problema('non_trovato');
+        }
+
+        if ($mia['archiviata_il'] !== null || $this->schede[$voce['aspettata']]['archiviata_il'] !== null) {
+            throw new Problema('scheda_archiviata');
+        }
+
+        unset($this->collegamenti[$collegamento]);
+
+        return [204, null];
+    }
+
+    /**
+     * Il giro e la catena (Collegamenti::controlla): `$scheda` → `$aspettata` non chiude un giro (422 collegamento_circolare) e
+     * non porta la catena oltre 20 collegamenti, a monte, più il nuovo, più a valle (422 catena_troppo_lunga, anche oltre 2.000
+     * schede visitate). Si cammina a livelli; la catena è il cammino più lungo.
+     */
+    private function controllaLaCatena(string $scheda, string $aspettata): void
+    {
+        $visitate = 0;
+        $valle = $this->profondita($aspettata, 'scheda', 'aspettata', $scheda, $visitate);
+        $monte = $this->profondita($scheda, 'aspettata', 'scheda', null, $visitate);
+
+        if ($monte + 1 + $valle > self::CATENA) {
+            throw new Problema('catena_troppo_lunga');
+        }
+    }
+
+    private function profondita(string $inizio, string $da, string $verso, ?string $cerca, int &$visitate): int
+    {
+        $livello = [$inizio];
+        $profondita = 0;
+
+        while (true) {
+            $successivo = array_values(array_unique(array_map(
+                fn (array $c) => $c[$verso],
+                array_filter($this->collegamenti, fn (array $c) => in_array($c[$da], $livello, true)),
+            )));
+
+            if ($successivo === []) {
+                return $profondita;
+            }
+
+            if ($cerca !== null && in_array($cerca, $successivo, true)) {
+                throw new Problema('collegamento_circolare');
+            }
+
+            $visitate += count($successivo);
+            $profondita++;
+
+            if ($visitate > self::SCHEDE_VISITATE || $profondita > self::CATENA) {
+                throw new Problema('catena_troppo_lunga');
+            }
+
+            $livello = $successivo;
+        }
     }
 
     /**

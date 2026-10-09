@@ -11,10 +11,16 @@ use RuntimeException;
  */
 class ErroreApi extends RuntimeException
 {
+    /** I membri di un problema che hanno un posto loro nell'errore: gli altri sono le estensioni. */
+    private const STANDARD = ['type', 'title', 'status', 'detail', 'codice', 'errors'];
+
     /**
      * @param  list<array<string, string>>  $errori  nel 422 dati_non_validi: un elemento per valore rifiutato, con
      *                                              `detail` e uno fra `pointer`, `parameter` e `header`
      * @param  int|null  $riprovaFra  i secondi di `Retry-After` (429 troppe_richieste)
+     * @param  array<string, int|float|string|bool>  $estensioni  i membri estesi del problema (RFC 9457, §3.2), per nome: oggi
+     *                                                            `limite` e `direzione` del 409 `limite_raggiunto` di
+     *                                                            `board.schede.collegamenti.crea`
      */
     public function __construct(
         public readonly int $stato,
@@ -23,6 +29,7 @@ class ErroreApi extends RuntimeException
         public readonly ?string $dettaglio,
         public readonly array $errori = [],
         public readonly ?int $riprovaFra = null,
+        public readonly array $estensioni = [],
     ) {
         // Nel messaggio stato e codice soltanto: va nei log del frontend, e i testi per le persone restano fuori.
         parent::__construct("Il backoffice ha risposto {$stato}".($codice !== null ? " {$codice}" : '').'.');
@@ -34,6 +41,12 @@ class ErroreApi extends RuntimeException
         $testo = fn (string $campo): ?string => isset($corpo[$campo]) && is_string($corpo[$campo]) ? $corpo[$campo] : null;
         $errori = isset($corpo['errors']) && is_array($corpo['errors']) ? array_values(array_filter($corpo['errors'], 'is_array')) : [];
         $riprova = $risposta->header('Retry-After');
+        // Ogni altro membro del problema, se è un valore semplice: i testi per le persone e `errors` hanno un posto loro.
+        $estensioni = array_filter(
+            is_array($corpo) ? $corpo : [],
+            fn (mixed $valore, mixed $nome) => is_string($nome) && ! in_array($nome, self::STANDARD, true) && is_scalar($valore),
+            ARRAY_FILTER_USE_BOTH,
+        );
 
         return new self(
             $risposta->status(),
@@ -42,6 +55,7 @@ class ErroreApi extends RuntimeException
             $testo('detail'),
             $errori,
             ctype_digit($riprova) ? (int) $riprova : null,
+            $estensioni,
         );
     }
 }

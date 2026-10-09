@@ -220,7 +220,7 @@ final class Testi
                 ? $this->traduttore->choice("errori.{$codice}.detail", $secondi, ['secondi' => $secondi])
                 : $this->testo("errori.{$codice}.detail"),
             'codice' => $codice,
-        ];
+        ] + $problema->estensioni;
 
         if ($problema->errori !== []) {
             $corpo['errors'] = $problema->errori;

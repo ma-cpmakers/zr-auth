@@ -106,7 +106,19 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Limit reached',
-        'detail' => 'The resource already has the maximum allowed: 100 active boards (300 active and closed, 1000 counting those in the bin) and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 50 members per workspace (counting live invitations). Free a slot (close a board or, with 1000 in all counting the bin, wait for one in the bin to be archived; archive a list or a card, remove a label or an item, revoke an invitation) and try again.',
+        'detail' => 'The resource already has the maximum allowed: 100 active boards (300 active and closed, 1000 counting those in the bin) and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 50 members per workspace (counting live invitations), 10 outgoing and 50 incoming links per card (counting completed or archived cards too; `limite` and `direzione` say which). Free a slot (close a board or, with 1000 in all counting the bin, wait for one in the bin to be archived; archive a list or a card, remove a label, an item or a link, revoke an invitation) and try again.',
+    ],
+    'collegamento_esistente' => [
+        'title' => 'Link already exists',
+        'detail' => 'The card already waits for that card: do not repeat the request. You can find the link in board.schede.collegamenti.elenca.',
+    ],
+    'collegamento_circolare' => [
+        'title' => 'Circular link',
+        'detail' => 'A card cannot wait for itself, nor for a card that waits for it in turn, directly or through other cards: choose another card, or first remove the link that closes the loop.',
+    ],
+    'catena_troppo_lunga' => [
+        'title' => 'Chain of links too long',
+        'detail' => 'This link would stretch the chain of cards that wait for one another beyond 20 links, or the chain is too large to be checked: shorten the chain by removing a link, and try again.',
     ],
     'transizione_non_valida' => [
         'title' => 'Invalid state transition',

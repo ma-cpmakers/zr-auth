@@ -24,9 +24,13 @@ final class Problema extends RuntimeException
         'app_in_arrivo' => 409,
         'gia_membro' => 409,
         'invito_esistente' => 409,
+        'collegamento_esistente' => 409,
+        'scheda_archiviata' => 409,
         'limite_raggiunto' => 409,
         'proprietario_intoccabile' => 409,
         'dati_non_validi' => 422,
+        'collegamento_circolare' => 422,
+        'catena_troppo_lunga' => 422,
         'credenziali_non_valide' => 422,
         'chiave_idempotenza_riusata' => 422,
         'verifica_non_riuscita' => 422,
@@ -39,11 +43,13 @@ final class Problema extends RuntimeException
     /**
      * @param  list<array{detail: string, pointer?: string, parameter?: string}>  $errori  per `dati_non_validi`, e solo per lui
      * @param  array<string, string>  $header  per `troppe_richieste` Retry-After, in secondi
+     * @param  array<string, int|string>  $estensioni  i membri estesi del problema: `limite` e `direzione` di `limite_raggiunto`
      */
     public function __construct(
         public readonly string $codice,
         public readonly array $errori = [],
         public readonly array $header = [],
+        public readonly array $estensioni = [],
     ) {
         parent::__construct($codice);
     }
