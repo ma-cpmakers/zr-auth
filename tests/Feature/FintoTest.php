@@ -190,6 +190,31 @@ it('accessi.elimina chiude l\'accesso: 204, e da lì ogni suo gettone, anche que
     }
 });
 
+it('accessi.corrente.elimina chiude l\'accesso del gettone senza id: 204 con il Link, ogni suo gettone è 401, un altro accesso resta (#1383)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio Anna', $anna);
+    $accesso = entraNelFinto('anna@example.com');
+    $gettone = $accesso['gettone']['gettone'];
+    $delWorkspace = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $gettone)->json('data.gettone');
+    $altro = entraNelFinto('anna@example.com')['gettone']['gettone'];
+
+    $uscita = alFinto('DELETE', '/v1/accessi/corrente', gettone: $delWorkspace);
+
+    expect($uscita->status())->toBe(204)
+        ->and($uscita->body())->toBe('')
+        ->and($uscita->header('Link'))->toBe(linkDi('accessi.corrente.elimina'));
+
+    foreach ([$gettone, $delWorkspace] as $chiuso) {
+        $rifiutato = alFinto('DELETE', '/v1/accessi/corrente', gettone: $chiuso);
+        expect($rifiutato->status())->toBe(401)
+            ->and($rifiutato->json('codice'))->toBe('gettone_non_valido');
+    }
+
+    expect(alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $altro)->status())->toBe(201)
+        ->and(alFinto('DELETE', '/v1/accessi/corrente')->status())->toBe(401);
+});
+
 it('si esce da un accesso con il gettone di un altro accesso della stessa persona, che resta aperto (T2.3)', function () {
     $finto = BackofficeFinto::attiva();
     $finto->persona('anna@example.com', PASSWORD);

@@ -122,12 +122,11 @@ Sessione::utente();     // la persona (lo schema Utente), mai il gettone
 Sessione::workspace();  // {id, nome, slug}; null prima di entra()
 Sessione::ruolo();      // proprietario, amministratore o membro
 
-// L'uscita: accessi.elimina chiude l'accesso e ogni gettone che ne discende. La sessione si chiude comunque, anche se
-// il backoffice non risponde; una sessione aperta solo col gettone di un workspace non ha l'id dell'accesso.
+// L'uscita: accessi.corrente.elimina chiude l'accesso da cui discende il gettone della sessione, e ogni gettone che ne
+// discende, senza l'id dell'accesso: vale anche per una sessione aperta solo col gettone di un workspace. La sessione si
+// chiude comunque, anche se il backoffice non risponde.
 try {
-    if (Sessione::accesso() !== null) {
-        Api::persona()->delete('/v1/accessi/'.Sessione::accesso());
-    }
+    Api::persona()->delete('/v1/accessi/corrente');
 } finally {
     Sessione::chiudi();
 }
@@ -352,7 +351,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
-- Fa `utenti.crea`, `accessi.crea`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
+- Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
   `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
   `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
