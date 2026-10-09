@@ -248,34 +248,64 @@ it('workspace.inviti.crea frena: oltre 5 inviti in un\'ora verso la stessa email
     expect(alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $gettone('anna@example.com'))->status())->toBe(409);
 });
 
-it('workspace.inviti.crea: al più 50 inviti in un\'ora dal workspace (429), e al più 100 vivi (409 limite_raggiunto) (T4.4)', function () {
+it('workspace.inviti.crea: i membri e gli inviti vivi insieme sono al più 50 (409 limite_raggiunto), al più 50 richieste in un\'ora dal workspace (429), e la revoca libera un posto (T4.4, #1411)', function () {
     [, , , $gettone] = squadra();
     $anna = $gettone('anna@example.com');
     $invita = fn (int $numero, string $gettone) => alFinto('POST', '/v1/workspace/inviti', ['email' => "invitata{$numero}@example.com", 'ruolo' => 'membro'], $gettone);
 
-    foreach (range(1, 50) as $numero) {
+    // Tre membri e 47 inviti sono 50: il 48º invito, e quelli dopo, sono 409; il freno conta anche i rifiutati.
+    foreach (range(1, 47) as $numero) {
         expect($invita($numero, $anna)->status())->toBe(201);
     }
 
-    expect(esito($invita(51, $anna)))->toBe([429, 'troppe_richieste']);
+    expect(esito($invita(48, $anna)))->toBe([409, 'limite_raggiunto'])
+        ->and(esito($invita(49, $anna)))->toBe([409, 'limite_raggiunto'])
+        ->and(esito($invita(50, $anna)))->toBe([409, 'limite_raggiunto'])
+        ->and(esito($invita(51, $anna)))->toBe([429, 'troppe_richieste']);
 
     $this->travel(61)->minutes();
     $anna = $gettone('anna@example.com');
 
-    foreach (range(51, 100) as $numero) {
-        expect($invita($numero, $anna)->status())->toBe(201);
-    }
-
-    $this->travel(61)->minutes();
-    $anna = $gettone('anna@example.com');
-
-    expect(esito($invita(101, $anna)))->toBe([409, 'limite_raggiunto']);
+    expect(esito($invita(48, $anna)))->toBe([409, 'limite_raggiunto']);
 
     // La revoca libera un posto sotto il tetto.
     $primo = alFinto('GET', '/v1/workspace/inviti?limite=1', gettone: $anna)->json('data.0.id');
 
     expect(alFinto('DELETE', "/v1/workspace/inviti/{$primo}", gettone: $anna)->status())->toBe(204)
-        ->and($invita(101, $anna)->status())->toBe(201);
+        ->and($invita(48, $anna)->status())->toBe(201);
+});
+
+/** Porta il workspace a 50 membri (tre della squadra e 47 persone di prova), con i membri messi direttamente. */
+function alTettoDeiMembri(BackofficeFinto $finto, array $studio): void
+{
+    foreach (range(1, 47) as $numero) {
+        $finto->membro($studio, $finto->persona("membro{$numero}@example.com", PASSWORD, nome: "Membro {$numero}"), 'membro');
+    }
+}
+
+it('inviti.accettazione.crea: in un workspace con 50 membri è 409 limite_raggiunto, e l\'invito resta vivo (T4.5, #1411)', function () {
+    [$finto, $studio, , $gettone] = squadra();
+    $finto->persona('dora@example.com', PASSWORD, nome: 'Dora');
+    $anna = $gettone('anna@example.com');
+    alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $anna);
+    $codice = $finto->ultimoInvito('dora@example.com');
+    alTettoDeiMembri($finto, $studio);
+    $accessoDiDora = entraNelFinto('dora@example.com')['gettone']['gettone'];
+
+    expect(esito(alFinto('POST', '/v1/inviti/accettazione', ['codice' => $codice], $accessoDiDora)))->toBe([409, 'limite_raggiunto'])
+        ->and(alFinto('GET', '/v1/workspace/inviti', gettone: $anna)->json('data.*.email'))->toBe(['dora@example.com']);
+});
+
+it('utenti.crea con un invito in un workspace con 50 membri è 409 limite_raggiunto, e la persona non nasce (T4.5, #1411)', function () {
+    [$finto, $studio, , $gettone] = squadra();
+    alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $gettone('anna@example.com'));
+    $codice = $finto->ultimoInvito('dora@example.com');
+    alTettoDeiMembri($finto, $studio);
+    $registra = fn () => alFinto('POST', '/v1/utenti', ['email' => 'dora@example.com', 'password' => PASSWORD, 'termini_accettati' => true, 'invito' => $codice]);
+
+    expect(esito($registra()))->toBe([409, 'limite_raggiunto'])
+        // Se la persona fosse nata, la seconda chiamata sarebbe un 202 uguale a quello di un'email nuova.
+        ->and(esito($registra()))->toBe([409, 'limite_raggiunto']);
 });
 
 it('workspace.inviti.crea con la stessa Idempotency-Key e lo stesso corpo dà la stessa risposta senza un secondo invito; con un altro corpo è 422 (T4.4)', function () {
