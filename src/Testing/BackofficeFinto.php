@@ -1111,6 +1111,11 @@ final class BackofficeFinto
     private function modificaIo(Request $richiesta, array $corpo): array
     {
         $chi = $this->autentica($richiesta);
+
+        // Dal #1412 la scrittura sulla persona vuole il gettone dell'accesso: con quello di un workspace, 403 prima del corpo.
+        if ($chi['workspace'] !== null) {
+            throw new Problema('gettone_con_workspace');
+        }
         $regole = [
             'utente' => ['sometimes', 'array'],
             'utente.nome' => ['filled', 'string', 'max:255'],
@@ -1155,6 +1160,11 @@ final class BackofficeFinto
     private function modificaPassword(Request $richiesta, array $corpo): array
     {
         $chi = $this->autentica($richiesta);
+
+        if ($chi['workspace'] !== null) {
+            throw new Problema('gettone_con_workspace');
+        }
+
         $persona = $chi['persona'];
         $dati = $this->testi->validaCorpo($corpo, [
             'password_attuale' => ['required', 'string', new SenzaCarattereNullo],
@@ -1274,6 +1284,11 @@ final class BackofficeFinto
     private function creaWorkspaceDellaPersona(Request $richiesta, array $corpo): array
     {
         $chi = $this->autentica($richiesta);
+
+        if ($chi['workspace'] !== null) {
+            throw new Problema('gettone_con_workspace');
+        }
+
         $chi['workspace'] = '';
 
         return $this->conIdempotenza($richiesta, 'io.workspace.crea', $chi, $corpo, function () use ($chi, $corpo) {
