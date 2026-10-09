@@ -57,6 +57,9 @@ final class BackofficeFinto
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
+        ['GET', '#^/v1/accessi/provider$#', 'accessi.provider.elenca'],
+        ['POST', '#^/v1/accessi/provider/([^/]+)/autorizzazioni$#', 'accessi.provider.autorizzazioni.crea'],
+        ['POST', '#^/v1/accessi/provider/([^/]+)$#', 'accessi.provider.crea'],
         ['GET', '#^/v1/app$#', 'app.elenca'],
         ['PATCH', '#^/v1/app/([^/]+)$#', 'app.modifica'],
         ['POST', '#^/v1/gettoni$#', 'gettoni.crea'],
@@ -128,6 +131,19 @@ final class BackofficeFinto
     /** Gli errori sulla password attuale che una persona può fare in un'ora (IoPasswordController::ERRORI). */
     private const ERRORI_DELLA_PASSWORD = 5;
 
+    /**
+     * I provider con cui si entra (App\Provider del backoffice, #1429): per slug, lo scope e l'indirizzo a cui la persona
+     * autorizza. Quali sono accesi lo dice il test (provider()), come in produzione lo dicono le credenziali.
+     */
+    private const PROVIDER = [
+        'facebook' => ['scope' => 'email public_profile', 'indirizzo' => 'https://www.facebook.com/dialog/oauth'],
+        'google' => ['scope' => 'openid email profile', 'indirizzo' => 'https://accounts.google.com/o/oauth2/v2/auth'],
+        'linkedin-openid' => ['scope' => 'openid email profile', 'indirizzo' => 'https://www.linkedin.com/oauth/v2/authorization'],
+    ];
+
+    /** Quanto vale lo stato di una partenza, in secondi (AccessiProviderController::VALIDITA_STATO): una volta sola. */
+    private const SECONDI_DELLO_STATO = 600;
+
     /** Gli elementi di una pagina di una lista, se `limite` manca, e al più (ListaRequest). */
     private const LIMITE_PREDEFINITO = 50;
 
@@ -147,7 +163,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5];
 
     private const ORA = 3600;
 
@@ -229,6 +245,21 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
     private array $ingressi = [];
 
+    /** @var array<string, true> i provider accesi (provider()), per slug */
+    private array $provider = [];
+
+    /** @var array<string, true> i provider che non rispondono (guastaProvider()), per slug */
+    private array $providerGuasti = [];
+
+    /** @var array<string, array{id: string, email: string, verificata: bool, nome: ?string}> il profilo che il provider dà per un codice (identitaDelProvider()), per slug e codice */
+    private array $profili = [];
+
+    /** @var array<string, array{provider: string, scade: CarbonImmutable, verificatore: string}> le partenze che valgono, per stato */
+    private array $partenze = [];
+
+    /** @var array<string, string> la persona di ogni identità del provider, per slug e id del provider */
+    private array $identita = [];
+
     /** Il numero d'ordine dell'ultimo evento che consegna() ha fatto: cresce di uno a ogni consegna (`sequence`). */
     private int $sequenza = 0;
 
@@ -302,6 +333,54 @@ final class BackofficeFinto
         }
 
         return $this->utente($id);
+    }
+
+    /**
+     * Accende dei provider (Google, LinkedIn, Facebook: `google`, `linkedin-openid`, `facebook`), come in produzione li
+     * accendono le credenziali: finché non sono accesi, `accessi.provider.elenca` non li dà e gli altri due metodi li
+     * trattano come sconosciuti (404).
+     */
+    public function provider(string ...$provider): self
+    {
+        foreach ($provider as $slug) {
+            if (! isset(self::PROVIDER[$slug])) {
+                throw new InvalidArgumentException("Il finto non conosce il provider «{$slug}»: i suoi sono ".implode(', ', array_keys(self::PROVIDER)).'.');
+            }
+
+            $this->provider[$slug] = true;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Dice che cosa risponde il provider quando la pagina gli porta il `codice` del ritorno: la persona che ha autorizzato.
+     * Un codice che il test non ha detto è un codice che il provider rifiuta. `$verificata: false` è un'email che il
+     * provider non garantisce: l'accesso non riesce. Senza `$id` l'id opaco del provider lo fa il finto, uguale per la
+     * stessa email.
+     */
+    public function identitaDelProvider(string $provider, string $codice, string $email, ?string $nome = null, bool $verificata = true, ?string $id = null): self
+    {
+        if (! isset(self::PROVIDER[$provider])) {
+            throw new InvalidArgumentException("Il finto non conosce il provider «{$provider}»: i suoi sono ".implode(', ', array_keys(self::PROVIDER)).'.');
+        }
+
+        $this->profili[$provider.'|'.$codice] = [
+            'id' => $id ?? 'finto-'.substr(hash('sha256', $provider.'|'.self::normalizza($email)), 0, 21),
+            'email' => trim($email),
+            'verificata' => $verificata,
+            'nome' => $nome,
+        ];
+
+        return $this;
+    }
+
+    /** Il provider non risponde: l'arrivo (`accessi.provider.crea`) è `503 servizio_non_disponibile`. */
+    public function guastaProvider(string $provider): self
+    {
+        $this->provider_guasti[$provider] = true;
+
+        return $this;
     }
 
     /**
@@ -539,6 +618,9 @@ final class BackofficeFinto
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
+                'accessi.provider.elenca' => $this->elencaProvider($richiesta),
+                'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
+                'accessi.provider.crea' => $this->creaAccessoDalProvider($corpo, $parametri[0]),
                 'app.elenca' => $this->elencaApp($richiesta),
                 'app.modifica' => $this->modificaApp($richiesta, $corpo, $parametri[0]),
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
@@ -608,6 +690,158 @@ final class BackofficeFinto
             'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
             'gettone' => $this->emetti($accesso, null),
         ]]];
+    }
+
+    /**
+     * accessi.provider.elenca (AccessiProviderController::elenca), senza gettone: i provider accesi, in ordine di slug, a
+     * pagine. Il freno è uno solo per tutti e si conta prima del resto.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaProvider(Request $richiesta): array
+    {
+        $this->frena('provider.elenca', self::FRENI['provider_elenco'], self::MINUTO);
+
+        return $this->pagina($richiesta, 'accessi.provider.elenca', 'provider', array_map(fn (string $slug) => ['provider' => $slug], array_keys($this->provider)), fn (array $voce) => [$voce['provider']], fn (string $slug) => [$slug]);
+    }
+
+    /**
+     * accessi.provider.autorizzazioni.crea (AccessiProviderController::autorizzazioniCrea), senza gettone e senza corpo: la
+     * partenza. I freni (in tutto, poi del provider) contano prima di tutto, anche per uno slug sconosciuto, che non apre un
+     * conto per slug; un provider spento o sconosciuto è 404. Dà l'indirizzo del provider con lo stato e la sfida PKCE
+     * (S256); il verificatore resta nel finto. Il `client_id` è `finto-<slug>`: nel backoffice lo mette l'.env.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaAutorizzazione(array $corpo, string $provider): array
+    {
+        $this->frena('provider.autorizzazioni:globale', self::FRENI['provider_globale'], self::MINUTO);
+
+        if (! isset($this->provider[$provider])) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->frena('provider.autorizzazioni:'.$provider, self::FRENI['provider_partenza'], self::MINUTO);
+        $this->testi->validaStretta($corpo, []);
+
+        $stato = self::base64url(random_bytes(32));
+        $verificatore = self::base64url(random_bytes(32));
+        // Al millesimo, come il backoffice: la scadenza scritta nella risposta è quella vera.
+        $scade = now()->toImmutable()->addSeconds(self::SECONDI_DELLO_STATO);
+        $this->partenze[$stato] = ['provider' => $provider, 'scade' => $scade, 'verificatore' => $verificatore];
+
+        $url = self::PROVIDER[$provider]['indirizzo'].'?'.http_build_query([
+            'response_type' => 'code',
+            'client_id' => 'finto-'.$provider,
+            'redirect_uri' => 'https://app.zeiras.com/auth/'.$provider.'/callback',
+            'scope' => self::PROVIDER[$provider]['scope'],
+            'state' => $stato,
+            'code_challenge' => self::base64url(hash('sha256', $verificatore, true)),
+            'code_challenge_method' => 'S256',
+        ], '', '&', PHP_QUERY_RFC3986);
+
+        return [201, ['data' => ['url' => $url, 'stato' => $stato, 'scade_il' => self::iso($scade)]]];
+    }
+
+    /**
+     * accessi.provider.crea (AccessiProviderController::crea, AccessoConProvider::entra), senza gettone: l'arrivo. Nell'ordine
+     * del backoffice: i freni (in tutto, del provider, dello stato), il corpo, lo stato, che si consuma una volta sola e
+     * anche se il resto non riesce (sconosciuto, scaduto, già usato o di un altro provider: 422 verifica_non_riuscita); poi
+     * il provider, che non risponde (503) o rifiuta il codice (422), e un profilo senza email verificata (422). Un'identità
+     * già collegata entra; un'email che ha un account lo collega (se l'email non era verificata lo diventa, e la password
+     * di prima non vale più); un'email nuova fa nascere la persona, se la registrazione la ammette (403) e ha accettato i
+     * termini (422 su `#/termini_accettati`). Risponde come accessi.crea: un accesso e il suo gettone, senza workspace.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaAccessoDalProvider(array $corpo, string $provider): array
+    {
+        $this->frena('provider.crea:globale', self::FRENI['provider_arrivo_globale'], self::MINUTO);
+
+        if (! isset($this->provider[$provider])) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->frena('provider.crea:'.$provider, self::FRENI['provider_arrivo'], self::MINUTO);
+        $dati = $this->testi->validaStretta($corpo, [
+            'codice' => ['required', 'string', 'max:2048'],
+            'stato' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
+            'termini_accettati' => ['sometimes', 'nullable', 'boolean'],
+        ]);
+        $this->frena('provider.crea:stato:'.hash('sha256', (string) $dati['stato']), self::FRENI['provider_stato'], self::MINUTO);
+
+        $partenza = $this->partenze[$dati['stato']] ?? null;
+        unset($this->partenze[$dati['stato']]);
+
+        if ($partenza === null || $partenza['scade']->lte(now()) || $partenza['provider'] !== $provider) {
+            throw new Problema('verifica_non_riuscita');
+        }
+
+        if (isset($this->provider_guasti[$provider])) {
+            throw new Problema('servizio_non_disponibile');
+        }
+
+        $profilo = $this->profili[$provider.'|'.$dati['codice']] ?? null;
+
+        if ($profilo === null || ! $profilo['verificata'] || ! $this->emailValida($profilo['email'])) {
+            throw new Problema('verifica_non_riuscita');
+        }
+
+        $email = self::normalizza($profilo['email']);
+        $persona = $this->identita[$provider.'|'.$profilo['id']] ?? null;
+
+        if ($persona === null) {
+            $persona = $this->conEmail($email);
+
+            if ($persona === null) {
+                if (! $this->consente($email)) {
+                    throw new Problema('registrazione_non_aperta');
+                }
+
+                if (($dati['termini_accettati'] ?? false) !== true) {
+                    throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.accepted', ['attribute' => 'termini_accettati']), 'pointer' => '#/termini_accettati']]);
+                }
+
+                $persona = self::id();
+                $this->persone[$persona] = [
+                    'nome' => $profilo['nome'] !== null && trim($profilo['nome']) !== '' ? mb_substr(trim($profilo['nome']), 0, 255) : Str::before($email, '@'),
+                    'email' => $email,
+                    'email_verificata_il' => now()->toImmutable(),
+                    'lingua' => 'it',
+                    'fuso_orario' => 'Europe/Rome',
+                    'password' => Str::random(64),
+                ];
+            } elseif ($this->persone[$persona]['email_verificata_il'] === null) {
+                // Il provider ha provato che l'email è sua: chi scelse la password prima, magari un altro, non entra più.
+                $this->persone[$persona]['email_verificata_il'] = now()->toImmutable();
+                $this->persone[$persona]['password'] = Str::random(64);
+            }
+
+            $this->identita[$provider.'|'.$profilo['id']] = $persona;
+        }
+
+        $accesso = self::id();
+        $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false];
+
+        return [201, ['data' => [
+            'id' => $accesso,
+            'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
+            'gettone' => $this->emetti($accesso, null),
+        ]]];
+    }
+
+    /** Se l'email passa le regole di Utente::REGOLE_EMAIL del backoffice. */
+    private function emailValida(string $email): bool
+    {
+        try {
+            $this->testi->valida(['email' => $email], ['email' => self::REGOLE_EMAIL]);
+        } catch (Problema) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
