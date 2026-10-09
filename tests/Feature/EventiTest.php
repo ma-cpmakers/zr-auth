@@ -206,7 +206,9 @@ final class EventiTest extends TestCase
         $this->assertStringNotContainsString('json_encode', $sorgente);
         $this->assertStringContainsString('getContent()', $sorgente);
         $this->assertStringNotContainsString('->all()', $sorgente);
-        $this->assertStringNotContainsString('->json(', $sorgente);
+        // Leggere la richiesta come JSON (`$richiesta->json()`) darebbe il corpo già decodificato; la risposta (`response()->json`) no.
+        $this->assertStringNotContainsString('$richiesta->json(', $sorgente);
+        $this->assertStringNotContainsString('request()->json(', $sorgente);
     }
 
     // --- RV2 -----------------------------------------------------------------------------------------------------
