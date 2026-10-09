@@ -22,8 +22,11 @@ it('nei sorgenti nessuno Schema, nessun modello e niente OpenID Connect', functi
     $testo = implode("\n", array_map(fn (string $f) => (string) file_get_contents("{$radice}/{$f}"), $sorgenti));
 
     // Il nome dove comincia una parola, non un pezzo di un'altra: `invalid_token` (RFC 6750, nel WWW-Authenticate di un
-    // 401 del backoffice finto) non è un id_token di OpenID Connect. Maiuscole o minuscole: JWKS è jwks.
-    foreach (['Schema::', 'Eloquent\\Model', 'id_token', 'jwks', 'openid', 'zr_persone', 'zr_revoche', 'Firebase\\JWT'] as $vietato) {
+    // 401 del backoffice finto) non è un id_token di OpenID Connect. Maiuscole o minuscole: JWKS è jwks. La parola `openid`
+    // non è più vietata (#1429): è lo slug `linkedin-openid` e lo scope `openid` nel catalogo dei provider del finto, dove il
+    // backoffice li ha uguali; l'ingresso via OpenID Connect di zr-home, che questo test teneva fuori, lo tengono fuori
+    // `id_token`, `jwks` e Firebase\JWT.
+    foreach (['Schema::', 'Eloquent\\Model', 'id_token', 'jwks', 'zr_persone', 'zr_revoche', 'Firebase\\JWT'] as $vietato) {
         expect(preg_match('/(?<![A-Za-z0-9_])'.preg_quote($vietato, '/').'/i', $testo))->toBe(0, "Nei sorgenti c'è {$vietato}.");
     }
 });

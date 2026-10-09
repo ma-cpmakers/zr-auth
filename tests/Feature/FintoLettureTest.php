@@ -263,7 +263,7 @@ it("app.elenca e workspace.membri.elenca rispondono 403 gettone_senza_workspace 
         ->and($risposta->header('Content-Type'))->toBe('application/problem+json')
         ->and($risposta->header('Link'))->toBe(linkDi($metodo))
         ->and($risposta->json())->toBe(problemaAtteso('gettone_senza_workspace', 403, 'Token without workspace',
-            'This method works on the data of a workspace, and the token is not of a workspace: ask for the workspace token with gettoni.crea.'));
+            'This method works on the data of a workspace, and the token is not of a workspace: ask for the workspace token.'));
 })->with([
     'app.elenca' => ['/v1/app', 'app.elenca'],
     'workspace.membri.elenca' => ['/v1/workspace/membri', 'workspace.membri.elenca'],

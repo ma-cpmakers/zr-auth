@@ -22,11 +22,11 @@ return [
     ],
     'gettone_senza_workspace' => [
         'title' => 'Token without workspace',
-        'detail' => 'This method works on the data of a workspace, and the token is not of a workspace: ask for the workspace token with gettoni.crea.',
+        'detail' => 'This method works on the data of a workspace, and the token is not of a workspace: ask for the workspace token.',
     ],
     'gettone_con_workspace' => [
         'title' => 'Token with workspace',
-        'detail' => 'This method wants the token of the access, without workspace, and the token is of a workspace: repeat the request with the token that accessi.crea gave you.',
+        'detail' => 'This method wants the token of the access, without workspace, and the token is of a workspace: repeat the request with the token of the access.',
     ],
     'registrazione_non_aperta' => [
         'title' => 'Registration not open',
@@ -38,7 +38,7 @@ return [
     ],
     'app_non_attiva' => [
         'title' => 'App not active',
-        'detail' => "This method belongs to an app that is not active in the token's workspace: if it is available, an owner or an administrator can activate it with app.modifica.",
+        'detail' => "This method belongs to an app that is not active in the token's workspace: if it is available, an owner or an administrator can activate it.",
     ],
     'percorso_inesistente' => [
         'title' => 'Path not found',
@@ -66,11 +66,11 @@ return [
     ],
     'app_in_arrivo' => [
         'title' => 'App coming soon',
-        'detail' => 'This app cannot be activated or deactivated yet: app.elenca tells which apps are available.',
+        'detail' => 'This app cannot be activated or deactivated yet: only some of the apps are available.',
     ],
     'cartella_non_vuota' => [
         'title' => 'Folder not empty',
-        'detail' => 'This folder still has boards, and it can be deleted only when empty: board.board.elenca tells which they are.',
+        'detail' => 'This folder still has boards, and it can be deleted only when empty: move or remove its boards first.',
     ],
     'proprietario_intoccabile' => [
         'title' => 'The owner cannot be touched',
@@ -78,11 +78,11 @@ return [
     ],
     'gia_membro' => [
         'title' => 'Already a member',
-        'detail' => 'The person is already a member of this workspace: do not repeat the request. workspace.membri.elenca says who the members are.',
+        'detail' => 'The person is already a member of this workspace: do not repeat the request. You will find them among the members of the workspace.',
     ],
     'invito_esistente' => [
         'title' => 'Invitation already sent',
-        'detail' => 'This email already has a live invitation in this workspace: wait for it to expire, or revoke it with workspace.inviti.elimina and send a new one.',
+        'detail' => 'This email already has a live invitation in this workspace: wait for it to expire, or revoke it from the pending invitations and send a new one.',
     ],
     'posizione_cambiata' => [
         'title' => 'Position changed',
@@ -90,15 +90,15 @@ return [
     ],
     'scheda_archiviata' => [
         'title' => 'Card archived',
-        'detail' => 'This card is archived: restore it with board.schede.archiviazione.elimina before changing it.',
+        'detail' => 'This card is archived: restore it before changing it.',
     ],
     'lista_archiviata' => [
         'title' => 'List archived',
-        'detail' => 'This list is archived: restore it with board.liste.archiviazione.elimina before changing it or its cards.',
+        'detail' => 'This list is archived: restore it before changing it or its cards.',
     ],
     'board_chiusa' => [
         'title' => 'Board not active',
-        'detail' => 'This board is closed or in the trash: make it active again with board.board.modifica before changing its lists, cards or labels.',
+        'detail' => 'This board is closed or in the trash: make it active again before changing its lists, cards or labels.',
     ],
     'limite_raggiunto' => [
         'title' => 'Limit reached',
@@ -110,7 +110,7 @@ return [
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor expired',
-        'detail' => 'The events after this point can no longer be read: read everything again and start over from the last event, with eventi.ultimo.mostra.',
+        'detail' => 'The events after this point can no longer be read: read everything again and start over from the last event.',
     ],
     'corpo_troppo_grande' => [
         'title' => 'Request body too large',

@@ -70,7 +70,7 @@ Da GitHub, a un tag (le versioni sono semver; prima della 1.0 un minore nuovo pu
 
 ```json
 "repositories": [{"type": "vcs", "url": "https://github.com/ma-cpmakers/zr-auth"}],
-"require": {"zeiras/zr-auth": "^0.6"}
+"require": {"zeiras/zr-auth": "^0.10"}
 ```
 
 Un minore esce quando il backoffice ha i suoi metodi. La 0.3 porta le letture (`io.mostra`, `io.workspace.elenca`,
@@ -82,7 +82,9 @@ GET e dallo stesso sito; un 3xx del backoffice, che non si segue, diventa `Backo
 `disponibile`, e ci sono i testi dei due codici nuovi, `app_non_attiva` e `app_in_arrivo`. La 0.6 porta l'ingresso nei moduli
 dal lato del modulo (`Ingresso::verso()` e il ricevitore, sotto), e ha il finto di password e ingressi. La 0.6.1 porta nel
 finto le lingue (`lingue.elenca`), la persona (`io.modifica`, `io.password.modifica`) e il workspace (`workspace.modifica`,
-i membri e gli inviti, con `ultimoInvito()`); un testo cambia: `verifica_non_riuscita` dice anche gli inviti.
+i membri e gli inviti, con `ultimoInvito()`); un testo cambia: `verifica_non_riuscita` dice anche gli inviti. La 0.10 porta
+nel finto l'accesso con un provider (`accessi.provider.elenca`, `accessi.provider.autorizzazioni.crea`,
+`accessi.provider.crea`); il client non cambia, perché sono tre chiamate di `Api::senzaGettone()` (sotto).
 
 | Variabile | Default | Cosa |
 |---|---|---|
@@ -137,6 +139,41 @@ scelto un workspace, e `Api::workspace()` lancia `LogicException`.
 
 Il gettone non esce mai dalla sessione: nessun metodo lo restituisce. Non va nell'HTML, nelle props di Inertia, né in
 un cookie (spec S01, prova 8).
+
+## L'accesso con un provider (Google, LinkedIn, Facebook)
+
+Tre metodi senza gettone, e nessun codice nuovo nel client: la pagina d'ingresso chiama `Api::senzaGettone()`.
+
+```php
+// 1. Quali bottoni mostrare: i provider accesi. Dice solo lo slug (google, linkedin-openid, facebook); il nome e il
+//    bottone sono della pagina. Quando Zeiras ne accende uno, compare qui da solo.
+$provider = Api::senzaGettone()->get('/v1/accessi/provider')['data'];            // [['provider' => 'google'], …]
+
+// 2. La partenza: l'indirizzo a cui mandare la persona. Lo `stato` si lega al browser (un cookie di sessione) prima di
+//    mandarla: al ritorno si controlla che sia lo stesso, PRIMA di chiamare il passo 3.
+$partenza = Api::senzaGettone()->post("/v1/accessi/provider/{$slug}/autorizzazioni")['data'];   // url, stato, scade_il
+session()->put('provider.stato', $partenza['stato']);
+return redirect()->away($partenza['url']);
+
+// 3. L'arrivo: il provider rimanda la persona a https://app.zeiras.com/auth/<provider>/callback con `code` e `state`.
+//    Se lo `state` non è quello della sessione, la pagina non chiama nulla. Altrimenti:
+try {
+    $accesso = Api::senzaGettone()->post("/v1/accessi/provider/{$slug}", [
+        'codice' => $request->query('code'),
+        'stato' => $request->query('state'),
+        'termini_accettati' => $request->boolean('termini'),     // solo se la persona è nuova
+    ]);
+} catch (ErroreApi $e) {
+    // verifica_non_riuscita (ogni rifiuto: ripartire dal passo 2), registrazione_non_aperta, dati_non_validi su
+    // #/termini_accettati (la persona nuova deve accettarli), servizio_non_disponibile (il provider non risponde),
+    // non_trovato (provider spento), troppe_richieste
+}
+Sessione::apri($accesso['data']);                                 // come dopo accessi.crea: un accesso, senza workspace
+```
+
+Lo `stato` vale 10 minuti e una volta sola, anche se l'arrivo non riesce. Un'email che il provider non garantisce non
+entra. Una persona che ha già un account con quell'email lo collega (e se l'email era da verificare diventa verificata, e la
+sua vecchia password non vale più); una nuova nasce con l'email verificata, se la registrazione la ammette.
 
 ## Il client delle API
 
@@ -351,13 +388,21 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
-- Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.elimina`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
+- Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.elimina`, `accessi.provider.elenca`,
+  `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
   `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
   `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
   `io.workspace.elenca`, `io.aziende.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
   `io.workspace.crea` (vedi «Il workspace»). Una chiamata
   di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
+- **I provider.** Spenti di norma, come in produzione senza credenziali: `provider('google', 'linkedin-openid', 'facebook')`
+  ne accende. Ciò che il provider risponde al `codice` del ritorno lo dice il test:
+  `identitaDelProvider('google', 'un-codice', 'anna@example.com', nome: 'Anna Rossi')` (con `verificata: false` l'email non
+  è garantita e l'accesso non riesce; un codice che il test non ha detto lo rifiuta il provider, `422`);
+  `guastaProvider('google')` lo fa non rispondere (`503`). La partenza dà un indirizzo con `client_id=finto-<slug>`; il
+  resto dell'indirizzo, lo `stato` di 10 minuti usa-e-getta e la sfida PKCE sono quelli del backoffice. Una persona nuova
+  vuole la registrazione consentita (`consenti()`) e `termini_accettati`.
 - **Le aziende.** `io.aziende.elenca` dà le aziende dei workspace di cui la persona è membro (con ogni suo gettone, anche
   quello dell'accesso), una volta sola ciascuna, in ordine di nome e poi di id, a pagine col solo id. Un'azienda nasce con
   il workspace e prende il suo nome di allora (`workspace()` e `io.workspace.crea` senza `azienda_id`): una rinomina del
@@ -454,5 +499,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   riuscito azzera il conto), `io.email.codice.crea` e `io.email.verifica.crea`, poi `429` con `Retry-After`; fra un codice e l'altro 60
   secondi, al più 5 codici in un'ora e 10 in un giorno; un codice vale 5 tentativi, e una persona ha 10 codici sbagliati
   al giorno; `gettoni.crea` dà al più 60 gettoni in un'ora a una persona, e un gettone fa al più 600 chiamate al minuto.
+- Il finto non fa i tetti di Zeiras che una CI di frontend non incontra: 30 codici all'ora per persona in `ingressi.crea`, 50
+  gettoni vivi per persona in `gettoni.crea` e `ingressi.scambio.crea`, il tetto di memoria delle `Idempotency-Key`.
 - Che risponda come il contratto lo prova la CI del backoffice: ogni sua risposta passa la validazione del contratto vero,
   e le copie dei testi sono uguali byte per byte a quelle del backoffice.
