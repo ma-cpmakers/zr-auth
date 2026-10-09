@@ -22,7 +22,7 @@ function conLeSchede(int $quante, bool $pm = true): array
     }
 
     $schede = array_map(fn (int $n) => $finto->scheda($studio, "Scheda {$n}"), range(1, $quante));
-    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone.gettone');
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
 
     return [$finto, $schede, $gettone];
 }
