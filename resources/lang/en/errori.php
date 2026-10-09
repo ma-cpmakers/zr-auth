@@ -102,7 +102,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Limit reached',
-        'detail' => 'The resource already has the maximum allowed: 100 active boards (300 in all, counting closed ones and those in the bin) and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 50 members per workspace (counting live invitations). Free a slot (close a board or, with 300 in all, wait for one in the bin to be archived; archive a list or a card, remove a label or an item, revoke an invitation) and try again.',
+        'detail' => 'The resource already has the maximum allowed: 100 active boards (300 active and closed, 1000 counting those in the bin) and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 50 members per workspace (counting live invitations). Free a slot (close a board or, with 1000 in all counting the bin, wait for one in the bin to be archived; archive a list or a card, remove a label or an item, revoke an invitation) and try again.',
     ],
     'transizione_non_valida' => [
         'title' => 'Invalid state transition',

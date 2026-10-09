@@ -102,7 +102,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Límite alcanzado',
-        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos (300 en total, con los cerrados y los de la papelera) y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación, 50 miembros por workspace (contando las invitaciones vigentes). Libera un lugar (cierra un tablero o, si tienes 300 en total, espera a que uno de la papelera pase al archivo; archiva una lista o una tarjeta, quita una etiqueta o un elemento, revoca una invitación) y repite.',
+        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos (300 entre activos y cerrados, 1000 con los de la papelera) y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación, 50 miembros por workspace (contando las invitaciones vigentes). Libera un lugar (cierra un tablero o, si tienes 1000 en total con la papelera, espera a que uno de la papelera pase al archivo; archiva una lista o una tarjeta, quita una etiqueta o un elemento, revoca una invitación) y repite.',
     ],
     'transizione_non_valida' => [
         'title' => 'Transición de estado no válida',
