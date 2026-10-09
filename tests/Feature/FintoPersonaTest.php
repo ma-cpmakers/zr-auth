@@ -60,7 +60,7 @@ it('lingue.elenca è una lista a cursore: il successivo porta l\'ultima lingua d
 // T3.2
 
 it('io.modifica cambia solo i campi mandati e risponde con la forma di io.mostra già aggiornata (T3.2)', function () {
-    [, $studio, , $gettone] = fintoDellaPersona();
+    [, , $gettone] = fintoDellaPersona();
 
     $risposta = alFinto('PATCH', '/v1/io', ['utente' => ['nome' => '  Anna Maria  ', 'fuso_orario' => 'America/New_York']], $gettone);
 
@@ -69,13 +69,13 @@ it('io.modifica cambia solo i campi mandati e risponde con la forma di io.mostra
         ->and($risposta->json('data.utente.fuso_orario'))->toBe('America/New_York')
         // La lingua non era nel corpo: resta quella di prima.
         ->and($risposta->json('data.utente.lingua'))->toBe('it')
-        ->and($risposta->json('data.workspace.id'))->toBe($studio['id'])
-        ->and($risposta->json('data.ruolo'))->toBe('proprietario')
+        ->and($risposta->json('data.workspace'))->toBeNull()
+        ->and($risposta->json('data.ruolo'))->toBeNull()
         ->and($risposta->json())->toBe(alFinto('GET', '/v1/io', gettone: $gettone)->json());
 });
 
 it('io.modifica è tutto o niente: un valore sbagliato non lascia salvato un altro campo (T3.2)', function () {
-    [, , , $gettone] = fintoDellaPersona();
+    [, , $gettone] = fintoDellaPersona();
     $prima = alFinto('GET', '/v1/io', gettone: $gettone)->json();
 
     $risposta = alFinto('PATCH', '/v1/io', ['utente' => ['nome' => 'Nuovo nome', 'lingua' => 'de', 'fuso_orario' => 'Marte/Olympus']], $gettone);
@@ -87,7 +87,7 @@ it('io.modifica è tutto o niente: un valore sbagliato non lascia salvato un alt
 });
 
 it('io.modifica rifiuta un campo di altre risposte o che non esiste sul suo pointer, mai in silenzio (T3.2)', function (array $corpo, array $pointer) {
-    [, , , $gettone] = fintoDellaPersona();
+    [, , $gettone] = fintoDellaPersona();
     $prima = alFinto('GET', '/v1/io', gettone: $gettone)->json();
 
     $risposta = alFinto('PATCH', '/v1/io', $corpo, $gettone);
@@ -106,7 +106,7 @@ it('io.modifica rifiuta un campo di altre risposte o che non esiste sul suo poin
 ]);
 
 it('io.modifica con un corpo senza campi da cambiare è un errore sul corpo (T3.2)', function (array $corpo, string $pointer) {
-    [, , , $gettone] = fintoDellaPersona();
+    [, , $gettone] = fintoDellaPersona();
 
     $risposta = alFinto('PATCH', '/v1/io', $corpo, $gettone);
 
@@ -137,7 +137,7 @@ it('io.modifica col gettone dell\'accesso cambia la persona, con workspace e ruo
 });
 
 it('la lingua cambiata vale per le risposte dopo, anche per gli errori (T3.2)', function () {
-    [, , , $gettone] = fintoDellaPersona();
+    [, , $gettone] = fintoDellaPersona();
     $inItaliano = alFinto('PATCH', '/v1/io', ['utente' => []], $gettone)->json('errors.0.detail');
 
     expect(alFinto('PATCH', '/v1/io', ['utente' => ['lingua' => 'en']], $gettone)->status())->toBe(200);
@@ -166,7 +166,7 @@ it('io.password.modifica lascia vivi i gettoni dell\'accesso che chiama e uccide
     $altro = entraNelFinto('anna@example.com')['gettone']['gettone'];
     $delAltro = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $altro)->json('data.gettone');
 
-    expect(alFinto('PATCH', '/v1/io/password', ['password_attuale' => PASSWORD, 'password_nuova' => PASSWORD_DEL_CAMBIO], $delWorkspace)->status())->toBe(204)
+    expect(alFinto('PATCH', '/v1/io/password', ['password_attuale' => PASSWORD, 'password_nuova' => PASSWORD_DEL_CAMBIO], $accesso)->status())->toBe(204)
         ->and(alFinto('GET', '/v1/io', gettone: $delWorkspace)->status())->toBe(200)
         ->and(alFinto('GET', '/v1/io', gettone: $accesso)->status())->toBe(200)
         ->and(alFinto('GET', '/v1/io', gettone: $altro)->status())->toBe(401)
@@ -235,4 +235,27 @@ it('io.password.modifica senza gettone è 401, e un corpo con un campo in più �
     $risposta = alFinto('PATCH', '/v1/io/password', ['password_attuale' => PASSWORD, 'password_nuova' => PASSWORD_DEL_CAMBIO, 'email' => 'altra@example.com'], $accesso);
 
     expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.pointer'))->toBe('#/email');
+});
+
+it('le tre scritture sulla persona col gettone di un workspace sono 403 gettone_con_workspace prima del corpo, e non cambiano niente (#1412, T5.4)', function () {
+    [, , $accesso, $delWorkspace] = fintoDellaPersona();
+
+    $scritture = [
+        ['PATCH', '/v1/io', ['utente' => ['nome' => 'Altro nome']]],
+        ['PATCH', '/v1/io/password', ['password_attuale' => PASSWORD, 'password_nuova' => PASSWORD_DEL_CAMBIO]],
+        ['POST', '/v1/io/workspace', ['nome' => 'Secondo studio']],
+    ];
+
+    foreach ($scritture as [$metodo, $percorso, $corpo]) {
+        foreach ([$corpo, ['x' => 1]] as $inviato) {
+            $risposta = alFinto($metodo, $percorso, $inviato, $delWorkspace);
+
+            expect($risposta->status())->toBe(403)
+                ->and($risposta->json('codice'))->toBe('gettone_con_workspace');
+        }
+    }
+
+    expect(alFinto('GET', '/v1/io', gettone: $accesso)->json('data.utente.nome'))->not->toBe('Altro nome')
+        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->status())->toBe(201)
+        ->and(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->toHaveCount(1);
 });
