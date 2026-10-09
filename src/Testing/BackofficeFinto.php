@@ -186,10 +186,11 @@ final class BackofficeFinto
 
     private const RUOLI = ['proprietario', 'amministratore', 'membro'];
 
-    /** Quanti giorni vale un invito (Invito::GIORNI), e quanti ne ammette un workspace vivi (Tetti::INVITI). */
+    /** Quanti giorni vale un invito (Invito::GIORNI). */
     private const GIORNI_DELL_INVITO = 7;
 
-    private const INVITI_VIVI = 100;
+    /** I membri di un workspace, con gli inviti vivi che li diventerebbero, al più (Tetti::MEMBRI, #1411): il 50º posto è l'ultimo. */
+    private const MEMBRI = 50;
 
     /** Per quanto il backoffice ricorda la risposta di una Idempotency-Key (Idempotenza::VALIDITA): 24 ore. */
     private const SECONDI_DELL_IDEMPOTENZA = 86400;
@@ -957,6 +958,11 @@ final class BackofficeFinto
         ]);
 
         if ($this->conEmail($email) === null) {
+            // Nel backoffice è una transazione: un workspace al tetto dà 409 e la persona non nasce.
+            if ($invito !== null) {
+                $this->tettoDeiMembri($this->inviti[$this->invitoDelCodice($invito) ?? '']['workspace'] ?? '');
+            }
+
             $id = self::id();
             $this->persone[$id] = [
                 'nome' => $dati['nome'] ?? Str::before($email, '@'),
@@ -1100,8 +1106,8 @@ final class BackofficeFinto
 
     /**
      * io.modifica (IoController::modifica): il nome, la lingua e il fuso orario della persona del gettone, come JSON Merge
-     * Patch sotto `utente`. Vale ogni gettone della persona, anche quello dell'accesso (workspace, ruolo e notifiche
-     * null nella risposta); nell'ordine del backoffice: tutti i campi insieme, un valore sbagliato non ne lascia salvato nessuno (422 sul pointer del campo, anche
+     * Patch sotto `utente`. Vale il solo gettone dell'accesso (#1412): uno di un workspace è 403
+     * `gettone_con_workspace` prima del corpo (workspace, ruolo e notifiche null nella risposta); nell'ordine del backoffice: tutti i campi insieme, un valore sbagliato non ne lascia salvato nessuno (422 sul pointer del campo, anche
      * per un campo di altre risposte o che non esiste); un corpo senza campi da cambiare è un errore sul corpo. La persona è
      * sempre quella del gettone. Risponde con la forma di io.mostra, già aggiornata; la lingua nuova vale dalla chiamata dopo.
      *
@@ -1148,8 +1154,8 @@ final class BackofficeFinto
     }
 
     /**
-     * io.password.modifica (IoPasswordController::modifica): la persona del gettone cambia la sua password, con un gettone
-     * qualunque (anche dell'accesso). Nell'ordine del backoffice: il corpo, poi il freno degli errori sulla password
+     * io.password.modifica (IoPasswordController::modifica): la persona del gettone cambia la sua password, con il solo
+     * gettone dell'accesso (#1412: uno di un workspace è 403 `gettone_con_workspace`). Nell'ordine del backoffice: il corpo, poi il freno degli errori sulla password
      * attuale (per persona, al sesto in un'ora 429 anche con quella giusta; una giusta lo azzera), poi la password attuale
      * (422 sul campo), poi la nuova trapelata. 204; i gettoni degli altri accessi della persona non valgono più, quelli
      * dell'accesso che chiama sì.
@@ -1272,7 +1278,7 @@ final class BackofficeFinto
     /**
      * io.workspace.crea (IoWorkspaceController::crea): un workspace nuovo, di cui la persona del gettone è proprietaria.
      * Nell'ordine del backoffice: la Idempotency-Key (il metodo è della persona, non del workspace del gettone: la stessa
-     * chiave vale con ogni suo gettone), l'email non verificata (403, prima del corpo), il corpo (422 su `nome`; un campo in più
+     * chiave vale per la persona, ma il metodo vuole il gettone dell'accesso: uno di un workspace è 403 prima di ogni altra cosa), l'email non verificata (403, prima del corpo), il corpo (422 su `nome`; un campo in più
      * si ignora, come Corpo::soloCorpo, perché un corpo con un campo in più non rompe una rotta nata prima della regola), l'azienda che non è della persona (404, come un id altrui), il freno di
      * workspace nuovi all'ora per persona (429; una risposta ripetuta dalla chiave non arriva al freno); poi nasce, con
      * un'azienda sua se non ne dà una. Il workspace non ha app attive. La risposta è lo schema WorkspaceConRuolo, senza
@@ -1777,7 +1783,7 @@ final class BackofficeFinto
 
             $vivi = array_filter($this->inviti, fn (array $invito) => $invito['workspace'] === $workspace && $invito['scade']->gt(now()));
 
-            if (count($vivi) >= self::INVITI_VIVI) {
+            if (count($this->membri[$workspace] ?? []) + count($vivi) >= self::MEMBRI) {
                 throw new Problema('limite_raggiunto');
             }
 
@@ -1863,6 +1869,14 @@ final class BackofficeFinto
         return [201, ['data' => ['id' => $chi['persona'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => $this->membri[$workspace][$chi['persona']]]]];
     }
 
+    /** Un membro in più nel workspace dell'invito che si accetta (Tetti::membri): con 50 membri, 409 limite_raggiunto. */
+    private function tettoDeiMembri(string $workspace): void
+    {
+        if (count($this->membri[$workspace] ?? []) >= self::MEMBRI) {
+            throw new Problema('limite_raggiunto');
+        }
+    }
+
     /** L'id dell'invito che ha questo codice, se è ancora un invito (non revocato né accettato): null se no. */
     private function invitoDelCodice(#[SensitiveParameter] string $codice): ?string
     {
@@ -1904,6 +1918,8 @@ final class BackofficeFinto
         if (isset($this->membri[$invito['workspace']][$persona])) {
             throw new Problema('gia_membro');
         }
+
+        $this->tettoDeiMembri($invito['workspace']);
 
         $this->membri[$invito['workspace']][$persona] = $invito['ruolo'];
         unset($this->inviti[$id]);

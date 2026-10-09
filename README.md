@@ -433,7 +433,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   nella mail, e il test lo legge da `ultimoInvito($email)`, la casella di posta degli inviti (l'ultimo partito, `null` se
   nessuno; non è il codice di `ultimoCodice()`). Un amministratore invita solo `membro` (`403`), il proprietario non si
   invita (`422` su `#/ruolo`), chi è già membro è `409` `gia_membro`, un invito vivo per la stessa email `409`
-  `invito_esistente` (uno scaduto si rifà), 100 inviti vivi `409` `limite_raggiunto`; oltre 5 inviti in un'ora verso la
+  `invito_esistente` (uno scaduto si rifà), 50 tra membri e inviti vivi `409` `limite_raggiunto` (e un invito accettato in un workspace con 50 membri, lo stesso); oltre 5 inviti in un'ora verso la
   stessa email, o 50 dal workspace, `429` con `Retry-After`. Un invito vale 7 giorni. Con `Idempotency-Key` la stessa chiave
   e lo stesso corpo danno la stessa risposta per 24 ore, senza un secondo invito (con un altro corpo `422`
   `chiave_idempotenza_riusata`). `workspace.inviti.elenca` dà i vivi dal più recente, a cursore; `workspace.inviti.elimina`
