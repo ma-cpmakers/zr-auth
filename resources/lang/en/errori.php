@@ -16,6 +16,10 @@ return [
         'title' => 'Invalid token',
         'detail' => 'The token of the request is not valid.',
     ],
+    'cliente_non_riconosciuto' => [
+        'title' => 'Client not recognised',
+        'detail' => 'The client that signed the request is not recognised: check its name, its secret and the server clock, and sign again.',
+    ],
     'permesso_negato' => [
         'title' => 'Permission denied',
         'detail' => 'The token does not allow this operation.',

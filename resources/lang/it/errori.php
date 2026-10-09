@@ -16,6 +16,10 @@ return [
         'title' => 'Gettone non valido',
         'detail' => 'Il gettone della richiesta non vale.',
     ],
+    'cliente_non_riconosciuto' => [
+        'title' => 'Client non riconosciuto',
+        'detail' => "Il client che ha firmato la richiesta non si riconosce: controlla il nome, il segreto e l'ora del server, e firma di nuovo.",
+    ],
     'permesso_negato' => [
         'title' => 'Permesso negato',
         'detail' => 'Il gettone non permette questa operazione.',

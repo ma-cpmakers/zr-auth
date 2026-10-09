@@ -6,6 +6,13 @@ return [
     // un GET. Un indirizzo in http:// non parte (IndirizzoNonSicuro).
     'api' => env('ZR_API_URL', 'https://api.zeiras.com'),
 
+    // Il client registrato (#1447): il nome di questo frontend (`home`, `board`) e il segreto con cui firma l'IP vero della
+    // persona nelle rotte senza gettone (Api::firmata). Il segreto lo genera e lo deposita chi gestisce il server, uno per
+    // frontend, e il backoffice ha lo stesso in ZR_CLIENTE_<NOME>_SEGRETO. Senza uno dei due non si firma niente, e il backoffice
+    // conta le richieste fra gli anonimi.
+    'cliente' => env('ZR_AUTH_CLIENTE'),
+    'segreto' => env('ZR_BACKOFFICE_SEGRETO'),
+
     // Quanto si aspetta il backoffice, in secondi: il pool PHP-FPM del server è uno per tutti i siti, e una pagina che
     // aspetta tiene fermo un processo, più quello del backoffice.
     'timeout' => 5,

@@ -47,6 +47,11 @@ final class BackofficeFinto
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
     public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';
 
+    /** Il client registrato che il finto riconosce (#1447) e il suo segreto: con `ZR_AUTH_CLIENTE=finto` e questo come ZR_BACKOFFICE_SEGRETO il client firma e il finto verifica. */
+    public const CLIENTE = 'finto';
+
+    public const SEGRETO_DEL_CLIENTE = 'segreto-del-client-finto-0123456789abcdef';
+
     /** La password che il finto dà per trapelata, al posto di Have I Been Pwned: utenti.crea la rifiuta. */
     public const PASSWORD_TRAPELATA = 'una password trapelata';
 
@@ -163,7 +168,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     private const ORA = 3600;
 
@@ -269,6 +274,12 @@ final class BackofficeFinto
 
     /** La registrazione aperta a tutti (RegistrazioneConsentita::aperta()). */
     private bool $aperta = false;
+
+    /** @var list<array{operazione: string, cliente: string, ip: string}> gli IP che il client ha firmato, uno per richiesta firmata (ipVisti()) */
+    private array $ipVisti = [];
+
+    /** L'IP firmato della richiesta in corso; null se è anonima. */
+    private ?string $ipFirmato = null;
 
     /** Turnstile in utenti.crea: spento (null), `acceso`, o `guasto` (Cloudflare non risponde). */
     private ?string $turnstile = null;
@@ -576,6 +587,47 @@ final class BackofficeFinto
         ];
     }
 
+    /**
+     * Gli IP che il client ha dichiarato con una firma valida, uno per richiesta, nell'ordine: l'operazione, il client e
+     * l'IP. Un modulo prova così che passa l'IP della persona e non il suo.
+     *
+     * @return list<array{operazione: string, cliente: string, ip: string}>
+     */
+    public function ipVisti(): array
+    {
+        return $this->ipVisti;
+    }
+
+    /** Le rotte senza gettone a cui un client firma l'IP. */
+    private const SENZA_GETTONE = ['accessi.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
+
+    /**
+     * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
+     * sconosciuto, IP che non è un IP, istante lontano più di 30 secondi, HMAC diverso) è 401 cliente_non_riconosciuto, sempre lo stesso.
+     */
+    private function riconosciIlCliente(Request $richiesta, string $operazione): void
+    {
+        $valori = array_map(fn (string $nome) => self::header($richiesta, $nome), ['Zr-Cliente', 'Zr-Ip', 'Zr-Istante', 'Zr-Firma']);
+
+        if (array_filter($valori, fn (?string $valore) => $valore !== null) === []) {
+            return;
+        }
+
+        [$cliente, $ip, $istante, $firma] = $valori;
+        $percorso = (string) parse_url($richiesta->url(), PHP_URL_PATH);
+        $attesa = hash_hmac('sha256', "zr1\n{$cliente}\n{$istante}\n".strtoupper($richiesta->method())."\n{$percorso}\n{$ip}", self::SEGRETO_DEL_CLIENTE);
+
+        if ($cliente !== self::CLIENTE
+            || $ip === null || filter_var($ip, FILTER_VALIDATE_IP) === false
+            || $istante === null || preg_match('/^\d{1,12}$/', $istante) !== 1 || abs(now()->timestamp - (int) $istante) > 30
+            || $firma === null || ! hash_equals($attesa, $firma)) {
+            throw new Problema('cliente_non_riconosciuto');
+        }
+
+        $this->ipFirmato = strtolower($ip);
+        $this->ipVisti[] = ['operazione' => $operazione, 'cliente' => $cliente, 'ip' => $this->ipFirmato];
+    }
+
     /** La risposta a una chiamata: null se non va alle API /v1, e allora resta agli altri Http::fake del test. */
     private function risponde(Request $richiesta): ?PromiseInterface
     {
@@ -614,7 +666,13 @@ final class BackofficeFinto
         $corpo = $richiesta->data();
         $corpo = is_array($corpo) ? $corpo : [];
 
+        $this->ipFirmato = null;
+
         try {
+            if (in_array($operazione, self::SENZA_GETTONE, true)) {
+                $this->riconosciIlCliente($richiesta, $operazione);
+            }
+
             $esito = match ($operazione) {
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
@@ -670,10 +728,22 @@ final class BackofficeFinto
      */
     private function creaAccesso(array $corpo): array
     {
-        $dati = $this->testi->valida($corpo, self::credenziali());
+        $dati = $this->testi->valida($corpo, self::credenziali() + ['turnstile' => ['sometimes', 'nullable', 'string', 'max:'.self::LUNGHEZZA_TURNSTILE]]);
         $email = self::normalizza($dati['email']);
+        // Come il backoffice (#1447): la coppia (email, IP firmato) frena al sesto tentativo in un minuto; l'email chiede il widget
+        // (se Turnstile è acceso) dal sesto al trentesimo, e oltre il trentesimo è 429.
+        $coppia = 'accessi-ip:'.$email.':'.($this->ipFirmato ?? 'anonimo');
+        $this->frena($coppia, self::FRENI['accessi_per_ip'], self::MINUTO);
         $freno = 'accessi:'.$email;
-        $this->frena($freno, self::FRENI['accessi'], self::MINUTO);
+        $tentativi = $this->freni->hit($freno, self::MINUTO);
+
+        if ($tentativi > self::FRENI['accessi_massimo']) {
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) $this->freni->availableIn($freno)]);
+        }
+
+        if ($tentativi > self::FRENI['accessi']) {
+            $this->controllaTurnstile($dati['turnstile'] ?? null);
+        }
 
         $persona = $this->conCredenziali($email, $dati['password']);
 
@@ -682,6 +752,7 @@ final class BackofficeFinto
         }
 
         $this->freni->clear($freno);
+        $this->freni->clear($coppia);
         $accesso = self::id();
         // Al millesimo, come il backoffice (datetime(3)): la scadenza scritta nella risposta è quella vera.
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false];

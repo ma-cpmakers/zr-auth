@@ -17,6 +17,7 @@ final class Problema extends RuntimeException
         'gettone_con_workspace' => 403,
         'gettone_senza_workspace' => 403,
         'permesso_negato' => 403,
+        'cliente_non_riconosciuto' => 401,
         'app_non_attiva' => 403,
         'registrazione_non_aperta' => 403,
         'non_trovato' => 404,

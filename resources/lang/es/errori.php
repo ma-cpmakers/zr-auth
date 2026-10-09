@@ -16,6 +16,10 @@ return [
         'title' => 'Token no válido',
         'detail' => 'El token de la solicitud no es válido.',
     ],
+    'cliente_non_riconosciuto' => [
+        'title' => 'Cliente no reconocido',
+        'detail' => 'No se reconoce al cliente que firmó la solicitud: revisa su nombre, su secreto y la hora del servidor, y vuelve a firmar.',
+    ],
     'permesso_negato' => [
         'title' => 'Permiso denegado',
         'detail' => 'El token no permite esta operación.',
