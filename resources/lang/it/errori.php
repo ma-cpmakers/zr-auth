@@ -102,7 +102,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Limite raggiunto',
-        'detail' => 'La risorsa ha già il massimo consentito: 100 board attive (300 in tutto, con le chiuse e quelle nel cestino) e 100 cartelle per workspace, 50 liste per board, 500 schede per lista, 3 etichette per scheda, 100 voci per checklist, 50 membri per workspace (contando gli inviti vivi). Libera un posto (chiudi una board o, se ne hai 300 in tutto, aspetta che una del cestino passi all\'archivio; archivia una lista o una scheda, togli un\'etichetta o una voce, revoca un invito) e ripeti.',
+        'detail' => 'La risorsa ha già il massimo consentito: 100 board attive (300 tra attive e chiuse, 1000 con quelle nel cestino) e 100 cartelle per workspace, 50 liste per board, 500 schede per lista, 3 etichette per scheda, 100 voci per checklist, 50 membri per workspace (contando gli inviti vivi). Libera un posto (chiudi una board o, se ne hai 1000 in tutto con il cestino, aspetta che una del cestino passi all\'archivio; archivia una lista o una scheda, togli un\'etichetta o una voce, revoca un invito) e ripeti.',
     ],
     'transizione_non_valida' => [
         'title' => 'Transizione di stato non valida',
