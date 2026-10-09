@@ -15,7 +15,8 @@ use Zeiras\Auth\Eventi\Firma;
  * firmato con Standard Webhooks. Ogni rifiuto per la firma, l'istante o gli header è lo stesso 401, senza un motivo: chi
  * non ha il segreto non impara quale parte ha sbagliato. L'evento verificato arriva al modulo come EventoDelBackoffice.
  * Il `webhook-id` è la chiave dei doppioni (cache del modulo, con un tempo): un evento già visto è un 204 senza passarlo
- * di nuovo. Nei log di questo pacchetto mai il corpo, il segreto o l'header della firma.
+ * di nuovo. Il tempo non è mai meno del doppio della tolleranza: una firma vale fino a `tolleranza` secondi dopo un istante
+ * che può stare `tolleranza` secondi nel futuro, e un doppione non deve poter rientrare prima che la firma scada. Nei log di questo pacchetto mai il corpo, il segreto o l'header della firma.
  */
 final class EventiController
 {
@@ -93,11 +94,13 @@ final class EventiController
         return is_int($secondi) && $secondi >= 0 ? $secondi : 300;
     }
 
+    /** Quanto si ricorda un `webhook-id`: `eventi.doppioni`, e mai meno del doppio della tolleranza (più un secondo). */
     private static function doppioni(): int
     {
         $secondi = config('zr-auth.eventi.doppioni');
+        $secondi = is_int($secondi) && $secondi > 0 ? $secondi : 300;
 
-        return is_int($secondi) && $secondi > 0 ? $secondi : 300;
+        return max($secondi, 2 * self::tolleranza() + 1);
     }
 
     /** Lo stesso corpo per ogni rifiuto di una stessa sorta: `{"status":401}`, un problem details senza altro. */

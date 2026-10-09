@@ -310,8 +310,10 @@ non è un evento (un oggetto con `id` e `type` stringhe e `data` oggetto) è un 
   poco: l'ascoltatore va in coda (`ShouldQueue`) e fa il lavoro lì. Se un ascoltatore sincrono lancia, la rotta risponde
   `5xx`, il pacchetto toglie il marcatore del doppione e il backoffice riprova: l'evento non si perde per un guasto del modulo.
 - **I doppioni.** Lo stesso `webhook-id` entro `doppioni` secondi è un `204` senza passare l'evento di nuovo (`Cache::add`
-  sulla cache del modulo, con un tempo: mai una chiave senza). Oltre quel tempo, o con un altro `webhook-id`, l'ascoltatore
-  deve reggere un evento già trattato: lo riconosce da `sequence`.
+  sulla cache del modulo, con un tempo: mai una chiave senza). Il tempo non è mai meno del doppio di `tolleranza`, perché
+  una firma vale fino a `tolleranza` secondi dopo un istante che può stare `tolleranza` secondi nel futuro. La cache del
+  modulo dev'essere una vera (Redis, database): con `array` o `null` i doppioni non si ricordano. Oltre quel tempo, o con un
+  altro `webhook-id`, l'ascoltatore deve reggere un evento già trattato: lo riconosce da `sequence`.
 - **L'ordine e i buchi.** Gli eventi di un workspace hanno un `sequence` che cresce, ma arrivano in qualunque ordine e
   qualcuno può mancare. Il modulo tiene l'ultimo `sequence` trattato per workspace, non applica un evento più vecchio e, se
   vede un buco, rilegge.

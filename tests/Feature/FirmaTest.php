@@ -2,10 +2,10 @@
 
 use Zeiras\Auth\Eventi\Firma;
 
-// Il vettore di prova di Standard Webhooks: i valori fissi di TestPayload (libraries/php/tests/TestPayload.php della loro
-// repo, letta il 09/10): id, corpo e la chiave in base64. La loro libreria calcola la firma al volo, senza un valore
-// scritto: quello atteso qui è stato calcolato a parte con openssl (HMAC-SHA256 di «id.timestamp.corpo» con la chiave
-// decodificata, in base64), non con questo codice.
+// I vettori di prova di Standard Webhooks. Il primo (sotto) è quello ufficiale con la firma scritta: la loro repo lo ha nel
+// test della libreria Python (test_sign_function). Il secondo usa i valori fissi di TestPayload (libraries/php/tests/, la
+// libreria PHP), che calcola la firma al volo senza un valore scritto: quello atteso qui è stato calcolato a parte con
+// openssl (HMAC-SHA256 di «id.timestamp.corpo» con la chiave decodificata, in base64), non con questo codice.
 const VETTORE_ID = 'msg_p5jXN8AQM9LWM0D4loKWxJek';
 const VETTORE_ISTANTE = 1614265330;
 const VETTORE_CORPO = '{"test": 2432232315}';
@@ -16,6 +16,15 @@ test('la firma del vettore ufficiale', function () {
     $chiave = base64_decode(VETTORE_BASE64, true);
 
     expect(Firma::calcola($chiave, VETTORE_ID, VETTORE_ISTANTE, VETTORE_CORPO))->toBe(VETTORE_FIRMA);
+});
+
+test('la firma del vettore ufficiale di Standard Webhooks (libraries/python/tests/test_webhooks.py, test_sign_function)', function () {
+    // Il vettore con la firma scritta dalla loro repo (letto il 09/10 nel test del backoffice, che lo ha dall'08/10): segreto
+    // `whsec_MfKQ…`, id, istante e corpo fissi, firma attesa fissa.
+    $chiave = Firma::chiave('whsec_'.VETTORE_BASE64);
+
+    expect(Firma::calcola($chiave, VETTORE_ID, VETTORE_ISTANTE, '{"test": 2432232314}'))
+        ->toBe('v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=');
 });
 
 test('la formula è quella della consegna del backoffice: v1, e il base64 dell’HMAC-SHA256 di id.timestamp.corpo', function () {
