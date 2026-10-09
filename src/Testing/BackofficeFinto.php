@@ -17,6 +17,7 @@ use InvalidArgumentException;
 use LogicException;
 use Random\Randomizer;
 use SensitiveParameter;
+use Zeiras\Auth\Eventi\Firma;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
@@ -226,6 +227,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
     private array $ingressi = [];
+
+    /** Il numero d'ordine dell'ultimo evento che consegna() ha fatto: cresce di uno a ogni consegna (`sequence`). */
+    private int $sequenza = 0;
 
     /** @var list<string> la lista dei consentiti (zeiras.registrazione.consentiti): email intere o «@dominio» */
     private array $consentiti = [];
@@ -443,6 +447,52 @@ final class BackofficeFinto
     public function ultimoInvito(string $email): ?string
     {
         return $this->postaInviti[self::normalizza($email)] ?? null;
+    }
+
+    /**
+     * La consegna di un evento del backoffice a un modulo, come la fa Consegna::manda: i tre header di Standard Webhooks e
+     * il corpo, nella forma di Forme::evento (stesse chiavi, stesso ordine), firmati col segreto di `zr-auth.eventi.segreto`.
+     * Il test la manda alla rotta del ricevitore (`zr-auth.eventi.percorso`) e prova il suo ascoltatore. L'`id` è un ULID
+     * nuovo a ogni chiamata e `sequence` cresce di uno, a 12 cifre; il `timestamp` è adesso, se il test non lo dice.
+     *
+     * @param  array<string, mixed>  $data  il `data` dell'evento: un oggetto anche se vuoto
+     * @return array{intestazioni: array{'webhook-id': string, 'webhook-timestamp': string, 'webhook-signature': string}, corpo: string}
+     */
+    public function consegna(string $tipo, string $subject, array $data = [], ?int $timestamp = null): array
+    {
+        $chiave = Firma::chiave(config('zr-auth.eventi.segreto'));
+
+        if ($chiave === null) {
+            throw new LogicException('Per consegnare un evento il finto firma col segreto di zr-auth.eventi.segreto (ZR_EVENTI_SEGRETO): "whsec_" e da 24 a 64 byte in base64.');
+        }
+
+        $timestamp ??= now()->getTimestamp();
+        $id = self::id();
+        $workspace = array_key_last($this->workspace) ?? self::id();
+
+        // L'ordine delle chiavi è quello di Forme::evento; `data` resta un oggetto anche se è vuoto (in JSON un array vuoto è una lista).
+        $corpo = json_encode([
+            'specversion' => '1.0',
+            'id' => $id,
+            'source' => 'https://api.zeiras.com/workspace/'.$workspace,
+            'type' => $tipo,
+            'subject' => $subject,
+            'time' => self::iso(CarbonImmutable::createFromTimestampUTC($timestamp)),
+            'sequence' => str_pad((string) ++$this->sequenza, 12, '0', STR_PAD_LEFT),
+            'autore' => null,
+            'causa' => null,
+            'datacontenttype' => 'application/json',
+            'data' => (object) $data,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        return [
+            'intestazioni' => [
+                'webhook-id' => $id,
+                'webhook-timestamp' => (string) $timestamp,
+                'webhook-signature' => Firma::calcola($chiave, $id, $timestamp, $corpo),
+            ],
+            'corpo' => $corpo,
+        ];
     }
 
     /** La risposta a una chiamata: null se non va alle API /v1, e allora resta agli altri Http::fake del test. */
