@@ -120,6 +120,18 @@ return [
         'title' => 'Lista al limite',
         'detail' => 'Questa lista blocca le schede nuove: ha già il numero di schede non archiviate che `limite` indica (il valore è nella risposta). Metti la scheda in un\'altra lista, archivia o sposta una scheda di questa, oppure alza il `limite` o spegni `blocca` con board.liste.modifica, e ripeti.',
     ],
+    'passaggio_non_consentito' => [
+        'title' => 'Passaggio non consentito',
+        'detail' => 'La lista di partenza consente di spostare le sue schede solo in alcune liste, e questa non è fra quelle (le liste consentite sono nella risposta, in `liste_consentite`). Scegli una di quelle, oppure cambia i `passaggi` della lista di partenza con board.liste.modifica o spegni `applica_regole` della board con board.board.modifica, e ripeti.',
+    ],
+    'attese_aperte' => [
+        'title' => 'Attese ancora aperte',
+        'detail' => 'Questa lista accetta solo schede che non aspettano altre schede ancora aperte, e questa ne aspetta (le prime sono nella risposta, in `schede`). Completa o archivia le schede aspettate, oppure togli le attese con board.schede.collegamenti.elimina o il requisito `senza_attese` dalla lista, e ripeti.',
+    ],
+    'checklist_incompleta' => [
+        'title' => 'Checklist incompleta',
+        'detail' => 'Questa lista accetta solo schede con la checklist completa, e questa ha ancora voci da spuntare (quante, nella risposta, in `voci_aperte`). Spunta o elimina le voci, oppure togli il requisito `checklist_completa` dalla lista con board.liste.modifica, e ripeti.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Collegamento già presente',
         'detail' => 'La scheda aspetta già quella scheda: non ripetere la richiesta. Il collegamento lo trovi in board.schede.collegamenti.elenca.',
