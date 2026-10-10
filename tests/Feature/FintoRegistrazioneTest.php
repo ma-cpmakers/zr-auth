@@ -153,22 +153,22 @@ it("un corpo non valido è 422 dati_non_validi coi testi del backoffice: prima l
                 ['detail' => 'Il campo email deve essere un indirizzo email valido.', 'regola' => 'formato', 'pointer' => '#/email'],
             ]]))
         ->and($resto->json('errors'))->toBe([
-            ['detail' => 'Il campo password deve avere almeno 12 caratteri.', 'pointer' => '#/password'],
-            ['detail' => 'Il campo nome non deve avere più di 255 caratteri.', 'pointer' => '#/nome'],
-            ['detail' => 'Il valore scelto per lingua non è valido.', 'pointer' => '#/lingua'],
-            ['detail' => 'Il campo fuso orario deve essere un fuso orario valido.', 'pointer' => '#/fuso_orario'],
+            ['detail' => 'Il campo password deve avere almeno 12 caratteri.', 'regola' => 'troppo_corto', 'pointer' => '#/password'],
+            ['detail' => 'Il campo nome non deve avere più di 255 caratteri.', 'regola' => 'troppo_lungo', 'pointer' => '#/nome'],
+            ['detail' => 'Il valore scelto per lingua non è valido.', 'regola' => 'valore_non_ammesso', 'pointer' => '#/lingua'],
+            ['detail' => 'Il campo fuso orario deve essere un fuso orario valido.', 'regola' => 'formato', 'pointer' => '#/fuso_orario'],
             ['detail' => 'Il campo accettazione dei termini deve essere accettato.', 'regola' => 'valore_non_ammesso', 'pointer' => '#/termini_accettati'],
         ])
-        // In spagnolo il backoffice non ha i messaggi della validazione: escono in inglese, il ripiego.
+        // In spagnolo il backoffice ha i messaggi della validazione (25d).
         ->and($mancanti->json('errors'))->toBe([
-            ['detail' => 'The password field is required.', 'pointer' => '#/password'],
-            ['detail' => 'The termini accettati field is required.', 'pointer' => '#/termini_accettati'],
+            ['detail' => 'El campo password es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/password'],
+            ['detail' => 'El campo aceptación de los términos es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/termini_accettati'],
         ])
         ->and($nullo->json('errors'))
-        ->toBe([['detail' => 'Il campo password non può contenere il carattere nullo (U+0000).', 'pointer' => '#/password']])
+        ->toBe([['detail' => 'Il campo password non può contenere il carattere nullo (U+0000).', 'regola' => 'formato', 'pointer' => '#/password']])
         // Al posto di Have I Been Pwned: la password trapelata del finto.
         ->and($trapelata->json('errors'))
-        ->toBe([['detail' => 'Il valore del campo password è comparso in una fuga di dati: scegline un altro.', 'pointer' => '#/password']])
+        ->toBe([['detail' => 'Il valore del campo password è comparso in una fuga di dati: scegline un altro.', 'regola' => 'valore_non_ammesso', 'pointer' => '#/password']])
         ->and($finto->ultimoCodice('anna@example.com'))->toBeNull();
 });
 

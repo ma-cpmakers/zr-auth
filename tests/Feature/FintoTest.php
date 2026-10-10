@@ -317,7 +317,7 @@ it('un workspace di cui la persona non è membro, o che non esiste, è lo stesso
             ]]]))
         ->and($inesistente->body())->toBe($nonSuo->body())
         ->and(alFinto('POST', '/v1/gettoni', [], $gettone)->json('errors'))
-        ->toBe([['detail' => 'Il campo workspace id è obbligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/workspace_id']]);
+        ->toBe([['detail' => 'Il campo workspace è obbligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/workspace_id']]);
 });
 
 it('gettoni.crea senza gettone è 401 gettone_assente, con un gettone inventato 401 gettone_non_valido (T2.4)', function (?string $gettone, string $codice, string $titolo, string $dettaglio, string $sfida) {

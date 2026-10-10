@@ -138,7 +138,7 @@ it('un\'email non valida, una password assente o col carattere nullo sono 422 da
                 ['detail' => 'El campo password es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/password'],
             ]]))
         ->and($italiano->json('errors'))
-        ->toBe([['detail' => 'Il campo password non può contenere il carattere nullo (U+0000).', 'pointer' => '#/password']]);
+        ->toBe([['detail' => 'Il campo password non può contenere il carattere nullo (U+0000).', 'regola' => 'formato', 'pointer' => '#/password']]);
 });
 
 it('la sesta richiesta di un codice in un minuto per la stessa email è 429, con Retry-After (T2.6)', function () {

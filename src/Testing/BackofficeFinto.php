@@ -1545,6 +1545,7 @@ final class BackofficeFinto
         $dati = $this->testi->valida($corpo, [
             'password' => ['required', 'string', new SenzaCarattereNullo, 'min:12', function (string $campo, mixed $valore, Closure $fail) {
                 if ($valore === self::PASSWORD_TRAPELATA) {
+                    $this->testi->dichiara($campo, 'valore_non_ammesso');
                     $fail('validation.password.uncompromised')->translate();
                 }
             }],
@@ -1907,6 +1908,7 @@ final class BackofficeFinto
         // Have I Been Pwned del backoffice (PasswordNuova::controlla), dopo il freno: la password trapelata è del finto.
         $this->testi->valida(['password_nuova' => $dati['password_nuova']], ['password_nuova' => [function (string $campo, mixed $valore, Closure $fail) {
             if ($valore === self::PASSWORD_TRAPELATA) {
+                $this->testi->dichiara($campo, 'valore_non_ammesso');
                 $fail('validation.password.uncompromised')->translate();
             }
         }]]);
@@ -2284,6 +2286,7 @@ final class BackofficeFinto
         // Have I Been Pwned del backoffice (PasswordNuova::controlla), dopo il freno: la password trapelata è del finto.
         $this->testi->valida(['password' => $dati['password']], ['password' => [function (string $campo, mixed $valore, Closure $fail) {
             if ($valore === self::PASSWORD_TRAPELATA) {
+                $this->testi->dichiara($campo, 'valore_non_ammesso');
                 $fail('validation.password.uncompromised')->translate();
             }
         }]]);
