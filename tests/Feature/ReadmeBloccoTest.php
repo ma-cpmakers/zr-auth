@@ -29,6 +29,7 @@ test('il README nomina la macro, il tetto, il 503 e dove sta il lock, e la macro
         ->toContain('Sessione::entra()')
         ->toContain('Sessione::chiudi()')
         ->toContain('rotte lente')
+        ->toContain('sessione vuota')
         ->and(Rotta::hasMacro('bloccaSessione'))->toBeTrue()
         ->and(Sessione::BLOCCO_TENUTA)->toBe(10)
         ->and(Sessione::BLOCCO_ATTESA)->toBe(3);

@@ -167,6 +167,10 @@ Route::get('report', ReportController::class)->bloccaSessione();               /
 - **Oltre l'attesa** la risposta è **503** con `Retry-After: 1`, mai un 500 e mai «prosegui senza il blocco» (riaprirebbe la
   gara). Il corpo non dice di chi è il blocco. Vale solo per una rotta con il blocco: il timeout di un altro lock del modulo
   resta com'è.
+- **Chi aspetta dietro un ingresso.** `Sessione::apri()` e `Sessione::entra()` rigenerano l'id della sessione. Una richiesta di
+  un'altra scheda che aspettava il lock dell'id di prima riparte, dopo l'attesa, da una sessione vuota: risponde come a una
+  persona non entrata e può rimandare il cookie con l'id di prima. Il blocco evita che la sessione di prima torni, non che
+  quella richiesta sia inutile: la pagina dopo un ingresso si ricarica dalla scheda in cui si è entrati.
 - **Dove sta il lock.** In `session.block_store` (`SESSION_BLOCK_STORE`), cioè nello store di cache del modulo se non lo
   cambi; deve poter fare i lock (Redis, database, file, array nei test). Il lock è perso se lo store lo butta: il rischio è la
   gara di prima, non un errore.

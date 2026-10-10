@@ -70,7 +70,8 @@ final class ZrAuthServiceProvider extends ServiceProvider
      * sovrappone a un'altra della stessa sessione, che a fine corsa riscriverebbe la sessione di prima. `->bloccaSessione()`
      * su una rotta è il `Route::block` di Laravel con i tempi di zr-auth. Oltre l'attesa Laravel lancia
      * LockTimeoutException, che senza una mano sarebbe un 500: qui diventa un 503 con Retry-After, solo per una rotta con il
-     * blocco (il timeout di un altro lock del modulo resta com'è) e senza dire di chi è il blocco.
+     * blocco e prima che la sessione parta (il timeout di un altro lock del modulo, dentro il controller, resta com'è), e senza dire di
+     * chi è il blocco.
      */
     private function bloccoDellaSessione(): void
     {
@@ -87,7 +88,9 @@ final class ZrAuthServiceProvider extends ServiceProvider
             }
 
             $gestore->renderable(function (LockTimeoutException $errore, Request $richiesta): ?Response {
-                if (! $richiesta->route() instanceof Rotta || ! $richiesta->route()->locksFor()) {
+                // Il lock della sessione scade prima che la sessione parta (StartSession la mette sulla richiesta solo dopo averlo
+                // preso): con una sessione già sulla richiesta il timeout è di un lock del modulo, e resta suo.
+                if (! $richiesta->route() instanceof Rotta || ! $richiesta->route()->locksFor() || $richiesta->hasSession()) {
                     return null;
                 }
 

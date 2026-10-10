@@ -108,10 +108,17 @@ it('oltre l\'attesa risponde 503 con Retry-After, mai 500, entro il tetto e senz
     $altra->release();
 });
 
-it('un timeout di un lock che non è quello della sessione non diventa un 503 di zr-auth (T1.4, revisione)', function () {
-    Route::middleware('web')->get('lock-altrui', function () {
+it('il timeout di un altro lock del modulo non è un 503 di zr-auth: né su una rotta senza il blocco né su una con il blocco (T1.4, revisione)', function (bool $conBlocco) {
+    $rotta = Route::middleware('web')->get('lock-altrui', function () {
         throw new LockTimeoutException;
     })->withoutMiddleware(ConGettone::class);
 
+    if ($conBlocco) {
+        $rotta->bloccaSessione();
+    }
+
     $this->get('/lock-altrui')->assertStatus(500);
-});
+})->with([
+    'senza il blocco' => [false],
+    'con il blocco' => [true],
+]);
