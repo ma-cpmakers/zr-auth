@@ -68,6 +68,10 @@ return [
             'provider' => 'Signing in with the provider failed: start again from the provider\'s button.',
         ],
     ],
+    'email_del_provider_non_verificata' => [
+        'title' => 'Email not verified by the provider',
+        'detail' => 'The sign-in provider does not vouch that this email is verified: verify it with the provider, or sign in another way.',
+    ],
     'turnstile_non_valido' => [
         'title' => 'Turnstile check failed',
         'detail' => 'The Turnstile check did not pass: have the person do it again and retry with the new response.',

@@ -68,6 +68,10 @@ return [
             'provider' => 'L\'accesso con il provider non riesce: riparti dal bottone del provider.',
         ],
     ],
+    'email_del_provider_non_verificata' => [
+        'title' => 'Email non verificata dal provider',
+        'detail' => 'Il provider di accesso non garantisce che questa email sia verificata: verificala presso il provider, o accedi con un altro metodo.',
+    ],
     'turnstile_non_valido' => [
         'title' => 'Controllo Turnstile non superato',
         'detail' => 'Il controllo Turnstile non è superato: fallo rifare alla persona e riprova con la risposta nuova.',

@@ -146,22 +146,33 @@ it('accessi.provider.crea: il nome manca, vale la parte locale dell\'email (#142
     expect(alFinto('GET', '/v1/io', gettone: $risposta->json('data.gettone.gettone'))->json('data.utente.nome'))->toBe('anna.rossi');
 });
 
-it('accessi.provider.crea: per una persona nuova la registrazione chiusa è 403 e i termini mancanti sono 422 su #/termini_accettati (#1429)', function () {
-    [$finto, $stato] = fintoConPartenza();
-    $finto->identitaDelProvider('google', 'codice', 'anna@example.com');
+it('accessi.provider.crea: Google e LinkedIn fanno nascere la persona anche a registrazione chiusa; i termini mancanti sono 422 su #/termini_accettati (#1554)', function (string $provider) {
+    [$finto, $stato] = fintoConPartenza($provider);
+    $finto->identitaDelProvider($provider, 'codice', 'anna@altro.it');
 
-    $chiusa = arrivo('google', 'codice', $stato, ['termini_accettati' => true]);
-    expect($chiusa->status())->toBe(403)->and($chiusa->json('codice'))->toBe('registrazione_non_aperta');
-
-    $finto->consenti('anna@example.com');
-    $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
-    $senza = arrivo('google', 'codice', $stato);
+    $senza = arrivo($provider, 'codice', $stato);
     expect($senza->status())->toBe(422)
         ->and($senza->json('codice'))->toBe('dati_non_validi')
         ->and($senza->json('errors.0.pointer'))->toBe('#/termini_accettati');
 
-    $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
-    expect(arrivo('google', 'codice', $stato, ['termini_accettati' => false])->json('errors.0.pointer'))->toBe('#/termini_accettati');
+    $stato = alFinto('POST', "/v1/accessi/provider/{$provider}/autorizzazioni")->json('data.stato');
+    expect(arrivo($provider, 'codice', $stato, ['termini_accettati' => false])->json('errors.0.pointer'))->toBe('#/termini_accettati');
+
+    $stato = alFinto('POST', "/v1/accessi/provider/{$provider}/autorizzazioni")->json('data.stato');
+    $aperta = arrivo($provider, 'codice', $stato, ['termini_accettati' => true]);
+    expect($aperta->status())->toBe(201)->and($aperta->json('data.gettone.utente.email'))->toBe('anna@altro.it');
+})->with(['google', 'linkedin-openid']);
+
+it('accessi.provider.crea: con Facebook la registrazione chiusa resta 403 registrazione_non_aperta, e la lista la apre (#1554)', function () {
+    [$finto, $stato] = fintoConPartenza('facebook');
+    $finto->identitaDelProvider('facebook', 'codice', 'anna@example.com');
+
+    $chiusa = arrivo('facebook', 'codice', $stato, ['termini_accettati' => true]);
+    expect($chiusa->status())->toBe(403)->and($chiusa->json('codice'))->toBe('registrazione_non_aperta');
+
+    $finto->consenti('anna@example.com');
+    $stato = alFinto('POST', '/v1/accessi/provider/facebook/autorizzazioni')->json('data.stato');
+    expect(arrivo('facebook', 'codice', $stato, ['termini_accettati' => true])->status())->toBe(201);
 });
 
 it("accessi.provider.crea: una persona che c'è già si collega senza termini, e dalla seconda volta entra per l'identità, anche se ha cambiato l'email (#1429)", function () {
@@ -200,21 +211,43 @@ it("accessi.provider.crea: un account con l'email da verificare diventa verifica
         ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->json('codice'))->toBe('credenziali_non_valide');
 });
 
-it("accessi.provider.crea: l'email che il provider non garantisce, o non valida, e un codice che il provider rifiuta sono la stessa 422 verifica_non_riuscita (#1429)", function () {
+it("accessi.provider.crea: l'email non valida e un codice che il provider rifiuta sono la stessa 422 verifica_non_riuscita (#1429)", function () {
     $finto = BackofficeFinto::attiva()->provider('google')->consenti('@example.com');
-    $finto->identitaDelProvider('google', 'non-verificata', 'anna@example.com', verificata: false)
-        ->identitaDelProvider('google', 'non-valida', 'non-una-email');
+    $finto->identitaDelProvider('google', 'non-valida', 'non-una-email');
     $corpi = [];
 
-    foreach (['non-verificata', 'non-valida', 'sconosciuto'] as $codice) {
+    foreach (['non-valida', 'sconosciuto'] as $codice) {
         $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
         $risposta = arrivo('google', $codice, $stato, ['termini_accettati' => true]);
         expect($risposta->status())->toBe(422)->and($risposta->json('codice'))->toBe('verifica_non_riuscita');
         $corpi[] = $risposta->body();
     }
 
+    expect(array_unique($corpi))->toHaveCount(1);
+});
+
+it("accessi.provider.crea: l'email che il provider non garantisce è 422 email_del_provider_non_verificata, uguale con e senza un account; non nasce niente e la password non cambia (#1555)", function () {
+    $finto = BackofficeFinto::attiva()->provider('google')->consenti('@example.com');
+    $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno', verificata: false);
+    $finto->identitaDelProvider('google', 'con-account', 'bruno@example.com', verificata: false)
+        ->identitaDelProvider('google', 'senza-account', 'anna@example.com', verificata: false);
+    $corpi = [];
+
+    foreach (['con-account', 'senza-account'] as $codice) {
+        $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
+        $risposta = arrivo('google', $codice, $stato, ['termini_accettati' => true]);
+        expect($risposta->status())->toBe(422)->and($risposta->json('codice'))->toBe('email_del_provider_non_verificata');
+        $corpi[] = preg_replace('/"instance":"[^"]*"/', '', $risposta->body());
+    }
+
     expect(array_unique($corpi))->toHaveCount(1)
-        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->status())->toBe(422);
+        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->status())->toBe(422)
+        ->and(alFinto('POST', '/v1/accessi', ['email' => 'bruno@example.com', 'password' => PASSWORD])->json('codice'))->not->toBe('verifica_non_riuscita');
+
+    // Lo stato è consumato: riportarlo è un rifiuto come gli altri.
+    $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
+    arrivo('google', 'senza-account', $stato);
+    expect(arrivo('google', 'senza-account', $stato)->json('codice'))->toBe('verifica_non_riuscita');
 });
 
 it('accessi.provider.crea: lo stato vale una volta sola, per quel provider, e 10 minuti; ogni altro stato è 422 verifica_non_riuscita (#1429)', function () {

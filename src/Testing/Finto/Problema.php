@@ -34,6 +34,7 @@ final class Problema extends RuntimeException
         'credenziali_non_valide' => 422,
         'chiave_idempotenza_riusata' => 422,
         'verifica_non_riuscita' => 422,
+        'email_del_provider_non_verificata' => 422,
         'turnstile_non_valido' => 422,
         'troppe_richieste' => 429,
         'servizio_non_disponibile' => 503,

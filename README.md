@@ -449,10 +449,11 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - **I provider.** Spenti di norma, come in produzione senza credenziali: `provider('google', 'linkedin-openid', 'facebook')`
   ne accende. Ciò che il provider risponde al `codice` del ritorno lo dice il test:
   `identitaDelProvider('google', 'un-codice', 'anna@example.com', nome: 'Anna Rossi')` (con `verificata: false` l'email non
-  è garantita e l'accesso non riesce; un codice che il test non ha detto lo rifiuta il provider, `422`);
+  è garantita e l'accesso non riesce con `422` `email_del_provider_non_verificata`, uguale con e senza un account; un codice che il test non ha detto lo rifiuta il provider, `422`);
   `guastaProvider('google')` lo fa non rispondere (`503`). La partenza dà un indirizzo con `client_id=finto-<slug>`; il
   resto dell'indirizzo, lo `stato` di 10 minuti usa-e-getta e la sfida PKCE sono quelli del backoffice. Una persona nuova
-  vuole la registrazione consentita (`consenti()`) e `termini_accettati`.
+  vuole `termini_accettati`; con Google e LinkedIn nasce anche a registrazione chiusa (dal backoffice del 10/10, #1554), con
+  Facebook solo se la registrazione la ammette (`consenti()`).
 - **Le schede.** Il finto non modella board né liste: `scheda($workspace, $titolo, $board)` fa nascere una scheda con il minimo che
   le attese guardano, e `segnaScheda($scheda, 'completata'|'archiviata')` la completa o la archivia. Con quelle rispondono
   `board.schede.mostra`, `board.schede.completamento.crea`, `board.schede.completamento.elimina`,
