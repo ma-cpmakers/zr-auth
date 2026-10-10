@@ -28,6 +28,8 @@ function conLeAziende(): array
     $finto->membro($secondo, $bruno, 'amministratore');
     $finto->membro($studio, $carla, 'membro');
     $finto->membro($secondo, $carla, 'membro');
+    // Un terzo workspace della stessa azienda dove Bruno e Carla non sono membri: nelle loro liste non compare.
+    $finto->workspace('Terzo', $anna, $studio['azienda_id']);
     $altro = $finto->workspace('Studio di Dora', $dora);
     $accesso = fn (string $email) => entraNelFinto($email)['gettone']['gettone'];
 
@@ -78,14 +80,6 @@ it('aziende.workspace.elenca dà solo i workspace dell\'azienda di cui la person
         ->and($dopo->json('data'))->toBe([[...$studio, 'ruolo' => 'membro']])
         ->and($dopo->json('successivo'))->toBeNull();
 
-    // Un workspace dell'azienda dove la persona non è membro non compare.
-    $soloPrimo = BackofficeFinto::attiva();
-    $eva = $soloPrimo->persona('eva@example.com', PASSWORD, nome: 'Eva');
-    $uno = $soloPrimo->workspace('Uno', $eva);
-    $soloPrimo->workspace('Due', $soloPrimo->persona('fabio@example.com', PASSWORD, nome: 'Fabio'), $uno['azienda_id']);
-
-    expect(alFinto('GET', "/v1/aziende/{$uno['azienda_id']}/workspace", gettone: entraNelFinto('eva@example.com')['gettone']['gettone'])->json('data'))
-        ->toBe([[...$uno, 'ruolo' => 'proprietario']]);
 });
 
 it('aziende.workspace.elenca: un\'azienda altrui è 404, e un limite sbagliato su un\'azienda altrui è 422, prima del 404 (T1.2)', function () {
@@ -144,7 +138,7 @@ it('utenti.crea con un invito: un turnstile mandato si controlla, prima del codi
     [$finto, $studio, , , $accesso] = conLeAziende();
     $finto->consenti('@example.com')->accendiTurnstile();
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'nuova@example.com', 'ruolo' => 'membro'], alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso('anna@example.com'))->json('data.gettone'));
-    $codice = $finto->ultimoCodice('nuova@example.com');
+    $codice = $finto->ultimoInvito('nuova@example.com');
     $corpo = fn (array $altri) => ['email' => 'nuova@example.com', 'password' => PASSWORD, 'invito' => $codice, ...$altri];
 
     // Senza obbligo, l'invito vale senza widget; con un turnstile sbagliato, è 422 turnstile_non_valido prima dell'invito.
@@ -157,7 +151,7 @@ it('utenti.crea con un invito e l\'obbligo di Turnstile acceso: senza turnstile 
     [$finto, $studio, , , $accesso] = conLeAziende();
     $finto->consenti('@example.com')->accendiTurnstile()->accendiTurnstileSullInvito();
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'nuova@example.com', 'ruolo' => 'membro'], alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso('anna@example.com'))->json('data.gettone'));
-    $vero = $finto->ultimoCodice('nuova@example.com');
+    $vero = $finto->ultimoInvito('nuova@example.com');
     $corpo = fn (string $invito, array $altri = []) => ['email' => 'nuova@example.com', 'password' => PASSWORD, 'invito' => $invito, ...$altri];
 
     $senzaVero = alFinto('POST', '/v1/utenti', $corpo($vero));
@@ -170,12 +164,14 @@ it('utenti.crea con un invito e l\'obbligo di Turnstile acceso: senza turnstile 
         ->and(alFinto('POST', '/v1/utenti', $corpo($vero, ['turnstile' => BackofficeFinto::TURNSTILE_VALIDO]))->status())->toBe(202);
 });
 
-it('ErroreApi tiene nelle estensioni anche gli elenchi del problema: schede di attese_aperte e liste_consentite di passaggio_non_consentito (#1556, T3.1)', function () {
+it('ErroreApi tiene nelle estensioni anche gli elenchi del problema: schede di attese_aperte (#1556, T3.1)', function () {
     Http::fake(['*' => problema(409, 'attese_aperte', ['schede' => [['id' => '01J0000000000000000000K3AB', 'numero' => 3]], 'limite' => 5])]);
 
     expect(fn () => Api::senzaGettone()->post('/v1/board/schede/x/completamento', []))
         ->toThrow(fn (ErroreApi $e) => expect($e->estensioni)->toBe(['schede' => [['id' => '01J0000000000000000000K3AB', 'numero' => 3]], 'limite' => 5]));
+});
 
+it('ErroreApi tiene liste_consentite del 409 passaggio_non_consentito (#1556, T3.1)', function () {
     Http::fake(['*' => problema(409, 'passaggio_non_consentito', ['liste_consentite' => ['01J0000000000000000000L1AB', '01J0000000000000000000L2AB']])]);
 
     expect(fn () => Api::senzaGettone()->post('/v1/board/schede/x/spostamento', []))
