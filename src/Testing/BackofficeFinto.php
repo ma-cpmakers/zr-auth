@@ -2732,7 +2732,7 @@ final class BackofficeFinto
         $chiave = $psr->getHeaderLine('Idempotency-Key');
 
         if (preg_match('/^[!-~]{1,255}$/', $chiave) !== 1) {
-            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.chiave_idempotenza'), 'header' => 'Idempotency-Key']]);
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.chiave_idempotenza'), 'regola' => 'formato', 'header' => 'Idempotency-Key']]);
         }
 
         $nome = implode(':', [$chi['persona'], $operazione, $chi['workspace'], hash('sha256', $chiave)]);
