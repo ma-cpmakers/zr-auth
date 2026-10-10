@@ -268,7 +268,7 @@ it('la lingua cambiata da io.modifica arriva alla sessione con io.mostra e Sessi
     Sessione::apri(entraNelFinto('anna@example.com'));
     expect(Sessione::utente()['lingua'])->toBe('it');
 
-    alFinto('PATCH', '/v1/io', ['utente' => ['lingua' => 'en', 'nome' => 'Anne']], $gettone)->assertStatus(200);
+    expect(alFinto('PATCH', '/v1/io', ['utente' => ['lingua' => 'en', 'nome' => 'Anne']], $gettone)->status())->toBe(200);
     $io = alFinto('GET', '/v1/io', gettone: $gettone)->json('data');
 
     expect(Sessione::aggiorna($io))->toBeTrue()
