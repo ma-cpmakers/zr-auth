@@ -38,6 +38,9 @@ final class Testi
 
     private readonly Factory $validatori;
 
+    /** @var array<string, string> la regola che una closure di validazione ha detto di aver violato, per attributo */
+    private array $dichiarate = [];
+
     public function __construct()
     {
         $this->traduttore = new Translator(new FileLoader(new Filesystem, dirname(__DIR__, 3).'/resources/lang'), self::PREDEFINITA);
@@ -45,6 +48,20 @@ final class Testi
         // validazione.
         $this->traduttore->setFallback(self::RIPIEGO);
         $this->validatori = new Factory($this->traduttore);
+        // I nomi dei campi in parole nei testi (#1623), come ValidatoreConNomi nel backoffice.
+        $this->validatori->resolver(fn ($traduttore, array $dati, array $regole, array $messaggi, array $attributi) => new ValidatoreConNomi($traduttore, $dati, $regole, $messaggi, $attributi));
+    }
+
+    /** Il nome di un campo in parole, nella lingua di adesso (NomiDeiCampi del backoffice). */
+    public function nome(string $attributo): string
+    {
+        return NomiDeiCampi::di($attributo, $this->traduttore);
+    }
+
+    /** Una closure di validazione dice la regola che rifiuta (RegoleDichiarate::rifiuta del backoffice). */
+    public function dichiara(string $attributo, string $regola): void
+    {
+        $this->dichiarate[$attributo] = $regola;
     }
 
     /** Da qui i testi sono in questa lingua: quella di Accept-Language, o della persona del gettone. */
@@ -122,13 +139,13 @@ final class Testi
         $errori = [];
 
         foreach ($validatore->errors()->messages() as $chiave => $messaggi) {
-            $errori[] = ['detail' => $messaggi[0], 'pointer' => self::puntatore(explode('.', (string) $chiave))];
+            $errori[] = ['detail' => $messaggi[0], 'regola' => Regola::dellaValidazione($validatore, (string) $chiave, $this->dichiarate), 'pointer' => self::puntatore(explode('.', (string) $chiave))];
         }
 
         $sbagliati = array_map('strval', array_keys($validatore->errors()->messages()));
 
         foreach (array_slice(array_values(array_diff(array_map('strval', array_keys($corpo)), array_keys($regole), $sbagliati)), 0, self::ESTRANEI) as $estraneo) {
-            $errori[] = ['detail' => (string) $this->traduttore->get('validation.prohibited', ['attribute' => $estraneo]), 'pointer' => self::puntatore([$estraneo])];
+            $errori[] = ['detail' => (string) $this->traduttore->get('validation.prohibited', ['attribute' => $this->nome($estraneo)]), 'regola' => Regola::CAMPO_ESTRANEO, 'pointer' => self::puntatore([$estraneo])];
         }
 
         if ($errori !== []) {
@@ -165,7 +182,7 @@ final class Testi
         self::estranei($corpo, $ammessi, [], $estranei);
 
         foreach ($estranei as $percorso) {
-            $errori[] = ['detail' => (string) $this->traduttore->get('validation.prohibited', ['attribute' => implode('.', $percorso)]), 'pointer' => self::puntatore($percorso)];
+            $errori[] = ['detail' => (string) $this->traduttore->get('validation.prohibited', ['attribute' => $this->nome(implode('.', $percorso))]), 'regola' => Regola::CAMPO_ESTRANEO, 'pointer' => self::puntatore($percorso)];
         }
 
         if ($errori !== []) {
@@ -257,7 +274,7 @@ final class Testi
 
         $errori = [];
         foreach ($validatore->errors()->messages() as $chiave => $messaggi) {
-            $errori[] = ['detail' => $messaggi[0], ...$dove(explode('.', $chiave))];
+            $errori[] = ['detail' => $messaggi[0], 'regola' => Regola::dellaValidazione($validatore, (string) $chiave, $this->dichiarate), ...$dove(explode('.', $chiave))];
         }
 
         throw new Problema('dati_non_validi', $errori);
@@ -292,14 +309,14 @@ final class Testi
     /**
      * Un errore per valore rifiutato, col primo messaggio delle sue regole e il suo pointer.
      *
-     * @return list<array{detail: string, pointer: string}>
+     * @return list<array{detail: string, regola: string, pointer: string}>
      */
-    private function errori(\Illuminate\Contracts\Validation\Validator $validatore): array
+    private function errori(\Illuminate\Validation\Validator $validatore): array
     {
         $errori = [];
 
         foreach ($validatore->errors()->messages() as $chiave => $messaggi) {
-            $errori[] = ['detail' => $messaggi[0], 'pointer' => self::puntatore(explode('.', (string) $chiave))];
+            $errori[] = ['detail' => $messaggi[0], 'regola' => Regola::dellaValidazione($validatore, (string) $chiave, $this->dichiarate), 'pointer' => self::puntatore(explode('.', (string) $chiave))];
         }
 
         return $errori;

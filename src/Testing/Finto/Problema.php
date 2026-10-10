@@ -42,7 +42,7 @@ final class Problema extends RuntimeException
     ];
 
     /**
-     * @param  list<array{detail: string, pointer?: string, parameter?: string}>  $errori  per `dati_non_validi`, e solo per lui
+     * @param  list<array{detail: string, regola: string, pointer?: string, parameter?: string}>  $errori  per `dati_non_validi`, e solo per lui
      * @param  array<string, string>  $header  per `troppe_richieste` Retry-After, in secondi
      * @param  array<string, int|string>  $estensioni  i membri estesi del problema: `limite` e `direzione` di `limite_raggiunto`
      * @param  ?string  $verifica  per `verifica_non_riuscita`, e solo per lui: l'operazione di cui il `detail` dice il caso

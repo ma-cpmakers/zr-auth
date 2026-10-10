@@ -1131,7 +1131,7 @@ final class BackofficeFinto
             $aspettata = $this->schede[strtolower($campi['scheda_aspettata_id'])] ?? null;
 
             if ($aspettata === null || $aspettata['workspace'] !== $mia['workspace'] || $aspettata['board'] !== $mia['board']) {
-                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.scheda_della_board'), 'pointer' => '#/scheda_aspettata_id']]);
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.scheda_della_board'), 'regola' => 'non_trovato', 'pointer' => '#/scheda_aspettata_id']]);
             }
 
             if ($aspettata['archiviata_il'] !== null) {
@@ -1399,7 +1399,7 @@ final class BackofficeFinto
                 }
 
                 if (($dati['termini_accettati'] ?? false) !== true) {
-                    throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.accepted', ['attribute' => 'termini_accettati']), 'pointer' => '#/termini_accettati']]);
+                    throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.accepted', ['attribute' => $this->testi->nome('termini_accettati')]), 'regola' => 'valore_non_ammesso', 'pointer' => '#/termini_accettati']]);
                 }
 
                 $persona = self::id();
@@ -1496,7 +1496,7 @@ final class BackofficeFinto
         $workspace = $this->testi->valida($corpo, ['workspace_id' => ['required', 'string']])['workspace_id'];
 
         if (! isset($this->membri[$workspace][$chi['persona']])) {
-            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.workspace_non_tuo'), 'pointer' => '#/workspace_id']]);
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.workspace_non_tuo'), 'regola' => 'non_trovato', 'pointer' => '#/workspace_id']]);
         }
 
         // Il freno è della persona, con qualunque suo gettone, e si conta dopo il controllo del membro.
@@ -1848,8 +1848,9 @@ final class BackofficeFinto
 
         foreach (self::ALTRI_CAMPI_DI_IO as $campo => $metodo) {
             $regole[$campo] = [function (string $attributo, mixed $valore, Closure $rifiuta) use ($metodo) {
+                $this->testi->dichiara($attributo, 'campo_vietato');
                 $rifiuta($metodo === null ? 'regole.campo_di_nessun_metodo' : 'regole.campo_di_un_altro_metodo')
-                    ->translate(['attribute' => $attributo, 'metodo' => (string) $metodo]);
+                    ->translate(['attribute' => $this->testi->nome($attributo), 'metodo' => (string) $metodo]);
             }];
         }
 
@@ -1859,6 +1860,7 @@ final class BackofficeFinto
         if (! is_array($utente) || $utente === []) {
             throw new Problema('dati_non_validi', [[
                 'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.lingua, utente.fuso_orario']),
+                'regola' => 'obbligatorio',
                 'pointer' => array_key_exists('utente', $campi) ? '#/utente' : '#',
             ]]);
         }
@@ -1897,7 +1899,7 @@ final class BackofficeFinto
         $this->frena('password:'.$persona, self::ERRORI_DELLA_PASSWORD, self::ORA);
 
         if (! hash_equals($this->persone[$persona]['password'], (string) $dati['password_attuale'])) {
-            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.password_attuale'), 'pointer' => '#/password_attuale']]);
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.password_attuale'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/password_attuale']]);
         }
 
         $this->freni->clear('password:'.$persona);

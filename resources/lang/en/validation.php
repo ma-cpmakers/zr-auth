@@ -164,6 +164,19 @@ return [
 
     'custom' => [],
 
-    'attributes' => [],
+    'attributes' => [
+        'email.*.indirizzo' => 'email address',
+        'email.*.etichetta' => 'address label',
+        'telefoni.*.numero' => 'phone number',
+        'telefoni.*.etichetta' => 'phone label',
+        'responsabile_id' => 'owner',
+        'organizzazione_id' => 'company',
+        'azienda_id' => 'company',
+        'workspace_id' => 'workspace',
+        'fasi.*.probabilita' => 'probability',
+        'fasi.*.giorni_massimi' => 'maximum days',
+        'turnstile' => 'anti-robot check',
+        'termini_accettati' => 'terms acceptance',
+    ],
 
 ];
