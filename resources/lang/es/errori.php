@@ -136,6 +136,10 @@ return [
         'title' => 'Lista de comprobación incompleta',
         'detail' => 'Esta lista solo acepta tarjetas con la lista de comprobación completa, y esta aún tiene elementos por marcar (cuántos, en la respuesta, en `voci_aperte`). Marca o elimina los elementos, o quita el requisito `checklist_completa` de la lista con board.liste.modifica, y repite.',
     ],
+    'email_gia_presente' => [
+        'title' => 'Correo ya presente',
+        'detail' => 'Este correo ya pertenece a otro contacto del workspace, incluso archivado: su id está en la respuesta, en `persona_id`. Ábrelo con crm.persone.mostra, o usa otro correo.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Vínculo ya existente',
         'detail' => 'La tarjeta ya espera a esa tarjeta: no repitas la solicitud. El vínculo lo encuentras en board.schede.collegamenti.elenca.',

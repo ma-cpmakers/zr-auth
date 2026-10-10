@@ -136,6 +136,10 @@ return [
         'title' => 'Checklist incompleta',
         'detail' => 'Questa lista accetta solo schede con la checklist completa, e questa ha ancora voci da spuntare (quante, nella risposta, in `voci_aperte`). Spunta o elimina le voci, oppure togli il requisito `checklist_completa` dalla lista con board.liste.modifica, e ripeti.',
     ],
+    'email_gia_presente' => [
+        'title' => 'Email già presente',
+        'detail' => 'Questa email appartiene già a un altro contatto del workspace, anche archiviato: il suo id è nella risposta, in `persona_id`. Aprilo con crm.persone.mostra, oppure usa un\'altra email.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Collegamento già presente',
         'detail' => 'La scheda aspetta già quella scheda: non ripetere la richiesta. Il collegamento lo trovi in board.schede.collegamenti.elenca.',

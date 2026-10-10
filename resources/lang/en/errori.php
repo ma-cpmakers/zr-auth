@@ -136,6 +136,10 @@ return [
         'title' => 'Checklist incomplete',
         'detail' => 'This list only takes cards whose checklist is complete, and this one still has items to check (how many, in the response, in `voci_aperte`). Check or delete the items, or remove the list\'s `checklist_completa` requirement with board.liste.modifica, and retry.',
     ],
+    'email_gia_presente' => [
+        'title' => 'Email already in use',
+        'detail' => 'This email already belongs to another contact in the workspace, even an archived one: its id is in the response, in `persona_id`. Open it with crm.persone.mostra, or use another email.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Link already exists',
         'detail' => 'The card already waits for that card: do not repeat the request. You can find the link in board.schede.collegamenti.elenca.',
