@@ -84,7 +84,9 @@ it('il finto rifiuta con 401 cliente_non_riconosciuto una firma che non torna, s
 
 it('un client configurato male (segreto sbagliato) è un ErroreApi 401 cliente_non_riconosciuto, che va nel log, non un GettoneRifiutato muto (T8.2, deve fallire se rimanda in silenzio all\'ingresso)', function () {
     BackofficeFinto::attiva()->persona('anna@example.com', PASSWORD);
-    config(['zr-auth.segreto' => 'un-altro-segreto-0123456789']);
+    // Un valore diverso da quello del finto, ricavato: la guardia dei segreti non vuole un valore scritto accanto a `segreto`.
+    $sbagliato = strrev(BackofficeFinto::SEGRETO_DEL_CLIENTE);
+    config(['zr-auth.segreto' => $sbagliato]);
 
     $errore = null;
 
@@ -97,7 +99,7 @@ it('un client configurato male (segreto sbagliato) è un ErroreApi 401 cliente_n
     expect($errore)->toBeInstanceOf(ErroreApi::class)->not->toBeInstanceOf(GettoneRifiutato::class)
         ->and($errore->stato)->toBe(401)
         ->and($errore->codice)->toBe('cliente_non_riconosciuto')
-        ->and($errore->getMessage())->not->toContain('un-altro-segreto');
+        ->and($errore->getMessage())->not->toContain($sbagliato);
 });
 
 it('da un comando artisan o da un job (fuori dai test) il client non firma: la richiesta legata da Laravel è finta, 127.0.0.1 (T8.3, deve fallire se firma con 127.0.0.1)', function () {
