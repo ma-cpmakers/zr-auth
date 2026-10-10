@@ -1,5 +1,7 @@
 <?php
 
+use Zeiras\Auth\Api;
+use Zeiras\Auth\Sessione;
 use Zeiras\Auth\Testing\BackofficeFinto;
 use Zeiras\Auth\Testing\Finto\Testi;
 
@@ -258,4 +260,21 @@ it('le tre scritture sulla persona col gettone di un workspace sono 403 gettone_
     expect(alFinto('GET', '/v1/io', gettone: $accesso)->json('data.utente.nome'))->not->toBe('Altro nome')
         ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->status())->toBe(201)
         ->and(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->toHaveCount(1);
+});
+
+// #1473 (T2.5): la lingua cambiata con io.modifica si rilegge da io.mostra e arriva alla sessione del modulo.
+
+it('la lingua cambiata da io.modifica arriva alla sessione con io.mostra e Sessione::aggiorna (#1473 T2.5)', function () {
+    fintoDellaPersona();
+    Sessione::apri(entraNelFinto('anna@example.com'));
+    expect(Sessione::utente()['lingua'])->toBe('it');
+
+    // Il giro di un modulo: la persona cambia il profilo (da app.zeiras.com), la cornice rilegge io.mostra col gettone della sua sessione.
+    Api::persona()->patch('/v1/io', ['utente' => ['lingua' => 'en', 'nome' => 'Anne']]);
+    $io = Api::persona()->get('/v1/io')['data'];
+
+    expect(Sessione::utente()['lingua'])->toBe('it')
+        ->and(Sessione::aggiorna($io))->toBeTrue()
+        ->and(Sessione::utente()['lingua'])->toBe('en')
+        ->and(Sessione::utente()['nome'])->toBe('Anne');
 });

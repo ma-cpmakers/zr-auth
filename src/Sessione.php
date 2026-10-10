@@ -68,6 +68,43 @@ final class Sessione
         ]);
     }
 
+    /**
+     * Rimette la lingua e il nome della sessione uguali a quelli di io.mostra (#1473): la lingua scelta nel profilo non
+     * arriva ai moduli da sola, perché la sessione la prende all'ingresso e non la rilegge. Una cornice che legge io.mostra a
+     * ogni pagina la chiama con i suoi `data` quando sono diversi da `Sessione::utente()`. Cambia solo `lingua` e `nome`, e
+     * solo se sono una stringa non vuota e diversi da quelli che ci sono: l'id della persona, il gettone, il workspace, il
+     * ruolo e ogni altro campo restano, e a valori uguali non cambia niente. Se i dati dicono di essere di un'altra persona
+     * (`utente.id` diverso da quello della sessione) non li prende. Senza una sessione aperta non fa niente e non lancia.
+     * Torna se ha cambiato qualcosa.
+     *
+     * @param  array<string, mixed>  $io  i `data` di io.mostra
+     */
+    public static function aggiorna(array $io): bool
+    {
+        if (! self::aperta()) {
+            return false;
+        }
+
+        $persona = is_array($io['utente'] ?? null) ? $io['utente'] : [];
+
+        if (isset($persona['id']) && $persona['id'] !== (self::stato()['utente']['id'] ?? null)) {
+            return false;
+        }
+
+        $cambiato = false;
+
+        foreach (['lingua', 'nome'] as $campo) {
+            $valore = $persona[$campo] ?? null;
+
+            if (is_string($valore) && trim($valore) !== '' && $valore !== (self::stato()['utente'][$campo] ?? null)) {
+                session()->put(self::CHIAVE.'.utente.'.$campo, $valore);
+                $cambiato = true;
+            }
+        }
+
+        return $cambiato;
+    }
+
     /** Se c'è un gettone che non è ancora scaduto. */
     public static function aperta(): bool
     {
