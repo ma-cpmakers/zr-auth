@@ -497,7 +497,7 @@ final class BackofficeFinto
     /**
      * Dice che cosa risponde il provider quando la pagina gli porta il `codice` del ritorno: la persona che ha autorizzato.
      * Un codice che il test non ha detto è un codice che il provider rifiuta. `$verificata: false` è un'email che il
-     * provider non garantisce: l'accesso non riesce. Senza `$id` l'id opaco del provider lo fa il finto, uguale per la
+     * provider non garantisce: l'accesso non riesce con `email_del_provider_non_verificata`. Senza `$id` l'id opaco del provider lo fa il finto, uguale per la
      * stessa email.
      */
     public function identitaDelProvider(string $provider, string $codice, string $email, ?string $nome = null, bool $verificata = true, ?string $id = null): self
@@ -1313,10 +1313,11 @@ final class BackofficeFinto
      * accessi.provider.crea (AccessiProviderController::crea, AccessoConProvider::entra), senza gettone: l'arrivo. Nell'ordine
      * del backoffice: i freni (in tutto, del provider, dello stato), il corpo, lo stato, che si consuma una volta sola e
      * anche se il resto non riesce (sconosciuto, scaduto, già usato o di un altro provider: 422 verifica_non_riuscita); poi
-     * il provider, che non risponde (503) o rifiuta il codice (422), e un profilo senza email verificata (422). Un'identità
+     * il provider, che non risponde (503) o rifiuta il codice (422), un profilo senza email valida (422 verifica_non_riuscita) e uno con
+     * l'email che il provider non garantisce (422 email_del_provider_non_verificata). Un'identità
      * già collegata entra; un'email che ha un account lo collega (se l'email non era verificata lo diventa, e la password
-     * di prima non vale più); un'email nuova fa nascere la persona, se la registrazione la ammette (403) e ha accettato i
-     * termini (422 su `#/termini_accettati`). Risponde come accessi.crea: un accesso e il suo gettone, senza workspace.
+     * di prima non vale più); un'email nuova fa nascere la persona, se ha accettato i termini (422 su `#/termini_accettati`) e,
+     * solo con Facebook, se la registrazione la ammette (403). Risponde come accessi.crea: un accesso e il suo gettone, senza workspace.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -1350,8 +1351,13 @@ final class BackofficeFinto
 
         $profilo = $this->profili[$provider.'|'.$dati['codice']] ?? null;
 
-        if ($profilo === null || ! $profilo['verificata'] || ! $this->emailValida($profilo['email'])) {
+        if ($profilo === null || ! $this->emailValida($profilo['email'])) {
             throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
+
+        // Un'email che il provider dà ma non garantisce (#1555): un codice suo, uguale con e senza un account.
+        if (! $profilo['verificata']) {
+            throw new Problema('email_del_provider_non_verificata');
         }
 
         $email = self::normalizza($profilo['email']);
@@ -1361,7 +1367,8 @@ final class BackofficeFinto
             $persona = $this->conEmail($email);
 
             if ($persona === null) {
-                if (! $this->consente($email)) {
+                // Google e LinkedIn fanno nascere la persona anche a registrazione chiusa (#1554); Facebook resta alla lista.
+                if ($provider === 'facebook' && ! $this->consente($email)) {
                     throw new Problema('registrazione_non_aperta');
                 }
 

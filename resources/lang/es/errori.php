@@ -68,6 +68,10 @@ return [
             'provider' => 'El acceso con el proveedor falla: vuelve a empezar desde el botón del proveedor.',
         ],
     ],
+    'email_del_provider_non_verificata' => [
+        'title' => 'Correo no verificado por el proveedor',
+        'detail' => 'El proveedor de acceso no garantiza que este correo esté verificado: verifícalo con el proveedor o accede de otra forma.',
+    ],
     'turnstile_non_valido' => [
         'title' => 'Comprobación de Turnstile no superada',
         'detail' => 'La comprobación de Turnstile no se ha superado: pide a la persona que la repita y vuelve a intentarlo con la respuesta nueva.',
