@@ -25,7 +25,7 @@ it('cambia solo lingua e nome: il resto della sessione resta com\'è (T2.2)', fu
     apriSessione();
     $prima = session(Sessione::CHIAVE);
 
-    Sessione::aggiorna(['utente' => ['lingua' => 'es', 'nome' => 'Ana', 'email' => 'altra@example.com', 'id' => 'ALTRA-PERSONA', 'fuso_orario' => 'Asia/Tokyo'], 'workspace' => ['id' => 'ALTRO'], 'ruolo' => 'membro']);
+    Sessione::aggiorna(['utente' => ['lingua' => 'es', 'nome' => 'Ana', 'email' => 'altra@example.com', 'id' => utente()['id'], 'fuso_orario' => 'Asia/Tokyo'], 'workspace' => ['id' => 'ALTRO'], 'ruolo' => 'membro']);
 
     $dopo = session(Sessione::CHIAVE);
     expect($dopo['utente'])->toBe([...$prima['utente'], 'lingua' => 'es', 'nome' => 'Ana'])
@@ -34,6 +34,14 @@ it('cambia solo lingua e nome: il resto della sessione resta com\'è (T2.2)', fu
         ->and($dopo['ruolo'])->toBe($prima['ruolo'])
         ->and($dopo['accesso'])->toBe($prima['accesso'])
         ->and($dopo['scade_il'])->toBe($prima['scade_il']);
+});
+
+it('i dati di un\'altra persona non entrano nella sessione (T2.2, revisione)', function () {
+    apriSessione();
+    $prima = session(Sessione::CHIAVE);
+
+    expect(Sessione::aggiorna(['utente' => ['id' => 'ALTRA-PERSONA', 'lingua' => 'es', 'nome' => 'Ana']]))->toBeFalse()
+        ->and(session(Sessione::CHIAVE))->toBe($prima);
 });
 
 it('chiamato con gli stessi valori non scrive la sessione, e lo dice (T2.2)', function () {

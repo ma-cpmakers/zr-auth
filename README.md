@@ -123,7 +123,7 @@ Sessione::entra($gettone['data']);           // da qui Api::workspace() manda il
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
 Sessione::workspace();  // {id, nome, slug}; null prima di entra()
 Sessione::ruolo();      // proprietario, amministratore o membro
-Sessione::aggiorna($io);   // lingua e nome dai `data` di io.mostra, se diversi (true se ha cambiato); gli altri campi restano
+Sessione::aggiorna(Api::persona()->get('/v1/io')['data']);  // lingua e nome di io.mostra, se diversi (true se ha cambiato); il resto resta
 
 // L'uscita: accessi.corrente.elimina chiude l'accesso da cui discende il gettone della sessione, e ogni gettone che ne
 // discende, senza l'id dell'accesso: vale anche per una sessione aperta solo col gettone di un workspace. La sessione si
