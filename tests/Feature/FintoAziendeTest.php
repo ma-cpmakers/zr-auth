@@ -139,7 +139,7 @@ it('utenti.crea con un invito: un turnstile mandato si controlla, prima del codi
     $finto->consenti('@example.com')->accendiTurnstile();
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'nuova@example.com', 'ruolo' => 'membro'], alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso('anna@example.com'))->json('data.gettone'));
     $codice = $finto->ultimoInvito('nuova@example.com');
-    $corpo = fn (array $altri) => ['email' => 'nuova@example.com', 'password' => PASSWORD, 'invito' => $codice, ...$altri];
+    $corpo = fn (array $altri) => ['email' => 'nuova@example.com', 'password' => PASSWORD, 'termini_accettati' => true, 'invito' => $codice, ...$altri];
 
     // Senza obbligo, l'invito vale senza widget; con un turnstile sbagliato, è 422 turnstile_non_valido prima dell'invito.
     expect(alFinto('POST', '/v1/utenti', $corpo(['turnstile' => 'altro', 'invito' => 'un-codice-falso']))->json('codice'))->toBe('turnstile_non_valido')
@@ -152,7 +152,7 @@ it('utenti.crea con un invito e l\'obbligo di Turnstile acceso: senza turnstile 
     $finto->consenti('@example.com')->accendiTurnstile()->accendiTurnstileSullInvito();
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'nuova@example.com', 'ruolo' => 'membro'], alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso('anna@example.com'))->json('data.gettone'));
     $vero = $finto->ultimoInvito('nuova@example.com');
-    $corpo = fn (string $invito, array $altri = []) => ['email' => 'nuova@example.com', 'password' => PASSWORD, 'invito' => $invito, ...$altri];
+    $corpo = fn (string $invito, array $altri = []) => ['email' => 'nuova@example.com', 'password' => PASSWORD, 'termini_accettati' => true, 'invito' => $invito, ...$altri];
 
     $senzaVero = alFinto('POST', '/v1/utenti', $corpo($vero));
     $senzaFalso = alFinto('POST', '/v1/utenti', $corpo('un-codice-falso'));
