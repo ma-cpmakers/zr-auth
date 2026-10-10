@@ -140,6 +140,10 @@ return [
         'title' => 'Correo ya presente',
         'detail' => 'Este correo ya pertenece a otro contacto del workspace, incluso archivado: su id está en la respuesta, en `persona_id`. Ábrelo con crm.persone.mostra, o usa otro correo.',
     ],
+    'pipeline_non_vuota' => [
+        'title' => 'Pipeline no vacío',
+        'detail' => 'Este pipeline aún tiene negociaciones abiertas y solo se archiva sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Vínculo ya existente',
         'detail' => 'La tarjeta ya espera a esa tarjeta: no repitas la solicitud. El vínculo lo encuentras en board.schede.collegamenti.elenca.',

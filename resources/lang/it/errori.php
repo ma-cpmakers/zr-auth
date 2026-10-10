@@ -140,6 +140,10 @@ return [
         'title' => 'Email già presente',
         'detail' => 'Questa email appartiene già a un altro contatto del workspace, anche archiviato: il suo id è nella risposta, in `persona_id`. Aprilo con crm.persone.mostra, oppure usa un\'altra email.',
     ],
+    'pipeline_non_vuota' => [
+        'title' => 'Pipeline non vuota',
+        'detail' => 'Questa pipeline ha ancora trattative aperte e si archivia solo senza: chiudi o sposta prima le sue trattative, poi ripeti.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Collegamento già presente',
         'detail' => 'La scheda aspetta già quella scheda: non ripetere la richiesta. Il collegamento lo trovi in board.schede.collegamenti.elenca.',
