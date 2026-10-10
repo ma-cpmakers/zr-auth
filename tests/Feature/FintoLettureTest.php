@@ -289,12 +289,12 @@ it('rifiuta un limite fuori da 1-100 e un cursore che non è un successivo di qu
             'Alcuni valori non vanno bene: li trovi in errors, con cosa non va e dove stanno.', ['errors' => [$errore]]));
 })->with([
     // R7: la Closure arriva intera perché il parametro è tipato Closure.
-    'limite zero' => ['/v1/workspace/membri', fn () => 'limite=0', ['detail' => 'Il campo limite deve essere fra 1 e 100.', 'parameter' => 'limite']],
-    'limite oltre 100' => ['/v1/io/workspace', fn () => 'limite=101', ['detail' => 'Il campo limite deve essere fra 1 e 100.', 'parameter' => 'limite']],
-    'limite che non è un numero' => ['/v1/app', fn () => 'limite=due', ['detail' => 'Il campo limite deve essere un numero intero.', 'parameter' => 'limite']],
-    'cursore inventato' => ['/v1/io/workspace', fn () => 'cursore=inventato', ['detail' => TESTO_DEL_CURSORE, 'parameter' => 'cursore']],
-    "cursore di un'altra lista" => ['/v1/io/workspace', fn (string $gettone) => 'cursore='.alFinto('GET', '/v1/app?limite=1', gettone: $gettone)->json('successivo'), ['detail' => TESTO_DEL_CURSORE, 'parameter' => 'cursore']],
-    'cursore ritoccato' => ['/v1/io/workspace', fn (string $gettone) => 'cursore=x'.alFinto('GET', '/v1/io/workspace?limite=1', gettone: $gettone)->json('successivo'), ['detail' => TESTO_DEL_CURSORE, 'parameter' => 'cursore']],
+    'limite zero' => ['/v1/workspace/membri', fn () => 'limite=0', ['detail' => 'Il campo limite deve essere fra 1 e 100.', 'regola' => 'fuori_intervallo', 'parameter' => 'limite']],
+    'limite oltre 100' => ['/v1/io/workspace', fn () => 'limite=101', ['detail' => 'Il campo limite deve essere fra 1 e 100.', 'regola' => 'fuori_intervallo', 'parameter' => 'limite']],
+    'limite che non è un numero' => ['/v1/app', fn () => 'limite=due', ['detail' => 'Il campo limite deve essere un numero intero.', 'regola' => 'tipo', 'parameter' => 'limite']],
+    'cursore inventato' => ['/v1/io/workspace', fn () => 'cursore=inventato', ['detail' => TESTO_DEL_CURSORE, 'regola' => 'formato', 'parameter' => 'cursore']],
+    "cursore di un'altra lista" => ['/v1/io/workspace', fn (string $gettone) => 'cursore='.alFinto('GET', '/v1/app?limite=1', gettone: $gettone)->json('successivo'), ['detail' => TESTO_DEL_CURSORE, 'regola' => 'formato', 'parameter' => 'cursore']],
+    'cursore ritoccato' => ['/v1/io/workspace', fn (string $gettone) => 'cursore=x'.alFinto('GET', '/v1/io/workspace?limite=1', gettone: $gettone)->json('successivo'), ['detail' => TESTO_DEL_CURSORE, 'regola' => 'formato', 'parameter' => 'cursore']],
 ]);
 
 it("io.aziende.elenca dà le aziende dei workspace della persona, una volta sola, col nome del primo workspace che l'ha fatta nascere, in ordine di nome e poi di id, con ogni suo gettone (AZ1, AZ2)", function () {

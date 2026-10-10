@@ -128,17 +128,17 @@ it('un\'email non valida, una password assente o col carattere nullo sono 422 da
     $spagnolo = alFinto('POST', '/v1/io/email/codice', ['email' => 'anna@', 'password' => null], lingua: 'es');
     $italiano = alFinto('POST', '/v1/io/email/codice', ['email' => 'anna@example.com', 'password' => PASSWORD_COL_NULLO]);
 
-    // In spagnolo il backoffice non ha i messaggi della validazione: escono in inglese, il ripiego.
+    // In spagnolo il backoffice ha i messaggi della validazione (25d): escono in spagnolo.
     expect($spagnolo->status())->toBe(422)
         ->and($spagnolo->header('Content-Type'))->toBe('application/problem+json')
         ->and($spagnolo->header('Link'))->toBe(linkDi('io.email.codice.crea'))
         ->and($spagnolo->json())->toBe(problemaAtteso('dati_non_validi', 422, 'Datos no válidos',
             'Algunos valores no son válidos: los encuentras en errors, con lo que falla y dónde están.', ['errors' => [
-                ['detail' => 'The email field must be a valid email address.', 'pointer' => '#/email'],
-                ['detail' => 'The password field is required.', 'pointer' => '#/password'],
+                ['detail' => 'El campo email debe ser una dirección de correo válida.', 'regola' => 'formato', 'pointer' => '#/email'],
+                ['detail' => 'El campo password es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/password'],
             ]]))
         ->and($italiano->json('errors'))
-        ->toBe([['detail' => 'Il campo password non può contenere il carattere nullo (U+0000).', 'pointer' => '#/password']]);
+        ->toBe([['detail' => 'Il campo password non può contenere il carattere nullo (U+0000).', 'regola' => 'formato', 'pointer' => '#/password']]);
 });
 
 it('la sesta richiesta di un codice in un minuto per la stessa email è 429, con Retry-After (T2.6)', function () {
@@ -271,7 +271,7 @@ it('dopo 10 codici sbagliati in un giorno nemmeno il codice giusto verifica, fin
     expect(verifica('bruno@example.com', $finto->ultimoCodice('bruno@example.com'))->status())->toBe(200);
 });
 
-it('un codice che non è di 6 cifre è 422 dati_non_validi su #/codice (T2.7)', function (mixed $codice, string $dettaglio) {
+it('un codice che non è di 6 cifre è 422 dati_non_validi su #/codice (T2.7)', function (mixed $codice, string $dettaglio, string $regola) {
     $finto = BackofficeFinto::attiva();
     $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno', verificata: false);
 
@@ -279,12 +279,12 @@ it('un codice che non è di 6 cifre è 422 dati_non_validi su #/codice (T2.7)', 
 
     expect($risposta->status())->toBe(422)
         ->and($risposta->json('codice'))->toBe('dati_non_validi')
-        ->and($risposta->json('errors'))->toBe([['detail' => $dettaglio, 'pointer' => '#/codice']]);
+        ->and($risposta->json('errors'))->toBe([['detail' => $dettaglio, 'regola' => $regola, 'pointer' => '#/codice']]);
 })->with([
-    'cinque cifre' => ['12345', 'Il campo codice deve avere 6 cifre.'],
-    'lettere' => ['12a456', 'Il campo codice deve avere 6 cifre.'],
-    'un numero' => [123456, 'Il campo codice deve essere una stringa.'],
-    'assente' => [null, 'Il campo codice è obbligatorio.'],
+    'cinque cifre' => ['12345', 'Il campo codice deve avere 6 cifre.', 'formato'],
+    'lettere' => ['12a456', 'Il campo codice deve avere 6 cifre.', 'formato'],
+    'un numero' => [123456, 'Il campo codice deve essere una stringa.', 'tipo'],
+    'assente' => [null, 'Il campo codice è obbligatorio.', 'obbligatorio'],
 ]);
 
 it('la sesta verifica in un minuto per la stessa email è 429, con Retry-After, anche col codice giusto (T2.7)', function () {
