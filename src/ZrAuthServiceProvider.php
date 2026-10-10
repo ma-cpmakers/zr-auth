@@ -13,6 +13,7 @@ use Illuminate\Routing\Route as Rotta;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 use Zeiras\Auth\Http\Controllers\EventiController;
 use Zeiras\Auth\Http\Controllers\RicevitoreController;
 use Zeiras\Auth\Http\Middleware\ConGettone;
@@ -87,15 +88,27 @@ final class ZrAuthServiceProvider extends ServiceProvider
                 return;
             }
 
+            // Non si riporta: un timeout atteso, che chiunque con un cookie suo può provocare, non deve riempire il log del
+            // modulo di errori con la traccia intera. Quello di un altro lock del modulo si riporta come sempre.
+            $gestore->dontReportWhen(fn (Throwable $errore) => $errore instanceof LockTimeoutException && self::eIlBloccoDellaSessione(request()));
+
             $gestore->renderable(function (LockTimeoutException $errore, Request $richiesta): ?Response {
-                // Il lock della sessione scade prima che la sessione parta (StartSession la mette sulla richiesta solo dopo averlo
-                // preso): con una sessione già sulla richiesta il timeout è di un lock del modulo, e resta suo.
-                if (! $richiesta->route() instanceof Rotta || ! $richiesta->route()->locksFor() || $richiesta->hasSession()) {
+                if (! self::eIlBloccoDellaSessione($richiesta)) {
                     return null;
                 }
 
                 return response('Riprova tra un istante.', 503, ['Retry-After' => '1', 'Cache-Control' => 'no-store']);
             });
         });
+    }
+
+    /**
+     * Il lock della sessione scade prima che la sessione parta (StartSession la mette sulla richiesta solo dopo averlo preso):
+     * su una rotta con il blocco e senza una sessione sulla richiesta il timeout è suo. Con una sessione già sulla richiesta è
+     * di un lock del modulo, dentro il controller, e resta suo.
+     */
+    private static function eIlBloccoDellaSessione(Request $richiesta): bool
+    {
+        return $richiesta->route() instanceof Rotta && (bool) $richiesta->route()->locksFor() && ! $richiesta->hasSession();
     }
 }

@@ -4,6 +4,7 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route as Rotta;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use Zeiras\Auth\Http\Middleware\ConGettone;
@@ -122,3 +123,23 @@ it('il timeout di un altro lock del modulo non è un 503 di zr-auth: né su una 
     'senza il blocco' => [false],
     'con il blocco' => [true],
 ]);
+
+it('il 503 del blocco non si riporta nel log, il timeout di un lock del modulo sì (T1.4, sicurezza)', function () {
+    Log::spy();
+    [$sessione, $cookie] = sessioneAperta();
+    $altra = Cache::lock('session:'.$sessione, 10);
+    expect($altra->get())->toBeTrue();
+
+    [, $risposta] = misura('POST', '/esci', $cookie);
+    $altra->release();
+
+    expect($risposta->getStatusCode())->toBe(503);
+    Log::shouldNotHaveReceived('error');
+
+    Route::middleware('web')->get('lock-del-modulo', function () {
+        throw new LockTimeoutException;
+    })->withoutMiddleware(ConGettone::class)->bloccaSessione();
+    $this->get('/lock-del-modulo')->assertStatus(500);
+
+    Log::shouldHaveReceived('error');
+});
