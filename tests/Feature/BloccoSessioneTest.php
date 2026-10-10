@@ -2,6 +2,7 @@
 
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Route as Rotta;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
@@ -26,27 +27,29 @@ beforeEach(function () {
     })->withoutMiddleware(ConGettone::class);
 });
 
-/** Apre una sessione e ne torna l'id: il cookie delle richieste dopo. */
-function sessioneAperta(): string
+/** Apre una sessione e ne torna l'id e il cookie come l'ha dato il server (cifrato): il browser lo rimanda così. */
+function sessioneAperta(): array
 {
-    return test()->get('/apri-sessione')->json('id');
+    $risposta = test()->get('/apri-sessione');
+
+    return [$risposta->json('id'), $risposta->getCookie(config('session.cookie'), false)->getValue()];
 }
 
 /** @return array{0: float, 1: TestResponse} i secondi passati e la risposta. */
-function misura(string $metodo, string $percorso, string $sessione): array
+function misura(string $metodo, string $percorso, string $cookie): array
 {
     $inizio = hrtime(true);
-    $risposta = test()->withCookie(config('session.cookie'), $sessione)->call($metodo, $percorso);
+    $risposta = test()->call($metodo, $percorso, [], [config('session.cookie') => $cookie]);
 
     return [(hrtime(true) - $inizio) / 1e9, $risposta];
 }
 
 it('il ricevitore del codice prende il blocco: aspetta chi tiene la sessione, poi prosegue (T1.1)', function () {
-    $sessione = sessioneAperta();
+    [$sessione, $cookie] = sessioneAperta();
     $altra = Cache::lock('session:'.$sessione, 1);
     expect($altra->get())->toBeTrue();
 
-    [$secondi, $risposta] = misura('GET', config('zr-auth.ricevitore'), $sessione);
+    [$secondi, $risposta] = misura('GET', config('zr-auth.ricevitore'), $cookie);
 
     // Il blocco di un secondo scade da sé: la richiesta ha aspettato e poi ha dato la sua risposta di sempre (la pagina d'errore).
     expect($secondi)->toBeGreaterThan(0.8)->toBeLessThan(2.5)
@@ -54,13 +57,13 @@ it('il ricevitore del codice prende il blocco: aspetta chi tiene la sessione, po
 });
 
 it('una rotta che cambia la sessione non si sovrappone a una richiesta in volo, e a richieste finite la sessione è chiusa (T1.2)', function () {
-    $sessione = sessioneAperta();
+    [$sessione, $cookie] = sessioneAperta();
     session()->setId($sessione);
     session()->put('di prima', true);
     session()->save();
     expect(Cache::lock('session:'.$sessione, 1)->get())->toBeTrue();
 
-    [$secondi, $risposta] = misura('POST', '/esci', $sessione);
+    [$secondi, $risposta] = misura('POST', '/esci', $cookie);
 
     expect($secondi)->toBeGreaterThan(0.8)
         ->and($risposta->getStatusCode())->toBe(200)
@@ -68,10 +71,10 @@ it('una rotta che cambia la sessione non si sovrappone a una richiesta in volo, 
 });
 
 it('senza il blocco la stessa richiesta non aspetta: è il test che prova il blocco (T1.2, controprova)', function () {
-    $sessione = sessioneAperta();
+    [$sessione, $cookie] = sessioneAperta();
     expect(Cache::lock('session:'.$sessione, 1)->get())->toBeTrue();
 
-    [$secondi, $risposta] = misura('POST', '/esci-senza-blocco', $sessione);
+    [$secondi, $risposta] = misura('POST', '/esci-senza-blocco', $cookie);
 
     expect($secondi)->toBeLessThan(0.5)
         ->and($risposta->getStatusCode())->toBe(200);
@@ -81,7 +84,7 @@ it('->bloccaSessione() mette sulla rotta 10 secondi di tenuta e 3 di attesa, e i
     $rotta = Route::getRoutes()->match(Request::create('/esci', 'POST'));
     $ricevitore = Route::getRoutes()->getByName('zr-auth.ricevitore');
 
-    expect(Route::hasMacro('bloccaSessione'))->toBeTrue()
+    expect(Rotta::hasMacro('bloccaSessione'))->toBeTrue()
         ->and([$rotta->locksFor(), $rotta->waitsFor()])->toBe([10, 3])
         ->and([$ricevitore->locksFor(), $ricevitore->waitsFor()])->toBe([10, 3])
         ->and(Sessione::BLOCCO_TENUTA)->toBe(10)
@@ -89,11 +92,11 @@ it('->bloccaSessione() mette sulla rotta 10 secondi di tenuta e 3 di attesa, e i
 });
 
 it('oltre l\'attesa risponde 503 con Retry-After, mai 500, entro il tetto e senza dire di chi è il blocco (T1.4)', function () {
-    $sessione = sessioneAperta();
+    [$sessione, $cookie] = sessioneAperta();
     $altra = Cache::lock('session:'.$sessione, 10);
     expect($altra->get())->toBeTrue();
 
-    [$secondi, $risposta] = misura('POST', '/esci', $sessione);
+    [$secondi, $risposta] = misura('POST', '/esci', $cookie);
 
     expect($risposta->getStatusCode())->toBe(503)
         ->and($risposta->headers->get('Retry-After'))->toBe('1')
