@@ -241,8 +241,13 @@ it("accessi.provider.crea: l'email che il provider non garantisce è 422 email_d
     }
 
     expect(array_unique($corpi))->toHaveCount(1)
-        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->status())->toBe(422)
-        ->and(alFinto('POST', '/v1/accessi', ['email' => 'bruno@example.com', 'password' => PASSWORD])->json('codice'))->not->toBe('verifica_non_riuscita');
+        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->status())->toBe(422);
+
+    // La password di Bruno non è cambiata: con quella stessa si verifica l'email col codice, e poi si entra.
+    alFinto('POST', '/v1/io/email/codice', ['email' => 'bruno@example.com', 'password' => PASSWORD]);
+    $codice = (string) $finto->ultimoCodice('bruno@example.com');
+    expect(alFinto('POST', '/v1/io/email/verifica', ['email' => 'bruno@example.com', 'password' => PASSWORD, 'codice' => $codice])->status())->toBe(200)
+        ->and(alFinto('POST', '/v1/accessi', ['email' => 'bruno@example.com', 'password' => PASSWORD])->status())->toBe(201);
 
     // Lo stato è consumato: riportarlo è un rifiuto come gli altri.
     $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
