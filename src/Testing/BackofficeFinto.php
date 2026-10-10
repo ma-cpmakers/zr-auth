@@ -198,7 +198,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     private const ORA = 3600;
 
@@ -2458,7 +2458,9 @@ final class BackofficeFinto
 
             $email = self::normalizza($campi['email']);
 
-            // Ogni invito è una mail che parte da Zeiras: si conta prima di ogni lavoro, per email e per workspace, mai per IP.
+            // Ogni invito è una mail che parte da Zeiras: si conta prima di ogni lavoro, per persona in 24 ore (in tutti i suoi
+            // workspace, #1413), per email e per workspace, mai per IP.
+            $this->frena('inviti-persona:'.$chi['persona'], self::FRENI['inviti_per_persona_al_giorno'], 86400);
             $this->frena('inviti:'.$email, self::FRENI['inviti_per_email'], self::ORA);
             $this->frena('inviti-workspace:'.$workspace, self::FRENI['inviti_per_workspace'], self::ORA);
 
