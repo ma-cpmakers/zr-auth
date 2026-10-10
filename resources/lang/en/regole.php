@@ -15,6 +15,8 @@ return [
     'lista_del_workspace' => 'There is no list with this id in the workspace: the ids of the lists are given by board.board.mostra.',
     'blocca_vuole_un_limite' => 'A list without a limit cannot be blocked: send `limite` too (from 1 to 99).',
     'passaggio_della_board' => 'One of these ids is not an active list of this board, or is the list itself: the ids of the lists are given by board.board.mostra.',
+    'passaggio_per_posizione' => 'A position in the passaggi is not in the `liste` array of this body, or is the list itself: positions start at 0.',
+    'passaggio_doppio' => 'A position appears twice in the passaggi.',
     'lista_della_board' => 'This list is not of the same board as the card: the ids of the lists are given by board.board.mostra.',
     'scheda_della_board' => 'This card is not of the same board: the ids of the cards are given by board.schede.elenca.',
     'una_posizione_o_un_ancora' => 'The body wants exactly one of posizione and dopo_scheda_id, not none and not both.',
