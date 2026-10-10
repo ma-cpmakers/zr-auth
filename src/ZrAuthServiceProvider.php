@@ -2,11 +2,18 @@
 
 namespace Zeiras\Auth;
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
+use Illuminate\Foundation\Exceptions\Handler;
 use Illuminate\Foundation\Http\Kernel;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Routing\Route as Rotta;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 use Zeiras\Auth\Http\Controllers\EventiController;
 use Zeiras\Auth\Http\Controllers\RicevitoreController;
 use Zeiras\Auth\Http\Middleware\ConGettone;
@@ -22,6 +29,8 @@ final class ZrAuthServiceProvider extends ServiceProvider
     {
         $this->publishes([__DIR__.'/../config/zr-auth.php' => config_path('zr-auth.php')], 'zr-auth-config');
 
+        $this->bloccoDellaSessione();
+
         // Ogni pagina e ogni API del frontend vuole la sessione col gettone: ConGettone entra nei gruppi `web` e `api`, e
         // gira prima dei binding delle rotte. Dal kernel, non dal router: il kernel ricopia i suoi gruppi nel router, e
         // cancellerebbe un middleware messo solo lì. Una pagina pubblica se lo toglie con withoutMiddleware, e il test del
@@ -31,6 +40,7 @@ final class ZrAuthServiceProvider extends ServiceProvider
         if (! $this->app->routesAreCached() && is_string(config('zr-auth.ricevitore')) && config('zr-auth.ricevitore') !== '') {
             Route::middleware('web')->get(config('zr-auth.ricevitore'), RicevitoreController::class)
                 ->name('zr-auth.ricevitore')
+                ->bloccaSessione()
                 ->withoutMiddleware(ConGettone::class);
         }
 
@@ -54,5 +64,51 @@ final class ZrAuthServiceProvider extends ServiceProvider
             }
             $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, ConGettone::class);
         });
+    }
+
+    /**
+     * Il blocco della sessione (#1477): una richiesta che cambia la sessione (l'uscita, l'ingresso nel workspace) non si
+     * sovrappone a un'altra della stessa sessione, che a fine corsa riscriverebbe la sessione di prima. `->bloccaSessione()`
+     * su una rotta è il `Route::block` di Laravel con i tempi di zr-auth. Oltre l'attesa Laravel lancia
+     * LockTimeoutException, che senza una mano sarebbe un 500: qui diventa un 503 con Retry-After, solo per una rotta con il
+     * blocco e prima che la sessione parta (il timeout di un altro lock del modulo, dentro il controller, resta com'è), e senza dire di
+     * chi è il blocco.
+     */
+    private function bloccoDellaSessione(): void
+    {
+        if (! Rotta::hasMacro('bloccaSessione')) {
+            Rotta::macro('bloccaSessione', function (): Rotta {
+                /** @var Rotta $this */
+                return $this->block(Sessione::BLOCCO_TENUTA, Sessione::BLOCCO_ATTESA);
+            });
+        }
+
+        $this->callAfterResolving(ExceptionHandler::class, function (ExceptionHandler $gestore): void {
+            if (! $gestore instanceof Handler) {
+                return;
+            }
+
+            // Non si riporta: un timeout atteso, che chiunque con un cookie suo può provocare, non deve riempire il log del
+            // modulo di errori con la traccia intera. Quello di un altro lock del modulo si riporta come sempre.
+            $gestore->dontReportWhen(fn (Throwable $errore) => $errore instanceof LockTimeoutException && self::eIlBloccoDellaSessione(request()));
+
+            $gestore->renderable(function (LockTimeoutException $errore, Request $richiesta): ?Response {
+                if (! self::eIlBloccoDellaSessione($richiesta)) {
+                    return null;
+                }
+
+                return response('Riprova tra un istante.', 503, ['Retry-After' => '1', 'Cache-Control' => 'no-store']);
+            });
+        });
+    }
+
+    /**
+     * Il lock della sessione scade prima che la sessione parta (StartSession la mette sulla richiesta solo dopo averlo preso):
+     * su una rotta con il blocco e senza una sessione sulla richiesta il timeout è suo. Con una sessione già sulla richiesta è
+     * di un lock del modulo, dentro il controller, e resta suo.
+     */
+    private static function eIlBloccoDellaSessione(Request $richiesta): bool
+    {
+        return $richiesta->route() instanceof Rotta && (bool) $richiesta->route()->locksFor() && ! $richiesta->hasSession();
     }
 }
