@@ -20,6 +20,15 @@ final class Sessione
     public const CHIAVE = 'zr-auth';
 
     /**
+     * Il blocco della sessione (`Route::block`, `->bloccaSessione()`): per quanti secondi una richiesta tiene il lock della
+     * sessione, e per quanti al più ne aspetta un altro. L'attesa è corta apposta: il pool PHP-FPM è uno solo e condiviso, e
+     * un processo che aspetta manca a tutti i siti.
+     */
+    public const BLOCCO_TENUTA = 10;
+
+    public const BLOCCO_ATTESA = 3;
+
+    /**
      * Apre la sessione coi `data` della risposta di accessi.crea (lo schema Accesso): l'accesso e il suo gettone, senza
      * workspace. L'id della sessione è nuovo e quella di prima è distrutta: chi conosceva l'id di prima non entra.
      *

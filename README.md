@@ -146,6 +146,31 @@ scelto un workspace, e `Api::workspace()` lancia `LogicException`.
 Il gettone non esce mai dalla sessione: nessun metodo lo restituisce. Non va nell'HTML, nelle props di Inertia, né in
 un cookie (spec S01, prova 8).
 
+## Il blocco della sessione: una richiesta lenta non rimette la sessione di prima
+
+Laravel carica la sessione all'inizio di una richiesta e la riscrive alla fine. Se una scheda ha una richiesta lenta in corso e
+un'altra scheda esce o cambia workspace, la lenta, finendo dopo, rimette la sessione di prima. Il rimedio è il blocco della
+sessione di Laravel (`Route::block`): zr-auth lo mette sul suo ricevitore e dà ai moduli una riga sola per le loro rotte.
+
+```php
+Route::post('esci', EsciController::class)->bloccaSessione();                  // chiama Sessione::chiudi()
+Route::post('workspace/{id}/entra', EntraController::class)->bloccaSessione(); // chiama Sessione::entra()
+Route::get('report', ReportController::class)->bloccaSessione();               // una rotta lenta, che riscrive la sessione a fine corsa
+```
+
+- **Cosa fa.** `->bloccaSessione()` è un `block(10, 3)` (`Sessione::BLOCCO_TENUTA`, `Sessione::BLOCCO_ATTESA`): la richiesta tiene il
+  lock della sessione fino a 10 secondi e ne aspetta un altro per al più **3 secondi**. Un processo PHP che aspetta manca a tutti
+  i siti del server (il pool è uno solo): per questo l'attesa è corta.
+- **Dove lo mette zr-auth.** Sul ricevitore del codice (`zr-auth.ricevitore`). Le rotte dei moduli lo mettono i moduli: quelle
+  che chiamano `Sessione::apri()`, `Sessione::entra()` o `Sessione::chiudi()` **e** le loro rotte lente. Non va su tutto: due
+  pagine della stessa persona caricate insieme si metterebbero in fila.
+- **Oltre l'attesa** la risposta è **503** con `Retry-After: 1`, mai un 500 e mai «prosegui senza il blocco» (riaprirebbe la
+  gara). Il corpo non dice di chi è il blocco. Vale solo per una rotta con il blocco: il timeout di un altro lock del modulo
+  resta com'è.
+- **Dove sta il lock.** In `session.block_store` (`SESSION_BLOCK_STORE`), cioè nello store di cache del modulo se non lo
+  cambi; deve poter fare i lock (Redis, database, file, array nei test). Il lock è perso se lo store lo butta: il rischio è la
+  gara di prima, non un errore.
+
 ## L'accesso con un provider (Google, LinkedIn, Facebook)
 
 Tre metodi senza gettone, e nessun codice nuovo nel client: la pagina d'ingresso chiama `Api::senzaGettone()`.
