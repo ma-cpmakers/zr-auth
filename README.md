@@ -390,10 +390,10 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
 - Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.elimina`, `accessi.provider.elenca`,
   `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
-  `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
+  `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
   `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
-  `io.workspace.elenca`, `io.aziende.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
+  `io.workspace.elenca`, `io.aziende.elenca`, `io.notifiche.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
   `io.workspace.crea` (vedi «Il workspace»). Una chiamata
   di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
 - **I provider.** Spenti di norma, come in produzione senza credenziali: `provider('google', 'linkedin-openid', 'facebook')`
@@ -403,6 +403,11 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `guastaProvider('google')` lo fa non rispondere (`503`). La partenza dà un indirizzo con `client_id=finto-<slug>`; il
   resto dell'indirizzo, lo `stato` di 10 minuti usa-e-getta e la sfida PKCE sono quelli del backoffice. Una persona nuova
   vuole la registrazione consentita (`consenti()`) e `termini_accettati`.
+- **Le notifiche.** `io.notifiche.elenca`, `io.notifiche.lettura.modifica` e `io.notifiche.letture.crea` rispondono come il backoffice,
+  col gettone di un workspace (quello dell'accesso è `403` `gettone_senza_workspace`), e `notifiche_non_lette` di `io.mostra` conta le
+  non lette della persona in quel workspace. Il finto non ha gli eventi che le generano: le semina il test con
+  `notifica($workspace, $persona, $tipo, creataIl: …, lettaIl: …)`, che dà la notifica come la dà l'elenco. L'app la dà il tipo
+  (`pm` per `com.zeiras.board.*`, altrimenti `null`): un'altra è un errore del test. La lettura in blocco segna al più 5000 per chiamata.
 - **Le aziende.** `io.aziende.elenca` dà le aziende dei workspace di cui la persona è membro (con ogni suo gettone, anche
   quello dell'accesso), una volta sola ciascuna, in ordine di nome e poi di id, a pagine col solo id. Un'azienda nasce con
   il workspace e prende il suo nome di allora (`workspace()` e `io.workspace.crea` senza `azienda_id`): una rinomina del

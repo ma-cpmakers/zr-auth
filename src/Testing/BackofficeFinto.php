@@ -64,6 +64,15 @@ final class BackofficeFinto
 
     private const CATENA = 20;
 
+    /** Le notifiche che una lettura in blocco segna al più, e quelle di un giro (IoNotificheController, #1411). */
+    private const NOTIFICHE_PER_CHIAMATA = 5000;
+
+    /** Un istante ISO 8601 con il fuso (`Z` o un offset), con o senza frazione di secondo (IoNotificheController::ISO_CON_FUSO). */
+    private const ISO_CON_FUSO = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/';
+
+    /** L'app di un tipo di evento, dal primo prefisso che il tipo ha (config/catalogo.php del backoffice, `prefissi`). */
+    private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm'];
+
     private const SCHEDE_VISITATE = 2000;
 
     /** L'id della lista di ogni scheda del finto, che non modella le liste. */
@@ -90,6 +99,9 @@ final class BackofficeFinto
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
+        ['GET', '#^/v1/io/notifiche$#', 'io.notifiche.elenca'],
+        ['POST', '#^/v1/io/notifiche/letture$#', 'io.notifiche.letture.crea'],
+        ['PATCH', '#^/v1/io/notifiche/([^/]+)/lettura$#', 'io.notifiche.lettura.modifica'],
         ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
@@ -269,6 +281,9 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
     private array $ingressi = [];
 
+    /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable}> le notifiche (notifica()), per id */
+    private array $notifiche = [];
+
     /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
     private array $schede = [];
 
@@ -417,6 +432,45 @@ final class BackofficeFinto
         $this->schede[$id][$stato.'_il'] = now()->toImmutable()->startOfMillisecond();
 
         return $this;
+    }
+
+    /**
+     * Una notifica di una persona nel workspace, per provare la campanella e la pagina delle notifiche (`io.notifiche.*`): il
+     * finto non modella gli eventi che le generano, come il backoffice li scrive in `Scrittura::registra`. L'app di una
+     * notifica la dà il tipo (`pm` per `com.zeiras.board.*`, altrimenti `null`): `$app` si dice solo per chiarezza, e un'app che
+     * il tipo non ha è un errore. `$creataIl` è adesso, `$lettaIl` null (non letta); i millesimi sono quelli del finto.
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     * @param  array<string, mixed>  $persona  una persona di persona(), membra del workspace
+     * @param  array<string, mixed>  $dati  quale risorsa è cambiata, coi soli id (come `data` dell'evento)
+     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string}
+     */
+    public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null): array
+    {
+        $idWorkspace = $workspace['id'] ?? null;
+        $idPersona = $persona['id'] ?? null;
+
+        if (! is_string($idWorkspace) || ! isset($this->workspace[$idWorkspace])) {
+            throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
+        }
+
+        if (! is_string($idPersona) || ! isset($this->membri[$idWorkspace][$idPersona])) {
+            throw new InvalidArgumentException('La persona non è del workspace: ne è membra con workspace() o membro().');
+        }
+
+        $delTipo = self::appDelTipo($tipo);
+
+        if ($app !== null && $app !== $delTipo) {
+            throw new InvalidArgumentException('L\'app di una notifica la dà il tipo: '.($delTipo === null ? "«{$tipo}» non è di un'app" : "«{$tipo}» è di {$delTipo}").'.');
+        }
+
+        $id = self::id();
+        $creata = ($creataIl ?? now())->toImmutable()->startOfMillisecond();
+        $letta = $lettaIl?->toImmutable()->startOfMillisecond();
+        $dati = $dati === [] ? ['id' => $id] : $dati;
+        $this->notifiche[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'persona' => $idPersona, 'tipo' => $tipo, 'soggetto' => $soggetto ?? '/v1/board/schede/'.$id, 'dati' => $dati, 'letta_il' => $letta, 'creata_il' => $creata];
+
+        return $this->voceNotifica($this->notifiche[$id]);
     }
 
     /**
@@ -765,6 +819,9 @@ final class BackofficeFinto
                 'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
+                'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
+                'io.notifiche.letture.crea' => $this->segnaNotificheLette($richiesta, $corpo),
+                'io.notifiche.lettura.modifica' => $this->segnaNotifica($richiesta, $corpo, $parametri[0]),
                 'io.modifica' => $this->modificaIo($richiesta, $corpo),
                 'io.password.modifica' => $this->modificaPassword($richiesta, $corpo),
                 'io.email.codice.crea' => $this->creaCodice($corpo),
@@ -1590,8 +1647,125 @@ final class BackofficeFinto
             'utente' => $this->utente($chi['persona']),
             'workspace' => $workspace === null ? null : $this->workspace[$workspace],
             'ruolo' => $workspace === null ? null : $this->membri[$workspace][$chi['persona']],
-            'notifiche_non_lette' => $workspace === null ? null : 0,
+            'notifiche_non_lette' => $workspace === null ? null : count(array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $workspace && $notifica['persona'] === $chi['persona'] && $notifica['letta_il'] === null)),
         ];
+    }
+
+    /**
+     * io.notifiche.elenca (IoNotificheController::elenca): le notifiche della persona del gettone in questo workspace, più
+     * recenti prima (creata_il e id decrescenti). Il cursore porta l'id, e la posizione si rilegge fra le notifiche del
+     * workspace, di chiunque. Il gettone dell'accesso è 403 gettone_senza_workspace.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaNotifiche(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $voci = array_values(array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $chi['workspace'] && $notifica['persona'] === $chi['persona']));
+        $posizione = fn (array $notifica) => [self::iso($notifica['creata_il']), $notifica['id']];
+
+        return $this->pagina($richiesta, 'io.notifiche.elenca', 'id', array_map($this->voceNotifica(...), $voci),
+            fn (array $voce) => [$voce['creata_il'], $voce['id']],
+            fn (string $id) => isset($this->notifiche[$id]) && $this->notifiche[$id]['workspace'] === $chi['workspace'] ? $posizione($this->notifiche[$id]) : null,
+            dalPiuRecente: true);
+    }
+
+    /**
+     * io.notifiche.lettura.modifica (IoNotificheController::modifica): segna letta o non letta una notifica della persona del
+     * gettone. Una che non è del workspace o di un'altra persona è 404, prima del corpo; `letta` è obbligatorio e booleano.
+     * Letta, l'istante di adesso; ripetuta, non cambia; non letta, torna null.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function segnaNotifica(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $notifica = $this->notifiche[$id] ?? null;
+
+        if ($notifica === null || $notifica['workspace'] !== $chi['workspace'] || $notifica['persona'] !== $chi['persona']) {
+            throw new Problema('non_trovato');
+        }
+
+        $letta = (bool) $this->testi->validaStretta($corpo, ['letta' => ['required', 'boolean']])['letta'];
+        $this->notifiche[$id]['letta_il'] = $letta ? ($notifica['letta_il'] ?? now()->toImmutable()->startOfMillisecond()) : null;
+
+        return [200, ['data' => $this->voceNotifica($this->notifiche[$id])]];
+    }
+
+    /**
+     * io.notifiche.letture.crea (IoNotificheController::lettureCrea): segna lette le notifiche non lette della persona del
+     * gettone in questo workspace con `creata_il` fino a `fino_a` compreso, al millesimo, al più 5000 per chiamata: `segnate`
+     * quante, `altre` se ne restano. `fino_a` è ISO 8601 con il fuso e una data che esiste. Una già letta o di un'altra
+     * persona non si tocca.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function segnaNotificheLette(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $campi = $this->testi->validaStretta($corpo, ['fino_a' => ['bail', 'required', 'string', function (string $attributo, mixed $valore, Closure $fail) {
+            if (preg_match(self::ISO_CON_FUSO, $valore) !== 1 || self::istanteIso($valore) === null) {
+                $fail('validation.date')->translate(['attribute' => $attributo]);
+            }
+        }]]);
+        $fino = self::istanteIso((string) $campi['fino_a']) ?? throw new LogicException('fino_a già validato.');
+        $adesso = now()->toImmutable()->startOfMillisecond();
+        $daSegnare = array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $chi['workspace'] && $notifica['persona'] === $chi['persona']
+            && $notifica['letta_il'] === null && $notifica['creata_il']->lte($fino));
+        uasort($daSegnare, fn (array $una, array $altra) => strcmp($una['id'], $altra['id']));
+        $segnate = array_slice($daSegnare, 0, self::NOTIFICHE_PER_CHIAMATA, true);
+
+        foreach (array_keys($segnate) as $id) {
+            $this->notifiche[$id]['letta_il'] = $adesso;
+        }
+
+        return [200, ['data' => ['fino_a' => self::iso($fino), 'segnate' => count($segnate), 'altre' => count($daSegnare) > self::NOTIFICHE_PER_CHIAMATA]]];
+    }
+
+    /**
+     * Una notifica nella forma del contratto (Forme::notifica).
+     *
+     * @param  array<string, mixed>  $notifica
+     * @return array<string, mixed>
+     */
+    private function voceNotifica(array $notifica): array
+    {
+        return [
+            'id' => $notifica['id'],
+            'tipo' => $notifica['tipo'],
+            'app' => self::appDelTipo($notifica['tipo']),
+            'soggetto' => $notifica['soggetto'],
+            'dati' => (object) $notifica['dati'],
+            'letta_il' => $notifica['letta_il'] === null ? null : self::iso($notifica['letta_il']),
+            'creata_il' => self::iso($notifica['creata_il']),
+        ];
+    }
+
+    /** L'app di un tipo di evento (Forme::appDelTipo): quella del primo prefisso che il tipo ha, o null. */
+    private static function appDelTipo(string $tipo): ?string
+    {
+        foreach (self::PREFISSI_DELLE_APP as $prefisso => $app) {
+            if (str_starts_with($tipo, $prefisso)) {
+                return $app;
+            }
+        }
+
+        return null;
+    }
+
+    /** L'istante di un testo ISO 8601 con fuso, in UTC e al millesimo, o null se non è una data che esiste (IoNotificheController::istante). */
+    private static function istanteIso(string $testo): ?CarbonImmutable
+    {
+        try {
+            $istante = CarbonImmutable::parse($testo);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        // Una data che non esiste (30 febbraio) Carbon la sposta: si confronta con ciò che si è letto.
+        return $istante->format('Y-m-d') === substr($testo, 0, 10) ? $istante->utc()->startOfMillisecond() : null;
     }
 
     /**
