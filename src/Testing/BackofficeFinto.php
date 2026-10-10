@@ -323,6 +323,9 @@ final class BackofficeFinto
     /** Turnstile in utenti.crea: spento (null), `acceso`, o `guasto` (Cloudflare non risponde). */
     private ?string $turnstile = null;
 
+    /** Il gradino del widget di accessi.crea (ZR_ACCESSI_TURNSTILE del backoffice): spento di default (accendiGradinoAccessi()). */
+    private bool $gradinoAccessi = false;
+
     /** I freni, con RateLimiter come nel backoffice: in memoria, e col tempo di now(). */
     private readonly RateLimiter $freni;
 
@@ -600,6 +603,18 @@ final class BackofficeFinto
     }
 
     /**
+     * Accende il gradino del widget di accessi.crea, come ZR_ACCESSI_TURNSTILE nel backoffice (spento di default, finché la pagina
+     * di accesso non mostra il widget): dal sesto al trentesimo tentativo di un'email serve `turnstile` (se Turnstile è acceso,
+     * accendiTurnstile()), e senza è 422 turnstile_non_valido. Spento, il sesto tentativo di un'email è 429.
+     */
+    public function accendiGradinoAccessi(): self
+    {
+        $this->gradinoAccessi = true;
+
+        return $this;
+    }
+
+    /**
      * Turnstile acceso, e Cloudflare che non risponde: una risposta del widget ben formata è 503 turnstile_non_disponibile,
      * una mancante o malformata resta 422 turnstile_non_valido.
      */
@@ -725,7 +740,7 @@ final class BackofficeFinto
     }
 
     /** Le rotte senza gettone a cui un client firma l'IP. */
-    private const SENZA_GETTONE = ['accessi.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
 
     /**
      * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
@@ -1125,7 +1140,7 @@ final class BackofficeFinto
 
     /**
      * board.schede.collegamenti.elimina (CollegamentiController::elimina): toglie l'attesa, 204. Un collegamento che non è della
-     * scheda del percorso (che aspetta) o non c'è più è 404; una scheda archiviata, quella del percorso o la aspettata, è 409.
+     * scheda del percorso (che aspetta) o non c'è più è 404; la scheda del percorso archiviata è 409, la aspettata archiviata no.
      *
      * @return array{int, null}
      */
@@ -1139,7 +1154,8 @@ final class BackofficeFinto
             throw new Problema('non_trovato');
         }
 
-        if ($mia['archiviata_il'] !== null || $this->schede[$voce['aspettata']]['archiviata_il'] !== null) {
+        // Solo la scheda del percorso conta: l'attesa verso una scheda archiviata si toglie (zr-pm, 10/10, nota 7953).
+        if ($mia['archiviata_il'] !== null) {
             throw new Problema('scheda_archiviata');
         }
 
@@ -1206,18 +1222,19 @@ final class BackofficeFinto
     {
         $dati = $this->testi->valida($corpo, self::credenziali() + ['turnstile' => ['sometimes', 'nullable', 'string', 'max:'.self::LUNGHEZZA_TURNSTILE]]);
         $email = self::normalizza($dati['email']);
-        // Come il backoffice (#1447): la coppia (email, IP firmato) frena al sesto tentativo in un minuto; l'email chiede il widget
-        // (se Turnstile è acceso) dal sesto al trentesimo, e oltre il trentesimo è 429.
+        // Come il backoffice (#1447): la coppia (email, IP firmato) frena al sesto tentativo in un minuto. L'email: oltre il quinto è
+        // 429, come prima; solo col gradino acceso (accendiGradinoAccessi(), l'interruttore ZR_ACCESSI_TURNSTILE del backoffice, spento di
+        // default) il widget si chiede dal sesto al trentesimo tentativo (se Turnstile è acceso) e il 429 viene oltre il trentesimo.
         $coppia = 'accessi-ip:'.$email.':'.($this->ipFirmato ?? 'anonimo');
         $this->frena($coppia, self::FRENI['accessi_per_ip'], self::MINUTO);
         $freno = 'accessi:'.$email;
         $tentativi = $this->freni->hit($freno, self::MINUTO);
 
-        if ($tentativi > self::FRENI['accessi_massimo']) {
+        if ($tentativi > self::FRENI[$this->gradinoAccessi ? 'accessi_massimo' : 'accessi']) {
             throw new Problema('troppe_richieste', header: ['Retry-After' => (string) $this->freni->availableIn($freno)]);
         }
 
-        if ($tentativi > self::FRENI['accessi']) {
+        if ($this->gradinoAccessi && $tentativi > self::FRENI['accessi']) {
             $this->controllaTurnstile($dati['turnstile'] ?? null);
         }
 

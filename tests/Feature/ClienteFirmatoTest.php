@@ -3,6 +3,8 @@
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Zeiras\Auth\Api;
+use Zeiras\Auth\Errori\ErroreApi;
+use Zeiras\Auth\Errori\GettoneRifiutato;
 use Zeiras\Auth\Testing\BackofficeFinto;
 
 // #1447 (T1.8): il client firma le rotte senza gettone con quattro header (Api::firmata), e il finto li verifica come il
@@ -80,6 +82,48 @@ it('il finto rifiuta con 401 cliente_non_riconosciuto una firma che non torna, s
     expect(array_unique(array_map(fn (string $corpo) => json_decode($corpo, true)['detail'], $corpi)))->toHaveCount(1);
 });
 
+it('un client configurato male (segreto sbagliato) è un ErroreApi 401 cliente_non_riconosciuto, che va nel log, non un GettoneRifiutato muto (T8.2, deve fallire se rimanda in silenzio all\'ingresso)', function () {
+    BackofficeFinto::attiva()->persona('anna@example.com', PASSWORD);
+    config(['zr-auth.segreto' => 'un-altro-segreto-0123456789']);
+
+    $errore = null;
+
+    try {
+        Api::senzaGettone()->post('/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD]);
+    } catch (Throwable $e) {
+        $errore = $e;
+    }
+
+    expect($errore)->toBeInstanceOf(ErroreApi::class)->not->toBeInstanceOf(GettoneRifiutato::class)
+        ->and($errore->stato)->toBe(401)
+        ->and($errore->codice)->toBe('cliente_non_riconosciuto')
+        ->and($errore->getMessage())->not->toContain('un-altro-segreto');
+});
+
+it('da un comando artisan o da un job (fuori dai test) il client non firma: la richiesta legata da Laravel è finta, 127.0.0.1 (T8.3, deve fallire se firma con 127.0.0.1)', function () {
+    BackofficeFinto::attiva();
+    app()['env'] = 'production';
+
+    Api::senzaGettone()->post('/v1/password/recupero', ['email' => 'anna@example.com']);
+
+    expect(intestazioniSpedite())->not->toHaveKey('Zr-Firma')->not->toHaveKey('Zr-Cliente');
+});
+
+it('le tre rotte dei provider sono senza gettone come nel backoffice: il finto verifica la firma e registra l\'IP (T8.4, deve fallire se una firma sbagliata passa)', function () {
+    $finto = BackofficeFinto::attiva()->provider('google');
+
+    Api::senzaGettone()->get('/v1/accessi/provider');
+    Api::senzaGettone()->post('/v1/accessi/provider/google/autorizzazioni');
+
+    expect(array_column($finto->ipVisti(), 'operazione'))->toBe(['accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea']);
+
+    $sbagliata = ['Zr-Cliente' => 'finto', 'Zr-Ip' => '203.0.113.5', 'Zr-Istante' => (string) Carbon::now()->timestamp, 'Zr-Firma' => str_repeat('0', 64)];
+
+    foreach ([['GET', '/v1/accessi/provider'], ['POST', '/v1/accessi/provider/google/autorizzazioni'], ['POST', '/v1/accessi/provider/google']] as [$metodo, $percorso]) {
+        expect(alFinto($metodo, $percorso, $metodo === 'POST' ? [] : null, intestazioni: $sbagliata)->json('codice'))->toBe('cliente_non_riconosciuto', $percorso);
+    }
+});
+
 /** Gli header che un client firmerebbe per accessi.crea da quell'IP. */
 function firmaDa(string $ip): array
 {
@@ -94,7 +138,7 @@ function firmaDa(string $ip): array
 }
 
 it('accessi.crea nel finto: dal sesto tentativo sull\'email serve il widget, la coppia (email, IP) è 429 al sesto, oltre 30 è 429 (T1.8)', function () {
-    BackofficeFinto::attiva()->accendiTurnstile()->persona('anna@example.com', PASSWORD);
+    BackofficeFinto::attiva()->accendiTurnstile()->accendiGradinoAccessi()->persona('anna@example.com', PASSWORD);
     $accedi = fn (string $ip, string $password, ?string $widget = null) => alFinto('POST', '/v1/accessi', array_filter(['email' => 'anna@example.com', 'password' => $password, 'turnstile' => $widget]), intestazioni: firmaDa($ip));
 
     foreach (range(1, 5) as $n) {
@@ -107,8 +151,20 @@ it('accessi.crea nel finto: dal sesto tentativo sull\'email serve il widget, la 
         ->and($accedi('203.0.113.5', PASSWORD, BackofficeFinto::TURNSTILE_VALIDO)->json('codice'))->toBe('troppe_richieste');
 });
 
-it('accessi.crea nel finto: la coppia (email, IP) al sesto tentativo è 429 anche col widget (T1.8)', function () {
+it('accessi.crea nel finto, col gradino spento (di default): il sesto tentativo di un\'email da un altro IP è 429, mai il widget (T8.1, deve fallire se è 422 turnstile_non_valido o 201)', function () {
     BackofficeFinto::attiva()->accendiTurnstile()->persona('anna@example.com', PASSWORD);
+    $accedi = fn (string $ip, string $password, ?string $widget = null) => alFinto('POST', '/v1/accessi', array_filter(['email' => 'anna@example.com', 'password' => $password, 'turnstile' => $widget]), intestazioni: firmaDa($ip));
+
+    foreach (range(1, 5) as $n) {
+        expect($accedi("198.51.100.{$n}", PASSWORD_SBAGLIATA)->json('codice'))->toBe('credenziali_non_valide');
+    }
+
+    expect($accedi('198.51.100.99', PASSWORD)->json('codice'))->toBe('troppe_richieste')
+        ->and($accedi('198.51.100.99', PASSWORD, BackofficeFinto::TURNSTILE_VALIDO)->json('codice'))->toBe('troppe_richieste');
+});
+
+it('accessi.crea nel finto: la coppia (email, IP) al sesto tentativo è 429 anche col widget (T1.8)', function () {
+    BackofficeFinto::attiva()->accendiTurnstile()->accendiGradinoAccessi()->persona('anna@example.com', PASSWORD);
     $accedi = fn (string $password, ?string $widget = null) => alFinto('POST', '/v1/accessi', array_filter(['email' => 'anna@example.com', 'password' => $password, 'turnstile' => $widget]), intestazioni: firmaDa('203.0.113.5'));
 
     foreach (range(1, 5) as $n) {

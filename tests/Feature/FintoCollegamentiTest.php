@@ -103,6 +103,18 @@ it('elimina toglie l\'attesa (204), e la stessa coppia si ricollega; una scheda 
     expect(aspettaNelFinto($gettone, $a, $c)->json('codice'))->toBe('scheda_archiviata');
 });
 
+it('elimina toglie l\'attesa verso una scheda archiviata (204), e è 409 se è archiviata la scheda del percorso (T3.6, deve fallire se la aspettata archiviata dà 409)', function () {
+    [$finto, [$a, $b, $c], $gettone] = conLeSchede(3);
+    $verso = aspettaNelFinto($gettone, $a, $b)->json('data.id');
+    $da = aspettaNelFinto($gettone, $c, $a)->json('data.id');
+    $finto->segnaScheda($b, 'archiviata');
+
+    expect(alFinto('DELETE', "/v1/board/schede/{$a['id']}/collegamenti/{$verso}", null, $gettone)->status())->toBe(204);
+
+    $finto->segnaScheda($c, 'archiviata');
+    expect(alFinto('DELETE', "/v1/board/schede/{$c['id']}/collegamenti/{$da}", null, $gettone)->json('codice'))->toBe('scheda_archiviata');
+});
+
 it('con l\'app pm spenta è 403 app_non_attiva (T3.9)', function () {
     [, [$a, $b], $gettone] = conLeSchede(2, pm: false);
 

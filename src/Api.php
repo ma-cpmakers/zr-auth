@@ -219,7 +219,10 @@ final class Api
 
         $corpo = self::json($risposta);
 
-        if ($risposta->status() === 401) {
+        // Un 401 è il gettone che non vale: si chiude la sessione. Non lo è `cliente_non_riconosciuto` di una rotta senza gettone:
+        // quello è il frontend configurato male (nome o segreto sbagliati, orologio spostato), e deve vedersi nel log, non
+        // rimandare in silenzio all'ingresso (che rimanderebbe qui, e a ogni registrazione).
+        if ($risposta->status() === 401 && ($corpo['codice'] ?? null) !== 'cliente_non_riconosciuto') {
             throw new GettoneRifiutato(ErroreApi::daRisposta($risposta, $corpo));
         }
 
@@ -279,14 +282,18 @@ final class Api
      * questo frontend, `zr-auth.cliente`), `Zr-Ip` (l'IP che Laravel vede nella richiesta del browser), `Zr-Istante` e
      * `Zr-Firma`, l'HMAC-SHA256 di `zr1`, client, istante, metodo, percorso e IP, uno per riga, col segreto
      * (`zr-auth.segreto`, ZR_BACKOFFICE_SEGRETO). Si firma alla spedizione, col metodo e il percorso veri. Senza il nome, il
-     * segreto o una richiesta del browser (un comando artisan) non si manda niente e il backoffice la conta fra gli anonimi:
-     * mai un X-Forwarded-For, che un chiamante qualsiasi può scrivere.
+     * segreto o una richiesta del browser (un comando artisan o un job in coda: Laravel lega comunque una richiesta, con
+     * 127.0.0.1) non si manda niente e il backoffice la conta fra gli anonimi: mai un X-Forwarded-For, che un chiamante
+     * qualsiasi può scrivere.
      */
     private function firmata(PendingRequest $richiesta): PendingRequest
     {
         $cliente = config('zr-auth.cliente');
         $segreto = config('zr-auth.segreto');
-        $ip = app()->bound('request') ? request()->ip() : null;
+        // Da console la richiesta legata è finta (127.0.0.1): tutti i comandi e i job dividerebbero un secchio. Nei test, che girano
+        // in console, la richiesta è quella che il test ha preparato.
+        $delBrowser = app()->bound('request') && (! app()->runningInConsole() || app()->runningUnitTests());
+        $ip = $delBrowser ? request()->ip() : null;
 
         if (! is_string($cliente) || $cliente === '' || ! is_string($segreto) || $segreto === '' || ! is_string($ip) || $ip === '') {
             return $richiesta;

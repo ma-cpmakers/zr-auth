@@ -207,8 +207,9 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   secchio. Per dirlo, il frontend ha un nome e un segreto: `ZR_AUTH_CLIENTE` (`home`, `board`) e `ZR_BACKOFFICE_SEGRETO`, uno
   per frontend, che chi gestisce il server genera e che il backoffice ha uguale in `ZR_CLIENTE_<NOME>_SEGRETO`. Con i due, ogni
   chiamata senza gettone porta quattro header firmati (`Zr-Cliente`, `Zr-Ip`, `Zr-Istante`, `Zr-Firma`: l'HMAC-SHA256 di `zr1`,
-  client, istante, metodo, percorso e IP, valida 30 secondi); senza uno dei due, o da un comando artisan, non parte niente
-  e la richiesta conta fra le anonime. Una firma che non torna è `401` `cliente_non_riconosciuto`.
+  client, istante, metodo, percorso e IP, valida 30 secondi); senza uno dei due, o da un comando artisan o da un job in coda (Laravel lega lì una richiesta finta, `127.0.0.1`), non parte niente
+  e la richiesta conta fra le anonime. Una firma che non torna è `401` `cliente_non_riconosciuto`, e il client lo lancia come `ErroreApi`
+  (finisce nel log, senza il segreto), non come `GettoneRifiutato`: un frontend configurato male si vede, non rimanda in silenzio all'ingresso.
   ⚠️ L'IP firmato è `request()->ip()` di Laravel: giusto solo se il frontend si fida dei soli proxy che lo precedono
   (Cloudflare, con `trustProxies` sui suoi indirizzi o `real_ip_header CF-Connecting-IP` in nginx). Con `trustProxies('*')` l'IP è
   quello che il browser scrive in `X-Forwarded-For`, e chi attacca sceglie il suo secchio; senza nessuna fiducia è l'IP del proxy,
@@ -417,6 +418,16 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `guastaProvider('google')` lo fa non rispondere (`503`). La partenza dà un indirizzo con `client_id=finto-<slug>`; il
   resto dell'indirizzo, lo `stato` di 10 minuti usa-e-getta e la sfida PKCE sono quelli del backoffice. Una persona nuova
   vuole la registrazione consentita (`consenti()`) e `termini_accettati`.
+- **Le schede.** Il finto non modella board né liste: `scheda($workspace, $titolo, $board)` fa nascere una scheda con il minimo che
+  le attese guardano, e `segnaScheda($scheda, 'completata'|'archiviata')` la completa o la archivia. Con quelle rispondono
+  `board.schede.mostra`, `board.schede.completamento.crea`, `board.schede.completamento.elimina`,
+  `board.schede.collegamenti.elenca`, `board.schede.collegamenti.crea` e `board.schede.collegamenti.elimina` (col gettone di un
+  workspace con l'app `pm`). `collegamenti.elimina` toglie l'attesa anche verso una scheda archiviata; è `409` `scheda_archiviata` solo
+  se è archiviata la scheda del percorso.
+- **Il widget di `accessi.crea`.** Come nel backoffice (`ZR_ACCESSI_TURNSTILE`, spento di default) il sesto tentativo di un'email in un
+  minuto è `429` `troppe_richieste`. `accendiGradinoAccessi()` accende il gradino: dal sesto al trentesimo tentativo serve `turnstile`
+  (con `accendiTurnstile()`; senza è `422` `turnstile_non_valido`) e il `429` viene oltre il trentesimo. La coppia (email, IP firmato)
+  è `429` al sesto in ogni caso.
 - **Le notifiche.** `io.notifiche.elenca`, `io.notifiche.lettura.modifica` e `io.notifiche.letture.crea` rispondono come il backoffice,
   col gettone di un workspace (quello dell'accesso è `403` `gettone_senza_workspace`), e `notifiche_non_lette` di `io.mostra` conta le
   non lette della persona in quel workspace. Il finto non ha gli eventi che le generano: le semina il test con
