@@ -1761,7 +1761,8 @@ final class BackofficeFinto
         $chi = $this->conWorkspace($richiesta);
         $campi = $this->testi->validaStretta($corpo, ['fino_a' => ['bail', 'required', 'string', function (string $attributo, mixed $valore, Closure $fail) {
             if (preg_match(self::ISO_CON_FUSO, $valore) !== 1 || self::istanteIso($valore) === null) {
-                $fail('validation.date')->translate(['attribute' => $attributo]);
+                $this->testi->dichiara($attributo, 'formato');
+                $fail('validation.date')->translate(['attribute' => $this->testi->nome($attributo)]);
             }
         }]]);
         $fino = self::istanteIso((string) $campi['fino_a']) ?? throw new LogicException('fino_a già validato.');
