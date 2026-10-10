@@ -201,6 +201,20 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   return $ultimo['corpo'];                                 // 304: si serve ciò che si aveva
   ```
 
+- **L'IP vero della persona (client registrato).** Le rotte senza gettone (`accessi.crea`, `utenti.crea`, le verifiche
+  dell'email, il recupero della password, lo scambio dell'ingresso e i tre metodi dei provider) hanno i loro freni per IP: se il
+  frontend non dice chi chiama, il backoffice vede il suo server (`127.0.0.1`) e tutte le persone di Zeiras dividono lo stesso
+  secchio. Per dirlo, il frontend ha un nome e un segreto: `ZR_AUTH_CLIENTE` (`home`, `board`) e `ZR_BACKOFFICE_SEGRETO`, uno
+  per frontend, che chi gestisce il server genera e che il backoffice ha uguale in `ZR_CLIENTE_<NOME>_SEGRETO`. Con i due, ogni
+  chiamata senza gettone porta quattro header firmati (`Zr-Cliente`, `Zr-Ip`, `Zr-Istante`, `Zr-Firma`: l'HMAC-SHA256 di `zr1`,
+  client, istante, metodo, percorso e IP, valida 30 secondi); senza uno dei due, o da un comando artisan, non parte niente
+  e la richiesta conta fra le anonime. Una firma che non torna è `401` `cliente_non_riconosciuto`.
+  ⚠️ L'IP firmato è `request()->ip()` di Laravel: giusto solo se il frontend si fida dei soli proxy che lo precedono
+  (Cloudflare, con `trustProxies` sui suoi indirizzi o `real_ip_header CF-Connecting-IP` in nginx). Con `trustProxies('*')` l'IP è
+  quello che il browser scrive in `X-Forwarded-For`, e chi attacca sceglie il suo secchio; senza nessuna fiducia è l'IP del proxy,
+  e molte persone dividono un secchio. Nei test, il finto riconosce il client `BackofficeFinto::CLIENTE` col segreto
+  `BackofficeFinto::SEGRETO_DEL_CLIENTE` (`ZR_AUTH_CLIENTE=finto`, `ZR_BACKOFFICE_SEGRETO=<quello>`), e `ipVisti()` dice gli IP
+  che il client ha dichiarato con una firma valida, per provare che passa quello della persona.
 - Il percorso è sempre di `/v1` (`'/v1/io'`): un indirizzo intero non parte, perché il gettone va solo al backoffice.
 - Un errore di `/v1` (RFC 9457, `application/problem+json`) diventa `ErroreApi`: si decide su `$e->codice`, e
   `$e->dettaglio` si mostra.
