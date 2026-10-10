@@ -165,10 +165,10 @@ it('utenti.crea con un invito e l\'obbligo di Turnstile acceso: senza turnstile 
 });
 
 it('ErroreApi tiene nelle estensioni anche gli elenchi del problema: schede di attese_aperte (#1556, T3.1)', function () {
-    Http::fake(['*' => problema(409, 'attese_aperte', ['schede' => [['id' => '01J0000000000000000000K3AB', 'numero' => 3]], 'limite' => 5])]);
+    Http::fake(['*' => problema(409, 'attese_aperte', ['schede' => [['id' => '01J0000000000000000000K3AB', 'numero' => 3]]])]);
 
     expect(fn () => Api::senzaGettone()->post('/v1/board/schede/x/completamento', []))
-        ->toThrow(fn (ErroreApi $e) => expect($e->estensioni)->toBe(['schede' => [['id' => '01J0000000000000000000K3AB', 'numero' => 3]], 'limite' => 5]));
+        ->toThrow(fn (ErroreApi $e) => expect($e->estensioni)->toBe(['schede' => [['id' => '01J0000000000000000000K3AB', 'numero' => 3]]]));
 });
 
 it('ErroreApi tiene liste_consentite del 409 passaggio_non_consentito (#1556, T3.1)', function () {

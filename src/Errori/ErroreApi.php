@@ -21,8 +21,9 @@ class ErroreApi extends RuntimeException
      * @param  array<string, int|float|string|bool|array<mixed>>  $estensioni  i membri estesi del problema (RFC 9457, §3.2), per
      *                                                            nome, scalari o elenchi: oggi `limite` e `direzione` del 409
      *                                                            `limite_raggiunto` di `board.schede.collegamenti.crea`, `schede` del
-     *                                                            409 `attese_aperte` e `liste_consentite` del 409
-     *                                                            `passaggio_non_consentito`
+     *                                                            409 `attese_aperte`, `liste_consentite` del 409
+     *                                                            `passaggio_non_consentito`, `limite` del 409 `lista_al_limite` e
+     *                                                            `voci_aperte` del 409 `checklist_incompleta`
      */
     public function __construct(
         public readonly int $stato,
