@@ -2779,6 +2779,7 @@ final class BackofficeFinto
             'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO],
             'cursore' => ['sometimes', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($lista, $chiave) {
                 if ($this->leggiCursore($lista, $chiave, $valore) === null) {
+                    $this->testi->dichiara($attributo, 'formato');
                     $fail('regole.cursore')->translate();
                 }
             }],
@@ -2790,7 +2791,7 @@ final class BackofficeFinto
 
         if (isset($query['cursore'])) {
             $dopo = $posizioneDelCursore((string) $this->leggiCursore($lista, $chiave, $query['cursore']))
-                ?? throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.cursore', ['attribute' => 'cursore']), 'parameter' => 'cursore']]);
+                ?? throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.cursore', ['attribute' => 'cursore']), 'regola' => 'formato', 'parameter' => 'cursore']]);
             $voci = array_values(array_filter($voci, fn (array $voce) => $verso * self::confronta($posizione($voce), $dopo) > 0));
         }
 

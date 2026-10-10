@@ -39,7 +39,7 @@ final class Regola
 
     private const DI_OBBLIGO = ['Required', 'RequiredWith', 'RequiredWithAll', 'RequiredWithout', 'RequiredWithoutAll', 'RequiredIf', 'RequiredUnless', 'Filled', 'Present'];
 
-    private const DI_FORMATO = ['Email', 'Url', 'ActiveUrl', 'Regex', 'NotRegex', 'Ulid', 'Uuid', 'Date', 'DateFormat', 'Timezone', 'AlphaDash', 'AlphaNum', 'Alpha', 'Ascii', 'Base64', 'Cursore', 'Sequenza', 'SenzaCarattereNullo'];
+    private const DI_FORMATO = ['Email', 'Url', 'ActiveUrl', 'Regex', 'NotRegex', 'Ulid', 'Uuid', 'Date', 'DateFormat', 'Digits', 'DigitsBetween', 'Timezone', 'AlphaDash', 'AlphaNum', 'Alpha', 'Ascii', 'Base64', 'Cursore', 'Sequenza', 'SenzaCarattereNullo'];
 
     private const DI_VALORE = ['In', 'NotIn', 'Accepted', 'AcceptedIf', 'Declined', 'Same', 'Different', 'Confirmed'];
 

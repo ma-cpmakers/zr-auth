@@ -160,8 +160,8 @@ it('un\'email non valida o una password assente sono 422 dati_non_validi, col po
     expect($risposta->status())->toBe(422)
         ->and($risposta->json())->toBe(problemaAtteso('dati_non_validi', 422, 'Invalid data',
             'Some values are not valid: you find them in errors, with what is wrong and where they are.', ['errors' => [
-                ['detail' => 'The email field must be a valid email address.', 'pointer' => '#/email'],
-                ['detail' => 'The password field is required.', 'pointer' => '#/password'],
+                ['detail' => 'The email field must be a valid email address.', 'regola' => 'formato', 'pointer' => '#/email'],
+                ['detail' => 'The password field is required.', 'regola' => 'obbligatorio', 'pointer' => '#/password'],
             ]]));
 });
 
@@ -312,11 +312,12 @@ it('un workspace di cui la persona non è membro, o che non esiste, è lo stesso
         ->and($nonSuo->json())->toBe(problemaAtteso('dati_non_validi', 422, 'Dati non validi',
             'Alcuni valori non vanno bene: li trovi in errors, con cosa non va e dove stanno.', ['errors' => [[
                 'detail' => "Non sei membro di un workspace con questo id: l'id lo dà io.workspace.crea, alla nascita del workspace.",
+                'regola' => 'non_trovato',
                 'pointer' => '#/workspace_id',
             ]]]))
         ->and($inesistente->body())->toBe($nonSuo->body())
         ->and(alFinto('POST', '/v1/gettoni', [], $gettone)->json('errors'))
-        ->toBe([['detail' => 'Il campo workspace id è obbligatorio.', 'pointer' => '#/workspace_id']]);
+        ->toBe([['detail' => 'Il campo workspace id è obbligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/workspace_id']]);
 });
 
 it('gettoni.crea senza gettone è 401 gettone_assente, con un gettone inventato 401 gettone_non_valido (T2.4)', function (?string $gettone, string $codice, string $titolo, string $dettaglio, string $sfida) {

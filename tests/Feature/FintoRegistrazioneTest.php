@@ -150,14 +150,14 @@ it("un corpo non valido è 422 dati_non_validi coi testi del backoffice: prima l
         ->and($email->header('Link'))->toBe(linkDi('utenti.crea'))
         ->and($email->json())->toBe(problemaAtteso('dati_non_validi', 422, 'Dati non validi',
             'Alcuni valori non vanno bene: li trovi in errors, con cosa non va e dove stanno.', ['errors' => [
-                ['detail' => 'Il campo email deve essere un indirizzo email valido.', 'pointer' => '#/email'],
+                ['detail' => 'Il campo email deve essere un indirizzo email valido.', 'regola' => 'formato', 'pointer' => '#/email'],
             ]]))
         ->and($resto->json('errors'))->toBe([
             ['detail' => 'Il campo password deve avere almeno 12 caratteri.', 'pointer' => '#/password'],
             ['detail' => 'Il campo nome non deve avere più di 255 caratteri.', 'pointer' => '#/nome'],
             ['detail' => 'Il valore scelto per lingua non è valido.', 'pointer' => '#/lingua'],
             ['detail' => 'Il campo fuso orario deve essere un fuso orario valido.', 'pointer' => '#/fuso_orario'],
-            ['detail' => 'Il campo termini accettati deve essere accettato.', 'pointer' => '#/termini_accettati'],
+            ['detail' => 'Il campo accettazione dei termini deve essere accettato.', 'regola' => 'valore_non_ammesso', 'pointer' => '#/termini_accettati'],
         ])
         // In spagnolo il backoffice non ha i messaggi della validazione: escono in inglese, il ripiego.
         ->and($mancanti->json('errors'))->toBe([
@@ -208,12 +208,12 @@ it('spento, Turnstile non controlla la risposta ma la valida come il contratto: 
     expect($lista->status())->toBe(422)
         ->and($lista->json())->toBe(problemaAtteso('dati_non_validi', 422, 'Dati non validi',
             'Alcuni valori non vanno bene: li trovi in errors, con cosa non va e dove stanno.', ['errors' => [
-                ['detail' => 'Il campo turnstile deve essere una stringa.', 'pointer' => '#/turnstile'],
+                ['detail' => 'Il campo controllo anti-robot deve essere una stringa.', 'regola' => 'tipo', 'pointer' => '#/turnstile'],
             ]]))
-        ->and($numero->json('errors'))->toBe([['detail' => 'The turnstile field must be a string.', 'pointer' => '#/turnstile']])
+        ->and($numero->json('errors'))->toBe([['detail' => 'The anti-robot check field must be a string.', 'regola' => 'tipo', 'pointer' => '#/turnstile']])
         ->and($lunga->json('errors'))->toBe([
-            ['detail' => 'Il campo termini accettati deve essere accettato.', 'pointer' => '#/termini_accettati'],
-            ['detail' => 'Il campo turnstile non deve avere più di 2048 caratteri.', 'pointer' => '#/turnstile'],
+            ['detail' => 'Il campo accettazione dei termini deve essere accettato.', 'regola' => 'valore_non_ammesso', 'pointer' => '#/termini_accettati'],
+            ['detail' => 'Il campo controllo anti-robot non deve avere più di 2048 caratteri.', 'regola' => 'troppo_lungo', 'pointer' => '#/turnstile'],
         ])
         ->and($finto->ultimoCodice('anna@example.com'))->toBeNull()
         // Vuota, di soli spazi o nulla è come assente; 2048 caratteri passano.
