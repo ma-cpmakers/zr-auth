@@ -102,6 +102,8 @@ final class BackofficeFinto
         ['GET', '#^/v1/io/notifiche$#', 'io.notifiche.elenca'],
         ['POST', '#^/v1/io/notifiche/letture$#', 'io.notifiche.letture.crea'],
         ['PATCH', '#^/v1/io/notifiche/([^/]+)/lettura$#', 'io.notifiche.lettura.modifica'],
+        ['GET', '#^/v1/aziende/([^/]+)$#', 'aziende.mostra'],
+        ['GET', '#^/v1/aziende/([^/]+)/workspace$#', 'aziende.workspace.elenca'],
         ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
@@ -323,6 +325,9 @@ final class BackofficeFinto
     /** Turnstile in utenti.crea: spento (null), `acceso`, o `guasto` (Cloudflare non risponde). */
     private ?string $turnstile = null;
 
+    /** L'obbligo di Turnstile anche con un invito (ZR_INVITO_TURNSTILE del backoffice): spento di default (accendiTurnstileSullInvito()). */
+    private bool $invitoTurnstile = false;
+
     /** Il gradino del widget di accessi.crea (ZR_ACCESSI_TURNSTILE del backoffice): spento di default (accendiGradinoAccessi()). */
     private bool $gradinoAccessi = false;
 
@@ -528,14 +533,20 @@ final class BackofficeFinto
      * Fa nascere un workspace, con la persona come proprietaria, e lo slug del backoffice (D13).
      *
      * @param  array<string, mixed>  $proprietaria  una persona di persona()
+     * @param  string|null  $azienda  l'`azienda_id` di un workspace che c'è già, per farne nascere un altro nella stessa azienda
      * @return array{id: string, nome: string, slug: string, azienda_id: string} il workspace, come lo dà il backoffice (lo schema Workspace)
      */
-    public function workspace(string $nome, array $proprietaria): array
+    public function workspace(string $nome, array $proprietaria, ?string $azienda = null): array
     {
         $id = self::id();
-        // Un'azienda sua, come fa il backoffice vero senza azienda_id passato (#1259, decisione 5612 del #76): il
-        // finto non modella aziende condivise fra workspace, nessun test gliene ha ancora chiesta una.
-        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => $this->nuovaAzienda($nome)];
+
+        if ($azienda !== null && ! isset($this->aziende[$azienda])) {
+            throw new InvalidArgumentException("L'azienda {$azienda} non c'è: si passa l'azienda_id di un workspace che c'è già.");
+        }
+
+        // Un'azienda sua, come fa il backoffice vero senza azienda_id passato (#1259, decisione 5612 del #76), o quella
+        // data: più workspace nella stessa azienda, per il ruolo più alto e l'elenco di aziende.mostra (#1590).
+        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => $azienda ?? $this->nuovaAzienda($nome)];
         $this->membro($this->workspace[$id], $proprietaria, 'proprietario');
 
         return $this->workspace[$id];
@@ -598,6 +609,19 @@ final class BackofficeFinto
     public function accendiTurnstile(): self
     {
         $this->turnstile = 'acceso';
+
+        return $this;
+    }
+
+    /**
+     * Accende l'obbligo di Turnstile anche per chi ha un invito (ZR_INVITO_TURNSTILE del backoffice, #1536): con
+     * Turnstile acceso, `utenti.crea` con un `invito` ma senza `turnstile` è 422 turnstile_non_valido, uguale per un invito
+     * vero e uno falso, prima di guardare il codice. Spento (di default) l'invito è una scorciatoia: `turnstile` si
+     * controlla solo se c'è.
+     */
+    public function accendiTurnstileSullInvito(): self
+    {
+        $this->invitoTurnstile = true;
 
         return $this;
     }
@@ -841,6 +865,8 @@ final class BackofficeFinto
                 'io.password.modifica' => $this->modificaPassword($richiesta, $corpo),
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
+                'aziende.mostra' => $this->mostraAzienda($richiesta, $parametri[0]),
+                'aziende.workspace.elenca' => $this->elencaWorkspaceDellAzienda($richiesta, $parametri[0]),
                 'io.aziende.elenca' => $this->elencaAziende($richiesta),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
                 'io.workspace.crea' => $this->creaWorkspaceDellaPersona($richiesta, $corpo),
@@ -1494,22 +1520,25 @@ final class BackofficeFinto
     {
         $email = self::normalizza($this->testi->valida($corpo, ['email' => self::REGOLE_EMAIL])['email']);
         $this->frena('registrazioni:'.$email, self::FRENI['registrazioni'], self::MINUTO);
-        // Il codice di un invito, se c'è: dopo il freno, prima di ogni costo. Vale per quest'email sola; uno per un'altra,
-        // scaduto, revocato o sconosciuto è la stessa 422.
+        // Il codice di un invito, se c'è: dal corpo come ogni campo. Il controllo Turnstile viene prima dell'invito (G48): con
+        // l'obbligo acceso (accendiTurnstileSullInvito()) un invito senza la risposta del widget rimbalza uguale che sia vero
+        // o falso. Spento, l'invito è una scorciatoia: si controlla solo se la risposta c'è. Senza invito, come sempre.
         $invito = $this->testi->valida($corpo, ['invito' => ['sometimes', 'nullable', 'string', 'max:255']])['invito'] ?? null;
+        // Dal corpo pulito come lo legge il backoffice, dopo TrimStrings e ConvertEmptyStringsToNull.
+        $turnstile = Testi::pulisci($corpo)['turnstile'] ?? null;
 
+        if ($invito === null || $this->invitoTurnstile || (is_string($turnstile) && $turnstile !== '')) {
+            $this->controllaTurnstile($turnstile);
+        }
+
+        // Un invito per un'altra email, scaduto, revocato o sconosciuto è la stessa 422.
         if ($invito !== null && $this->invitoVivo($invito, $email) === null) {
             throw new Problema('verifica_non_riuscita', verifica: 'registrazione');
         }
 
-        // L'invito sostituisce Turnstile e la lista dei consentiti: chi ha il codice è stato scelto.
-        if ($invito === null) {
-            // Dal corpo pulito come lo legge il backoffice, dopo TrimStrings e ConvertEmptyStringsToNull.
-            $this->controllaTurnstile(Testi::pulisci($corpo)['turnstile'] ?? null);
-
-            if (! $this->consente($email)) {
-                throw new Problema('registrazione_non_aperta');
-            }
+        // L'invito sostituisce la lista dei consentiti: chi ha il codice è stato scelto.
+        if ($invito === null && ! $this->consente($email)) {
+            throw new Problema('registrazione_non_aperta');
         }
 
         // Password::min(12)->uncompromised() del backoffice: la lunghezza, e la password trapelata al posto di HIBP.
@@ -1932,6 +1961,59 @@ final class BackofficeFinto
     }
 
     /**
+     * Il ruolo della persona in ogni workspace dell'azienda di cui è membro (id del workspace => ruolo), come AziendeController::ruoliNell:
+     * un'azienda dove non ha nessun workspace non c'è per lei, e risponde 404 come una che non esiste.
+     *
+     * @return array<string, string>
+     */
+    private function ruoliNellAzienda(string $persona, string $azienda): array
+    {
+        $ruoli = [];
+
+        foreach ($this->workspace as $id => $workspace) {
+            if ($workspace['azienda_id'] === $azienda && isset($this->membri[$id][$persona])) {
+                $ruoli[$id] = $this->membri[$id][$persona];
+            }
+        }
+
+        return $ruoli === [] ? throw new Problema('non_trovato') : $ruoli;
+    }
+
+    /**
+     * aziende.mostra (AziendeController::mostra): l'azienda con il ruolo più alto che la persona ha nei suoi workspace
+     * (proprietario, poi amministratore, poi membro). Vale ogni gettone della persona, anche quello dell'accesso.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraAzienda(Request $richiesta, string $azienda): array
+    {
+        $ruoli = $this->ruoliNellAzienda($this->autentica($richiesta)['persona'], $azienda);
+        $piuAlto = collect(['proprietario', 'amministratore', 'membro'])->first(fn (string $ruolo) => in_array($ruolo, $ruoli, true));
+
+        return [200, ['data' => ['id' => $azienda, 'nome' => $this->aziende[$azienda], 'ruolo' => $piuAlto]]];
+    }
+
+    /**
+     * aziende.workspace.elenca (AziendeController::workspaceElenca): i workspace dell'azienda di cui la persona è membro,
+     * ognuno col ruolo che ha lì, in ordine di nome e poi di id, a pagine. I parametri della lista si controllano prima
+     * dell'azienda (ListaRequest viene prima del metodo): un limite sbagliato su un'azienda altrui è 422, non 404.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaWorkspaceDellAzienda(Request $richiesta, string $azienda): array
+    {
+        $persona = $this->autentica($richiesta)['persona'];
+        $voci = function () use ($persona, $azienda) {
+            $ruoli = $this->ruoliNellAzienda($persona, $azienda);
+
+            return array_values(array_map(fn (string $id) => [...$this->workspace[$id], 'ruolo' => $ruoli[$id]], array_keys($ruoli)));
+        };
+
+        return $this->pagina($richiesta, 'aziende.workspace.elenca', 'id', $voci, self::perNomeEId(...),
+            fn (string $id) => isset($this->workspace[$id]) ? self::perNomeEId($this->workspace[$id]) : null);
+    }
+
+    /**
      * io.aziende.elenca (IoAziendeController::elenca): le aziende dei workspace di cui la persona del gettone è membro, una
      * volta sola ciascuna, in ordine di nome (maiuscole e accenti non contano) e poi di id, a pagine col solo id. Vale ogni
      * gettone della persona, anche quello dell'accesso. Il nome è quello che l'azienda ebbe alla nascita.
@@ -1967,7 +2049,7 @@ final class BackofficeFinto
      * io.workspace.crea (IoWorkspaceController::crea): un workspace nuovo, di cui la persona del gettone è proprietaria.
      * Nell'ordine del backoffice: la Idempotency-Key (il metodo è della persona, non del workspace del gettone: la stessa
      * chiave vale per la persona, ma il metodo vuole il gettone dell'accesso: uno di un workspace è 403 prima di ogni altra cosa), l'email non verificata (403, prima del corpo), il corpo (422 su `nome`; un campo in più
-     * si ignora, come Corpo::soloCorpo, perché un corpo con un campo in più non rompe una rotta nata prima della regola), l'azienda che non è della persona (404, come un id altrui), il freno di
+     * si ignora, come Corpo::soloCorpo, perché un corpo con un campo in più non rompe una rotta nata prima della regola), l'azienda che non è della persona (404, come un id altrui) o dove è solo membro (403 permesso_negato), il freno di
      * workspace nuovi all'ora per persona (429; una risposta ripetuta dalla chiave non arriva al freno); poi nasce, con
      * un'azienda sua se non ne dà una. Il workspace non ha app attive. La risposta è lo schema WorkspaceConRuolo, senza
      * `Location` (il contratto ha il solo `Link`).
@@ -1998,8 +2080,14 @@ final class BackofficeFinto
             ]);
             $azienda = $campi['azienda_id'] ?? null;
 
-            if ($azienda !== null && ! $this->appartieneAllAzienda($persona, $azienda)) {
-                throw new Problema('non_trovato');
+            // Nessun workspace dell'azienda di cui la persona sia membro: 404 (N9). Solo membro: 403, perché l'azienda la
+            // conosce già (#1537, dal 10/10 `a28ebac`). Il 404 e il 403 vengono prima del freno e non contano.
+            if ($azienda !== null) {
+                $ruoli = $this->ruoliNellAzienda($persona, $azienda);
+
+                if (! in_array('proprietario', $ruoli, true) && ! in_array('amministratore', $ruoli, true)) {
+                    throw new Problema('permesso_negato');
+                }
             }
 
             $this->frena('freni:persona:io.workspace.crea:'.$persona, self::FRENI['workspace'], self::ORA);
@@ -2010,18 +2098,6 @@ final class BackofficeFinto
 
             return [201, ['data' => [...$this->workspace[$id], 'ruolo' => 'proprietario']], []];
         });
-    }
-
-    /** Se la persona appartiene già all'azienda data: è membro di un workspace con quella azienda_id. */
-    private function appartieneAllAzienda(string $persona, string $azienda): bool
-    {
-        foreach ($this->workspace as $id => $workspace) {
-            if ($workspace['azienda_id'] === $azienda && isset($this->membri[$id][$persona])) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -2688,13 +2764,14 @@ final class BackofficeFinto
      * cursore la cui posizione non si trova più non vale. Nel finto quel ramo non si raggiunge (nessuna voce sparisce, e la
      * chiave dei cursori è del finto): resta per rispondere come il backoffice, dove la voce del cursore si può archiviare.
      *
-     * @param  list<array<string, mixed>>  $voci
+     * @param  list<array<string, mixed>>|Closure(): list<array<string, mixed>>  $voci  le voci, o chi le dà dopo i parametri: un
+     *                                                                                  metodo che risponde 404 per l'azienda risponde prima 422 sui parametri
      * @param  Closure(array<string, mixed>): list<string>  $posizione  la posizione di una voce nell'ordine della lista
      * @param  Closure(string): (list<string>|null)  $posizioneDelCursore  la posizione dalla chiave di un cursore
      * @param  bool  $dalPiuRecente  l'ordine al contrario, dalla posizione più alta (gli inviti: gli id sono ULID, in ordine di nascita)
      * @return array{int, array<string, mixed>}
      */
-    private function pagina(Request $richiesta, string $lista, string $chiave, array $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false): array
+    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false): array
     {
         $query = $this->testi->validaQuery(self::query($richiesta), [
             'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO],
@@ -2704,6 +2781,7 @@ final class BackofficeFinto
                 }
             }],
         ]);
+        $voci = $voci instanceof Closure ? $voci() : $voci;
         $limite = (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO);
         $verso = $dalPiuRecente ? -1 : 1;
         usort($voci, fn (array $una, array $altra) => $verso * self::confronta($posizione($una), $posizione($altra)));
