@@ -73,8 +73,8 @@ final class Sessione
      * arriva ai moduli da sola, perché la sessione la prende all'ingresso e non la rilegge. Una cornice che legge io.mostra a
      * ogni pagina la chiama con i suoi `data` quando sono diversi da `Sessione::utente()`. Cambia solo `lingua` e `nome`, e
      * solo se sono una stringa non vuota e diversi da quelli che ci sono: l'id della persona, il gettone, il workspace, il
-     * ruolo e ogni altro campo restano, e a valori uguali non cambia niente. Se i dati dicono di essere di un'altra persona
-     * (`utente.id` diverso da quello della sessione) non li prende. Senza una sessione aperta non fa niente e non lancia.
+     * ruolo e ogni altro campo restano, e a valori uguali non cambia niente. Se i dati non portano l'`utente.id` della sessione
+     * (mancante o di un'altra persona) non li prende. Senza una sessione aperta non fa niente e non lancia.
      * Torna se ha cambiato qualcosa.
      *
      * @param  array<string, mixed>  $io  i `data` di io.mostra
@@ -87,7 +87,8 @@ final class Sessione
 
         $persona = is_array($io['utente'] ?? null) ? $io['utente'] : [];
 
-        if (isset($persona['id']) && $persona['id'] !== (self::stato()['utente']['id'] ?? null)) {
+        // io.mostra porta sempre l'id: dati senza id, o con quello di un'altra persona, non sono della persona della sessione.
+        if (! is_string($persona['id'] ?? null) || $persona['id'] !== (self::stato()['utente']['id'] ?? null)) {
             return false;
         }
 

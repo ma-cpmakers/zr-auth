@@ -8,7 +8,7 @@ use Zeiras\Auth\Sessione;
 /** I `data` di io.mostra per una persona con la lingua e il nome dati. */
 function ioMostra(mixed $lingua, mixed $nome): array
 {
-    return ['utente' => ['lingua' => $lingua, 'nome' => $nome], 'workspace' => null, 'ruolo' => null];
+    return ['utente' => ['id' => utente()['id'], 'lingua' => $lingua, 'nome' => $nome], 'workspace' => null, 'ruolo' => null];
 }
 
 it('aggiorna la lingua e il nome della sessione dai dati di io.mostra (T2.1)', function () {
@@ -36,6 +36,14 @@ it('cambia solo lingua e nome: il resto della sessione resta com\'è (T2.2)', fu
         ->and($dopo['scade_il'])->toBe($prima['scade_il']);
 });
 
+it('dati senza l\'id della persona non entrano nella sessione (T2.2, revisione)', function () {
+    apriSessione();
+    $prima = session(Sessione::CHIAVE);
+
+    expect(Sessione::aggiorna(['utente' => ['lingua' => 'es', 'nome' => 'Ana']]))->toBeFalse()
+        ->and(session(Sessione::CHIAVE))->toBe($prima);
+});
+
 it('i dati di un\'altra persona non entrano nella sessione (T2.2, revisione)', function () {
     apriSessione();
     $prima = session(Sessione::CHIAVE);
@@ -44,7 +52,7 @@ it('i dati di un\'altra persona non entrano nella sessione (T2.2, revisione)', f
         ->and(session(Sessione::CHIAVE))->toBe($prima);
 });
 
-it('chiamato con gli stessi valori non scrive la sessione, e lo dice (T2.2)', function () {
+it('chiamato con gli stessi valori non cambia la sessione, e lo dice (T2.2)', function () {
     apriSessione();
     Sessione::aggiorna(ioMostra('en', 'Anne'));
     $prima = session(Sessione::CHIAVE);

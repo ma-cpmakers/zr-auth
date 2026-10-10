@@ -123,7 +123,7 @@ Sessione::entra($gettone['data']);           // da qui Api::workspace() manda il
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
 Sessione::workspace();  // {id, nome, slug}; null prima di entra()
 Sessione::ruolo();      // proprietario, amministratore o membro
-Sessione::aggiorna(Api::persona()->get('/v1/io')['data']);  // lingua e nome di io.mostra, se diversi (true se ha cambiato); il resto resta
+Sessione::aggiorna($io);  // $io = i `data` di io.mostra che la pagina ha già letto (non una chiamata in più); lingua e nome, se diversi (true se ha cambiato); il resto resta
 
 // L'uscita: accessi.corrente.elimina chiude l'accesso da cui discende il gettone della sessione, e ogni gettone che ne
 // discende, senza l'id dell'accesso: vale anche per una sessione aperta solo col gettone di un workspace. La sessione si
@@ -134,6 +134,11 @@ try {
     Sessione::chiudi();
 }
 ```
+
+`Sessione::aggiorna()` non chiama il backoffice: riceve i `data` di `io.mostra` che la pagina ha già letto (la cornice di zr-core
+li legge a ogni pagina, con `Api::workspace()`), così non c'è una seconda lettura per pagina. I guasti di quella lettura sono
+della pagina: `BackofficeNonRisponde` ed `ErroreApi` si possono prendere per non rompere la pagina e lasciare la lingua com'è;
+`GettoneRifiutato` mai, perché è lui a chiudere la sessione (un 401 è un gettone revocato, non un guasto).
 
 Una pagina che vuole il workspace guarda prima `Sessione::workspace()`: senza, la persona è entrata ma non ha ancora
 scelto un workspace, e `Api::workspace()` lancia `LogicException`.
