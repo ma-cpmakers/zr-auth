@@ -33,4 +33,8 @@ return [
     'campo_di_nessun_metodo' => 'Il campo :attribute non si cambia: lo dà il sistema.',
     'numero_senza_archiviate' => 'Con numero la scheda arriva in qualunque stato, anche archiviata: il parametro archiviate non serve.',
     'password_attuale' => 'La password attuale non è giusta: la nuova password si dà solo con quella di adesso.',
+    'contatto_vuoto' => 'Un contatto vuole almeno uno fra nome, cognome ed email.',
+    'responsabile_del_workspace' => 'Questa persona non è un membro del workspace: gli id dei membri li dà workspace.membri.elenca.',
+    'organizzazione_non_esiste' => "L'azienda del contatto non esiste ancora: per ora organizzazione_id si lascia vuoto.",
+    'email_doppia' => 'Questo indirizzo compare due volte nella lista.',
 ];
