@@ -59,6 +59,14 @@ return [
     'verifica_non_riuscita' => [
         'title' => 'Verificación fallida',
         'detail' => 'El código no verifica la solicitud: para el correo, revisa el código, el correo y la contraseña, o pide un código nuevo; para la contraseña, revisa el código y el correo, o pide un código nuevo; para entrar en una app, vuelve a empezar desde el acceso; para una invitación, revisa el código y que uses el correo al que llegó, o pide uno nuevo a quien te invitó.',
+        'varianti' => [
+            'email' => 'El código no verifica el correo: revisa el código, el correo y la contraseña, o pide un código nuevo.',
+            'password' => 'El código no restablece la contraseña: revisa el código y el correo, o pide un código nuevo.',
+            'ingresso' => 'La entrada en la app falla: el código ya no vale, vuelve a empezar desde el acceso.',
+            'invito' => 'La invitación no vale: revisa el código y usa el correo al que llegó, o pide una nueva a quien te invitó.',
+            'registrazione' => 'La invitación no vale para este correo: revisa el código y usa el correo al que llegó, o pide una nueva.',
+            'provider' => 'El acceso con el proveedor falla: vuelve a empezar desde el botón del proveedor.',
+        ],
     ],
     'turnstile_non_valido' => [
         'title' => 'Comprobación de Turnstile no superada',

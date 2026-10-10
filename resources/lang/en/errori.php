@@ -59,6 +59,14 @@ return [
     'verifica_non_riuscita' => [
         'title' => 'Verification failed',
         'detail' => 'The code does not verify the request: for the email, check the code, the email and the password, or ask for a new code; for the password, check the code and the email, or ask for a new code; for entering an app, start again from the sign-in; for an invitation, check the code and that you are using the email it was sent to, or ask whoever invited you for a new one.',
+        'varianti' => [
+            'email' => 'The code does not verify the email: check the code, the email and the password, or ask for a new code.',
+            'password' => 'The code does not reset the password: check the code and the email, or ask for a new code.',
+            'ingresso' => 'Entering the app failed: the code is no longer valid, start again from the sign-in.',
+            'invito' => 'The invitation is not valid: check the code and use the email it was sent to, or ask whoever invited you for a new one.',
+            'registrazione' => 'The invitation is not valid for this email: check the code and use the email it was sent to, or ask for a new one.',
+            'provider' => 'Signing in with the provider failed: start again from the provider\'s button.',
+        ],
     ],
     'turnstile_non_valido' => [
         'title' => 'Turnstile check failed',

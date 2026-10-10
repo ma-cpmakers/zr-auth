@@ -1267,7 +1267,7 @@ final class BackofficeFinto
         unset($this->partenze[$dati['stato']]);
 
         if ($partenza === null || $partenza['scade']->lte(now()) || $partenza['provider'] !== $provider) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
         }
 
         if (isset($this->provider_guasti[$provider])) {
@@ -1277,7 +1277,7 @@ final class BackofficeFinto
         $profilo = $this->profili[$provider.'|'.$dati['codice']] ?? null;
 
         if ($profilo === null || ! $profilo['verificata'] || ! $this->emailValida($profilo['email'])) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
         }
 
         $email = self::normalizza($profilo['email']);
@@ -1418,7 +1418,7 @@ final class BackofficeFinto
         $invito = $this->testi->valida($corpo, ['invito' => ['sometimes', 'nullable', 'string', 'max:255']])['invito'] ?? null;
 
         if ($invito !== null && $this->invitoVivo($invito, $email) === null) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'registrazione');
         }
 
         // L'invito sostituisce Turnstile e la lista dei consentiti: chi ha il codice è stato scelto.
@@ -1468,7 +1468,7 @@ final class BackofficeFinto
             if ($invito === null) {
                 $this->chiediCodice($id);
             } else {
-                $this->accettaCodice($invito, $id);
+                $this->accettaCodice($invito, $id, 'registrazione');
             }
         }
 
@@ -1558,7 +1558,7 @@ final class BackofficeFinto
         $persona = $this->conCredenziali($email, $dati['password']);
 
         if ($persona === null || $this->persone[$persona]['email_verificata_il'] !== null || ! $this->provaCodice($persona, $dati['codice'])) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'email');
         }
 
         return [200, ['data' => $this->utente($persona)]];
@@ -1934,14 +1934,14 @@ final class BackofficeFinto
 
         if ($ingresso === null || $ingresso['scade'] <= now()->getTimestamp()
             || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
         }
 
         $accesso = $this->accessi[$ingresso['accesso']] ?? null;
 
         if ($accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now())
             || ! isset($this->membri[$ingresso['workspace']][$accesso['utente']]) || ! $this->appAttiva($ingresso['workspace'], $ingresso['app'])) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
         }
 
         return [201, ['data' => $this->emetti($ingresso['accesso'], $ingresso['workspace'])]];
@@ -2015,7 +2015,7 @@ final class BackofficeFinto
         $persona = $this->conEmail($email);
 
         if ($persona === null || ! $this->provaRecupero($persona, $dati['codice'])) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'password');
         }
 
         $this->persone[$persona]['password'] = $dati['password'];
@@ -2394,13 +2394,13 @@ final class BackofficeFinto
      *
      * @return string il workspace dell'invito
      */
-    private function accettaCodice(#[SensitiveParameter] string $codice, string $persona): string
+    private function accettaCodice(#[SensitiveParameter] string $codice, string $persona, string $verifica = 'invito'): string
     {
         $id = $this->invitoDelCodice($codice);
 
         if ($id === null || ! $this->inviti[$id]['scade']->gt(now()) || $this->inviti[$id]['email'] !== $this->persone[$persona]['email']
             || $this->persone[$persona]['email_verificata_il'] === null) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: $verifica);
         }
 
         $invito = $this->inviti[$id];

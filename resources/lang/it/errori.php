@@ -59,6 +59,14 @@ return [
     'verifica_non_riuscita' => [
         'title' => 'Verifica non riuscita',
         'detail' => "Il codice non verifica la richiesta: per l'email controlla il codice, l'email e la password, o chiedi un codice nuovo; per la password controlla il codice e l'email, o chiedi un codice nuovo; per l'ingresso in un'app riparti dall'accesso; per un invito controlla il codice e usa l'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato.",
+        'varianti' => [
+            'email' => 'Il codice non verifica l\'email: controlla il codice, l\'email e la password, o chiedi un codice nuovo.',
+            'password' => 'Il codice non reimposta la password: controlla il codice e l\'email, o chiedi un codice nuovo.',
+            'ingresso' => 'L\'ingresso nell\'app non riesce: il codice non vale più, riparti dall\'accesso.',
+            'invito' => 'L\'invito non vale: controlla il codice e usa l\'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato.',
+            'registrazione' => 'L\'invito non vale per questa email: controlla il codice e usa l\'email a cui è arrivato, o chiedine uno nuovo.',
+            'provider' => 'L\'accesso con il provider non riesce: riparti dal bottone del provider.',
+        ],
     ],
     'turnstile_non_valido' => [
         'title' => 'Controllo Turnstile non superato',
