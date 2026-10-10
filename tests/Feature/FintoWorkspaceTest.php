@@ -250,6 +250,8 @@ it('workspace.inviti.crea frena: oltre 5 inviti in un\'ora verso la stessa email
 
 it('workspace.inviti.crea ha un tetto giornaliero per persona: oltre 100 inviti in 24 ore, 429 con Retry-After, e la revoca non libera il conto (#1413)', function () {
     [, , , $gettone] = squadra();
+    // Un gettone solo: gettoni.crea ha un freno suo (60 all'ora), e qui si conta il tetto degli inviti.
+    $anna = $gettone('anna@example.com');
 
     foreach (range(1, 100) as $n) {
         // Il freno del workspace (50 in un'ora) non è questo: si lascia passare un'ora a metà.
@@ -257,12 +259,12 @@ it('workspace.inviti.crea ha un tetto giornaliero per persona: oltre 100 inviti 
             $this->travel(61)->minutes();
         }
 
-        $creato = alFinto('POST', '/v1/workspace/inviti', ['email' => "invitato{$n}@example.com", 'ruolo' => 'membro'], $gettone('anna@example.com'));
+        $creato = alFinto('POST', '/v1/workspace/inviti', ['email' => "invitato{$n}@example.com", 'ruolo' => 'membro'], $anna);
         expect($creato->status())->toBe(201);
-        expect(alFinto('DELETE', '/v1/workspace/inviti/'.$creato->json('data.id'), [], $gettone('anna@example.com'))->status())->toBe(204);
+        expect(alFinto('DELETE', '/v1/workspace/inviti/'.$creato->json('data.id'), [], $anna)->status())->toBe(204);
     }
 
-    $frenata = alFinto('POST', '/v1/workspace/inviti', ['email' => 'invitato101@example.com', 'ruolo' => 'membro'], $gettone('anna@example.com'));
+    $frenata = alFinto('POST', '/v1/workspace/inviti', ['email' => 'invitato101@example.com', 'ruolo' => 'membro'], $anna);
 
     expect(esito($frenata))->toBe([429, 'troppe_richieste'])
         ->and((int) $frenata->header('Retry-After'))->toBeGreaterThan(0)->toBeLessThanOrEqual(86400);
