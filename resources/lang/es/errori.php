@@ -16,6 +16,10 @@ return [
         'title' => 'Token no válido',
         'detail' => 'El token de la solicitud no es válido.',
     ],
+    'cliente_non_riconosciuto' => [
+        'title' => 'Cliente no reconocido',
+        'detail' => 'No se reconoce al cliente que firmó la solicitud: revisa su nombre, su secreto y la hora del servidor, y vuelve a firmar.',
+    ],
     'permesso_negato' => [
         'title' => 'Permiso denegado',
         'detail' => 'El token no permite esta operación.',
@@ -55,6 +59,14 @@ return [
     'verifica_non_riuscita' => [
         'title' => 'Verificación fallida',
         'detail' => 'El código no verifica la solicitud: para el correo, revisa el código, el correo y la contraseña, o pide un código nuevo; para la contraseña, revisa el código y el correo, o pide un código nuevo; para entrar en una app, vuelve a empezar desde el acceso; para una invitación, revisa el código y que uses el correo al que llegó, o pide uno nuevo a quien te invitó.',
+        'varianti' => [
+            'email' => 'El código no verifica el correo: revisa el código, el correo y la contraseña, o pide un código nuevo.',
+            'password' => 'El código no restablece la contraseña: revisa el código y el correo, o pide un código nuevo.',
+            'ingresso' => 'La entrada en la app falla: el código ya no vale, vuelve a empezar desde el acceso.',
+            'invito' => 'La invitación no vale: revisa el código y usa el correo al que llegó, o pide una nueva a quien te invitó.',
+            'registrazione' => 'La invitación no vale para este correo: revisa el código y usa el correo al que llegó, o pide una nueva.',
+            'provider' => 'El acceso con el proveedor falla: vuelve a empezar desde el botón del proveedor.',
+        ],
     ],
     'turnstile_non_valido' => [
         'title' => 'Comprobación de Turnstile no superada',
@@ -102,7 +114,23 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Límite alcanzado',
-        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos (300 entre activos y cerrados, 1000 con los de la papelera) y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación, 50 miembros por workspace (contando las invitaciones vigentes). Libera un lugar (cierra un tablero o, si tienes 1000 en total con la papelera, espera a que uno de la papelera pase al archivo; archiva una lista o una tarjeta, quita una etiqueta o un elemento, revoca una invitación) y repite.',
+        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos (300 entre activos y cerrados, 1000 con los de la papelera) y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación, 50 miembros por workspace (contando las invitaciones vigentes), 10 vínculos de salida y 50 de entrada por tarjeta (contando también las tarjetas completadas o archivadas; `limite` y `direzione` dicen cuál). Libera un lugar (cierra un tablero o, si tienes 1000 en total con la papelera, espera a que uno de la papelera pase al archivo; archiva una lista o una tarjeta, quita una etiqueta, un elemento o un vínculo, revoca una invitación) y repite.',
+    ],
+    'lista_al_limite' => [
+        'title' => 'Lista en su límite',
+        'detail' => 'Esta lista bloquea las tarjetas nuevas: ya tiene tantas tarjetas no archivadas como indica `limite` (el valor viene en la respuesta). Pon la tarjeta en otra lista, archiva o mueve una tarjeta de esta, o sube el `limite` o desactiva `blocca` con board.liste.modifica, y repite.',
+    ],
+    'collegamento_esistente' => [
+        'title' => 'Vínculo ya existente',
+        'detail' => 'La tarjeta ya espera a esa tarjeta: no repitas la solicitud. El vínculo lo encuentras en board.schede.collegamenti.elenca.',
+    ],
+    'collegamento_circolare' => [
+        'title' => 'Vínculo circular',
+        'detail' => 'Una tarjeta no puede esperarse a sí misma, ni esperar a una tarjeta que a su vez la espera, directamente o a través de otras: elige otra tarjeta, o quita antes el vínculo que cierra el ciclo.',
+    ],
+    'catena_troppo_lunga' => [
+        'title' => 'Cadena de esperas demasiado larga',
+        'detail' => 'Este vínculo alargaría más de 20 vínculos la cadena de tarjetas que se esperan una a otra, o la cadena es demasiado grande para comprobarse: acorta la cadena quitando un vínculo y repite.',
     ],
     'transizione_non_valida' => [
         'title' => 'Transición de estado no válida',

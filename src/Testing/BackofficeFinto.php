@@ -47,16 +47,48 @@ final class BackofficeFinto
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
     public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';
 
+    /** Il client registrato che il finto riconosce (#1447) e il suo segreto: con `ZR_AUTH_CLIENTE=finto` e questo come ZR_BACKOFFICE_SEGRETO il client firma e il finto verifica. */
+    public const CLIENTE = 'finto';
+
+    public const SEGRETO_DEL_CLIENTE = 'segreto-del-client-finto-0123456789abcdef';
+
     /** La password che il finto dà per trapelata, al posto di Have I Been Pwned: utenti.crea la rifiuta. */
     public const PASSWORD_TRAPELATA = 'una password trapelata';
 
     private const DOCUMENTAZIONE = 'https://docs.zeiras.com/v1/';
+
+    /** I tetti delle attese di una scheda e della catena (Tetti del backoffice, #1457). */
+    private const ATTESE_IN_USCITA = 10;
+
+    private const ATTESE_IN_ENTRATA = 50;
+
+    private const CATENA = 20;
+
+    /** Le notifiche che una lettura in blocco segna al più, e quelle di un giro (IoNotificheController, #1411). */
+    private const NOTIFICHE_PER_CHIAMATA = 5000;
+
+    /** Un istante ISO 8601 con il fuso (`Z` o un offset), con o senza frazione di secondo (IoNotificheController::ISO_CON_FUSO). */
+    private const ISO_CON_FUSO = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/';
+
+    /** L'app di un tipo di evento, dal primo prefisso che il tipo ha (config/catalogo.php del backoffice, `prefissi`). */
+    private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm'];
+
+    private const SCHEDE_VISITATE = 2000;
+
+    /** L'id della lista di ogni scheda del finto, che non modella le liste. */
+    private const LISTA_DI_PROVA = 'lista-di-prova';
 
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
+        ['GET', '#^/v1/board/schede/([^/]+)$#', 'board.schede.mostra'],
+        ['POST', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.elimina'],
+        ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
+        ['POST', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/collegamenti/([^/]+)$#', 'board.schede.collegamenti.elimina'],
         ['GET', '#^/v1/accessi/provider$#', 'accessi.provider.elenca'],
         ['POST', '#^/v1/accessi/provider/([^/]+)/autorizzazioni$#', 'accessi.provider.autorizzazioni.crea'],
         ['POST', '#^/v1/accessi/provider/([^/]+)$#', 'accessi.provider.crea'],
@@ -67,6 +99,9 @@ final class BackofficeFinto
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
+        ['GET', '#^/v1/io/notifiche$#', 'io.notifiche.elenca'],
+        ['POST', '#^/v1/io/notifiche/letture$#', 'io.notifiche.letture.crea'],
+        ['PATCH', '#^/v1/io/notifiche/([^/]+)/lettura$#', 'io.notifiche.lettura.modifica'],
         ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
@@ -163,7 +198,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     private const ORA = 3600;
 
@@ -246,6 +281,15 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
     private array $ingressi = [];
 
+    /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable}> le notifiche (notifica()), per id */
+    private array $notifiche = [];
+
+    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
+    private array $schede = [];
+
+    /** @var array<string, array{id: string, scheda: string, aspettata: string, creato_il: CarbonImmutable}> i collegamenti «aspetta» vivi, per id */
+    private array $collegamenti = [];
+
     /** @var array<string, true> i provider accesi (provider()), per slug */
     private array $provider = [];
 
@@ -270,8 +314,17 @@ final class BackofficeFinto
     /** La registrazione aperta a tutti (RegistrazioneConsentita::aperta()). */
     private bool $aperta = false;
 
+    /** @var list<array{operazione: string, cliente: string, ip: string}> gli IP che il client ha firmato, uno per richiesta firmata (ipVisti()) */
+    private array $ipVisti = [];
+
+    /** L'IP firmato della richiesta in corso; null se è anonima. */
+    private ?string $ipFirmato = null;
+
     /** Turnstile in utenti.crea: spento (null), `acceso`, o `guasto` (Cloudflare non risponde). */
     private ?string $turnstile = null;
+
+    /** Il gradino del widget di accessi.crea (ZR_ACCESSI_TURNSTILE del backoffice): spento di default (accendiGradinoAccessi()). */
+    private bool $gradinoAccessi = false;
 
     /** I freni, con RateLimiter come nel backoffice: in memoria, e col tempo di now(). */
     private readonly RateLimiter $freni;
@@ -334,6 +387,93 @@ final class BackofficeFinto
         }
 
         return $this->utente($id);
+    }
+
+    /**
+     * Una scheda di una board del workspace, per provare i collegamenti «aspetta» (`board.schede.collegamenti.*`): il finto non
+     * modella boards, liste né schede vere, solo il minimo che le attese guardano (la board, il numero, il titolo, se è
+     * completata o archiviata). Il `numero` parte da 1 per ogni board e non si riusa. Le schede di una stessa `$board` si
+     * possono collegare fra loro; una scheda di un'altra board è «di un'altra board».
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     * @return array{id: string, board_id: string, numero: int, titolo: string}
+     */
+    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova'): array
+    {
+        $idWorkspace = $workspace['id'] ?? null;
+
+        if (! is_string($idWorkspace) || ! isset($this->workspace[$idWorkspace])) {
+            throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
+        }
+
+        $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
+        $id = self::id();
+        $ora = now()->toImmutable()->startOfMillisecond();
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+
+        return ['id' => $id, 'board_id' => $board, 'numero' => $numero, 'titolo' => $titolo];
+    }
+
+    /**
+     * Completa o archivia una scheda del finto (`completata_il`, `archiviata_il` ora): una scheda completata o archiviata conta
+     * ancora nei tetti, nel giro e nella catena, e una archiviata è 409 scheda_archiviata per ogni scrittura.
+     *
+     * @param  array<string, mixed>  $scheda  una scheda di scheda()
+     */
+    public function segnaScheda(array $scheda, string $stato): self
+    {
+        $id = $scheda['id'] ?? null;
+
+        if (! is_string($id) || ! isset($this->schede[$id])) {
+            throw new InvalidArgumentException('La scheda non è del finto: nasce con scheda().');
+        }
+
+        if (! in_array($stato, ['completata', 'archiviata'], true)) {
+            throw new InvalidArgumentException("Lo stato «{$stato}» non c'è: sono completata e archiviata.");
+        }
+
+        $this->schede[$id][$stato.'_il'] = now()->toImmutable()->startOfMillisecond();
+
+        return $this;
+    }
+
+    /**
+     * Una notifica di una persona nel workspace, per provare la campanella e la pagina delle notifiche (`io.notifiche.*`): il
+     * finto non modella gli eventi che le generano, come il backoffice li scrive in `Scrittura::registra`. L'app di una
+     * notifica la dà il tipo (`pm` per `com.zeiras.board.*`, altrimenti `null`): `$app` si dice solo per chiarezza, e un'app che
+     * il tipo non ha è un errore. `$creataIl` è adesso, `$lettaIl` null (non letta); i millesimi sono quelli del finto.
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     * @param  array<string, mixed>  $persona  una persona di persona(), membra del workspace
+     * @param  array<string, mixed>  $dati  quale risorsa è cambiata, coi soli id (come `data` dell'evento)
+     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string}
+     */
+    public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null): array
+    {
+        $idWorkspace = $workspace['id'] ?? null;
+        $idPersona = $persona['id'] ?? null;
+
+        if (! is_string($idWorkspace) || ! isset($this->workspace[$idWorkspace])) {
+            throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
+        }
+
+        if (! is_string($idPersona) || ! isset($this->membri[$idWorkspace][$idPersona])) {
+            throw new InvalidArgumentException('La persona non è del workspace: ne è membra con workspace() o membro().');
+        }
+
+        $delTipo = self::appDelTipo($tipo);
+
+        if ($app !== null && $app !== $delTipo) {
+            throw new InvalidArgumentException('L\'app di una notifica la dà il tipo: '.($delTipo === null ? "«{$tipo}» non è di un'app" : "«{$tipo}» è di {$delTipo}").'.');
+        }
+
+        $id = self::id();
+        $creata = ($creataIl ?? now())->toImmutable()->startOfMillisecond();
+        $letta = $lettaIl?->toImmutable()->startOfMillisecond();
+        $dati = $dati === [] ? ['id' => $id] : $dati;
+        $this->notifiche[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'persona' => $idPersona, 'tipo' => $tipo, 'soggetto' => $soggetto ?? '/v1/board/schede/'.$id, 'dati' => $dati, 'letta_il' => $letta, 'creata_il' => $creata];
+
+        return $this->voceNotifica($this->notifiche[$id]);
     }
 
     /**
@@ -463,6 +603,18 @@ final class BackofficeFinto
     }
 
     /**
+     * Accende il gradino del widget di accessi.crea, come ZR_ACCESSI_TURNSTILE nel backoffice (spento di default, finché la pagina
+     * di accesso non mostra il widget): dal sesto al trentesimo tentativo di un'email serve `turnstile` (se Turnstile è acceso,
+     * accendiTurnstile()), e senza è 422 turnstile_non_valido. Spento, il sesto tentativo di un'email è 429.
+     */
+    public function accendiGradinoAccessi(): self
+    {
+        $this->gradinoAccessi = true;
+
+        return $this;
+    }
+
+    /**
      * Turnstile acceso, e Cloudflare che non risponde: una risposta del widget ben formata è 503 turnstile_non_disponibile,
      * una mancante o malformata resta 422 turnstile_non_valido.
      */
@@ -576,6 +728,47 @@ final class BackofficeFinto
         ];
     }
 
+    /**
+     * Gli IP che il client ha dichiarato con una firma valida, uno per richiesta, nell'ordine: l'operazione, il client e
+     * l'IP. Un modulo prova così che passa l'IP della persona e non il suo.
+     *
+     * @return list<array{operazione: string, cliente: string, ip: string}>
+     */
+    public function ipVisti(): array
+    {
+        return $this->ipVisti;
+    }
+
+    /** Le rotte senza gettone a cui un client firma l'IP. */
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
+
+    /**
+     * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
+     * sconosciuto, IP che non è un IP, istante lontano più di 30 secondi, HMAC diverso) è 401 cliente_non_riconosciuto, sempre lo stesso.
+     */
+    private function riconosciIlCliente(Request $richiesta, string $operazione): void
+    {
+        $valori = array_map(fn (string $nome) => self::header($richiesta, $nome), ['Zr-Cliente', 'Zr-Ip', 'Zr-Istante', 'Zr-Firma']);
+
+        if (array_filter($valori, fn (?string $valore) => $valore !== null) === []) {
+            return;
+        }
+
+        [$cliente, $ip, $istante, $firma] = $valori;
+        $percorso = (string) parse_url($richiesta->url(), PHP_URL_PATH);
+        $attesa = hash_hmac('sha256', "zr1\n{$cliente}\n{$istante}\n".strtoupper($richiesta->method())."\n{$percorso}\n{$ip}", self::SEGRETO_DEL_CLIENTE);
+
+        if ($cliente !== self::CLIENTE
+            || $ip === null || filter_var($ip, FILTER_VALIDATE_IP) === false
+            || $istante === null || preg_match('/^\d{1,12}$/', $istante) !== 1 || abs(now()->timestamp - (int) $istante) > 30
+            || $firma === null || ! hash_equals($attesa, $firma)) {
+            throw new Problema('cliente_non_riconosciuto');
+        }
+
+        $this->ipFirmato = strtolower($ip);
+        $this->ipVisti[] = ['operazione' => $operazione, 'cliente' => $cliente, 'ip' => $this->ipFirmato];
+    }
+
     /** La risposta a una chiamata: null se non va alle API /v1, e allora resta agli altri Http::fake del test. */
     private function risponde(Request $richiesta): ?PromiseInterface
     {
@@ -614,7 +807,13 @@ final class BackofficeFinto
         $corpo = $richiesta->data();
         $corpo = is_array($corpo) ? $corpo : [];
 
+        $this->ipFirmato = null;
+
         try {
+            if (in_array($operazione, self::SENZA_GETTONE, true)) {
+                $this->riconosciIlCliente($richiesta, $operazione);
+            }
+
             $esito = match ($operazione) {
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
@@ -622,6 +821,12 @@ final class BackofficeFinto
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
                 'accessi.provider.crea' => $this->creaAccessoDalProvider($corpo, $parametri[0]),
+                'board.schede.mostra' => $this->mostraScheda($richiesta, $parametri[0]),
+                'board.schede.completamento.crea' => $this->completaScheda($richiesta, $parametri[0], true),
+                'board.schede.completamento.elimina' => $this->completaScheda($richiesta, $parametri[0], false),
+                'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
+                'board.schede.collegamenti.crea' => $this->creaCollegamento($richiesta, $corpo, $parametri[0]),
+                'board.schede.collegamenti.elimina' => $this->eliminaCollegamento($richiesta, $parametri[0], $parametri[1]),
                 'app.elenca' => $this->elencaApp($richiesta),
                 'app.modifica' => $this->modificaApp($richiesta, $corpo, $parametri[0]),
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
@@ -629,6 +834,9 @@ final class BackofficeFinto
                 'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
+                'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
+                'io.notifiche.letture.crea' => $this->segnaNotificheLette($richiesta, $corpo),
+                'io.notifiche.lettura.modifica' => $this->segnaNotifica($richiesta, $corpo, $parametri[0]),
                 'io.modifica' => $this->modificaIo($richiesta, $corpo),
                 'io.password.modifica' => $this->modificaPassword($richiesta, $corpo),
                 'io.email.codice.crea' => $this->creaCodice($corpo),
@@ -662,6 +870,348 @@ final class BackofficeFinto
     }
 
     /**
+     * Il workspace del gettone col suo metodo dell'app `pm` (i middleware `workspace` e `app:pm` del backoffice): al gettone
+     * dell'accesso 403 gettone_senza_workspace, con l'app spenta 403 app_non_attiva, prima di guardare la scheda del percorso.
+     *
+     * @return array{persona: string, accesso: string, workspace: string}
+     */
+    private function conPm(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+
+        if (! $this->appAttiva($chi['workspace'], 'pm')) {
+            throw new Problema('app_non_attiva');
+        }
+
+        return $chi;
+    }
+
+    /**
+     * La scheda del percorso, nel workspace del gettone: una di un altro workspace, o che non c'è, è 404.
+     *
+     * @return array<string, mixed>
+     */
+    private function schedaDelPercorso(string $workspace, string $id): array
+    {
+        $scheda = $this->schede[$id] ?? null;
+
+        return $scheda !== null && $scheda['workspace'] === $workspace ? $scheda : throw new Problema('non_trovato');
+    }
+
+    /** Cambia `aggiornata_il` delle schede date, come ogni scrittura di un collegamento nel backoffice (T3.8). */
+    private function tocca(string ...$schede): void
+    {
+        $ora = now()->toImmutable()->startOfMillisecond();
+
+        foreach ($schede as $scheda) {
+            $this->schede[$scheda]['aggiornata_il'] = $ora;
+        }
+    }
+
+    /**
+     * Una scheda aperta: né completata né archiviata. Solo una scheda aperta tiene ferma qualcuno, e solo una aperta si sblocca.
+     *
+     * @param  array<string, mixed>  $scheda
+     */
+    private static function aperta(array $scheda): bool
+    {
+        return $scheda['completata_il'] === null && $scheda['archiviata_il'] === null;
+    }
+
+    /**
+     * Le schede che `$scheda` aspetta e che sono ancora aperte (`attese_aperte`), nell'ordine in cui sono state collegate.
+     *
+     * @return list<array{id: string, numero: int}>
+     */
+    private function atteseAperte(string $scheda): array
+    {
+        $attese = [];
+
+        foreach ($this->collegamenti as $collegamento) {
+            if ($collegamento['scheda'] === $scheda && self::aperta($this->schede[$collegamento['aspettata']])) {
+                $attese[] = ['id' => $collegamento['aspettata'], 'numero' => $this->schede[$collegamento['aspettata']]['numero']];
+            }
+        }
+
+        return $attese;
+    }
+
+    /**
+     * La scheda intera come la dà il backoffice (Forme::scheda). Il finto non modella liste, etichette, assegnatari, checklist
+     * né commenti: `lista_id` è un id fisso di prova e le altre parti sono vuote. Ciò che le attese guardano c'è tutto.
+     *
+     * @param  array<string, mixed>  $scheda
+     * @return array<string, mixed>
+     */
+    private function voceScheda(array $scheda): array
+    {
+        return [
+            'id' => $scheda['id'],
+            'board_id' => $scheda['board'],
+            'lista_id' => self::LISTA_DI_PROVA,
+            'numero' => $scheda['numero'],
+            'titolo' => $scheda['titolo'],
+            'descrizione' => '',
+            'inizio' => null,
+            'scadenza' => null,
+            'copertina' => null,
+            'etichette' => [],
+            'assegnatari' => [],
+            'numero_voci' => 0,
+            'numero_voci_spuntate' => 0,
+            'numero_commenti' => 0,
+            'attese_aperte' => $this->atteseAperte($scheda['id']),
+            'completata_il' => $scheda['completata_il'] === null ? null : self::iso($scheda['completata_il']),
+            'archiviata_il' => $scheda['archiviata_il'] === null ? null : self::iso($scheda['archiviata_il']),
+            'creata_il' => self::iso($scheda['creata_il']),
+            'aggiornata_il' => self::iso($scheda['aggiornata_il']),
+        ];
+    }
+
+    /**
+     * board.schede.mostra (SchedeController::mostra): la scheda intera, anche archiviata, con le sue `attese_aperte`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraScheda(Request $richiesta, string $scheda): array
+    {
+        $chi = $this->conPm($richiesta);
+
+        return [200, ['data' => $this->voceScheda($this->schedaDelPercorso($chi['workspace'], $scheda))]];
+    }
+
+    /**
+     * board.schede.completamento.crea e .elimina (SchedeController::completamento): completa o riapre la scheda, senza
+     * cambiare niente se è già com'è. Una scheda archiviata è 409. `sbloccate` sono le schede aperte per cui questa era
+     * l'ultima attesa aperta, per numero, e solo se la scheda si completa adesso; riaprire non sblocca mai nessuno.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function completaScheda(Request $richiesta, string $scheda, bool $completa): array
+    {
+        $chi = $this->conPm($richiesta);
+        $voce = $this->schedaDelPercorso($chi['workspace'], $scheda);
+
+        if ($voce['archiviata_il'] !== null) {
+            throw new Problema('scheda_archiviata');
+        }
+
+        $sbloccate = [];
+
+        if (($voce['completata_il'] !== null) !== $completa) {
+            $ora = now()->toImmutable()->startOfMillisecond();
+            $this->schede[$scheda]['completata_il'] = $completa ? $ora : null;
+            $this->schede[$scheda]['aggiornata_il'] = $ora;
+
+            if ($completa) {
+                $sbloccate = $this->sbloccate($scheda);
+            }
+        }
+
+        return [200, ['data' => $this->voceScheda($this->schede[$scheda]), 'sbloccate' => $sbloccate]];
+    }
+
+    /**
+     * Le schede aperte che aspettavano `$scheda` (appena completata) e non hanno più nessuna attesa aperta, per numero.
+     *
+     * @return list<array{id: string, numero: int, titolo: string}>
+     */
+    private function sbloccate(string $scheda): array
+    {
+        $sbloccate = [];
+
+        foreach ($this->collegamenti as $collegamento) {
+            $chi = $this->schede[$collegamento['scheda']];
+
+            if ($collegamento['aspettata'] === $scheda && self::aperta($chi) && $this->atteseAperte($chi['id']) === []) {
+                $sbloccate[$chi['id']] = ['id' => $chi['id'], 'numero' => $chi['numero'], 'titolo' => $chi['titolo']];
+            }
+        }
+
+        usort($sbloccate, fn (array $a, array $b) => $a['numero'] <=> $b['numero']);
+
+        return array_slice($sbloccate, 0, self::ATTESE_IN_ENTRATA);
+    }
+
+    /**
+     * Un collegamento come lo dà il backoffice (Forme::collegamento): le due schede con quanto serve a riconoscerle.
+     *
+     * @param  array<string, mixed>  $collegamento
+     * @return array<string, mixed>
+     */
+    private function voceCollegamento(array $collegamento): array
+    {
+        $estremo = fn (string $id) => [
+            'id' => $id,
+            'numero' => $this->schede[$id]['numero'],
+            'titolo' => $this->schede[$id]['titolo'],
+            'completata_il' => $this->schede[$id]['completata_il'] === null ? null : self::iso($this->schede[$id]['completata_il']),
+            'archiviata_il' => $this->schede[$id]['archiviata_il'] === null ? null : self::iso($this->schede[$id]['archiviata_il']),
+        ];
+
+        return [
+            'id' => $collegamento['id'],
+            'scheda_id' => $collegamento['scheda'],
+            'scheda_aspettata_id' => $collegamento['aspettata'],
+            'creato_il' => self::iso($collegamento['creato_il']),
+            'scheda' => $estremo($collegamento['scheda']),
+            'scheda_aspettata' => $estremo($collegamento['aspettata']),
+        ];
+    }
+
+    /**
+     * board.schede.collegamenti.elenca (CollegamentiController::elenca): le attese della scheda, per id, a cursore;
+     * `in_uscita` (il default) le schede che aspetta, `in_entrata` quelle che la aspettano. Una scheda archiviata si legge.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaCollegamenti(Request $richiesta, string $scheda): array
+    {
+        $chi = $this->conPm($richiesta);
+        $this->schedaDelPercorso($chi['workspace'], $scheda);
+        $query = $this->testi->validaQuery(self::query($richiesta), ['direzione' => ['sometimes', 'string', 'in:in_uscita,in_entrata']]);
+        $verso = ($query['direzione'] ?? 'in_uscita') === 'in_uscita' ? 'scheda' : 'aspettata';
+        $voci = array_map(
+            $this->voceCollegamento(...),
+            array_filter($this->collegamenti, fn (array $collegamento) => $collegamento[$verso] === $scheda),
+        );
+
+        return $this->pagina($richiesta, 'board.schede.collegamenti.elenca', 'id', array_values($voci), fn (array $voce) => [$voce['id']], fn (string $id) => [$id]);
+    }
+
+    /**
+     * board.schede.collegamenti.crea (CollegamentiController::crea): la scheda del percorso aspetta `scheda_aspettata_id`, della
+     * stessa board. Nell'ordine del backoffice: il ruolo e l'app (403), la scheda del percorso (404), la Idempotency-Key, il
+     * freno per persona (429), la scheda archiviata (409), il corpo (422), la aspettata che non c'è, è di un altro workspace o
+     * di un'altra board (422, un testo solo), la aspettata archiviata (409), la scheda che aspetta sé stessa (422), il
+     * doppione (409), i tetti (409 con `limite` e `direzione`), il giro e la catena (422).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaCollegamento(Request $richiesta, array $corpo, string $scheda): array
+    {
+        $chi = $this->conPm($richiesta);
+        $mia = $this->schedaDelPercorso($chi['workspace'], $scheda);
+
+        return $this->conIdempotenza($richiesta, 'board.schede.collegamenti.crea', $chi, ['corpo' => $corpo, 'percorso' => ['scheda' => $scheda]], function () use ($chi, $corpo, $mia) {
+            $this->frena('collegamenti.crea:persona:'.$chi['persona'], self::FRENI['board_collegamenti_persona'], self::MINUTO);
+
+            if ($mia['archiviata_il'] !== null) {
+                throw new Problema('scheda_archiviata');
+            }
+
+            $campi = $this->testi->validaStretta($corpo, ['scheda_aspettata_id' => ['bail', 'required', 'string', 'ulid']]);
+            $aspettata = $this->schede[strtolower($campi['scheda_aspettata_id'])] ?? null;
+
+            if ($aspettata === null || $aspettata['workspace'] !== $mia['workspace'] || $aspettata['board'] !== $mia['board']) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.scheda_della_board'), 'pointer' => '#/scheda_aspettata_id']]);
+            }
+
+            if ($aspettata['archiviata_il'] !== null) {
+                throw new Problema('scheda_archiviata');
+            }
+
+            if ($aspettata['id'] === $mia['id']) {
+                throw new Problema('collegamento_circolare');
+            }
+
+            if (array_filter($this->collegamenti, fn (array $c) => $c['scheda'] === $mia['id'] && $c['aspettata'] === $aspettata['id']) !== []) {
+                throw new Problema('collegamento_esistente');
+            }
+
+            if (count(array_filter($this->collegamenti, fn (array $c) => $c['scheda'] === $mia['id'])) >= self::ATTESE_IN_USCITA) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ATTESE_IN_USCITA, 'direzione' => 'in_uscita']);
+            }
+
+            if (count(array_filter($this->collegamenti, fn (array $c) => $c['aspettata'] === $aspettata['id'])) >= self::ATTESE_IN_ENTRATA) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ATTESE_IN_ENTRATA, 'direzione' => 'in_entrata']);
+            }
+
+            $this->controllaLaCatena($mia['id'], $aspettata['id']);
+
+            $id = self::id();
+            $this->collegamenti[$id] = ['id' => $id, 'scheda' => $mia['id'], 'aspettata' => $aspettata['id'], 'creato_il' => now()->toImmutable()->startOfMillisecond()];
+            $this->tocca($mia['id'], $aspettata['id']);
+
+            return [201, ['data' => $this->voceCollegamento($this->collegamenti[$id])], ['Location' => "/v1/board/schede/{$mia['id']}/collegamenti/{$id}"]];
+        });
+    }
+
+    /**
+     * board.schede.collegamenti.elimina (CollegamentiController::elimina): toglie l'attesa, 204. Un collegamento che non è della
+     * scheda del percorso (che aspetta) o non c'è più è 404; la scheda del percorso archiviata è 409, la aspettata archiviata no.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaCollegamento(Request $richiesta, string $scheda, string $collegamento): array
+    {
+        $chi = $this->conPm($richiesta);
+        $mia = $this->schedaDelPercorso($chi['workspace'], $scheda);
+        $voce = $this->collegamenti[$collegamento] ?? null;
+
+        if ($voce === null || $voce['scheda'] !== $mia['id']) {
+            throw new Problema('non_trovato');
+        }
+
+        // Solo la scheda del percorso conta: l'attesa verso una scheda archiviata si toglie (zr-pm, 10/10, nota 7953).
+        if ($mia['archiviata_il'] !== null) {
+            throw new Problema('scheda_archiviata');
+        }
+
+        unset($this->collegamenti[$collegamento]);
+        $this->tocca($voce['scheda'], $voce['aspettata']);
+
+        return [204, null];
+    }
+
+    /**
+     * Il giro e la catena (Collegamenti::controlla): `$scheda` → `$aspettata` non chiude un giro (422 collegamento_circolare) e
+     * non porta la catena oltre 20 collegamenti, a monte, più il nuovo, più a valle (422 catena_troppo_lunga, anche oltre 2.000
+     * schede visitate). Si cammina a livelli; la catena è il cammino più lungo.
+     */
+    private function controllaLaCatena(string $scheda, string $aspettata): void
+    {
+        $visitate = 0;
+        $valle = $this->profondita($aspettata, 'scheda', 'aspettata', $scheda, $visitate);
+        $monte = $this->profondita($scheda, 'aspettata', 'scheda', null, $visitate);
+
+        if ($monte + 1 + $valle > self::CATENA) {
+            throw new Problema('catena_troppo_lunga');
+        }
+    }
+
+    private function profondita(string $inizio, string $da, string $verso, ?string $cerca, int &$visitate): int
+    {
+        $livello = [$inizio];
+        $profondita = 0;
+
+        while (true) {
+            $successivo = array_values(array_unique(array_map(
+                fn (array $c) => $c[$verso],
+                array_filter($this->collegamenti, fn (array $c) => in_array($c[$da], $livello, true)),
+            )));
+
+            if ($successivo === []) {
+                return $profondita;
+            }
+
+            if ($cerca !== null && in_array($cerca, $successivo, true)) {
+                throw new Problema('collegamento_circolare');
+            }
+
+            $visitate += count($successivo);
+            $profondita++;
+
+            if ($visitate > self::SCHEDE_VISITATE || $profondita > self::CATENA) {
+                throw new Problema('catena_troppo_lunga');
+            }
+
+            $livello = $successivo;
+        }
+    }
+
+    /**
      * accessi.crea (AccessiController::crea): l'accesso e il suo gettone, senza workspace. Il freno dell'email si conta
      * prima delle credenziali, e un accesso riuscito lo azzera.
      *
@@ -670,10 +1220,23 @@ final class BackofficeFinto
      */
     private function creaAccesso(array $corpo): array
     {
-        $dati = $this->testi->valida($corpo, self::credenziali());
+        $dati = $this->testi->valida($corpo, self::credenziali() + ['turnstile' => ['sometimes', 'nullable', 'string', 'max:'.self::LUNGHEZZA_TURNSTILE]]);
         $email = self::normalizza($dati['email']);
+        // Come il backoffice (#1447): la coppia (email, IP firmato) frena al sesto tentativo in un minuto. L'email: oltre il quinto è
+        // 429, come prima; solo col gradino acceso (accendiGradinoAccessi(), l'interruttore ZR_ACCESSI_TURNSTILE del backoffice, spento di
+        // default) il widget si chiede dal sesto al trentesimo tentativo (se Turnstile è acceso) e il 429 viene oltre il trentesimo.
+        $coppia = 'accessi-ip:'.$email.':'.($this->ipFirmato ?? 'anonimo');
+        $this->frena($coppia, self::FRENI['accessi_per_ip'], self::MINUTO);
         $freno = 'accessi:'.$email;
-        $this->frena($freno, self::FRENI['accessi'], self::MINUTO);
+        $tentativi = $this->freni->hit($freno, self::MINUTO);
+
+        if ($tentativi > self::FRENI[$this->gradinoAccessi ? 'accessi_massimo' : 'accessi']) {
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) $this->freni->availableIn($freno)]);
+        }
+
+        if ($this->gradinoAccessi && $tentativi > self::FRENI['accessi']) {
+            $this->controllaTurnstile($dati['turnstile'] ?? null);
+        }
 
         $persona = $this->conCredenziali($email, $dati['password']);
 
@@ -682,6 +1245,7 @@ final class BackofficeFinto
         }
 
         $this->freni->clear($freno);
+        $this->freni->clear($coppia);
         $accesso = self::id();
         // Al millesimo, come il backoffice (datetime(3)): la scadenza scritta nella risposta è quella vera.
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false];
@@ -777,7 +1341,7 @@ final class BackofficeFinto
         unset($this->partenze[$dati['stato']]);
 
         if ($partenza === null || $partenza['scade']->lte(now()) || $partenza['provider'] !== $provider) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
         }
 
         if (isset($this->provider_guasti[$provider])) {
@@ -787,7 +1351,7 @@ final class BackofficeFinto
         $profilo = $this->profili[$provider.'|'.$dati['codice']] ?? null;
 
         if ($profilo === null || ! $profilo['verificata'] || ! $this->emailValida($profilo['email'])) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
         }
 
         $email = self::normalizza($profilo['email']);
@@ -928,7 +1492,7 @@ final class BackofficeFinto
         $invito = $this->testi->valida($corpo, ['invito' => ['sometimes', 'nullable', 'string', 'max:255']])['invito'] ?? null;
 
         if ($invito !== null && $this->invitoVivo($invito, $email) === null) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'registrazione');
         }
 
         // L'invito sostituisce Turnstile e la lista dei consentiti: chi ha il codice è stato scelto.
@@ -978,7 +1542,7 @@ final class BackofficeFinto
             if ($invito === null) {
                 $this->chiediCodice($id);
             } else {
-                $this->accettaCodice($invito, $id);
+                $this->accettaCodice($invito, $id, 'registrazione');
             }
         }
 
@@ -1068,7 +1632,7 @@ final class BackofficeFinto
         $persona = $this->conCredenziali($email, $dati['password']);
 
         if ($persona === null || $this->persone[$persona]['email_verificata_il'] !== null || ! $this->provaCodice($persona, $dati['codice'])) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'email');
         }
 
         return [200, ['data' => $this->utente($persona)]];
@@ -1100,8 +1664,125 @@ final class BackofficeFinto
             'utente' => $this->utente($chi['persona']),
             'workspace' => $workspace === null ? null : $this->workspace[$workspace],
             'ruolo' => $workspace === null ? null : $this->membri[$workspace][$chi['persona']],
-            'notifiche_non_lette' => $workspace === null ? null : 0,
+            'notifiche_non_lette' => $workspace === null ? null : count(array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $workspace && $notifica['persona'] === $chi['persona'] && $notifica['letta_il'] === null)),
         ];
+    }
+
+    /**
+     * io.notifiche.elenca (IoNotificheController::elenca): le notifiche della persona del gettone in questo workspace, più
+     * recenti prima (creata_il e id decrescenti). Il cursore porta l'id, e la posizione si rilegge fra le notifiche del
+     * workspace, di chiunque. Il gettone dell'accesso è 403 gettone_senza_workspace.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaNotifiche(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $voci = array_values(array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $chi['workspace'] && $notifica['persona'] === $chi['persona']));
+        $posizione = fn (array $notifica) => [self::iso($notifica['creata_il']), $notifica['id']];
+
+        return $this->pagina($richiesta, 'io.notifiche.elenca', 'id', array_map($this->voceNotifica(...), $voci),
+            fn (array $voce) => [$voce['creata_il'], $voce['id']],
+            fn (string $id) => isset($this->notifiche[$id]) && $this->notifiche[$id]['workspace'] === $chi['workspace'] ? $posizione($this->notifiche[$id]) : null,
+            dalPiuRecente: true);
+    }
+
+    /**
+     * io.notifiche.lettura.modifica (IoNotificheController::modifica): segna letta o non letta una notifica della persona del
+     * gettone. Una che non è del workspace o di un'altra persona è 404, prima del corpo; `letta` è obbligatorio e booleano.
+     * Letta, l'istante di adesso; ripetuta, non cambia; non letta, torna null.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function segnaNotifica(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $notifica = $this->notifiche[$id] ?? null;
+
+        if ($notifica === null || $notifica['workspace'] !== $chi['workspace'] || $notifica['persona'] !== $chi['persona']) {
+            throw new Problema('non_trovato');
+        }
+
+        $letta = (bool) $this->testi->validaStretta($corpo, ['letta' => ['required', 'boolean']])['letta'];
+        $this->notifiche[$id]['letta_il'] = $letta ? ($notifica['letta_il'] ?? now()->toImmutable()->startOfMillisecond()) : null;
+
+        return [200, ['data' => $this->voceNotifica($this->notifiche[$id])]];
+    }
+
+    /**
+     * io.notifiche.letture.crea (IoNotificheController::lettureCrea): segna lette le notifiche non lette della persona del
+     * gettone in questo workspace con `creata_il` fino a `fino_a` compreso, al millesimo, al più 5000 per chiamata: `segnate`
+     * quante, `altre` se ne restano. `fino_a` è ISO 8601 con il fuso e una data che esiste. Una già letta o di un'altra
+     * persona non si tocca.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function segnaNotificheLette(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $campi = $this->testi->validaStretta($corpo, ['fino_a' => ['bail', 'required', 'string', function (string $attributo, mixed $valore, Closure $fail) {
+            if (preg_match(self::ISO_CON_FUSO, $valore) !== 1 || self::istanteIso($valore) === null) {
+                $fail('validation.date')->translate(['attribute' => $attributo]);
+            }
+        }]]);
+        $fino = self::istanteIso((string) $campi['fino_a']) ?? throw new LogicException('fino_a già validato.');
+        $adesso = now()->toImmutable()->startOfMillisecond();
+        $daSegnare = array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $chi['workspace'] && $notifica['persona'] === $chi['persona']
+            && $notifica['letta_il'] === null && $notifica['creata_il']->lte($fino));
+        uasort($daSegnare, fn (array $una, array $altra) => strcmp($una['id'], $altra['id']));
+        $segnate = array_slice($daSegnare, 0, self::NOTIFICHE_PER_CHIAMATA, true);
+
+        foreach (array_keys($segnate) as $id) {
+            $this->notifiche[$id]['letta_il'] = $adesso;
+        }
+
+        return [200, ['data' => ['fino_a' => self::iso($fino), 'segnate' => count($segnate), 'altre' => count($daSegnare) > self::NOTIFICHE_PER_CHIAMATA]]];
+    }
+
+    /**
+     * Una notifica nella forma del contratto (Forme::notifica).
+     *
+     * @param  array<string, mixed>  $notifica
+     * @return array<string, mixed>
+     */
+    private function voceNotifica(array $notifica): array
+    {
+        return [
+            'id' => $notifica['id'],
+            'tipo' => $notifica['tipo'],
+            'app' => self::appDelTipo($notifica['tipo']),
+            'soggetto' => $notifica['soggetto'],
+            'dati' => (object) $notifica['dati'],
+            'letta_il' => $notifica['letta_il'] === null ? null : self::iso($notifica['letta_il']),
+            'creata_il' => self::iso($notifica['creata_il']),
+        ];
+    }
+
+    /** L'app di un tipo di evento (Forme::appDelTipo): quella del primo prefisso che il tipo ha, o null. */
+    private static function appDelTipo(string $tipo): ?string
+    {
+        foreach (self::PREFISSI_DELLE_APP as $prefisso => $app) {
+            if (str_starts_with($tipo, $prefisso)) {
+                return $app;
+            }
+        }
+
+        return null;
+    }
+
+    /** L'istante di un testo ISO 8601 con fuso, in UTC e al millesimo, o null se non è una data che esiste (IoNotificheController::istante). */
+    private static function istanteIso(string $testo): ?CarbonImmutable
+    {
+        try {
+            $istante = CarbonImmutable::parse($testo);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        // Una data che non esiste (30 febbraio) Carbon la sposta: si confronta con ciò che si è letto.
+        return $istante->format('Y-m-d') === substr($testo, 0, 10) ? $istante->utc()->startOfMillisecond() : null;
     }
 
     /**
@@ -1444,14 +2125,14 @@ final class BackofficeFinto
 
         if ($ingresso === null || $ingresso['scade'] <= now()->getTimestamp()
             || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
         }
 
         $accesso = $this->accessi[$ingresso['accesso']] ?? null;
 
         if ($accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now())
             || ! isset($this->membri[$ingresso['workspace']][$accesso['utente']]) || ! $this->appAttiva($ingresso['workspace'], $ingresso['app'])) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
         }
 
         return [201, ['data' => $this->emetti($ingresso['accesso'], $ingresso['workspace'])]];
@@ -1525,7 +2206,7 @@ final class BackofficeFinto
         $persona = $this->conEmail($email);
 
         if ($persona === null || ! $this->provaRecupero($persona, $dati['codice'])) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: 'password');
         }
 
         $this->persone[$persona]['password'] = $dati['password'];
@@ -1904,13 +2585,13 @@ final class BackofficeFinto
      *
      * @return string il workspace dell'invito
      */
-    private function accettaCodice(#[SensitiveParameter] string $codice, string $persona): string
+    private function accettaCodice(#[SensitiveParameter] string $codice, string $persona, string $verifica = 'invito'): string
     {
         $id = $this->invitoDelCodice($codice);
 
         if ($id === null || ! $this->inviti[$id]['scade']->gt(now()) || $this->inviti[$id]['email'] !== $this->persone[$persona]['email']
             || $this->persone[$persona]['email_verificata_il'] === null) {
-            throw new Problema('verifica_non_riuscita');
+            throw new Problema('verifica_non_riuscita', verifica: $verifica);
         }
 
         $invito = $this->inviti[$id];

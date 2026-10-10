@@ -338,3 +338,18 @@ it('né il gettone né l\'ETag finiscono nel messaggio di un\'eccezione', functi
         expect($messaggio)->not->toContain('segreto-etag')->not->toContain(GETTONE_WORKSPACE);
     }
 }); // T5.3
+
+it('i membri estesi di un problema (RFC 9457) arrivano in estensioni: limite e direzione del 409 limite_raggiunto (#1457)', function () {
+    Http::fake(['*' => problema(409, 'limite_raggiunto', ['limite' => 10, 'direzione' => 'in_uscita'])]);
+
+    expect(fn () => Api::senzaGettone()->post('/v1/board/schede/x/collegamenti', []))
+        ->toThrow(fn (ErroreApi $e) => expect($e->codice)->toBe('limite_raggiunto')
+            ->and($e->estensioni)->toBe(['limite' => 10, 'direzione' => 'in_uscita']));
+});
+
+it('senza membri estesi, estensioni è vuoto: i testi e gli errori dei campi non ci sono (#1457)', function () {
+    Http::fake(['*' => problema(422, 'dati_non_validi', ['errors' => [['detail' => 'Obbligatorio.', 'pointer' => '#/nome']]])]);
+
+    expect(fn () => Api::senzaGettone()->post('/v1/utenti', []))
+        ->toThrow(fn (ErroreApi $e) => expect($e->estensioni)->toBe([]));
+});

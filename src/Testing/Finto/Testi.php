@@ -201,6 +201,16 @@ final class Testi
         return (string) $this->traduttore->get($chiave, $sostituzioni);
     }
 
+    /** Il `detail` di un codice; per `verifica_non_riuscita` quello della sua operazione, se la lingua ne ha uno (RendeProblemi). */
+    private function detail(string $codice, ?string $verifica): string
+    {
+        if ($verifica !== null && $this->traduttore->has("errori.{$codice}.varianti.{$verifica}")) {
+            return $this->testo("errori.{$codice}.varianti.{$verifica}");
+        }
+
+        return $this->testo("errori.{$codice}.detail");
+    }
+
     /**
      * Il corpo di un errore di /v1 (RendeProblemi): type, title, status, detail, codice, e `errors` per dati_non_validi.
      * Il detail di troppe_richieste dice i secondi di Retry-After (D19).
@@ -218,9 +228,9 @@ final class Testi
             'status' => $problema->stato(),
             'detail' => $codice === 'troppe_richieste'
                 ? $this->traduttore->choice("errori.{$codice}.detail", $secondi, ['secondi' => $secondi])
-                : $this->testo("errori.{$codice}.detail"),
+                : $this->detail($codice, $problema->verifica),
             'codice' => $codice,
-        ];
+        ] + $problema->estensioni;
 
         if ($problema->errori !== []) {
             $corpo['errors'] = $problema->errori;

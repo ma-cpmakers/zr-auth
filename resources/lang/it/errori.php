@@ -16,6 +16,10 @@ return [
         'title' => 'Gettone non valido',
         'detail' => 'Il gettone della richiesta non vale.',
     ],
+    'cliente_non_riconosciuto' => [
+        'title' => 'Client non riconosciuto',
+        'detail' => "Il client che ha firmato la richiesta non si riconosce: controlla il nome, il segreto e l'ora del server, e firma di nuovo.",
+    ],
     'permesso_negato' => [
         'title' => 'Permesso negato',
         'detail' => 'Il gettone non permette questa operazione.',
@@ -55,6 +59,14 @@ return [
     'verifica_non_riuscita' => [
         'title' => 'Verifica non riuscita',
         'detail' => "Il codice non verifica la richiesta: per l'email controlla il codice, l'email e la password, o chiedi un codice nuovo; per la password controlla il codice e l'email, o chiedi un codice nuovo; per l'ingresso in un'app riparti dall'accesso; per un invito controlla il codice e usa l'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato.",
+        'varianti' => [
+            'email' => 'Il codice non verifica l\'email: controlla il codice, l\'email e la password, o chiedi un codice nuovo.',
+            'password' => 'Il codice non reimposta la password: controlla il codice e l\'email, o chiedi un codice nuovo.',
+            'ingresso' => 'L\'ingresso nell\'app non riesce: il codice non vale più, riparti dall\'accesso.',
+            'invito' => 'L\'invito non vale: controlla il codice e usa l\'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato.',
+            'registrazione' => 'L\'invito non vale per questa email: controlla il codice e usa l\'email a cui è arrivato, o chiedine uno nuovo.',
+            'provider' => 'L\'accesso con il provider non riesce: riparti dal bottone del provider.',
+        ],
     ],
     'turnstile_non_valido' => [
         'title' => 'Controllo Turnstile non superato',
@@ -102,7 +114,23 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Limite raggiunto',
-        'detail' => 'La risorsa ha già il massimo consentito: 100 board attive (300 tra attive e chiuse, 1000 con quelle nel cestino) e 100 cartelle per workspace, 50 liste per board, 500 schede per lista, 3 etichette per scheda, 100 voci per checklist, 50 membri per workspace (contando gli inviti vivi). Libera un posto (chiudi una board o, se ne hai 1000 in tutto con il cestino, aspetta che una del cestino passi all\'archivio; archivia una lista o una scheda, togli un\'etichetta o una voce, revoca un invito) e ripeti.',
+        'detail' => 'La risorsa ha già il massimo consentito: 100 board attive (300 tra attive e chiuse, 1000 con quelle nel cestino) e 100 cartelle per workspace, 50 liste per board, 500 schede per lista, 3 etichette per scheda, 100 voci per checklist, 50 membri per workspace (contando gli inviti vivi), 10 attese in uscita e 50 in entrata per scheda (contando anche le schede completate o archiviate; `limite` e `direzione` dicono quale). Libera un posto (chiudi una board o, se ne hai 1000 in tutto con il cestino, aspetta che una del cestino passi all\'archivio; archivia una lista o una scheda, togli un\'etichetta, una voce o un\'attesa, revoca un invito) e ripeti.',
+    ],
+    'lista_al_limite' => [
+        'title' => 'Lista al limite',
+        'detail' => 'Questa lista blocca le schede nuove: ha già il numero di schede non archiviate che `limite` indica (il valore è nella risposta). Metti la scheda in un\'altra lista, archivia o sposta una scheda di questa, oppure alza il `limite` o spegni `blocca` con board.liste.modifica, e ripeti.',
+    ],
+    'collegamento_esistente' => [
+        'title' => 'Collegamento già presente',
+        'detail' => 'La scheda aspetta già quella scheda: non ripetere la richiesta. Il collegamento lo trovi in board.schede.collegamenti.elenca.',
+    ],
+    'collegamento_circolare' => [
+        'title' => 'Collegamento circolare',
+        'detail' => 'Una scheda non può aspettare sé stessa, né una scheda che a sua volta la aspetta, direttamente o attraverso altre: scegli un\'altra scheda, o togli prima l\'attesa che chiude il giro.',
+    ],
+    'catena_troppo_lunga' => [
+        'title' => 'Catena di attese troppo lunga',
+        'detail' => 'Questo collegamento allungherebbe oltre 20 collegamenti la catena di schede che si aspettano una dopo l\'altra, o la catena è troppo grande per essere controllata: accorcia la catena togliendo un collegamento, e ripeti.',
     ],
     'transizione_non_valida' => [
         'title' => 'Transizione di stato non valida',

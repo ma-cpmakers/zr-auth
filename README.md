@@ -201,6 +201,21 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   return $ultimo['corpo'];                                 // 304: si serve ciò che si aveva
   ```
 
+- **L'IP vero della persona (client registrato).** Le rotte senza gettone (`accessi.crea`, `utenti.crea`, le verifiche
+  dell'email, il recupero della password, lo scambio dell'ingresso e i tre metodi dei provider) hanno i loro freni per IP: se il
+  frontend non dice chi chiama, il backoffice vede il suo server (`127.0.0.1`) e tutte le persone di Zeiras dividono lo stesso
+  secchio. Per dirlo, il frontend ha un nome e un segreto: `ZR_AUTH_CLIENTE` (`home`, `board`) e `ZR_BACKOFFICE_SEGRETO`, uno
+  per frontend, che chi gestisce il server genera e che il backoffice ha uguale in `ZR_CLIENTE_<NOME>_SEGRETO`. Con i due, ogni
+  chiamata senza gettone porta quattro header firmati (`Zr-Cliente`, `Zr-Ip`, `Zr-Istante`, `Zr-Firma`: l'HMAC-SHA256 di `zr1`,
+  client, istante, metodo, percorso e IP, valida 30 secondi); senza uno dei due, o da un comando artisan o da un job in coda (Laravel lega lì una richiesta finta, `127.0.0.1`), non parte niente
+  e la richiesta conta fra le anonime. Una firma che non torna è `401` `cliente_non_riconosciuto`, e il client lo lancia come `ErroreApi`
+  (finisce nel log, senza il segreto), non come `GettoneRifiutato`: un frontend configurato male si vede, non rimanda in silenzio all'ingresso.
+  ⚠️ L'IP firmato è `request()->ip()` di Laravel: giusto solo se il frontend si fida dei soli proxy che lo precedono
+  (Cloudflare, con `trustProxies` sui suoi indirizzi o `real_ip_header CF-Connecting-IP` in nginx). Con `trustProxies('*')` l'IP è
+  quello che il browser scrive in `X-Forwarded-For`, e chi attacca sceglie il suo secchio; senza nessuna fiducia è l'IP del proxy,
+  e molte persone dividono un secchio. Nei test, il finto riconosce il client `BackofficeFinto::CLIENTE` col segreto
+  `BackofficeFinto::SEGRETO_DEL_CLIENTE` (`ZR_AUTH_CLIENTE=finto`, `ZR_BACKOFFICE_SEGRETO=<quello>`), e `ipVisti()` dice gli IP
+  che il client ha dichiarato con una firma valida, per provare che passa quello della persona.
 - Il percorso è sempre di `/v1` (`'/v1/io'`): un indirizzo intero non parte, perché il gettone va solo al backoffice.
 - Un errore di `/v1` (RFC 9457, `application/problem+json`) diventa `ErroreApi`: si decide su `$e->codice`, e
   `$e->dettaglio` si mostra.
@@ -390,10 +405,10 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
 - Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.elimina`, `accessi.provider.elenca`,
   `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
-  `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
+  `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
   `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
-  `io.workspace.elenca`, `io.aziende.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
+  `io.workspace.elenca`, `io.aziende.elenca`, `io.notifiche.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
   `io.workspace.crea` (vedi «Il workspace»). Una chiamata
   di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
 - **I provider.** Spenti di norma, come in produzione senza credenziali: `provider('google', 'linkedin-openid', 'facebook')`
@@ -403,6 +418,21 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `guastaProvider('google')` lo fa non rispondere (`503`). La partenza dà un indirizzo con `client_id=finto-<slug>`; il
   resto dell'indirizzo, lo `stato` di 10 minuti usa-e-getta e la sfida PKCE sono quelli del backoffice. Una persona nuova
   vuole la registrazione consentita (`consenti()`) e `termini_accettati`.
+- **Le schede.** Il finto non modella board né liste: `scheda($workspace, $titolo, $board)` fa nascere una scheda con il minimo che
+  le attese guardano, e `segnaScheda($scheda, 'completata'|'archiviata')` la completa o la archivia. Con quelle rispondono
+  `board.schede.mostra`, `board.schede.completamento.crea`, `board.schede.completamento.elimina`,
+  `board.schede.collegamenti.elenca`, `board.schede.collegamenti.crea` e `board.schede.collegamenti.elimina` (col gettone di un
+  workspace con l'app `pm`). `collegamenti.elimina` toglie l'attesa anche verso una scheda archiviata; è `409` `scheda_archiviata` solo
+  se è archiviata la scheda del percorso.
+- **Il widget di `accessi.crea`.** Come nel backoffice (`ZR_ACCESSI_TURNSTILE`, spento di default) il sesto tentativo di un'email in un
+  minuto è `429` `troppe_richieste`. `accendiGradinoAccessi()` accende il gradino: dal sesto al trentesimo tentativo serve `turnstile`
+  (con `accendiTurnstile()`; senza è `422` `turnstile_non_valido`) e il `429` viene oltre il trentesimo. La coppia (email, IP firmato)
+  è `429` al sesto in ogni caso.
+- **Le notifiche.** `io.notifiche.elenca`, `io.notifiche.lettura.modifica` e `io.notifiche.letture.crea` rispondono come il backoffice,
+  col gettone di un workspace (quello dell'accesso è `403` `gettone_senza_workspace`), e `notifiche_non_lette` di `io.mostra` conta le
+  non lette della persona in quel workspace. Il finto non ha gli eventi che le generano: le semina il test con
+  `notifica($workspace, $persona, $tipo, creataIl: …, lettaIl: …)`, che dà la notifica come la dà l'elenco. L'app la dà il tipo
+  (`pm` per `com.zeiras.board.*`, altrimenti `null`): un'altra è un errore del test. La lettura in blocco segna al più 5000 per chiamata.
 - **Le aziende.** `io.aziende.elenca` dà le aziende dei workspace di cui la persona è membro (con ogni suo gettone, anche
   quello dell'accesso), una volta sola ciascuna, in ordine di nome e poi di id, a pagine col solo id. Un'azienda nasce con
   il workspace e prende il suo nome di allora (`workspace()` e `io.workspace.crea` senza `azienda_id`): una rinomina del
