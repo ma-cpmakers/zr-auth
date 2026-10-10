@@ -120,6 +120,18 @@ return [
         'title' => 'Lista en su límite',
         'detail' => 'Esta lista bloquea las tarjetas nuevas: ya tiene tantas tarjetas no archivadas como indica `limite` (el valor viene en la respuesta). Pon la tarjeta en otra lista, archiva o mueve una tarjeta de esta, o sube el `limite` o desactiva `blocca` con board.liste.modifica, y repite.',
     ],
+    'passaggio_non_consentito' => [
+        'title' => 'Paso no permitido',
+        'detail' => 'La lista de origen solo deja mover sus tarjetas a algunas listas, y esta no es una de ellas (las listas permitidas vienen en la respuesta, en `liste_consentite`). Elige una de esas, o cambia los `passaggi` de la lista de origen con board.liste.modifica o apaga `applica_regole` del tablero con board.board.modifica, y repite.',
+    ],
+    'attese_aperte' => [
+        'title' => 'Esperas aún abiertas',
+        'detail' => 'Esta lista solo acepta tarjetas que no esperan a otras tarjetas aún abiertas, y esta espera a alguna (las primeras vienen en la respuesta, en `schede`). Completa o archiva las tarjetas esperadas, o quita las esperas con board.schede.collegamenti.elimina o el requisito `senza_attese` de la lista, y repite.',
+    ],
+    'checklist_incompleta' => [
+        'title' => 'Lista de comprobación incompleta',
+        'detail' => 'Esta lista solo acepta tarjetas con la lista de comprobación completa, y esta aún tiene elementos por marcar (cuántos, en la respuesta, en `voci_aperte`). Marca o elimina los elementos, o quita el requisito `checklist_completa` de la lista con board.liste.modifica, y repite.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Vínculo ya existente',
         'detail' => 'La tarjeta ya espera a esa tarjeta: no repitas la solicitud. El vínculo lo encuentras en board.schede.collegamenti.elenca.',

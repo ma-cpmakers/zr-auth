@@ -15,6 +15,7 @@ return [
     'board_del_workspace' => "Nel workspace non c'è una board con questo id: gli id delle board li dà board.board.elenca.",
     'lista_del_workspace' => "Nel workspace non c'è una lista con questo id: gli id delle liste li dà board.board.mostra.",
     'blocca_vuole_un_limite' => 'Una lista senza limite non si può bloccare: manda anche `limite` (da 1 a 99).',
+    'passaggio_della_board' => 'Uno di questi id non è di una lista attiva di questa board, o è la lista stessa: gli id delle liste li dà board.board.mostra.',
     'lista_della_board' => 'Questa lista non è della stessa board della scheda: gli id delle liste li dà board.board.mostra.',
     'scheda_della_board' => 'Questa scheda non è della stessa board: gli id delle schede li dà board.schede.elenca.',
     'una_posizione_o_un_ancora' => 'Il corpo vuole uno solo fra posizione e dopo_scheda_id, non nessuno e non tutti e due.',

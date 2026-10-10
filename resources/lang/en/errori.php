@@ -120,6 +120,18 @@ return [
         'title' => 'List at its limit',
         'detail' => 'This list blocks new cards: it already has as many unarchived cards as `limite` says (the value is in the response). Put the card in another list, archive or move a card of this one, or raise the `limite` or turn `blocca` off with board.liste.modifica, and try again.',
     ],
+    'passaggio_non_consentito' => [
+        'title' => 'Move not allowed',
+        'detail' => 'The list the card is in only lets its cards move to some lists, and this is not one of them (the allowed lists are in the response, in `liste_consentite`). Pick one of those, or change the source list\'s `passaggi` with board.liste.modifica, or turn off the board\'s `applica_regole` with board.board.modifica, and retry.',
+    ],
+    'attese_aperte' => [
+        'title' => 'Waits still open',
+        'detail' => 'This list only takes cards that are not waiting for other cards that are still open, and this card is (the first ones are in the response, in `schede`). Complete or archive the awaited cards, or remove the waits with board.schede.collegamenti.elimina or the list\'s `senza_attese` requirement, and retry.',
+    ],
+    'checklist_incompleta' => [
+        'title' => 'Checklist incomplete',
+        'detail' => 'This list only takes cards whose checklist is complete, and this one still has items to check (how many, in the response, in `voci_aperte`). Check or delete the items, or remove the list\'s `checklist_completa` requirement with board.liste.modifica, and retry.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Link already exists',
         'detail' => 'The card already waits for that card: do not repeat the request. You can find the link in board.schede.collegamenti.elenca.',
