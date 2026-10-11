@@ -107,6 +107,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
         ['POST', '#^/v1/link/accettazione$#', 'link.accettazione.crea'],
+        ['POST', '#^/v1/link/verifica$#', 'link.verifica.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
         ['GET', '#^/v1/io/notifiche$#', 'io.notifiche.elenca'],
         ['POST', '#^/v1/io/notifiche/letture$#', 'io.notifiche.letture.crea'],
@@ -213,7 +214,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
@@ -909,7 +910,7 @@ final class BackofficeFinto
     }
 
     /** Le rotte senza gettone a cui un client firma l'IP. */
-    private const SENZA_GETTONE = ['accessi.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
 
     /**
      * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
@@ -1010,6 +1011,7 @@ final class BackofficeFinto
                 'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
                 'link.accettazione.crea' => $this->accettaLink($richiesta, $corpo),
+                'link.verifica.crea' => $this->verificaLink($corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
                 'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
                 'io.notifiche.letture.crea' => $this->segnaNotificheLette($richiesta, $corpo),
@@ -2067,6 +2069,22 @@ final class BackofficeFinto
         $this->membri[$workspace][$chi['persona']] = 'membro';
 
         return [201, ['data' => ['id' => $chi['persona'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => 'membro']]];
+    }
+
+    /**
+     * link.verifica.crea (LinkController::verificaCrea), senza gettone: dice se il codice di un link d'invito vale ancora, con
+     * un campo solo, `valido`, uguale per ogni link che non vale. Non consuma un ingresso e non scrive. La forma del codice (422
+     * dati_non_validi sul pointer #/codice), poi il freno per codice (mai per IP), poi la lettura del link.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function verificaLink(array $corpo): array
+    {
+        $codice = (string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'bail', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/']])['codice'];
+        $this->frena('link-verifica:'.hash('sha256', $codice), self::FRENI['link_verifiche_per_codice'], self::MINUTO);
+
+        return [200, ['data' => ['valido' => $this->linkDelCodice($codice) !== null]]];
     }
 
     /** Il workspace del link che ha questo codice, se è vivo (non scaduto, con ingressi liberi): null se no (Link::valido). */

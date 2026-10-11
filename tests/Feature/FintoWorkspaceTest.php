@@ -619,3 +619,29 @@ it('link.accettazione.crea: entra come membro e conta un ingresso; già membro �
         ->and(esito(alFinto('POST', '/v1/link/accettazione', ['codice' => $codice], entraNelFinto('ultima@example.com')['gettone']['gettone'])))->toBe([422, 'verifica_non_riuscita'])
         ->and(isset($studio['id']))->toBeTrue();
 });
+
+it('link.verifica.crea: un link vivo è valido, uno spento o inventato no, la forma sbagliata è 422 e il freno è per codice (#1708)', function () {
+    [, , , $gettone] = squadra();
+    $anna = $gettone('anna@example.com');
+    $codice = alFinto('POST', '/v1/workspace/link', gettone: $anna)->json('data.codice');
+    $verifica = fn (mixed $valore, array $altro = []) => alFinto('POST', '/v1/link/verifica', ['codice' => $valore] + $altro);
+
+    expect($verifica($codice)->json())->toBe(['data' => ['valido' => true]])
+        ->and($verifica(str_repeat('a', 43))->json())->toBe(['data' => ['valido' => false]])
+        ->and(alFinto('GET', '/v1/workspace/link', gettone: $anna)->json('data.ingressi_usati'))->toBe(0)
+        ->and(esito($verifica(str_repeat('a', 42))))->toBe([422, 'dati_non_validi'])
+        ->and(esito($verifica(['a'])))->toBe([422, 'dati_non_validi'])
+        ->and(esito($verifica($codice, ['altro' => 1])))->toBe([422, 'dati_non_validi'])
+        ->and(esito(alFinto('POST', '/v1/link/verifica', [])))->toBe([422, 'dati_non_validi']);
+
+    alFinto('DELETE', '/v1/workspace/link', gettone: $anna);
+
+    expect($verifica($codice)->json())->toBe(['data' => ['valido' => false]]);
+
+    foreach (range(1, 30) as $numero) {
+        $verifica($codice);
+    }
+
+    expect(esito($verifica($codice)))->toBe([429, 'troppe_richieste'])
+        ->and($verifica(str_repeat('b', 43))->status())->toBe(200);
+});
