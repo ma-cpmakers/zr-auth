@@ -472,7 +472,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - **Le aziende.** `io.aziende.elenca` dà le aziende dei workspace di cui la persona è membro (con ogni suo gettone, anche
   quello dell'accesso), una volta sola ciascuna, in ordine di nome e poi di id, a pagine col solo id. Un'azienda nasce con
   il workspace e prende il suo nome di allora (`workspace()` e `io.workspace.crea` senza `azienda_id`): una rinomina del
-  workspace non la cambia, come nel backoffice. Il finto non ha un metodo per cambiare il nome di un'azienda.
+  workspace non la cambia, come nel backoffice. `aziende.modifica` cambia il nome e i dati dell'azienda (`partita_iva`, `settore`, `persone`, `sito`; JSON Merge Patch, `null` toglie un dato e non il nome) a chi è proprietario o amministratore di almeno uno dei suoi workspace, con ogni suo gettone: conta il ruolo più alto, un membro semplice è `403` `permesso_negato`, un'azienda altrui o inesistente `404` prima del corpo, un corpo senza campi `422` sul corpo intero (`#`), e oltre 20 modifiche in un'ora per persona `429` con `Retry-After` (conta anche un corpo che non cambia niente).
 - **La persona.** `lingue.elenca` dà le lingue di Zeiras (`it`, `en`, `es`) col nome scritto in ognuna, a ogni gettone.
   `io.modifica` cambia nome, lingua e fuso orario sotto `utente` (JSON Merge Patch) con ogni gettone della persona, anche quello
   dell'accesso, di chi non ha ancora un workspace (nella risposta `workspace`, `ruolo` e `notifiche_non_lette` sono `null`): un campo sbagliato o di un'altra

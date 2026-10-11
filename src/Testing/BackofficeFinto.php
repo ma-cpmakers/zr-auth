@@ -106,6 +106,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/io/notifiche/letture$#', 'io.notifiche.letture.crea'],
         ['PATCH', '#^/v1/io/notifiche/([^/]+)/lettura$#', 'io.notifiche.lettura.modifica'],
         ['GET', '#^/v1/aziende/([^/]+)$#', 'aziende.mostra'],
+        ['PATCH', '#^/v1/aziende/([^/]+)$#', 'aziende.modifica'],
         ['GET', '#^/v1/aziende/([^/]+)/workspace$#', 'aziende.workspace.elenca'],
         ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
@@ -203,7 +204,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
@@ -967,6 +968,7 @@ final class BackofficeFinto
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
                 'aziende.mostra' => $this->mostraAzienda($richiesta, $parametri[0]),
+                'aziende.modifica' => $this->modificaAzienda($richiesta, $corpo, $parametri[0]),
                 'aziende.workspace.elenca' => $this->elencaWorkspaceDellAzienda($richiesta, $parametri[0]),
                 'io.aziende.elenca' => $this->elencaAziende($richiesta),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
@@ -2237,6 +2239,61 @@ final class BackofficeFinto
     {
         $ruoli = $this->ruoliNellAzienda($this->autentica($richiesta)['persona'], $azienda);
         $piuAlto = collect(['proprietario', 'amministratore', 'membro'])->first(fn (string $ruolo) => in_array($ruolo, $ruoli, true));
+
+        return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto]]];
+    }
+
+    /**
+     * aziende.modifica (AziendeController::modifica): il nome e i dati di un'azienda, a chi è proprietario o amministratore di
+     * almeno uno dei suoi workspace (conta il ruolo più alto, non quello del gettone, e vale ogni gettone della persona).
+     * Nell'ordine del backoffice: l'azienda (404, uguale per un'altra e per una che non c'è, prima del corpo), il ruolo (403
+     * a chi è solo membro), il corpo (422, JSON Merge Patch: ne serve almeno un campo, `null` toglie un dato e non il nome), il
+     * freno (20 in un'ora per persona, conta anche un corpo che non cambia niente) e la scrittura. Risponde con la forma di
+     * aziende.mostra. Non emette eventi.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaAzienda(Request $richiesta, array $corpo, string $azienda): array
+    {
+        $persona = $this->autentica($richiesta)['persona'];
+        $ruoli = $this->ruoliNellAzienda($persona, $azienda);
+        $piuAlto = collect(self::RUOLI)->first(fn (string $ruolo) => in_array($ruolo, $ruoli, true));
+
+        if ($piuAlto === 'membro') {
+            throw new Problema('permesso_negato');
+        }
+
+        $regole = [
+            'nome' => ['filled', 'string', 'max:255'],
+            'partita_iva' => ['sometimes', 'nullable', 'bail', 'string', 'max:40', 'regex:/^(?=[A-Za-z0-9 .]*$)(?:[ .]*[A-Za-z0-9]){8,14}[ .]*$/'],
+            'settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
+            'persone' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PERSONE)],
+            'sito' => ['sometimes', 'nullable', 'bail', 'string', 'max:255', 'url:http,https'],
+        ];
+        $campi = $this->testi->validaStretta($corpo, $regole);
+
+        if ($campi === []) {
+            throw new Problema('dati_non_validi', [[
+                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => implode(', ', array_keys($regole))]),
+                'regola' => 'obbligatorio',
+                'pointer' => '#',
+            ]]);
+        }
+
+        $this->frena('freni:persona:aziende.modifica:'.$persona, self::FRENI['azienda_modifiche'], self::ORA);
+
+        if (isset($campi['partita_iva'])) {
+            $campi['partita_iva'] = strtoupper((string) preg_replace('/[ .]/', '', (string) $campi['partita_iva']));
+        }
+
+        if (array_key_exists('nome', $campi)) {
+            $this->aziende[$azienda] = (string) $campi['nome'];
+            unset($campi['nome']);
+        }
+
+        $this->datiAziende[$azienda] = [...$this->voceAzienda($azienda), ...$campi];
+        unset($this->datiAziende[$azienda]['id'], $this->datiAziende[$azienda]['nome']);
 
         return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto]]];
     }
