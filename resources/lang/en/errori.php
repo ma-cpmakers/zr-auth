@@ -161,6 +161,10 @@ return [
         'title' => 'Acceptance required',
         'detail' => 'To use Zeiras you must accept the privacy notice and the terms of use in their current version. The problem carries `mancanti` next to the code, the documents still to accept: accept them with legale.accettazioni.crea (legale.documenti.elenca lists them) and repeat the request.',
     ],
+    'precondizione_fallita' => [
+        'title' => 'Precondition failed',
+        'detail' => 'The resource is no longer the one you read: someone else changed it after you read it (or the `ETag` in `If-Match` is not its own). Nothing was written. Read it again (its `mostra` method gives the current `ETag`), check what changed and, if you still want your change, repeat the request with the new `ETag`.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Link already exists',
         'detail' => 'The card already waits for that card: do not repeat the request. You can find the link in board.schede.collegamenti.elenca.',

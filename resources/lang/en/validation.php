@@ -180,6 +180,7 @@ return [
         'utente.telefono' => 'phone number',
         'turnstile' => 'anti-robot check',
         'termini_accettati' => 'terms acceptance',
+        'accordo_trattamento_dati_accettato' => 'data processing agreement acceptance',
         'nome' => 'name',
         'cognome' => 'surname',
         'mansione' => 'job title',

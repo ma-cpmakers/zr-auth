@@ -106,6 +106,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/ingressi$#', 'ingressi.crea'],
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
+        ['POST', '#^/v1/inviti/verifica$#', 'inviti.verifica.crea'],
         ['POST', '#^/v1/link/accettazione$#', 'link.accettazione.crea'],
         ['POST', '#^/v1/link/verifica$#', 'link.verifica.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
@@ -216,7 +217,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
@@ -318,6 +319,12 @@ final class BackofficeFinto
 
     /** @var array<string, array{versione: string, in_vigore_dal: string, impronta: string}> i documenti legali in vigore: vuoto è l'interruttore spento, come in produzione (config/legale.php) */
     private array $documentiLegali = [];
+
+    /** @var ?array{versione: string, in_vigore_dal: string, impronta: string} l'accordo sul trattamento dei dati in vigore: null è l'interruttore spento (config/legale.php, `accordi`) */
+    private ?array $accordoLegale = null;
+
+    /** @var array<string, array<string, true>> le aziende che hanno accettato l'accordo: per azienda, la versione */
+    private array $accordiAccettati = [];
 
     /** @var array<string, array<string, string>> le accettazioni di ogni persona: per persona, «documento@versione» → l'istante */
     private array $accettazioni = [];
@@ -499,7 +506,7 @@ final class BackofficeFinto
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @return array{id: string, nome: string, colore: string}
      */
-    public function cartella(array $workspace, string $nome, string $colore = 'pine'): array
+    public function cartella(array $workspace, string $nome, string $colore = 'pine', string $stato = 'attiva'): array
     {
         $idWorkspace = $this->workspaceDelFinto($workspace);
 
@@ -507,11 +514,15 @@ final class BackofficeFinto
             throw new InvalidArgumentException("Il colore «{$colore}» non c'è: sono pine, citrus, coral, sky, plum e neutral.");
         }
 
+        if (! in_array($stato, ['attiva', 'cestino'], true)) {
+            throw new InvalidArgumentException("Lo stato «{$stato}» di una cartella non c'è: sono attiva e cestino.");
+        }
+
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
-        $this->cartelle[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'colore' => $colore, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $this->cartelle[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'colore' => $colore, 'stato' => $stato, 'nel_cestino_il' => $stato === 'cestino' ? $ora : null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
-        return ['id' => $id, 'nome' => $nome, 'colore' => $colore];
+        return ['id' => $id, 'nome' => $nome, 'colore' => $colore, 'stato' => $stato];
     }
 
     /**
@@ -924,7 +935,7 @@ final class BackofficeFinto
     /** I metodi che chi non ha accettato i documenti legali può chiamare (Accettazione::ESENTI del backoffice, #1699). */
     private const APERTI_SENZA_ACCETTAZIONE = ['legale.documenti.elenca', 'legale.accettazioni.crea', 'io.mostra', 'accessi.corrente.elimina', 'accessi.elimina'];
 
-    private const SENZA_GETTONE = ['accessi.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
 
     /**
      * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
@@ -1027,6 +1038,7 @@ final class BackofficeFinto
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
                 'link.accettazione.crea' => $this->accettaLink($richiesta, $corpo),
                 'link.verifica.crea' => $this->verificaLink($corpo),
+                'inviti.verifica.crea' => $this->verificaInvito($corpo),
                 'legale.documenti.elenca' => $this->elencaDocumentiLegali($richiesta),
                 'legale.accettazioni.crea' => $this->accettaDocumentoLegale($richiesta, $corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
@@ -1179,15 +1191,22 @@ final class BackofficeFinto
     private function elencaCartelle(Request $richiesta): array
     {
         $chi = $this->conPm($richiesta);
+        $query = $this->testi->validaQuery(self::query($richiesta), ['stato' => ['sometimes', 'string', 'in:attiva,cestino']]);
+        $stato = (string) ($query['stato'] ?? 'attiva');
         $voci = [];
 
         foreach ($this->cartelle as $cartella) {
-            if ($cartella['workspace'] === $chi['workspace']) {
-                $voci[] = ['id' => $cartella['id'], 'nome' => $cartella['nome'], 'colore' => $cartella['colore'], 'creata_il' => self::iso($cartella['creata_il']), 'aggiornata_il' => self::iso($cartella['aggiornata_il'])];
+            if ($cartella['workspace'] === $chi['workspace'] && $cartella['stato'] === $stato) {
+                $voci[] = [
+                    'id' => $cartella['id'], 'nome' => $cartella['nome'], 'colore' => $cartella['colore'], 'creata_il' => self::iso($cartella['creata_il']), 'aggiornata_il' => self::iso($cartella['aggiornata_il']),
+                    'stato' => $cartella['stato'],
+                    'nel_cestino_il' => $cartella['nel_cestino_il'] === null ? null : self::iso($cartella['nel_cestino_il']),
+                    'cancellata_il' => $cartella['nel_cestino_il'] === null ? null : self::iso($cartella['nel_cestino_il']->addDays(30)),
+                ];
             }
         }
 
-        return $this->pagina($richiesta, 'board.cartelle.elenca', 'id', $voci, self::perNomeEId(...),
+        return $this->pagina($richiesta, 'board.cartelle.elenca:'.$stato, 'id', $voci, self::perNomeEId(...),
             fn (string $id) => isset($this->cartelle[$id]) ? self::perNomeEId($this->cartelle[$id]) : null);
     }
 
@@ -2055,12 +2074,36 @@ final class BackofficeFinto
      * accettazione è possibile.
      *
      * @param  array<string, array{versione: string, in_vigore_dal: string, impronta: string}>  $documenti
+     * @param  ?array{versione: string, in_vigore_dal: string, impronta: string}  $accordo  l'accordo sul trattamento dei dati (#1700): con
+     *                                                                                      uno, io.workspace.crea e aziende.modifica lo vogliono accettato
      */
-    public function documentiLegali(array $documenti): static
+    public function documentiLegali(array $documenti, ?array $accordo = null): static
     {
         $this->documentiLegali = $documenti;
+        $this->accordoLegale = $accordo;
 
         return $this;
+    }
+
+    /**
+     * Rifiuta con 422 sul campo dell'accordo (obbligatorio, con `accordo` accanto) se l'azienda deve accettare e il corpo non dice
+     * `true` (Legale::richiediAccordo); dice se l'accettazione va scritta. Spento, o già accettata la versione in vigore: no.
+     */
+    private function richiediAccordo(?string $azienda, mixed $campo): bool
+    {
+        if ($this->accordoLegale === null || ($azienda !== null && isset($this->accordiAccettati[$azienda][$this->accordoLegale['versione']]))) {
+            return false;
+        }
+
+        if ($campo !== true) {
+            throw new Problema('dati_non_validi', [[
+                'detail' => $this->testi->testo('validation.required', ['attribute' => $this->testi->nome('accordo_trattamento_dati_accettato')]),
+                'regola' => 'obbligatorio',
+                'pointer' => '#/accordo_trattamento_dati_accettato',
+            ]], estensioni: ['accordo' => ['documento' => 'accordo-trattamento-dati', 'versione' => $this->accordoLegale['versione']]]);
+        }
+
+        return true;
     }
 
     /**
@@ -2161,6 +2204,39 @@ final class BackofficeFinto
         $this->frena('link-verifica:'.hash('sha256', $codice), self::FRENI['link_verifiche_per_codice'], self::MINUTO);
 
         return [200, ['data' => ['valido' => $this->linkDelCodice($codice) !== null]]];
+    }
+
+    /**
+     * inviti.verifica.crea (InvitiController::verificaCrea), senza gettone: dice a chi apre un invito per email se vale ancora e, se
+     * vale, in quale workspace entra, con quale ruolo e chi l'ha invitato. Un invito che non vale (sconosciuto, scaduto, revocato,
+     * accettato) è sempre `{"valido": false}`. La forma del codice (422 sul pointer #/codice), poi il freno per codice, poi la lettura;
+     * mai un'email né un id. `azienda_nome` solo se diverso dal nome del workspace.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function verificaInvito(array $corpo): array
+    {
+        $codice = (string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'bail', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/']])['codice'];
+        $this->frena('inviti-verifica:'.hash('sha256', $codice), self::FRENI['inviti_verifiche_per_codice'], self::MINUTO);
+
+        $invito = collect($this->inviti)->first(fn (array $uno) => hash_equals($uno['codice'], $codice) && $uno['scade']->gt(now()));
+        $workspace = $invito === null ? null : ($this->workspace[$invito['workspace']] ?? null);
+
+        if ($invito === null || $workspace === null) {
+            return [200, ['data' => ['valido' => false]]];
+        }
+
+        $azienda = $this->aziende[$workspace['azienda_id']] ?? null;
+        $invitante = isset($invito['invitante']) ? ($this->persone[$invito['invitante']] ?? null) : null;
+
+        return [200, ['data' => array_filter([
+            'valido' => true,
+            'workspace_nome' => $workspace['nome'],
+            'azienda_nome' => $azienda !== null && $azienda !== $workspace['nome'] ? $azienda : null,
+            'invitante_nome' => $invitante === null ? null : trim($invitante['nome'].' '.($invitante['cognome'] ?? '')),
+            'ruolo' => $invito['ruolo'],
+        ], fn (mixed $valore) => $valore !== null)]];
     }
 
     /** Il workspace del link che ha questo codice, se è vivo (non scaduto, con ingressi liberi): null se no (Link::valido). */
@@ -2829,9 +2905,11 @@ final class BackofficeFinto
             'persone' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PERSONE)],
             'sito' => ['sometimes', 'nullable', 'bail', 'string', 'max:255', 'url:http,https'],
         ];
-        $campi = $this->testi->validaStretta($corpo, $regole);
+        $campi = $this->testi->validaStretta($corpo, $regole + ['accordo_trattamento_dati_accettato' => ['sometimes', 'nullable', 'boolean:strict']]);
+        $accordo = $this->richiediAccordo($azienda, $campi['accordo_trattamento_dati_accettato'] ?? null);
+        unset($campi['accordo_trattamento_dati_accettato']);
 
-        if ($campi === []) {
+        if ($campi === [] && ! $accordo) {
             throw new Problema('dati_non_validi', [[
                 'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => implode(', ', array_keys($regole))]),
                 'regola' => 'obbligatorio',
@@ -2840,6 +2918,10 @@ final class BackofficeFinto
         }
 
         $this->frena('freni:persona:aziende.modifica:'.$persona, self::FRENI['azienda_modifiche'], self::ORA);
+
+        if ($accordo && $this->accordoLegale !== null) {
+            $this->accordiAccettati[$azienda][$this->accordoLegale['versione']] = true;
+        }
 
         if (isset($campi['partita_iva'])) {
             $campi['partita_iva'] = strtoupper((string) preg_replace('/[ .]/', '', (string) $campi['partita_iva']));
@@ -2959,6 +3041,7 @@ final class BackofficeFinto
                 'settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
                 'lingua_contenuti' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(Testi::LINGUE)],
                 'azienda' => ['sometimes', 'nullable', 'array', 'prohibits:azienda_id'],
+                'accordo_trattamento_dati_accettato' => ['sometimes', 'nullable', 'boolean:strict'],
                 'azienda.partita_iva' => ['sometimes', 'nullable', 'bail', 'string', 'max:40', 'regex:/^(?=[A-Za-z0-9 .]*$)(?:[ .]*[A-Za-z0-9]){8,14}[ .]*$/'],
                 'azienda.settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
                 'azienda.persone' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PERSONE)],
@@ -2981,6 +3064,9 @@ final class BackofficeFinto
                 }
             }
 
+            // L'accordo sul trattamento dei dati (#1700): dopo il 404 e il 403 dell'azienda, prima del freno e di ogni scrittura.
+            $accordo = $this->richiediAccordo($azienda, $campi['accordo_trattamento_dati_accettato'] ?? null);
+
             $this->frena('freni:persona:io.workspace.crea:'.$persona, self::FRENI['workspace'], self::ORA);
 
             $id = self::id();
@@ -2992,6 +3078,11 @@ final class BackofficeFinto
                 'settore' => $campi['settore'] ?? null,
                 'lingua_contenuti' => $campi['lingua_contenuti'] ?? $this->persone[$persona]['lingua'],
             ];
+
+            if ($accordo && $this->accordoLegale !== null) {
+                $this->accordiAccettati[$this->workspace[$id]['azienda_id']][$this->accordoLegale['versione']] = true;
+            }
+
             $this->membri[$id][$persona] = 'proprietario';
             // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
             $this->attive[$id]['pm'] = true;
@@ -3478,6 +3569,7 @@ final class BackofficeFinto
                 'workspace' => $workspace,
                 'email' => $email,
                 'ruolo' => $campi['ruolo'],
+                'invitante' => $chi['persona'],
                 'codice' => self::base64url(random_bytes(32)),
                 'scade' => $adesso->addDays(self::GIORNI_DELL_INVITO),
                 'creato_il' => $adesso,

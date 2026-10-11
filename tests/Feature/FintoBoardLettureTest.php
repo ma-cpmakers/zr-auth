@@ -40,7 +40,7 @@ it('board.cartelle.elenca dà le cartelle del workspace per nome, senza maiuscol
 
     expect($prima->status())->toBe(200)
         ->and(array_column($prima->json('data'), 'nome'))->toBe(['àmbito', 'Marketing'])
-        ->and(array_keys($prima->json('data.0')))->toBe(['id', 'nome', 'colore', 'creata_il', 'aggiornata_il'])
+        ->and(array_keys($prima->json('data.0')))->toBe(['id', 'nome', 'colore', 'creata_il', 'aggiornata_il', 'stato', 'nel_cestino_il', 'cancellata_il'])
         ->and($prima->json('data.0.colore'))->toBe('sky')
         ->and($prima->json('successivo'))->not->toBeNull();
 

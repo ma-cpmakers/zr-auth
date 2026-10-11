@@ -178,6 +178,7 @@ return [
         'utente.telefono' => 'teléfono',
         'turnstile' => 'control antirrobot',
         'termini_accettati' => 'aceptación de los términos',
+        'accordo_trattamento_dati_accettato' => 'aceptación del acuerdo de tratamiento de datos',
         'nome' => 'nombre',
         'cognome' => 'apellido',
         'mansione' => 'cargo',
