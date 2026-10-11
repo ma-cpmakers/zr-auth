@@ -101,6 +101,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/ingressi$#', 'ingressi.crea'],
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
+        ['POST', '#^/v1/link/accettazione$#', 'link.accettazione.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
         ['GET', '#^/v1/io/notifiche$#', 'io.notifiche.elenca'],
         ['POST', '#^/v1/io/notifiche/letture$#', 'io.notifiche.letture.crea'],
@@ -120,6 +121,9 @@ final class BackofficeFinto
         ['POST', '#^/v1/password/reimpostazione$#', 'password.reimpostazione.crea'],
         ['POST', '#^/v1/utenti$#', 'utenti.crea'],
         ['PATCH', '#^/v1/workspace$#', 'workspace.modifica'],
+        ['GET', '#^/v1/workspace/link$#', 'workspace.link.mostra'],
+        ['POST', '#^/v1/workspace/link$#', 'workspace.link.crea'],
+        ['DELETE', '#^/v1/workspace/link$#', 'workspace.link.elimina'],
         ['GET', '#^/v1/workspace/inviti$#', 'workspace.inviti.elenca'],
         ['POST', '#^/v1/workspace/inviti$#', 'workspace.inviti.crea'],
         ['DELETE', '#^/v1/workspace/inviti/([^/]+)$#', 'workspace.inviti.elimina'],
@@ -204,7 +208,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
@@ -235,6 +239,11 @@ final class BackofficeFinto
 
     /** Quanti giorni vale un invito (Invito::GIORNI). */
     private const GIORNI_DELL_INVITO = 7;
+
+    /** Quanti giorni vale un link d'invito (LinkInvito::GIORNI) e quante persone fa entrare (LinkInvito::INGRESSI). */
+    private const GIORNI_DEL_LINK = 7;
+
+    private const INGRESSI_DEL_LINK = 20;
 
     /** I membri di un workspace, con gli inviti vivi che li diventerebbero, al più (Tetti::MEMBRI, #1411): il 50º posto è l'ultimo. */
     private const MEMBRI = 50;
@@ -283,6 +292,9 @@ final class BackofficeFinto
 
     /** @var array<string, string> l'ultimo codice d'invito partito, per email */
     private array $postaInviti = [];
+
+    /** @var array<string, array{codice: string, scade: CarbonImmutable, massimi: int, usati: int}> il link d'invito vivo di ogni workspace (LinkInvito), per workspace: uno solo */
+    private array $links = [];
 
     /** @var array<string, array{impronta: string, stato: int, dati: array<string, mixed>, header: array<string, string>, scade: int}> le risposte che l'Idempotency-Key ricorda, per chiave */
     private array $ricordate = [];
@@ -962,6 +974,7 @@ final class BackofficeFinto
                 'ingressi.crea' => $this->creaIngresso($richiesta, $corpo),
                 'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
+                'link.accettazione.crea' => $this->accettaLink($richiesta, $corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
                 'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
                 'io.notifiche.letture.crea' => $this->segnaNotificheLette($richiesta, $corpo),
@@ -981,6 +994,9 @@ final class BackofficeFinto
                 'password.reimpostazione.crea' => $this->reimposta($corpo),
                 'utenti.crea' => $this->creaUtente($corpo),
                 'workspace.modifica' => $this->modificaWorkspace($richiesta, $corpo),
+                'workspace.link.mostra' => $this->mostraLink($richiesta),
+                'workspace.link.crea' => $this->creaLink($richiesta, $corpo),
+                'workspace.link.elimina' => $this->eliminaLink($richiesta),
                 'workspace.inviti.elenca' => $this->elencaInviti($richiesta),
                 'workspace.inviti.crea' => $this->creaInvito($richiesta, $corpo),
                 'workspace.inviti.elimina' => $this->eliminaInvito($richiesta, $parametri[0]),
@@ -1602,7 +1618,9 @@ final class BackofficeFinto
             'codice' => ['required', 'string', 'max:2048'],
             'stato' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
             'termini_accettati' => ['sometimes', 'nullable', 'boolean'],
+            'invito' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
         ]);
+        $invito = $dati['invito'] ?? null;
         $this->frena('provider.crea:stato:'.hash('sha256', (string) $dati['stato']), self::FRENI['provider_stato'], self::MINUTO);
 
         $partenza = $this->partenze[$dati['stato']] ?? null;
@@ -1634,14 +1652,17 @@ final class BackofficeFinto
             $persona = $this->conEmail($email);
 
             if ($persona === null) {
-                // Google e LinkedIn fanno nascere la persona anche a registrazione chiusa (#1554); Facebook resta alla lista.
-                if ($provider === 'facebook' && ! $this->consente($email)) {
+                // Google e LinkedIn fanno nascere la persona anche a registrazione chiusa (#1554); Facebook resta alla lista,
+                // o all'invito di quell'email (#1657).
+                if ($provider === 'facebook' && ($invito === null || $this->invitoVivo($invito, $email) === null) && ! $this->consente($email)) {
                     throw new Problema('registrazione_non_aperta');
                 }
 
                 if (($dati['termini_accettati'] ?? false) !== true) {
                     throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.accepted', ['attribute' => $this->testi->nome('termini_accettati')]), 'regola' => 'valore_non_ammesso', 'pointer' => '#/termini_accettati']]);
                 }
+
+                $this->controllaInvitoDelProvider($invito, $email, null);
 
                 $persona = self::id();
                 $this->persone[$persona] = [
@@ -1655,13 +1676,25 @@ final class BackofficeFinto
                     'fuso_orario' => 'Europe/Rome',
                     'password' => Str::random(64),
                 ];
-            } elseif ($this->persone[$persona]['email_verificata_il'] === null) {
-                // Il provider ha provato che l'email è sua: chi scelse la password prima, magari un altro, non entra più.
-                $this->persone[$persona]['email_verificata_il'] = now()->toImmutable();
-                $this->persone[$persona]['password'] = Str::random(64);
+            } else {
+                $this->controllaInvitoDelProvider($invito, $this->persone[$persona]['email'], $persona);
+
+                if ($this->persone[$persona]['email_verificata_il'] === null) {
+                    // Il provider ha provato che l'email è sua: chi scelse la password prima, magari un altro, non entra più.
+                    $this->persone[$persona]['email_verificata_il'] = now()->toImmutable();
+                    $this->persone[$persona]['password'] = Str::random(64);
+                }
             }
 
             $this->identita[$provider.'|'.$profilo['id']] = $persona;
+        } else {
+            $this->controllaInvitoDelProvider($invito, $this->persone[$persona]['email'], $persona);
+        }
+
+        // L'invito (#1657): la persona entra nel workspace dell'invito nella stessa scrittura dell'accesso. Tutto è già controllato
+        // sopra, prima di toccare lo stato: un invito che non vale non lascia né account né identità.
+        if ($invito !== null) {
+            $this->accettaCodice($invito, $persona, 'provider');
         }
 
         $accesso = self::id();
@@ -1672,6 +1705,152 @@ final class BackofficeFinto
             'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
             'gettone' => $this->emetti($accesso, null),
         ]]];
+    }
+
+    /**
+     * L'invito di un arrivo dal provider (AccessoConProvider::collega, Inviti::accetta), controllato prima di scrivere: nel
+     * backoffice è una transazione, qui il controllo viene prima dello stato. Un invito sconosciuto, scaduto, revocato o di
+     * un'altra email dà 422 verifica_non_riuscita; chi è già membro 409 gia_membro; un workspace pieno 409 limite_raggiunto.
+     * Senza invito non fa niente.
+     */
+    private function controllaInvitoDelProvider(?string $invito, string $email, ?string $persona): void
+    {
+        if ($invito === null) {
+            return;
+        }
+
+        $id = $this->invitoVivo($invito, $email);
+
+        if ($id === null) {
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
+
+        $workspace = $this->inviti[$id]['workspace'];
+
+        if ($persona !== null && isset($this->membri[$workspace][$persona])) {
+            throw new Problema('gia_membro');
+        }
+
+        $this->tettoDeiMembri($workspace);
+    }
+
+    /**
+     * workspace.link.mostra (LinkController::mostra): lo stato del link del workspace, senza il codice; 404 se non c'è.
+     * Proprietario e amministratore.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraLink(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
+
+        return [200, ['data' => $this->voceLink($this->links[$chi['workspace']] ?? throw new Problema('non_trovato'))]];
+    }
+
+    /**
+     * workspace.link.crea (LinkController::crea): crea il link del workspace o lo rigenera, e lo dà col codice, una volta
+     * sola. Il ruolo (403) prima del corpo, che non ha campi (422), poi i freni della persona e del workspace (429). Un
+     * workspace ha un link solo: il vecchio smette di valere. Non accetta Idempotency-Key.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaLink(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
+        $this->testi->validaStretta($corpo, []);
+
+        $this->frena('link-persona:'.$chi['persona'], self::FRENI['link_per_persona_al_giorno'], 86400);
+        $this->frena('link-workspace:'.$chi['workspace'], self::FRENI['link_per_workspace'], self::ORA);
+
+        $this->links[$chi['workspace']] = [
+            'codice' => self::base64url(random_bytes(32)),
+            'scade' => now()->toImmutable()->startOfMillisecond()->addDays(self::GIORNI_DEL_LINK),
+            'massimi' => self::INGRESSI_DEL_LINK,
+            'usati' => 0,
+        ];
+
+        return [201, ['data' => ['codice' => $this->links[$chi['workspace']]['codice']] + $this->voceLink($this->links[$chi['workspace']])], ['Location' => '/v1/workspace/link']];
+    }
+
+    /**
+     * workspace.link.elimina (LinkController::elimina): spegne il link del workspace, il cui codice non vale più; 404 se non c'è.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaLink(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
+
+        if (! isset($this->links[$chi['workspace']])) {
+            throw new Problema('non_trovato');
+        }
+
+        unset($this->links[$chi['workspace']]);
+
+        return [204, null];
+    }
+
+    /**
+     * link.accettazione.crea (LinkController::accettazioneCrea, Link::accetta): la persona del gettone dell'accesso entra nel
+     * workspace del link come membro (201, la forma Membro). Il gettone di un workspace è 403 prima del corpo; poi il freno
+     * della persona (429); ogni rifiuto del link, anche per l'email non verificata, è la stessa 422 verifica_non_riuscita;
+     * chi è già membro 409 senza consumare un ingresso; un workspace pieno 409 limite_raggiunto.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function accettaLink(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+
+        if ($chi['workspace'] !== null) {
+            throw new Problema('gettone_con_workspace');
+        }
+
+        $codice = (string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'string', 'max:255']])['codice'];
+        $this->frena('link-accettazione:'.$chi['persona'], self::FRENI['link_accettazioni_per_persona'], self::ORA);
+
+        $workspace = $this->linkDelCodice($codice);
+        $persona = $this->persone[$chi['persona']];
+
+        if ($workspace === null || $persona['email_verificata_il'] === null) {
+            throw new Problema('verifica_non_riuscita', verifica: 'link');
+        }
+
+        if (isset($this->membri[$workspace][$chi['persona']])) {
+            throw new Problema('gia_membro');
+        }
+
+        $this->tettoDeiMembri($workspace);
+
+        $this->links[$workspace]['usati']++;
+        $this->membri[$workspace][$chi['persona']] = 'membro';
+
+        return [201, ['data' => ['id' => $chi['persona'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => 'membro']]];
+    }
+
+    /** Il workspace del link che ha questo codice, se è vivo (non scaduto, con ingressi liberi): null se no (Link::valido). */
+    private function linkDelCodice(#[SensitiveParameter] string $codice): ?string
+    {
+        foreach ($this->links as $workspace => $link) {
+            if (hash_equals($link['codice'], $codice) && $link['scade']->gt(now()) && $link['usati'] < $link['massimi']) {
+                return $workspace;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Un link come lo dà il backoffice (Forme::link): mai il codice.
+     *
+     * @param  array{codice: string, scade: CarbonImmutable, massimi: int, usati: int}  $link
+     * @return array{scade_il: string, ingressi_massimi: int, ingressi_usati: int}
+     */
+    private function voceLink(array $link): array
+    {
+        return ['scade_il' => self::iso($link['scade']), 'ingressi_massimi' => $link['massimi'], 'ingressi_usati' => $link['usati']];
     }
 
     /** Se l'email passa le regole di Utente::REGOLE_EMAIL del backoffice. */
@@ -1767,11 +1946,16 @@ final class BackofficeFinto
         // Il codice di un invito, se c'è: dal corpo come ogni campo. Il controllo Turnstile viene prima dell'invito (G48): con
         // l'obbligo acceso (accendiTurnstileSullInvito()) un invito senza la risposta del widget rimbalza uguale che sia vero
         // o falso. Spento, l'invito è una scorciatoia: si controlla solo se la risposta c'è. Senza invito, come sempre.
-        $invito = $this->testi->valida($corpo, ['invito' => ['sometimes', 'nullable', 'string', 'max:255']])['invito'] ?? null;
+        $porte = $this->testi->valida($corpo, [
+            'invito' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'link' => ['sometimes', 'nullable', 'string', 'max:255', 'prohibits:invito'],
+        ]);
+        $invito = $porte['invito'] ?? null;
+        $link = $porte['link'] ?? null;
         // Dal corpo pulito come lo legge il backoffice, dopo TrimStrings e ConvertEmptyStringsToNull.
         $turnstile = Testi::pulisci($corpo)['turnstile'] ?? null;
 
-        if ($invito === null || $this->invitoTurnstile || (is_string($turnstile) && $turnstile !== '')) {
+        if ($link !== null || $invito === null || $this->invitoTurnstile || (is_string($turnstile) && $turnstile !== '')) {
             $this->controllaTurnstile($turnstile);
         }
 
@@ -1781,7 +1965,7 @@ final class BackofficeFinto
         }
 
         // L'invito sostituisce la lista dei consentiti: chi ha il codice è stato scelto.
-        if ($invito === null && ! $this->consente($email)) {
+        if ($invito === null && $link === null && ! $this->consente($email)) {
             throw new Problema('registrazione_non_aperta');
         }
 
@@ -1800,7 +1984,13 @@ final class BackofficeFinto
             // La risposta del widget come la dichiara il contratto, anche a Turnstile spento; per ultima, come nel backoffice.
             'turnstile' => ['sometimes', 'nullable', 'string', 'max:'.self::LUNGHEZZA_TURNSTILE],
             'invito' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'link' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
+
+        // Un link che non vale, a registrazione chiusa, risponde come uno vero senza far nascere niente (UtentiController).
+        if ($link !== null && $this->linkDelCodice($link) === null && ! $this->consente($email)) {
+            return [202, ['data' => ['email' => $email]]];
+        }
 
         if ($this->conEmail($email) === null) {
             // Nel backoffice è una transazione: un workspace al tetto dà 409 e la persona non nasce.

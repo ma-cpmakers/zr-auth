@@ -561,3 +561,61 @@ it('io.workspace.crea: dieci all\'ora per persona, l\'undicesimo è 429 con Retr
     $oltre = alFinto('POST', '/v1/io/workspace', ['nome' => 'Uno di troppo'], $accesso);
     expect($oltre->status())->toBe(429)->and($oltre->header('Retry-After'))->toMatch('/^\d+$/');
 });
+
+// Sprint 25e T5 (#1576): il link d'invito del workspace. Il comportamento è quello di LinkController e Link::accetta del
+// backoffice, provato byte per byte dal FintoTest del backoffice.
+
+it('workspace.link.*: crea dà il codice una volta, mostra no; rigenerare spegne il vecchio; elimina lo spegne e poi è 404 (#1576)', function () {
+    [$finto, , , $gettone] = squadra();
+    $anna = $gettone('anna@example.com');
+    $finto->persona('dora@example.com', PASSWORD, nome: 'Dora');
+    $accesso = entraNelFinto('dora@example.com')['gettone']['gettone'];
+
+    expect(esito(alFinto('GET', '/v1/workspace/link', gettone: $anna)))->toBe([404, 'non_trovato']);
+
+    $crea = alFinto('POST', '/v1/workspace/link', gettone: $anna);
+    $vecchio = $crea->json('data.codice');
+
+    expect($crea->status())->toBe(201)
+        ->and($crea->header('Location'))->toBe('/v1/workspace/link')
+        ->and(array_keys($crea->json('data')))->toBe(['codice', 'scade_il', 'ingressi_massimi', 'ingressi_usati'])
+        ->and(array_slice($crea->json('data'), 2))->toBe(['ingressi_massimi' => 20, 'ingressi_usati' => 0])
+        ->and(array_keys(alFinto('GET', '/v1/workspace/link', gettone: $anna)->json('data')))->toBe(['scade_il', 'ingressi_massimi', 'ingressi_usati'])
+        ->and(esito(alFinto('POST', '/v1/workspace/link', gettone: $gettone('carla@example.com'))))->toBe([403, 'permesso_negato'])
+        ->and(esito(alFinto('POST', '/v1/workspace/link', ['ingressi_massimi' => 1000], $anna)))->toBe([422, 'dati_non_validi']);
+
+    $nuovo = alFinto('POST', '/v1/workspace/link', gettone: $anna)->json('data.codice');
+
+    expect(esito(alFinto('POST', '/v1/link/accettazione', ['codice' => $vecchio], $accesso)))->toBe([422, 'verifica_non_riuscita'])
+        ->and(alFinto('DELETE', '/v1/workspace/link', gettone: $anna)->status())->toBe(204)
+        ->and(esito(alFinto('DELETE', '/v1/workspace/link', gettone: $anna)))->toBe([404, 'non_trovato'])
+        ->and(esito(alFinto('POST', '/v1/link/accettazione', ['codice' => $nuovo], $accesso)))->toBe([422, 'verifica_non_riuscita']);
+});
+
+it('link.accettazione.crea: entra come membro e conta un ingresso; già membro è 409 senza contare; il 21º è la stessa 422; l\'email non verificata no (#1576)', function () {
+    [$finto, $studio, , $gettone] = squadra();
+    $anna = $gettone('anna@example.com');
+    $codice = alFinto('POST', '/v1/workspace/link', gettone: $anna)->json('data.codice');
+    $dora = $finto->persona('dora@example.com', PASSWORD, nome: 'Dora');
+    $accesso = entraNelFinto('dora@example.com')['gettone']['gettone'];
+
+    $entra = alFinto('POST', '/v1/link/accettazione', ['codice' => $codice], $accesso);
+
+    expect($entra->status())->toBe(201)
+        ->and($entra->json('data'))->toBe(['id' => $dora['id'], 'nome' => 'Dora', 'email' => 'dora@example.com', 'ruolo' => 'membro'])
+        ->and(alFinto('GET', '/v1/workspace/link', gettone: $anna)->json('data.ingressi_usati'))->toBe(1)
+        ->and(esito(alFinto('POST', '/v1/link/accettazione', ['codice' => $codice], $accesso)))->toBe([409, 'gia_membro'])
+        ->and(alFinto('GET', '/v1/workspace/link', gettone: $anna)->json('data.ingressi_usati'))->toBe(1)
+        ->and(esito(alFinto('POST', '/v1/link/accettazione', ['codice' => $codice], $gettone('carla@example.com'))))->toBe([403, 'gettone_con_workspace']);
+
+    foreach (range(1, 19) as $numero) {
+        $finto->persona("ospite{$numero}@example.com", PASSWORD, nome: "Ospite {$numero}");
+        expect(alFinto('POST', '/v1/link/accettazione', ['codice' => $codice], entraNelFinto("ospite{$numero}@example.com")['gettone']['gettone'])->status())->toBe(201);
+    }
+
+    $finto->persona('ultima@example.com', PASSWORD, nome: 'Ultima');
+
+    expect(alFinto('GET', '/v1/workspace/link', gettone: $anna)->json('data.ingressi_usati'))->toBe(20)
+        ->and(esito(alFinto('POST', '/v1/link/accettazione', ['codice' => $codice], entraNelFinto('ultima@example.com')['gettone']['gettone'])))->toBe([422, 'verifica_non_riuscita'])
+        ->and(isset($studio['id']))->toBeTrue();
+});

@@ -65,6 +65,7 @@ return [
             'ingresso' => 'Entering the app failed: the code is no longer valid, start again from the sign-in.',
             'invito' => 'The invitation is not valid: check the code and use the email it was sent to, or ask whoever invited you for a new one.',
             'registrazione' => 'The invitation is not valid for this email: check the code and use the email it was sent to, or ask for a new one.',
+            'link' => 'The link is not valid: check that you copied all of it, or ask whoever invited you for a new one.',
             'provider' => 'Signing in with the provider failed: start again from the provider\'s button.',
         ],
     ],

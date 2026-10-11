@@ -65,6 +65,7 @@ return [
             'ingresso' => 'La entrada en la app falla: el código ya no vale, vuelve a empezar desde el acceso.',
             'invito' => 'La invitación no vale: revisa el código y usa el correo al que llegó, o pide una nueva a quien te invitó.',
             'registrazione' => 'La invitación no vale para este correo: revisa el código y usa el correo al que llegó, o pide una nueva.',
+            'link' => 'El enlace no vale: comprueba que lo has copiado entero, o pide uno nuevo a quien te invitó.',
             'provider' => 'El acceso con el proveedor falla: vuelve a empezar desde el botón del proveedor.',
         ],
     ],

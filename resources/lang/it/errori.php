@@ -65,6 +65,7 @@ return [
             'ingresso' => 'L\'ingresso nell\'app non riesce: il codice non vale più, riparti dall\'accesso.',
             'invito' => 'L\'invito non vale: controlla il codice e usa l\'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato.',
             'registrazione' => 'L\'invito non vale per questa email: controlla il codice e usa l\'email a cui è arrivato, o chiedine uno nuovo.',
+            'link' => 'Il link non vale: controlla di averlo copiato intero, o chiedine uno nuovo a chi ti ha invitato.',
             'provider' => 'L\'accesso con il provider non riesce: riparti dal bottone del provider.',
         ],
     ],
