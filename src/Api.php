@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use LogicException;
 use Psr\Http\Message\RequestInterface;
+use Zeiras\Auth\Errori\AccettazioneRichiesta;
 use Zeiras\Auth\Errori\BackofficeNonRisponde;
 use Zeiras\Auth\Errori\ErroreApi;
 use Zeiras\Auth\Errori\GettoneRifiutato;
@@ -21,7 +22,8 @@ use Zeiras\Auth\Errori\IndirizzoNonSicuro;
  * 5xx (un 503 turnstile_non_disponibile resta leggibile: si decide su `codice`, si mostra `detail`); un 401 diventa
  * GettoneRifiutato, che chiude la sessione e rimanda all'ingresso, senza ripetere la chiamata; un backoffice che non
  * risponde, un trasporto che cade (anche dopo lo stato), un 3xx, un 5xx senza un problema JSON o una risposta senza
- * JSON diventano BackofficeNonRisponde. Un redirect non si segue.
+ * JSON diventano BackofficeNonRisponde. Un redirect non si segue. Un 403 accettazione_richiesta è un ErroreApi particolare
+ * (AccettazioneRichiesta): se nessuno lo cattura, la pagina manda la persona ad accettare i documenti legali e poi indietro.
  *
  *     Api::senzaGettone()->post('/v1/accessi', ['email' => $email, 'password' => $password]);
  *     Api::workspace()->tutti('/v1/workspace/membri');
@@ -231,7 +233,9 @@ final class Api
                 throw new BackofficeNonRisponde("Il backoffice ha risposto {$risposta->status()} senza un problema JSON.");
             }
 
-            throw ErroreApi::daRisposta($risposta, $corpo);
+            $errore = ErroreApi::daRisposta($risposta, $corpo);
+
+            throw $risposta->status() === 403 && $errore->codice === 'accettazione_richiesta' ? AccettazioneRichiesta::da($errore) : $errore;
         }
 
         if ($condizionale) {

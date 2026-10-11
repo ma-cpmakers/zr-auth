@@ -22,6 +22,10 @@ return [
     // guardia rimanda qui (ConGettone).
     'ingresso' => env('ZR_AUTH_INGRESSO', 'https://app.zeiras.com/accedi'),
 
+    // La pagina dell'accettazione dei documenti legali (zr-home, #1699). Un 403 `accettazione_richiesta` che nessuno cattura manda la
+    // persona qui, con `?ritorno=<la pagina da cui è partita>`; accettato, zr-home la rimanda indietro.
+    'accettazione' => env('ZR_AUTH_ACCETTAZIONE', 'https://app.zeiras.com/legale/accetta'),
+
     // L'ingresso nei moduli (Ingresso::verso e il ricevitore). `home` è zr-home, a cui il modulo manda la persona
     // (`/ingresso`, solo https); `app` è il codice dell'app del modulo nel catalogo (pm, …); `ricevitore` è il percorso
     // dove zr-home rimanda col codice: lo stesso che chi gestisce il backoffice mette in ZR_RITORNO_<CODICE>; `dopo` dove si

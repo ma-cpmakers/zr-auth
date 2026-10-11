@@ -261,6 +261,15 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   `$e->dettaglio` si mostra.
 - Un **401** (gettone scaduto o revocato) diventa `GettoneRifiutato`: zr-auth chiude la sessione e rimanda all'ingresso,
   senza ripetere la chiamata.
+- Un **403 `accettazione_richiesta`** (#1699: la persona non ha accettato la versione in vigore di un documento legale, e il
+  backoffice le apre solo `legale.*`, `io.mostra` e l'uscita) è un `AccettazioneRichiesta`, un `ErroreApi` come gli altri: chi
+  lo cattura lo legge da `$e->codice` e `$e->estensioni['mancanti']`. Se **nessuno lo cattura**, zr-auth manda la persona a
+  `zr-auth.accettazione` (`ZR_AUTH_ACCETTAZIONE`, default `https://app.zeiras.com/legale/accetta`) con `?ritorno=<la pagina da
+  cui è partita>`: l'indirizzo della richiesta se è una GET in https e di non più di 2000 caratteri, altrimenti la radice del
+  frontend. Accettato, zr-home la rimanda lì (il filtro del `ritorno` è suo). Una richiesta JSON riceve `403`
+  `{"codice":"accettazione_richiesta","mancanti":[…]}`, una visita di Inertia `409` con `X-Inertia-Location`; la sessione resta
+  aperta e niente va nel log. La pagina dell'accettazione stessa non rimanda a sé stessa (stesso host e percorso, anche con la
+  lingua davanti): risponde il `403` JSON. Ogni altro `403` è un `ErroreApi` che resta com'è.
 - Un backoffice che non risponde, un trasporto che cade (anche dopo lo stato), un 3xx, un 5xx o una risposta senza JSON
   diventano `BackofficeNonRisponde`: mai una lista vuota, e mai un'eccezione del client HTTP che esce. Quando il client
   HTTP ha lanciato, la sua eccezione sta in `getPrevious()`: una `ConnectionException` se il trasporto è caduto prima
