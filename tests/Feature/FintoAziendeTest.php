@@ -45,7 +45,7 @@ it('aziende.mostra dà id, nome e il ruolo più alto della persona nei workspace
 
     // Bruno è membro nel primo workspace e amministratore nel secondo: l'azienda lo vede amministratore.
     expect($bruno->status())->toBe(200)
-        ->and($bruno->json('data'))->toBe(['id' => $studio['azienda_id'], 'nome' => 'Studio', 'ruolo' => 'amministratore'])
+        ->and($bruno->json('data'))->toBe(['id' => $studio['azienda_id'], 'nome' => 'Studio', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'ruolo' => 'amministratore'])
         ->and($carla->json('data.ruolo'))->toBe('membro')
         ->and($anna->json('data.ruolo'))->toBe('proprietario');
 });
@@ -187,4 +187,41 @@ it('un\'estensione non sostituisce un campo riservato del problema: codice, deta
             ->and($e->stato)->toBe(409)
             ->and($e->dettaglio)->toBe('Dettaglio per la persona.')
             ->and($e->titolo)->toBe('Titolo'));
+});
+
+it('il finto fa nascere il workspace con settore e lingua dei contenuti, e l\'azienda con i suoi dati; i valori fuori regola sono 422 sul campo (sprint 25d T4, #1571, #1575)', function () {
+    [, , , , $accesso] = conLeAziende();
+    $gettone = $accesso('anna@example.com');
+
+    $nato = alFinto('POST', '/v1/io/workspace', [
+        'nome' => 'Ditta',
+        'settore' => 'consulenza',
+        'lingua_contenuti' => 'en',
+        'azienda' => ['partita_iva' => ' it 012.345.678 90 ', 'settore' => 'formazione', 'persone' => '2-10', 'sito' => 'https://ditta.example.com'],
+    ], $gettone);
+
+    expect($nato->status())->toBe(201)
+        ->and($nato->json('data.settore'))->toBe('consulenza')
+        ->and($nato->json('data.lingua_contenuti'))->toBe('en');
+
+    $azienda = alFinto('GET', '/v1/aziende/'.$nato->json('data.azienda_id'), gettone: $gettone);
+
+    expect($azienda->json('data'))->toMatchArray(['nome' => 'Ditta', 'partita_iva' => 'IT01234567890', 'settore' => 'formazione', 'persone' => '2-10', 'sito' => 'https://ditta.example.com']);
+
+    $senza = alFinto('POST', '/v1/io/workspace', ['nome' => 'Senza'], $gettone);
+
+    expect($senza->json('data.settore'))->toBeNull()->and($senza->json('data.lingua_contenuti'))->toBe('it');
+
+    foreach ([
+        [['settore' => 'pesca'], '#/settore'],
+        [['lingua_contenuti' => 'fr'], '#/lingua_contenuti'],
+        [['azienda' => ['partita_iva' => '1234567']], '#/azienda/partita_iva'],
+        [['azienda' => ['colore' => 'blu']], '#/azienda/colore'],
+        [['azienda' => ['sito' => 'ftp://x.example.com']], '#/azienda/sito'],
+        [['azienda_id' => '01k6r3a7c2e6g0j4m8p2s6v0x9', 'azienda' => ['settore' => 'eventi']], '#/azienda'],
+    ] as [$corpo, $pointer]) {
+        $risposta = alFinto('POST', '/v1/io/workspace', ['nome' => 'Fuori'] + $corpo, $gettone);
+
+        expect($risposta->status())->toBe(422)->and(array_column($risposta->json('errors'), 'pointer'))->toContain($pointer);
+    }
 });

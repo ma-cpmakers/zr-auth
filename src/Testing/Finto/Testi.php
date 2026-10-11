@@ -126,6 +126,44 @@ final class Testi
     }
 
     /**
+     * Come valida(), ma dentro i campi-oggetto di `$oggetti` un campo che non è dichiarato è un errore sul suo pointer
+     * (`validation.prohibited`, `#/azienda/colore`), come Corpo::soloCorpo() del backoffice; fuori da quegli oggetti un campo
+     * in più si ignora. Gli errori dei campi vengono prima, quelli degli estranei dopo.
+     *
+     * @param  array<mixed>  $corpo
+     * @param  array<string, mixed>  $regole  le regole di Laravel, con le chiavi a punti solo per i campi degli oggetti
+     * @param  array<string, list<string>>  $oggetti  per ogni campo-oggetto, i nomi dei campi che ammette
+     * @return array<string, mixed> i valori validati
+     */
+    public function validaConOggetti(array $corpo, array $regole, array $oggetti): array
+    {
+        $corpo = self::pulisci($corpo);
+        $validatore = $this->validatori->make($corpo, $regole);
+        $errori = $this->errori($validatore);
+
+        foreach ($oggetti as $campo => $ammessi) {
+            $valore = $corpo[$campo] ?? null;
+
+            if (! is_array($valore) || $validatore->errors()->has($campo)) {
+                continue;
+            }
+
+            $estranei = [];
+            self::estranei($valore, array_fill_keys($ammessi, []), [$campo], $estranei);
+
+            foreach ($estranei as $percorso) {
+                $errori[] = ['detail' => (string) $this->traduttore->get('validation.prohibited', ['attribute' => $this->nome(implode('.', $percorso))]), 'regola' => Regola::CAMPO_ESTRANEO, 'pointer' => self::puntatore($percorso)];
+            }
+        }
+
+        if ($errori !== []) {
+            throw new Problema('dati_non_validi', $errori);
+        }
+
+        return $validatore->validated();
+    }
+
+    /**
      * Valida il corpo di una scrittura come Corpo::valida() del backoffice: le regole di valida(), e un campo che le
      * regole non nominano è un errore sul suo pointer (`validation.prohibited`), al più ESTRANEI, dopo quelli dei campi.
      *

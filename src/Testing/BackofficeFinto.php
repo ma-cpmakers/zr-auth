@@ -202,6 +202,12 @@ final class BackofficeFinto
      */
     private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
+    /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
+    private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
+
+    /** Le fasce di persone di un'azienda (Azienda::PERSONE del backoffice). */
+    private const PERSONE = ['solo_io', '2-10', '11-50', 'oltre_50'];
+
     private const ORA = 3600;
 
     private const MINUTO = 60;
@@ -247,11 +253,14 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: ?string}> per gettone, in chiaro: il finto vive nella memoria del test */
     private array $gettoni = [];
 
-    /** @var array<string, array{id: string, nome: string, slug: string, azienda_id: string}> per id */
+    /** @var array<string, array{id: string, nome: string, slug: string, azienda_id: string, settore: ?string, lingua_contenuti: ?string}> per id */
     private array $workspace = [];
 
     /** @var array<string, string> il nome di ogni azienda, per id: quello del primo workspace che l'ha fatta nascere, mai aggiornato */
     private array $aziende = [];
+
+    /** @var array<string, array{partita_iva: ?string, settore: ?string, persone: ?string, sito: ?string}> i dati di ogni azienda, per id: `null` se non dati */
+    private array $datiAziende = [];
 
     /** @var array<string, array<string, string>> il ruolo, per workspace e per persona */
     private array $membri = [];
@@ -534,7 +543,7 @@ final class BackofficeFinto
      *
      * @param  array<string, mixed>  $proprietaria  una persona di persona()
      * @param  string|null  $azienda  l'`azienda_id` di un workspace che c'è già, per farne nascere un altro nella stessa azienda
-     * @return array{id: string, nome: string, slug: string, azienda_id: string} il workspace, come lo dà il backoffice (lo schema Workspace)
+     * @return array{id: string, nome: string, slug: string, azienda_id: string, settore: ?string, lingua_contenuti: ?string} il workspace, come lo dà il backoffice (lo schema Workspace)
      */
     public function workspace(string $nome, array $proprietaria, ?string $azienda = null): array
     {
@@ -546,7 +555,7 @@ final class BackofficeFinto
 
         // Un'azienda sua, come fa il backoffice vero senza azienda_id passato (#1259, decisione 5612 del #76), o quella
         // data: più workspace nella stessa azienda, per il ruolo più alto e l'elenco di aziende.mostra (#1590).
-        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => $azienda ?? $this->nuovaAzienda($nome)];
+        $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => $azienda ?? $this->nuovaAzienda($nome), 'settore' => null, 'lingua_contenuti' => null];
         $this->membro($this->workspace[$id], $proprietaria, 'proprietario');
 
         return $this->workspace[$id];
@@ -1995,7 +2004,7 @@ final class BackofficeFinto
         $ruoli = $this->ruoliNellAzienda($this->autentica($richiesta)['persona'], $azienda);
         $piuAlto = collect(['proprietario', 'amministratore', 'membro'])->first(fn (string $ruolo) => in_array($ruolo, $ruoli, true));
 
-        return [200, ['data' => ['id' => $azienda, 'nome' => $this->aziende[$azienda], 'ruolo' => $piuAlto]]];
+        return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto]]];
     }
 
     /**
@@ -2033,21 +2042,37 @@ final class BackofficeFinto
         foreach ($this->membri as $workspace => $ruoli) {
             if (isset($ruoli[$persona])) {
                 $id = $this->workspace[$workspace]['azienda_id'];
-                $voci[$id] = ['id' => $id, 'nome' => $this->aziende[$id]];
+                $voci[$id] = $this->voceAzienda($id);
             }
         }
 
         return $this->pagina($richiesta, 'io.aziende.elenca', 'id', array_values($voci), self::perNomeEId(...),
-            fn (string $id) => isset($this->aziende[$id]) ? self::perNomeEId(['id' => $id, 'nome' => $this->aziende[$id]]) : null);
+            fn (string $id) => isset($this->aziende[$id]) ? self::perNomeEId($this->voceAzienda($id)) : null);
     }
 
-    /** Un'azienda nuova, col nome del workspace che la fa nascere (Workspace::booted del backoffice), e il suo id. */
-    private function nuovaAzienda(string $nome): string
+    /**
+     * Un'azienda nuova, col nome del workspace che la fa nascere (Workspace::booted del backoffice), e il suo id; i dati
+     * (partita IVA, settore, persone, sito) sono quelli dati a io.workspace.crea, `null` se non dati.
+     *
+     * @param  array<string, string>  $dati
+     */
+    private function nuovaAzienda(string $nome, array $dati = []): string
     {
         $id = self::id();
         $this->aziende[$id] = $nome;
+        $this->datiAziende[$id] = ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, ...$dati];
 
         return $id;
+    }
+
+    /**
+     * Lo schema Azienda (Forme::azienda): id, nome e i quattro dati dell'azienda.
+     *
+     * @return array<string, ?string>
+     */
+    private function voceAzienda(string $id): array
+    {
+        return ['id' => $id, 'nome' => $this->aziende[$id], ...($this->datiAziende[$id] ?? ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null])];
     }
 
     /**
@@ -2079,11 +2104,23 @@ final class BackofficeFinto
                 throw new Problema('email_non_verificata');
             }
 
-            $campi = $this->testi->valida($corpo, [
+            $campi = $this->testi->validaConOggetti($corpo, [
                 'nome' => ['required', 'string', 'max:255'],
                 'azienda_id' => ['sometimes', 'string'],
-            ]);
+                'settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
+                'lingua_contenuti' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(Testi::LINGUE)],
+                'azienda' => ['sometimes', 'nullable', 'array', 'prohibits:azienda_id'],
+                'azienda.partita_iva' => ['sometimes', 'nullable', 'bail', 'string', 'max:40', 'regex:/^(?=[A-Za-z0-9 .]*$)(?:[ .]*[A-Za-z0-9]){8,14}[ .]*$/'],
+                'azienda.settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
+                'azienda.persone' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PERSONE)],
+                'azienda.sito' => ['sometimes', 'nullable', 'bail', 'string', 'max:255', 'url:http,https'],
+            ], ['azienda' => ['partita_iva', 'settore', 'persone', 'sito']]);
             $azienda = $campi['azienda_id'] ?? null;
+            $datiAzienda = array_filter($campi['azienda'] ?? [], fn (mixed $valore) => $valore !== null);
+
+            if (isset($datiAzienda['partita_iva'])) {
+                $datiAzienda['partita_iva'] = strtoupper((string) preg_replace('/[ .]/', '', (string) $datiAzienda['partita_iva']));
+            }
 
             // Nessun workspace dell'azienda di cui la persona sia membro: 404 (N9). Solo membro: 403, perché l'azienda la
             // conosce già (#1537, dal 10/10 `a28ebac`). Il 404 e il 403 vengono prima del freno e non contano.
@@ -2098,7 +2135,14 @@ final class BackofficeFinto
             $this->frena('freni:persona:io.workspace.crea:'.$persona, self::FRENI['workspace'], self::ORA);
 
             $id = self::id();
-            $this->workspace[$id] = ['id' => $id, 'nome' => $campi['nome'], 'slug' => $this->nuovoSlug($campi['nome']), 'azienda_id' => $azienda ?? $this->nuovaAzienda($campi['nome'])];
+            $this->workspace[$id] = [
+                'id' => $id,
+                'nome' => $campi['nome'],
+                'slug' => $this->nuovoSlug($campi['nome']),
+                'azienda_id' => $azienda ?? $this->nuovaAzienda($campi['nome'], array_map(strval(...), $datiAzienda)),
+                'settore' => $campi['settore'] ?? null,
+                'lingua_contenuti' => $campi['lingua_contenuti'] ?? $this->persone[$persona]['lingua'],
+            ];
             $this->membri[$id][$persona] = 'proprietario';
 
             return [201, ['data' => [...$this->workspace[$id], 'ruolo' => 'proprietario']], []];
