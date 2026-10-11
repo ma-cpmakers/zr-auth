@@ -17,6 +17,7 @@ use InvalidArgumentException;
 use LogicException;
 use Random\Randomizer;
 use SensitiveParameter;
+use stdClass;
 use Zeiras\Auth\Eventi\Firma;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
@@ -92,6 +93,10 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/collegamenti/([^/]+)$#', 'board.schede.collegamenti.elimina'],
+        ['GET', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.elenca'],
+        ['POST', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.crea'],
+        ['PATCH', '#^/v1/board/board/([^/]+)/viste/([^/]+)$#', 'board.board.viste.modifica'],
+        ['DELETE', '#^/v1/board/board/([^/]+)/viste/([^/]+)$#', 'board.board.viste.elimina'],
         ['GET', '#^/v1/accessi/provider$#', 'accessi.provider.elenca'],
         ['POST', '#^/v1/accessi/provider/([^/]+)/autorizzazioni$#', 'accessi.provider.autorizzazioni.crea'],
         ['POST', '#^/v1/accessi/provider/([^/]+)$#', 'accessi.provider.crea'],
@@ -220,6 +225,21 @@ final class BackofficeFinto
 
     private const MINUTO = 60;
 
+    /** Le viste di una board (VisteController): il nome, il testo del filtro, gli id di un elenco e i tetti (Tetti::VISTE_*). */
+    private const VISTA_NOME = 60;
+
+    private const VISTA_TESTO = 100;
+
+    private const VISTA_ELENCO = 50;
+
+    private const VISTE_PERSONALI = 25;
+
+    private const VISTE_CONDIVISE = 25;
+
+    private const VISTE_PER_PERSONA_ALL_ORA = 120;
+
+    private const VISTE_PER_BOARD_ALL_ORA = 600;
+
     /** I freni degli invii dei codici di una persona, contando quello della nascita: invii, secondi (VerificaEmail). */
     private const INVII = ['invio' => [1, 60], 'ora' => [5, 3600], 'giorno' => [10, 86400]];
 
@@ -325,6 +345,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{id: string, scheda: string, aspettata: string, creato_il: CarbonImmutable}> i collegamenti «aspetta» vivi, per id */
     private array $collegamenti = [];
+
+    /** @var array<string, array{id: string, workspace: string, board: string, nome: string, filtri: array<string, mixed>, condivisa: bool, creata_da: string, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le viste salvate vive, per id */
+    private array $viste = [];
 
     /** @var array<string, true> i provider accesi (provider()), per slug */
     private array $provider = [];
@@ -976,6 +999,10 @@ final class BackofficeFinto
                 'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
                 'board.schede.collegamenti.crea' => $this->creaCollegamento($richiesta, $corpo, $parametri[0]),
                 'board.schede.collegamenti.elimina' => $this->eliminaCollegamento($richiesta, $parametri[0], $parametri[1]),
+                'board.board.viste.elenca' => $this->elencaViste($richiesta, $parametri[0]),
+                'board.board.viste.crea' => $this->creaVista($richiesta, $corpo, $parametri[0]),
+                'board.board.viste.modifica' => $this->modificaVista($richiesta, $corpo, $parametri[0], $parametri[1]),
+                'board.board.viste.elimina' => $this->eliminaVista($richiesta, $parametri[0], $parametri[1]),
                 'app.elenca' => $this->elencaApp($richiesta),
                 'app.modifica' => $this->modificaApp($richiesta, $corpo, $parametri[0]),
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
@@ -1457,6 +1484,210 @@ final class BackofficeFinto
     }
 
     /**
+     * Le regole di `condivisa` e dei cinque campi di `filtri` (VisteController::regole): un oggetto chiuso, e ognuno può essere
+     * `null`, che vuol dire assente.
+     *
+     * @return array<string, mixed>
+     */
+    private function regoleDelleViste(): array
+    {
+        $elenco = ['bail', 'nullable', 'array', 'list', 'max:'.self::VISTA_ELENCO];
+
+        return [
+            'condivisa' => ['boolean:strict'],
+            'filtri' => ['bail', 'array'],
+            'filtri.etichette' => $elenco,
+            'filtri.etichette.*' => ['bail', 'string', 'max:64'],
+            'filtri.persone' => $elenco,
+            'filtri.persone.*' => ['bail', 'string', 'max:64'],
+            'filtri.scadenza' => ['bail', 'nullable', 'string', Rule::in(['scaduta', 'oggi', 'settimana', 'senza'])],
+            'filtri.stato' => ['bail', 'nullable', 'string', Rule::in(['aperte', 'completate'])],
+            'filtri.testo' => ['bail', 'nullable', 'string', 'max:'.self::VISTA_TESTO],
+        ];
+    }
+
+    /**
+     * I filtri nella forma con cui si salvano (VisteController::filtri): i cinque campi nel loro ordine, senza quelli assenti,
+     * nulli o vuoti.
+     *
+     * @param  array<string, mixed>  $filtri
+     * @return array<string, mixed>
+     */
+    private function filtriDellaVista(array $filtri): array
+    {
+        $salvati = [];
+
+        foreach (['etichette', 'persone', 'scadenza', 'stato', 'testo'] as $campo) {
+            $valore = $filtri[$campo] ?? null;
+
+            if ($valore !== null && $valore !== []) {
+                $salvati[$campo] = is_array($valore) ? array_values($valore) : $valore;
+            }
+        }
+
+        return $salvati;
+    }
+
+    /**
+     * Una vista come la dà il backoffice (Forme::vista): `filtri` è un oggetto anche vuoto.
+     *
+     * @param  array<string, mixed>  $vista
+     * @return array<string, mixed>
+     */
+    private function voceVista(array $vista): array
+    {
+        return [
+            'id' => $vista['id'], 'board_id' => $vista['board'], 'nome' => $vista['nome'],
+            'filtri' => $vista['filtri'] === [] ? new stdClass : $vista['filtri'],
+            'condivisa' => $vista['condivisa'], 'creata_da' => $vista['creata_da'],
+            'creata_il' => self::iso($vista['creata_il']), 'aggiornata_il' => self::iso($vista['aggiornata_il']),
+        ];
+    }
+
+    /** La board del percorso, nel workspace del gettone: una di un altro workspace, o che non c'è, è 404. */
+    private function boardDelPercorso(string $workspace, string $id): string
+    {
+        $board = $this->boards[$id] ?? null;
+
+        return $board !== null && $board['workspace'] === $workspace ? $id : throw new Problema('non_trovato');
+    }
+
+    /**
+     * La vista del percorso, della board e visibile alla persona (condivisa, o sua): ogni altra — personale di un altro, anche
+     * per un proprietario, di un'altra board, eliminata, che non c'è — è lo stesso 404 (G74).
+     *
+     * @return array<string, mixed>
+     */
+    private function vistaDelPercorso(string $board, string $id, string $persona): array
+    {
+        $vista = $this->viste[$id] ?? null;
+
+        return $vista !== null && $vista['board'] === $board && ($vista['condivisa'] || $vista['creata_da'] === $persona) ? $vista : throw new Problema('non_trovato');
+    }
+
+    /** 409 limite_raggiunto con `limite` e `ambito` se la persona (o la board) ha già il tetto di viste (Tetti::viste). */
+    private function tettoDelleViste(string $board, string $autore, bool $condivisa): void
+    {
+        $viste = array_filter($this->viste, fn (array $vista) => $vista['board'] === $board);
+        $pieno = $condivisa
+            ? count(array_filter($viste, fn (array $vista) => $vista['condivisa'])) >= self::VISTE_CONDIVISE
+            : count(array_filter($viste, fn (array $vista) => ! $vista['condivisa'] && $vista['creata_da'] === $autore)) >= self::VISTE_PERSONALI;
+
+        if ($pieno) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => $condivisa ? self::VISTE_CONDIVISE : self::VISTE_PERSONALI, 'ambito' => $condivisa ? 'condivisa' : 'personale']);
+        }
+    }
+
+    /**
+     * board.board.viste.elenca (VisteController::elenca): le viste condivise della board e le personali della persona, in ordine
+     * di nome e poi di id, a cursore. Il cursore di una vista che la persona non vede è 422 sul parametro.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaViste(Request $richiesta, string $board): array
+    {
+        $chi = $this->conPm($richiesta);
+        $board = $this->boardDelPercorso($chi['workspace'], $board);
+        $visibili = fn (array $vista) => $vista['board'] === $board && ($vista['condivisa'] || $vista['creata_da'] === $chi['persona']);
+        $voci = array_map($this->voceVista(...), array_values(array_filter($this->viste, $visibili)));
+
+        return $this->pagina($richiesta, 'board.board.viste.elenca:'.$board, 'id', $voci, self::perNomeEId(...),
+            fn (string $id) => isset($this->viste[$id]) && $visibili($this->viste[$id]) ? self::perNomeEId($this->viste[$id]) : null);
+    }
+
+    /**
+     * board.board.viste.crea (VisteController::crea): salva i filtri come vista personale o condivisa. Nell'ordine del backoffice:
+     * il ruolo e l'app (403), la board del percorso (404), la Idempotency-Key, i freni per persona e per board (429), il corpo
+     * (422), il tetto (409 con `limite` e `ambito`). Nessuna `Location`.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaVista(Request $richiesta, array $corpo, string $board): array
+    {
+        $chi = $this->conPm($richiesta);
+        $board = $this->boardDelPercorso($chi['workspace'], $board);
+
+        return $this->conIdempotenza($richiesta, 'board.board.viste.crea', $chi, ['corpo' => $corpo, 'percorso' => ['board' => $board]], function () use ($chi, $corpo, $board) {
+            $this->frena('board.viste.crea:persona:'.$chi['persona'], self::VISTE_PER_PERSONA_ALL_ORA, self::ORA);
+            $this->frena('board.viste.crea:board:'.$board, self::VISTE_PER_BOARD_ALL_ORA, self::ORA);
+            $campi = $this->testi->validaCorpo($corpo, [...$this->regoleDelleViste(), 'nome' => ['bail', 'required', 'string', 'max:'.self::VISTA_NOME]]);
+            $condivisa = $campi['condivisa'] ?? false;
+            $this->tettoDelleViste($board, $chi['persona'], $condivisa);
+
+            $id = self::id();
+            $ora = now()->toImmutable()->startOfMillisecond();
+            $this->viste[$id] = [
+                'id' => $id, 'workspace' => $chi['workspace'], 'board' => $board, 'nome' => trim((string) $campi['nome']),
+                'filtri' => $this->filtriDellaVista($campi['filtri'] ?? []), 'condivisa' => $condivisa,
+                'creata_da' => $chi['persona'], 'creata_il' => $ora, 'aggiornata_il' => $ora,
+            ];
+
+            return [201, ['data' => $this->voceVista($this->viste[$id])], []];
+        });
+    }
+
+    /**
+     * board.board.viste.modifica (VisteController::modifica): nome, filtri (sostituiti per intero) o condivisione, come JSON Merge
+     * Patch. La vista si cerca prima del corpo (404). Un corpo senza campi è 422 sul corpo intero; uno che non cambia niente non
+     * scrive. Rendere condivisa una personale conta nel tetto delle condivise, renderla personale in quello personale dell'autore.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaVista(Request $richiesta, array $corpo, string $board, string $vista): array
+    {
+        $chi = $this->conPm($richiesta);
+        $board = $this->boardDelPercorso($chi['workspace'], $board);
+        $corrente = $this->vistaDelPercorso($board, $vista, $chi['persona']);
+        $regole = [...$this->regoleDelleViste(), 'nome' => ['bail', 'filled', 'string', 'max:'.self::VISTA_NOME]];
+        $campi = $this->testi->validaCorpo($corpo, $regole);
+
+        if ($campi === []) {
+            $ammessi = array_values(array_unique(array_map(fn (string $chiave) => explode('.', $chiave, 2)[0], array_keys($regole))));
+
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => implode(', ', $ammessi)]), 'regola' => 'obbligatorio', 'pointer' => '#']]);
+        }
+
+        $cambi = [];
+
+        if (array_key_exists('nome', $campi) && trim((string) $campi['nome']) !== $corrente['nome']) {
+            $cambi['nome'] = trim((string) $campi['nome']);
+        }
+
+        if (array_key_exists('filtri', $campi) && ($filtri = $this->filtriDellaVista($campi['filtri'])) !== $corrente['filtri']) {
+            $cambi['filtri'] = $filtri;
+        }
+
+        if (array_key_exists('condivisa', $campi) && $campi['condivisa'] !== $corrente['condivisa']) {
+            $this->tettoDelleViste($board, $corrente['creata_da'], $campi['condivisa']);
+            $cambi['condivisa'] = $campi['condivisa'];
+        }
+
+        if ($cambi !== []) {
+            $this->viste[$vista] = [...$corrente, ...$cambi, 'aggiornata_il' => now()->toImmutable()->startOfMillisecond()];
+        }
+
+        return [200, ['data' => $this->voceVista($this->viste[$vista])]];
+    }
+
+    /**
+     * board.board.viste.elimina (VisteController::elimina): toglie la vista, 204. Gli stessi permessi di modifica: una personale
+     * di un altro è 404.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaVista(Request $richiesta, string $board, string $vista): array
+    {
+        $chi = $this->conPm($richiesta);
+        $board = $this->boardDelPercorso($chi['workspace'], $board);
+        $this->vistaDelPercorso($board, $vista, $chi['persona']);
+        unset($this->viste[$vista]);
+
+        return [204, null];
+    }
+
+    /**
      * Il giro e la catena (Collegamenti::controlla): `$scheda` → `$aspettata` non chiude un giro (422 collegamento_circolare) e
      * non porta la catena oltre 20 collegamenti, a monte, più il nuovo, più a valle (422 catena_troppo_lunga, anche oltre 2.000
      * schede visitate). Si cammina a livelli; la catena è il cammino più lungo.
@@ -1608,7 +1839,8 @@ final class BackofficeFinto
      * l'email che il provider non garantisce (422 email_del_provider_non_verificata). Un'identità
      * già collegata entra; un'email che ha un account lo collega (se l'email non era verificata lo diventa, e la password
      * di prima non vale più); un'email nuova fa nascere la persona, se ha accettato i termini (422 su `#/termini_accettati`) e,
-     * solo con Facebook, se la registrazione la ammette (403). Risponde come accessi.crea: un accesso e il suo gettone, senza workspace.
+     * solo con Facebook, se la registrazione la ammette (403). Risponde come accessi.crea: un accesso e il suo gettone, senza workspace,
+     * più `workspace_id`: quello dell'invito accettato, null senza invito (#1679).
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -1701,9 +1933,7 @@ final class BackofficeFinto
 
         // L'invito (#1657): la persona entra nel workspace dell'invito nella stessa scrittura dell'accesso. Tutto è già controllato
         // sopra, prima di toccare lo stato: un invito che non vale non lascia né account né identità.
-        if ($invito !== null) {
-            $this->accettaCodice($invito, $persona, 'provider');
-        }
+        $workspace = $invito !== null ? $this->accettaCodice($invito, $persona, 'provider') : null;
 
         $accesso = self::id();
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false];
@@ -1712,6 +1942,7 @@ final class BackofficeFinto
             'id' => $accesso,
             'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
             'gettone' => $this->emetti($accesso, null),
+            'workspace_id' => $workspace,
         ]]];
     }
 

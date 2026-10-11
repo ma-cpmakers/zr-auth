@@ -127,7 +127,8 @@ it('accessi.provider.crea: la persona nuova ha il nome del provider, l\'email ve
 
     expect($risposta->status())->toBe(201)
         ->and($risposta->header('Link'))->toBe(linkDi('accessi.provider.crea'))
-        ->and(array_keys($risposta->json('data')))->toBe(['id', 'creato_il', 'gettone'])
+        ->and(array_keys($risposta->json('data')))->toBe(['id', 'creato_il', 'gettone', 'workspace_id'])
+        ->and($risposta->json('data.workspace_id'))->toBeNull()
         ->and($risposta->json('data.gettone.workspace'))->toBeNull();
 
     $io = alFinto('GET', '/v1/io', gettone: $risposta->json('data.gettone.gettone'));
@@ -333,4 +334,31 @@ it('accessi.provider.crea: il sesto arrivo in un minuto con lo stesso stato è 4
 
     // Un altro stato passa.
     expect(arrivo('google', 'codice', str_repeat('c', 43))->status())->toBe(422);
+});
+
+it("accessi.provider.crea: con un invito dà il workspace_id del workspace dell'invito, non di un altro della persona, e il gettone resta senza workspace (#1679)", function () {
+    $finto = BackofficeFinto::attiva()->provider('google')->consenti('carla@example.com');
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio', $anna);
+    $carla = $finto->persona('carla@example.com', PASSWORD, nome: 'Carla');
+    $altro = $finto->workspace('Di Carla', $carla);
+    $finto->identitaDelProvider('google', 'codice-di-carla', 'carla@example.com');
+
+    $gettoneDiAnna = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
+    expect(alFinto('POST', '/v1/workspace/inviti', ['email' => 'carla@example.com', 'ruolo' => 'membro'], $gettoneDiAnna)->status())->toBe(201);
+    $codice = $finto->ultimoInvito('carla@example.com');
+
+    $partenza = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni');
+    $risposta = arrivo('google', 'codice-di-carla', $partenza->json('data.stato'), ['invito' => $codice]);
+
+    expect($risposta->status())->toBe(201)
+        ->and($risposta->json('data.workspace_id'))->toBe($studio['id'])
+        ->and($risposta->json('data.workspace_id'))->not->toBe($altro['id'])
+        ->and($risposta->json('data.gettone.workspace'))->toBeNull();
+
+    // Un invito che non vale è il 422 di sempre, senza workspace_id.
+    $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
+    $rifiuto = arrivo('google', 'codice-di-carla', $stato, ['invito' => $codice]);
+
+    expect($rifiuto->status())->toBe(422)->and($rifiuto->body())->not->toContain('workspace_id');
 });
