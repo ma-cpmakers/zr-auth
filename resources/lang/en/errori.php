@@ -155,7 +155,11 @@ return [
     ],
     'valuta_in_uso' => [
         'title' => 'Currency in use',
-        'detail' => 'This workspace has open amounts in the current currency. Changing the currency does not convert them: the numbers stay the same. To change it anyway, send `senza_conversione: true` together with `valuta`.',
+        'detail' => 'This workspace has deals with an amount (open, won, lost or archived) in the current currency. Changing the currency does not convert the amounts: the numbers stay the same. To change it anyway, send `senza_conversione: true` together with `valuta`.',
+    ],
+    'accettazione_richiesta' => [
+        'title' => 'Acceptance required',
+        'detail' => 'To use Zeiras you must accept the privacy notice and the terms of use in their current version. The problem carries `mancanti` next to the code, the documents still to accept: accept them with legale.accettazioni.crea (legale.documenti.elenca lists them) and repeat the request.',
     ],
     'collegamento_esistente' => [
         'title' => 'Link already exists',

@@ -155,7 +155,11 @@ return [
     ],
     'valuta_in_uso' => [
         'title' => 'Valuta in uso',
-        'detail' => 'In questo workspace ci sono importi aperti nella valuta di adesso. Cambiare la valuta non li converte: restano gli stessi numeri. Per cambiarla comunque manda `senza_conversione: true` insieme a `valuta`.',
+        'detail' => 'In questo workspace ci sono trattative con un importo (aperte, vinte, perse o archiviate) nella valuta di adesso. Cambiare la valuta non converte gli importi: restano gli stessi numeri. Per cambiarla comunque manda `senza_conversione: true` insieme a `valuta`.',
+    ],
+    'accettazione_richiesta' => [
+        'title' => 'Accettazione richiesta',
+        'detail' => 'Per usare Zeiras devi accettare l\'informativa sulla privacy e i termini d\'uso nella versione in vigore. Il problema porta accanto al codice `mancanti`, i documenti da accettare: accettali con legale.accettazioni.crea (li elenca legale.documenti.elenca) e ripeti la richiesta.',
     ],
     'collegamento_esistente' => [
         'title' => 'Collegamento già presente',

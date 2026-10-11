@@ -23,7 +23,7 @@ class ErroreApi extends RuntimeException
      *                                                            `limite_raggiunto` di `board.schede.collegamenti.crea`, `schede` del
      *                                                            409 `attese_aperte`, `liste_consentite` del 409
      *                                                            `passaggio_non_consentito`, `limite` del 409 `lista_al_limite` e
-     *                                                            `voci_aperte` del 409 `checklist_incompleta`
+     *                                                            `voci_aperte` del 409 `checklist_incompleta` e `mancanti` del 403 `accettazione_richiesta`
      */
     public function __construct(
         public readonly int $stato,
