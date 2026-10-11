@@ -144,6 +144,18 @@ return [
         'title' => 'Pipeline not empty',
         'detail' => 'This pipeline still has open deals and can only be archived without them: close or move its deals first, then try again.',
     ],
+    'fase_non_vuota' => [
+        'title' => 'Stage not empty',
+        'detail' => 'This stage still has open deals and can only be deleted without them: close or move its deals first, then try again.',
+    ],
+    'ultima_fase' => [
+        'title' => 'Last stage',
+        'detail' => 'This is the last stage of the pipeline and cannot be deleted: a pipeline always has at least one stage. Add another with crm.fasi.crea, or archive the pipeline with crm.pipeline.modifica.',
+    ],
+    'valuta_in_uso' => [
+        'title' => 'Currency in use',
+        'detail' => 'This workspace has open amounts in the current currency. Changing the currency does not convert them: the numbers stay the same. To change it anyway, send `senza_conversione: true` together with `valuta`.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Link already exists',
         'detail' => 'The card already waits for that card: do not repeat the request. You can find the link in board.schede.collegamenti.elenca.',

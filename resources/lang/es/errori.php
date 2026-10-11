@@ -144,6 +144,18 @@ return [
         'title' => 'Pipeline no vacío',
         'detail' => 'Este pipeline aún tiene negociaciones abiertas y solo se archiva sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',
     ],
+    'fase_non_vuota' => [
+        'title' => 'Fase no vacía',
+        'detail' => 'Esta fase aún tiene negociaciones abiertas y solo se elimina sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',
+    ],
+    'ultima_fase' => [
+        'title' => 'Última fase',
+        'detail' => 'Esta es la última fase del pipeline y no se elimina: un pipeline siempre tiene al menos una fase. Añade otra con crm.fasi.crea, o archiva el pipeline con crm.pipeline.modifica.',
+    ],
+    'valuta_in_uso' => [
+        'title' => 'Moneda en uso',
+        'detail' => 'Este workspace tiene importes abiertos en la moneda actual. Cambiar la moneda no los convierte: los números siguen siendo los mismos. Para cambiarla igualmente, envía `senza_conversione: true` junto con `valuta`.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Vínculo ya existente',
         'detail' => 'La tarjeta ya espera a esa tarjeta: no repitas la solicitud. El vínculo lo encuentras en board.schede.collegamenti.elenca.',
