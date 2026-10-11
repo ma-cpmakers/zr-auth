@@ -135,7 +135,7 @@ it('un\'email non valida, una password assente o col carattere nullo sono 422 da
         ->and($spagnolo->json())->toBe(problemaAtteso('dati_non_validi', 422, 'Datos no válidos',
             'Algunos valores no son válidos: los encuentras en errors, con lo que falla y dónde están.', ['errors' => [
                 ['detail' => 'El campo email debe ser una dirección de correo válida.', 'regola' => 'formato', 'pointer' => '#/email'],
-                ['detail' => 'El campo password es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/password'],
+                ['detail' => 'El campo contraseña es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/password'],
             ]]))
         ->and($italiano->json('errors'))
         ->toBe([['detail' => 'Il campo password non può contenere il carattere nullo (U+0000).', 'regola' => 'formato', 'pointer' => '#/password']]);

@@ -161,7 +161,7 @@ it("un corpo non valido è 422 dati_non_validi coi testi del backoffice: prima l
         ])
         // In spagnolo il backoffice ha i messaggi della validazione (25d).
         ->and($mancanti->json('errors'))->toBe([
-            ['detail' => 'El campo password es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/password'],
+            ['detail' => 'El campo contraseña es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/password'],
             ['detail' => 'El campo aceptación de los términos es obligatorio.', 'regola' => 'obbligatorio', 'pointer' => '#/termini_accettati'],
         ])
         ->and($nullo->json('errors'))
