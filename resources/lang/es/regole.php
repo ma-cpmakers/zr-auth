@@ -35,6 +35,6 @@ return [
     'password_attuale' => 'La contraseña actual no es correcta: la contraseña nueva solo se da con la de ahora.',
     'contatto_vuoto' => 'Un contacto necesita al menos uno de nome, cognome y email.',
     'responsabile_del_workspace' => 'Esta persona no es miembro del workspace: los ids de los miembros los da workspace.membri.elenca.',
-    'organizzazione_non_esiste' => 'La empresa del contacto aún no existe: por ahora organizzazione_id se deja vacío.',
+    'organizzazione_non_esiste' => 'La empresa del contacto no existe en este espacio de trabajo.',
     'email_doppia' => 'Esta dirección aparece dos veces en la lista.',
 ];
