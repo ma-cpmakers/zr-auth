@@ -1608,7 +1608,8 @@ final class BackofficeFinto
      * l'email che il provider non garantisce (422 email_del_provider_non_verificata). Un'identità
      * già collegata entra; un'email che ha un account lo collega (se l'email non era verificata lo diventa, e la password
      * di prima non vale più); un'email nuova fa nascere la persona, se ha accettato i termini (422 su `#/termini_accettati`) e,
-     * solo con Facebook, se la registrazione la ammette (403). Risponde come accessi.crea: un accesso e il suo gettone, senza workspace.
+     * solo con Facebook, se la registrazione la ammette (403). Risponde come accessi.crea: un accesso e il suo gettone, senza workspace,
+     * più `workspace_id`: quello dell'invito accettato, null senza invito (#1679).
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -1701,9 +1702,7 @@ final class BackofficeFinto
 
         // L'invito (#1657): la persona entra nel workspace dell'invito nella stessa scrittura dell'accesso. Tutto è già controllato
         // sopra, prima di toccare lo stato: un invito che non vale non lascia né account né identità.
-        if ($invito !== null) {
-            $this->accettaCodice($invito, $persona, 'provider');
-        }
+        $workspace = $invito !== null ? $this->accettaCodice($invito, $persona, 'provider') : null;
 
         $accesso = self::id();
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false];
@@ -1712,6 +1711,7 @@ final class BackofficeFinto
             'id' => $accesso,
             'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
             'gettone' => $this->emetti($accesso, null),
+            'workspace_id' => $workspace,
         ]]];
     }
 

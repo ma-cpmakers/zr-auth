@@ -197,6 +197,7 @@ try {
         'codice' => $request->query('code'),
         'stato' => $request->query('state'),
         'termini_accettati' => $request->boolean('termini'),     // solo se la persona è nuova
+        // 'invito' => $codice,                                  // se la persona arriva da un invito (workspace.inviti.crea)
     ]);
 } catch (ErroreApi $e) {
     // verifica_non_riuscita (ogni rifiuto: ripartire dal passo 2), registrazione_non_aperta, dati_non_validi su
@@ -204,11 +205,15 @@ try {
     // non_trovato (provider spento), troppe_richieste
 }
 Sessione::apri($accesso['data']);                                 // come dopo accessi.crea: un accesso, senza workspace
+$workspace = $accesso['data']['workspace_id'];                   // l'id del workspace dell'invito; null senza invito
 ```
 
 Lo `stato` vale 10 minuti e una volta sola, anche se l'arrivo non riesce. Un'email che il provider non garantisce non
 entra. Una persona che ha già un account con quell'email lo collega (e se l'email era da verificare diventa verificata, e la
-sua vecchia password non vale più); una nuova nasce con l'email verificata, se la registrazione la ammette.
+sua vecchia password non vale più); una nuova nasce con l'email verificata, se la registrazione la ammette. Con un
+`invito` la persona entra anche nel workspace dell'invito, e la risposta dice quale con `workspace_id` (sempre presente,
+`null` senza invito; mai l'ultimo workspace della persona): il gettone resta quello dell'accesso, senza workspace, e quello
+del workspace si chiede con `gettoni.crea`.
 
 ## Il client delle API
 
