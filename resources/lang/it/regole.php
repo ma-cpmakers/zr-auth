@@ -38,4 +38,9 @@ return [
     'responsabile_del_workspace' => 'Questa persona non è un membro del workspace: gli id dei membri li dà workspace.membri.elenca.',
     'organizzazione_non_esiste' => "L'azienda del contatto non esiste in questo workspace.",
     'email_doppia' => 'Questo indirizzo compare due volte nella lista.',
+    'valuta_del_workspace' => "La valuta dev'essere quella del CRM del workspace (:valuta): la dà crm.impostazioni.mostra.",
+    'fase_della_pipeline' => "Nella pipeline non c'è una fase con questo id: gli id delle fasi li dà crm.pipeline.mostra.",
+    'pipeline_archiviata' => 'Una pipeline archiviata non accetta trattative nuove: si ripristina con crm.pipeline.modifica.',
+    'contatto_non_esiste' => "Nel workspace non c'è un contatto con questo id: gli id dei contatti li dà crm.persone.elenca.",
+    'azienda_non_esiste' => "Nel workspace non c'è un'azienda con questo id: gli id delle aziende li dà crm.organizzazioni.elenca.",
 ];
