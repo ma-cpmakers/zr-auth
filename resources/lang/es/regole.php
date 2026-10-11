@@ -42,4 +42,6 @@ return [
     'pipeline_archiviata' => 'Una pipeline archivada no acepta negociaciones nuevas: se restaura con crm.pipeline.modifica.',
     'contatto_non_esiste' => 'El espacio de trabajo no tiene un contacto con este id: los ids de los contactos los da crm.persone.elenca.',
     'azienda_non_esiste' => 'El espacio de trabajo no tiene una empresa con este id: los ids de las empresas los da crm.organizzazioni.elenca.',
+    'fase_con_la_pipeline' => 'La fase se da junto con la pipeline: para mover la negociación dentro de su pipeline está crm.trattative.spostamento.crea.',
+    'motivo_solo_se_persa' => 'El motivo de pérdida solo vale para una negociación perdida: envía también el estado `persa`, o deja el motivo en null.',
 ];

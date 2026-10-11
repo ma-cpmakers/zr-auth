@@ -201,6 +201,7 @@ return [
         'valore.valuta' => 'valuta',
         'fase_id' => 'fase',
         'chiusura_prevista' => 'chiusura prevista',
+        'motivo_perdita' => 'motivo di perdita',
         'pipeline_id' => 'pipeline',
         'probabilita' => 'probabilità',
         'giorni_massimi' => 'giorni massimi',

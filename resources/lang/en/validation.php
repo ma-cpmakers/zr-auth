@@ -202,6 +202,7 @@ return [
         'valore.valuta' => 'currency',
         'fase_id' => 'stage',
         'chiusura_prevista' => 'expected close date',
+        'motivo_perdita' => 'loss reason',
         'pipeline_id' => 'pipeline',
         'probabilita' => 'probability',
         'giorni_massimi' => 'maximum days',
