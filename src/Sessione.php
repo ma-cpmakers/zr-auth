@@ -28,6 +28,9 @@ final class Sessione
 
     public const BLOCCO_ATTESA = 3;
 
+    /** Le lingue di Zeiras (config/lingue.php del backoffice): la lingua del profilo che la sessione prende è una di queste. */
+    public const LINGUE = ['it', 'en', 'es'];
+
     /**
      * Apre la sessione coi `data` della risposta di accessi.crea (lo schema Accesso): l'accesso e il suo gettone, senza
      * workspace. L'id della sessione è nuovo e quella di prima è distrutta: chi conosceva l'id di prima non entra.
@@ -81,7 +84,7 @@ final class Sessione
      * Rimette la lingua e il nome della sessione uguali a quelli di io.mostra (#1473): la lingua scelta nel profilo non
      * arriva ai moduli da sola, perché la sessione la prende all'ingresso e non la rilegge. Una cornice che legge io.mostra a
      * ogni pagina la chiama con i suoi `data` quando sono diversi da `Sessione::utente()`. Cambia solo `lingua` e `nome`, e
-     * solo se sono una stringa non vuota e diversi da quelli che ci sono: l'id della persona, il gettone, il workspace, il
+     * solo se la lingua è una di `LINGUE` e il nome una stringa non vuota, diversi da quelli che ci sono: l'id della persona, il gettone, il workspace, il
      * ruolo e ogni altro campo restano, e a valori uguali non cambia niente. Se i dati non portano l'`utente.id` della sessione
      * (mancante o di un'altra persona) non li prende. Senza una sessione aperta non fa niente e non lancia.
      * Torna se ha cambiato qualcosa.
@@ -105,8 +108,9 @@ final class Sessione
 
         foreach (['lingua', 'nome'] as $campo) {
             $valore = $persona[$campo] ?? null;
+            $valido = $campo === 'lingua' ? in_array($valore, self::LINGUE, true) : is_string($valore) && trim($valore) !== '';
 
-            if (is_string($valore) && trim($valore) !== '' && $valore !== (self::stato()['utente'][$campo] ?? null)) {
+            if ($valido && $valore !== (self::stato()['utente'][$campo] ?? null)) {
                 session()->put(self::CHIAVE.'.utente.'.$campo, $valore);
                 $cambiato = true;
             }

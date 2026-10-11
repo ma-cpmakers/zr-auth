@@ -311,7 +311,7 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
     private array $ingressi = [];
 
-    /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable}> le notifiche (notifica()), per id */
+    /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, autore: ?string, risorsa_nome: ?string, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable}> le notifiche (notifica()), per id */
     private array $notifiche = [];
 
     /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
@@ -565,9 +565,11 @@ final class BackofficeFinto
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  array<string, mixed>  $persona  una persona di persona(), membra del workspace
      * @param  array<string, mixed>  $dati  quale risorsa è cambiata, coi soli id (come `data` dell'evento)
-     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string}
+     * @param  array<string, mixed>|null  $autore  la persona che ha fatto, di persona(): `autore` dice il suo nome di oggi finché è membra del workspace, poi `null`; senza, `null` (lo ha fatto il sistema)
+     * @param  string|null  $risorsaNome  il nome della cosa a cui si riferisce il soggetto; senza, `risorsa_nome` è `null`
+     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, autore: ?array{nome: string}, risorsa_nome: ?string, per_me: bool}
      */
-    public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null): array
+    public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null, ?array $autore = null, ?string $risorsaNome = null): array
     {
         $idWorkspace = $workspace['id'] ?? null;
         $idPersona = $persona['id'] ?? null;
@@ -580,6 +582,12 @@ final class BackofficeFinto
             throw new InvalidArgumentException('La persona non è del workspace: ne è membra con workspace() o membro().');
         }
 
+        $idAutore = $autore['id'] ?? null;
+
+        if ($autore !== null && (! is_string($idAutore) || ! isset($this->persone[$idAutore]))) {
+            throw new InvalidArgumentException("L'autore non è del finto: nasce con persona().");
+        }
+
         $delTipo = self::appDelTipo($tipo);
 
         if ($app !== null && $app !== $delTipo) {
@@ -590,7 +598,7 @@ final class BackofficeFinto
         $creata = ($creataIl ?? now())->toImmutable()->startOfMillisecond();
         $letta = $lettaIl?->toImmutable()->startOfMillisecond();
         $dati = $dati === [] ? ['id' => $id] : $dati;
-        $this->notifiche[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'persona' => $idPersona, 'tipo' => $tipo, 'soggetto' => $soggetto ?? '/v1/board/schede/'.$id, 'dati' => $dati, 'letta_il' => $letta, 'creata_il' => $creata];
+        $this->notifiche[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'persona' => $idPersona, 'tipo' => $tipo, 'soggetto' => $soggetto ?? '/v1/board/schede/'.$id, 'dati' => $dati, 'autore' => $idAutore, 'risorsa_nome' => $risorsaNome, 'letta_il' => $letta, 'creata_il' => $creata];
 
         return $this->voceNotifica($this->notifiche[$id]);
     }
@@ -2233,6 +2241,9 @@ final class BackofficeFinto
             'dati' => (object) $notifica['dati'],
             'letta_il' => $notifica['letta_il'] === null ? null : self::iso($notifica['letta_il']),
             'creata_il' => self::iso($notifica['creata_il']),
+            'autore' => $notifica['autore'] !== null && isset($this->membri[$notifica['workspace']][$notifica['autore']]) ? ['nome' => $this->persone[$notifica['autore']]['nome']] : null,
+            'risorsa_nome' => $notifica['risorsa_nome'],
+            'per_me' => false,
         ];
     }
 
