@@ -76,7 +76,7 @@ it('workspace() dà lo slug del backoffice: il nome in slug, al più 40 caratter
 
     $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone']);
 
-    expect(array_keys($studio))->toBe(['id', 'nome', 'slug', 'azienda_id'])
+    expect(array_keys($studio))->toBe(['id', 'nome', 'slug', 'azienda_id', 'settore', 'lingua_contenuti'])
         ->and($studio['nome'])->toBe('Studio Anna')
         ->and($studio['slug'])->toMatch('/^studio-anna-[a-z0-9]{6}$/')
         ->and($altroStudio['slug'])->toMatch('/^studio-anna-[a-z0-9]{6}$/')->not->toBe($studio['slug'])
@@ -316,9 +316,9 @@ it("io.aziende.elenca dà le aziende dei workspace della persona, una volta sola
     expect(alFinto('PATCH', '/v1/workspace', ['nome' => 'Tutt’altro nome'], gettoneDelFinto('anna@example.com', $beta))->status())->toBe(200);
 
     $attese = [
-        ['id' => $albero['azienda_id'], 'nome' => 'Àlbero'],
-        ['id' => $alfa['azienda_id'], 'nome' => 'Alfa'],
-        ['id' => $beta['azienda_id'], 'nome' => 'beta'],
+        ['id' => $albero['azienda_id'], 'nome' => 'Àlbero', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null],
+        ['id' => $alfa['azienda_id'], 'nome' => 'Alfa', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null],
+        ['id' => $beta['azienda_id'], 'nome' => 'beta', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null],
     ];
 
     foreach ([gettoneDelFinto('anna@example.com'), gettoneDelFinto('anna@example.com', $beta)] as $gettone) {
