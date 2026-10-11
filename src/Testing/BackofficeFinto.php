@@ -244,7 +244,7 @@ final class BackofficeFinto
     /** Quanti caratteri può avere la risposta del widget (Turnstile::LUNGHEZZA). */
     private const LUNGHEZZA_TURNSTILE = 2048;
 
-    /** @var array<string, array{nome: string, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
+    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
     private array $persone = [];
 
     /** @var array<string, array{utente: string, creato_il: CarbonImmutable, chiuso: bool}> per id */
@@ -389,6 +389,9 @@ final class BackofficeFinto
         $id = self::id();
         $this->persone[$id] = [
             'nome' => $nome,
+            'cognome' => null,
+            'mansione' => null,
+            'telefono' => null,
             'email' => $email,
             'email_verificata_il' => $verificata ? now()->toImmutable() : null,
             'lingua' => $lingua,
@@ -1414,6 +1417,9 @@ final class BackofficeFinto
                 $persona = self::id();
                 $this->persone[$persona] = [
                     'nome' => $profilo['nome'] !== null && trim($profilo['nome']) !== '' ? mb_substr(trim($profilo['nome']), 0, 255) : Str::before($email, '@'),
+                    'cognome' => null,
+                    'mansione' => null,
+                    'telefono' => null,
                     'email' => $email,
                     'email_verificata_il' => now()->toImmutable(),
                     'lingua' => 'it',
@@ -1855,6 +1861,9 @@ final class BackofficeFinto
             'utente.nome' => ['filled', 'string', 'max:255'],
             'utente.lingua' => ['filled', 'string', Rule::in(Testi::LINGUE)],
             'utente.fuso_orario' => ['filled', 'string', 'timezone:all'],
+            'utente.cognome' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'utente.mansione' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'utente.telefono' => ['sometimes', 'nullable', 'bail', 'string', 'max:32', 'regex:/^(?=(?:\\D*\\d){5})[0-9+().\\- ]+$/'],
         ];
 
         foreach (self::ALTRI_CAMPI_DI_IO as $campo => $metodo) {
@@ -1870,7 +1879,7 @@ final class BackofficeFinto
 
         if (! is_array($utente) || $utente === []) {
             throw new Problema('dati_non_validi', [[
-                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.lingua, utente.fuso_orario']),
+                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.cognome, utente.mansione, utente.telefono, utente.lingua, utente.fuso_orario']),
                 'regola' => 'obbligatorio',
                 'pointer' => array_key_exists('utente', $campi) ? '#/utente' : '#',
             ]]);
@@ -3041,6 +3050,9 @@ final class BackofficeFinto
             'email_verificata_il' => $persona['email_verificata_il'] === null ? null : self::iso($persona['email_verificata_il']),
             'lingua' => $persona['lingua'],
             'fuso_orario' => $persona['fuso_orario'],
+            'cognome' => $persona['cognome'],
+            'mansione' => $persona['mansione'],
+            'telefono' => $persona['telefono'],
         ];
     }
 

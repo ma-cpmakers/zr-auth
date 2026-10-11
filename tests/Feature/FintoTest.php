@@ -37,7 +37,7 @@ it('accessi.crea apre un accesso col suo gettone di 12 ore, senza workspace, e l
         // La persona come la dà persona(), con la sua lingua: non quella di Accept-Language.
         ->and($accesso['gettone']['utente'])->toBe($ana)
         ->and($ana)->toMatchArray(['nome' => 'Ana', 'email' => 'ana@example.com', 'lingua' => 'es', 'fuso_orario' => 'Europe/Rome'])
-        ->and(array_keys($ana))->toBe(['id', 'nome', 'email', 'email_verificata_il', 'lingua', 'fuso_orario'])
+        ->and(array_keys($ana))->toBe(['id', 'nome', 'email', 'email_verificata_il', 'lingua', 'fuso_orario', 'cognome', 'mansione', 'telefono'])
         ->and($ana['email_verificata_il'])->toBe(iso(now()));
 });
 
