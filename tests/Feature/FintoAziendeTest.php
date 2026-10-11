@@ -225,3 +225,91 @@ it('il finto fa nascere il workspace con settore e lingua dei contenuti, e l\'az
         expect($risposta->status())->toBe(422)->and(array_column($risposta->json('errors'), 'pointer'))->toContain($pointer);
     }
 });
+
+// aziende.modifica (sprint 25d T6, #1484; richiesta di zr-home per #1583 e #1661): il finto la fa come il backoffice.
+
+it('aziende.modifica: il proprietario cambia il nome e i dati, e li vede aziende.mostra e io.aziende.elenca; null toglie un dato', function () {
+    [, $studio, , , $accesso] = conLeAziende();
+    $anna = $accesso('anna@example.com');
+    $id = $studio['azienda_id'];
+
+    $risposta = alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => ' Studio Verdi ', 'partita_iva' => 'it 012.345.678 90', 'settore' => 'consulenza', 'persone' => '2-10', 'sito' => 'https://verdi.example.com'], $anna);
+
+    expect($risposta->status())->toBe(200)
+        ->and($risposta->json('data'))->toBe(['id' => $id, 'nome' => 'Studio Verdi', 'partita_iva' => 'IT01234567890', 'settore' => 'consulenza', 'persone' => '2-10', 'sito' => 'https://verdi.example.com', 'ruolo' => 'proprietario'])
+        ->and(alFinto('GET', "/v1/aziende/{$id}", gettone: $anna)->json('data.nome'))->toBe('Studio Verdi')
+        ->and(collect(alFinto('GET', '/v1/io/aziende', gettone: $anna)->json('data'))->firstWhere('id', $id)['nome'])->toBe('Studio Verdi');
+
+    $tolto = alFinto('PATCH', "/v1/aziende/{$id}", ['sito' => null, 'settore' => null], $anna);
+
+    expect($tolto->json('data'))->toMatchArray(['nome' => 'Studio Verdi', 'partita_iva' => 'IT01234567890', 'settore' => null, 'persone' => '2-10', 'sito' => null]);
+});
+
+it('aziende.modifica: conta il ruolo più alto, non quello del gettone; il membro semplice è 403, un\'azienda altrui o inesistente 404 prima del corpo', function () {
+    [, $studio, , $altro, $accesso] = conLeAziende();
+    $id = $studio['azienda_id'];
+    $bruno = $accesso('bruno@example.com');
+    $delMembro = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $bruno)->json('data.gettone');
+
+    // Bruno è membro in «Studio» e amministratore nell'altro workspace della stessa azienda: può, anche col gettone del primo.
+    expect(alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => 'Studio B'], $bruno)->json('data.ruolo'))->toBe('amministratore')
+        ->and(alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => 'Studio C'], $delMembro)->status())->toBe(200);
+
+    $carla = alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => 'Carla'], $accesso('carla@example.com'));
+    $altrui = alFinto('PATCH', "/v1/aziende/{$altro['azienda_id']}", ['nome' => ''], $bruno);
+    $inventata = alFinto('PATCH', '/v1/aziende/01k6r3a7c2e6g0j4m8p2s6v0x9', ['nome' => ''], $bruno);
+
+    expect($carla->status())->toBe(403)->and($carla->json('codice'))->toBe('permesso_negato')
+        ->and($altrui->status())->toBe(404)->and($altrui->json())->toBe($inventata->json())
+        ->and(alFinto('GET', "/v1/aziende/{$id}", gettone: $bruno)->json('data.nome'))->toBe('Studio C')
+        ->and(alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => 'x'])->json('codice'))->toBe('gettone_assente');
+});
+
+it('aziende.modifica: un valore sbagliato è un 422 sul suo pointer e non salva niente; un corpo senza campi è 422 sul corpo intero', function () {
+    [, $studio, , , $accesso] = conLeAziende();
+    $anna = $accesso('anna@example.com');
+    $id = $studio['azienda_id'];
+
+    foreach ([
+        [['nome' => ''], '#/nome', 'obbligatorio'],
+        [['nome' => null], '#/nome', 'obbligatorio'],
+        [['nome' => str_repeat('a', 256)], '#/nome', 'troppo_lungo'],
+        [['settore' => 'pesca'], '#/settore', 'valore_non_ammesso'],
+        [['persone' => 'tanti'], '#/persone', 'valore_non_ammesso'],
+        [['partita_iva' => '1234567'], '#/partita_iva', 'formato'],
+        [['sito' => 'ftp://x.example.com'], '#/sito', 'formato'],
+        [['colore' => 'blu'], '#/colore', 'campo_estraneo'],
+        [['nome' => 'Buono', 'sito' => 'x'], '#/sito', 'formato'],
+    ] as [$corpo, $pointer, $regola]) {
+        $risposta = alFinto('PATCH', "/v1/aziende/{$id}", $corpo, $anna);
+
+        expect($risposta->status())->toBe(422)
+            ->and(collect($risposta->json('errors'))->firstWhere('pointer', $pointer)['regola'])->toBe($regola);
+    }
+
+    $vuoto = alFinto('PATCH', "/v1/aziende/{$id}", [], $anna);
+
+    expect(alFinto('GET', "/v1/aziende/{$id}", gettone: $anna)->json('data.nome'))->toBe('Studio')
+        ->and($vuoto->status())->toBe(422)
+        ->and($vuoto->json('errors.0.pointer'))->toBe('#')
+        ->and($vuoto->json('errors.0.regola'))->toBe('obbligatorio');
+});
+
+it('aziende.modifica: 20 in un\'ora per persona, poi 429 con Retry-After; i 404 e i 422 non contano, un corpo che non cambia niente sì', function () {
+    [, $studio, , , $accesso] = conLeAziende();
+    $anna = $accesso('anna@example.com');
+    $id = $studio['azienda_id'];
+
+    alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => ''], $anna);
+    alFinto('PATCH', '/v1/aziende/01k6r3a7c2e6g0j4m8p2s6v0x9', ['nome' => 'x'], $anna);
+
+    foreach (range(1, 20) as $volta) {
+        expect(alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => 'Studio'], $anna)->status())->toBe(200);
+    }
+
+    $oltre = alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => 'Studio'], $anna);
+
+    expect($oltre->status())->toBe(429)
+        ->and($oltre->json('codice'))->toBe('troppe_richieste')
+        ->and((int) $oltre->header('Retry-After'))->toBeGreaterThan(0);
+});
