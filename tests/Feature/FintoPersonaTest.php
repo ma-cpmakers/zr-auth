@@ -263,7 +263,7 @@ it('io.password.modifica senza gettone è 401, e un corpo con un campo in più �
     expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.pointer'))->toBe('#/email');
 });
 
-it('le tre scritture sulla persona col gettone di un workspace sono 403 gettone_con_workspace prima del corpo, e non cambiano niente (#1412, T5.4)', function () {
+it('le tre scritture sulla persona col gettone di un workspace sono 403 gettone_con_workspace prima del corpo, e non cambiano niente (#1412, T5.4; io.modifica solo con `utente`, #1664)', function () {
     [, , $accesso, $delWorkspace] = fintoDellaPersona();
 
     $scritture = [
@@ -273,7 +273,8 @@ it('le tre scritture sulla persona col gettone di un workspace sono 403 gettone_
     ];
 
     foreach ($scritture as [$metodo, $percorso, $corpo]) {
-        foreach ([$corpo, ['x' => 1]] as $inviato) {
+        // Il corpo di io.modifica col gettone di un workspace è `primi_passi_nascosti`: solo un corpo con `utente` è 403, prima di guardarlo.
+        foreach ($percorso === '/v1/io' ? [$corpo] : [$corpo, ['x' => 1]] as $inviato) {
             $risposta = alFinto($metodo, $percorso, $inviato, $delWorkspace);
 
             expect($risposta->status())->toBe(403)
@@ -301,4 +302,42 @@ it('la lingua cambiata da io.modifica arriva alla sessione con io.mostra e Sessi
         ->and(Sessione::aggiorna($io))->toBeTrue()
         ->and(Sessione::utente()['lingua'])->toBe('en')
         ->and(Sessione::utente()['nome'])->toBe('Anne');
+});
+
+// #1664: `primi_passi_nascosti`, un dato per persona e workspace, in io.mostra e io.modifica (come il backoffice, sprint 25e).
+it('io.modifica col gettone di un workspace nasconde i primi passi per quella persona in quel workspace, e io.mostra lo dice (#1664)', function () {
+    [, $finto, $accesso, $delWorkspace] = fintoDellaPersona();
+
+    expect(alFinto('GET', '/v1/io', gettone: $delWorkspace)->json('data.primi_passi_nascosti'))->toBeFalse()
+        ->and(alFinto('GET', '/v1/io', gettone: $accesso)->json('data.primi_passi_nascosti'))->toBeNull();
+
+    $risposta = alFinto('PATCH', '/v1/io', ['primi_passi_nascosti' => true], $delWorkspace);
+
+    expect($risposta->status())->toBe(200)
+        ->and($risposta->json('data.primi_passi_nascosti'))->toBeTrue()
+        ->and(alFinto('GET', '/v1/io', gettone: $delWorkspace)->json('data.primi_passi_nascosti'))->toBeTrue()
+        ->and(alFinto('GET', '/v1/io', gettone: $accesso)->json('data.primi_passi_nascosti'))->toBeNull();
+
+    expect(alFinto('PATCH', '/v1/io', ['primi_passi_nascosti' => false], $delWorkspace)->json('data.primi_passi_nascosti'))->toBeFalse();
+});
+
+it('i primi passi col gettone dell\'accesso sono 422 campo_vietato, e un valore che non è un booleano è 422 sul campo (#1664)', function () {
+    [, , $accesso, $delWorkspace] = fintoDellaPersona();
+
+    $conAccesso = alFinto('PATCH', '/v1/io', ['primi_passi_nascosti' => true], $accesso);
+
+    expect($conAccesso->status())->toBe(422)
+        ->and($conAccesso->json('errors.0.pointer'))->toBe('#/primi_passi_nascosti')
+        ->and($conAccesso->json('errors.0.regola'))->toBe('campo_vietato');
+
+    foreach (['true', 1, [1]] as $valore) {
+        $risposta = alFinto('PATCH', '/v1/io', ['primi_passi_nascosti' => $valore], $delWorkspace);
+
+        expect($risposta->status())->toBe(422)
+            ->and($risposta->json('errors.0.pointer'))->toBe('#/primi_passi_nascosti')
+            ->and($risposta->json('errors.0.regola'))->toBe('tipo');
+    }
+
+    expect(alFinto('PATCH', '/v1/io', ['primi_passi_nascosti' => null], $delWorkspace)->json('errors.0.regola'))->toBe('obbligatorio')
+        ->and(alFinto('PATCH', '/v1/io', [], $delWorkspace)->status())->toBe(422);
 });

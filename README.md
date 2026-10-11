@@ -467,7 +467,9 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - **Le notifiche.** `io.notifiche.elenca`, `io.notifiche.lettura.modifica` e `io.notifiche.letture.crea` rispondono come il backoffice,
   col gettone di un workspace (quello dell'accesso è `403` `gettone_senza_workspace`), e `notifiche_non_lette` di `io.mostra` conta le
   non lette della persona in quel workspace. Il finto non ha gli eventi che le generano: le semina il test con
-  `notifica($workspace, $persona, $tipo, creataIl: …, lettaIl: …)`, che dà la notifica come la dà l'elenco. L'app la dà il tipo
+  `notifica($workspace, $persona, $tipo, creataIl: …, lettaIl: …, autore: …, risorsaNome: …)`, che dà la notifica come la dà l'elenco, con
+  `autore` (`{nome}` di chi ha fatto, a oggi, finché è membra del workspace, altrimenti `null`), `risorsa_nome` e `per_me` (sempre `null`, come
+  nel backoffice di oggi: il destinatario diretto non si conosce ancora). L'app la dà il tipo
   (`pm` per `com.zeiras.board.*`, altrimenti `null`): un'altra è un errore del test. La lettura in blocco segna al più 5000 per chiamata.
 - **Le aziende.** `io.aziende.elenca` dà le aziende dei workspace di cui la persona è membro (con ogni suo gettone, anche
   quello dell'accesso), una volta sola ciascuna, in ordine di nome e poi di id, a pagine col solo id. Un'azienda nasce con

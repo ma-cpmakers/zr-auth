@@ -9,6 +9,7 @@ use Illuminate\Translation\FileLoader;
 use Illuminate\Translation\Translator;
 use Illuminate\Validation\Factory;
 use Symfony\Component\HttpFoundation\AcceptHeader;
+use Zeiras\Auth\Sessione;
 
 /**
  * I testi del backoffice finto (D20): le copie byte per byte di lang/ del backoffice, in resources/lang/, lette da un
@@ -19,7 +20,7 @@ use Symfony\Component\HttpFoundation\AcceptHeader;
 final class Testi
 {
     /** Le lingue di Zeiras (config/lingue.php del backoffice): quelle che parla, la predefinita e il ripiego. */
-    public const LINGUE = ['it', 'en', 'es'];
+    public const LINGUE = Sessione::LINGUE;
 
     private const PREDEFINITA = 'it';
 

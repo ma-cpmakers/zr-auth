@@ -65,6 +65,7 @@ return [
             'ingresso' => 'La entrada en la app falla: el código ya no vale, vuelve a empezar desde el acceso.',
             'invito' => 'La invitación no vale: revisa el código y usa el correo al que llegó, o pide una nueva a quien te invitó.',
             'registrazione' => 'La invitación no vale para este correo: revisa el código y usa el correo al que llegó, o pide una nueva.',
+            'link' => 'El enlace no vale: comprueba que lo has copiado entero, o pide uno nuevo a quien te invitó.',
             'provider' => 'El acceso con el proveedor falla: vuelve a empezar desde el botón del proveedor.',
         ],
     ],
@@ -143,6 +144,18 @@ return [
     'pipeline_non_vuota' => [
         'title' => 'Pipeline no vacío',
         'detail' => 'Este pipeline aún tiene negociaciones abiertas y solo se archiva sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',
+    ],
+    'fase_non_vuota' => [
+        'title' => 'Fase no vacía',
+        'detail' => 'Esta fase aún tiene negociaciones abiertas y solo se elimina sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',
+    ],
+    'ultima_fase' => [
+        'title' => 'Última fase',
+        'detail' => 'Esta es la última fase del pipeline y no se elimina: un pipeline siempre tiene al menos una fase. Añade otra con crm.fasi.crea, o archiva el pipeline con crm.pipeline.modifica.',
+    ],
+    'valuta_in_uso' => [
+        'title' => 'Moneda en uso',
+        'detail' => 'Este workspace tiene importes abiertos en la moneda actual. Cambiar la moneda no los convierte: los números siguen siendo los mismos. Para cambiarla igualmente, envía `senza_conversione: true` junto con `valuta`.',
     ],
     'collegamento_esistente' => [
         'title' => 'Vínculo ya existente',

@@ -65,6 +65,7 @@ return [
             'ingresso' => 'L\'ingresso nell\'app non riesce: il codice non vale più, riparti dall\'accesso.',
             'invito' => 'L\'invito non vale: controlla il codice e usa l\'email a cui è arrivato, o chiedine uno nuovo a chi ti ha invitato.',
             'registrazione' => 'L\'invito non vale per questa email: controlla il codice e usa l\'email a cui è arrivato, o chiedine uno nuovo.',
+            'link' => 'Il link non vale: controlla di averlo copiato intero, o chiedine uno nuovo a chi ti ha invitato.',
             'provider' => 'L\'accesso con il provider non riesce: riparti dal bottone del provider.',
         ],
     ],
@@ -143,6 +144,18 @@ return [
     'pipeline_non_vuota' => [
         'title' => 'Pipeline non vuota',
         'detail' => 'Questa pipeline ha ancora trattative aperte e si archivia solo senza: chiudi o sposta prima le sue trattative, poi ripeti.',
+    ],
+    'fase_non_vuota' => [
+        'title' => 'Fase non vuota',
+        'detail' => 'Questa fase ha ancora trattative aperte e si elimina solo senza: chiudi o sposta prima le sue trattative, poi ripeti.',
+    ],
+    'ultima_fase' => [
+        'title' => 'Ultima fase',
+        'detail' => 'Questa è l\'ultima fase della pipeline e non si elimina: una pipeline ha sempre almeno una fase. Aggiungine un\'altra con crm.fasi.crea, o archivia la pipeline con crm.pipeline.modifica.',
+    ],
+    'valuta_in_uso' => [
+        'title' => 'Valuta in uso',
+        'detail' => 'In questo workspace ci sono importi aperti nella valuta di adesso. Cambiare la valuta non li converte: restano gli stessi numeri. Per cambiarla comunque manda `senza_conversione: true` insieme a `valuta`.',
     ],
     'collegamento_esistente' => [
         'title' => 'Collegamento già presente',

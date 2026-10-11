@@ -65,7 +65,7 @@ it('chiamato con gli stessi valori non cambia la sessione, e lo dice (T2.2)', fu
         ->and(session(Sessione::CHIAVE)['utente'])->toBe([...$prima['utente'], 'nome' => 'Annette']);
 });
 
-it('una lingua che non è una stringa non vuota, o un nome vuoto, non sostituisce il valore che c\'è (T2.3)', function (mixed $lingua, mixed $nome) {
+it('una lingua che non è una delle tre, o un nome vuoto, non sostituisce il valore che c\'è (T2.3)', function (mixed $lingua, mixed $nome) {
     apriSessione();
     $prima = session(Sessione::CHIAVE);
 
@@ -78,7 +78,23 @@ it('una lingua che non è una stringa non vuota, o un nome vuoto, non sostituisc
     'numeri' => [12, 34],
     'array' => [['en'], ['Anne']],
     'bool' => [true, false],
+    'lingua fuori elenco' => ['fr', ''],
+    'lingua in maiuscolo' => ['IT', ''],
 ]);
+
+it('una lingua che non è una delle tre di Zeiras non entra nella sessione, e il nome valido sì (#1670, deve fallire se la lingua cambia)', function () {
+    apriSessione();
+    $lingua = Sessione::utente()['lingua'];
+
+    expect(Sessione::aggiorna(ioMostra('fr', 'Anne')))->toBeTrue()
+        ->and(Sessione::utente()['lingua'])->toBe($lingua)
+        ->and(Sessione::utente()['nome'])->toBe('Anne');
+
+    foreach (['it', 'en', 'es'] as $codice) {
+        Sessione::aggiorna(ioMostra($codice, 'Anne'));
+        expect(Sessione::utente()['lingua'])->toBe($codice);
+    }
+});
 
 it('una lingua valida con un nome vuoto cambia la lingua e lascia il nome (T2.3)', function () {
     apriSessione();

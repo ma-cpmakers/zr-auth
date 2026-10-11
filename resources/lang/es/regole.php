@@ -30,6 +30,7 @@ return [
     'descrizione_non_nulla' => 'La descripción nunca es null: para vaciarla envía una cadena vacía.',
     'campo_di_un_altro_metodo' => 'El campo :attribute no se cambia aquí: lo cambia :metodo.',
     'campo_di_nessun_metodo' => 'El campo :attribute no se cambia: lo da el sistema.',
+    'campo_del_workspace' => 'El campo :attribute se cambia con el token de un workspace: es un dato de la persona en ese workspace.',
     'numero_senza_archiviate' => 'Con numero la tarjeta llega en cualquier estado, también archivada: el parámetro archiviate no hace falta.',
     'password_attuale' => 'La contraseña actual no es correcta: la contraseña nueva solo se da con la de ahora.',
     'contatto_vuoto' => 'Un contacto necesita al menos uno de nome, cognome y email.',

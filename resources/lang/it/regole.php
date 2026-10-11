@@ -31,6 +31,7 @@ return [
     'descrizione_non_nulla' => 'La descrizione non è mai null: per svuotarla manda una stringa vuota.',
     'campo_di_un_altro_metodo' => 'Il campo :attribute non si cambia qui: lo cambia :metodo.',
     'campo_di_nessun_metodo' => 'Il campo :attribute non si cambia: lo dà il sistema.',
+    'campo_del_workspace' => 'Il campo :attribute si cambia col gettone di un workspace: è un dato della persona in quel workspace.',
     'numero_senza_archiviate' => 'Con numero la scheda arriva in qualunque stato, anche archiviata: il parametro archiviate non serve.',
     'password_attuale' => 'La password attuale non è giusta: la nuova password si dà solo con quella di adesso.',
     'contatto_vuoto' => 'Un contatto vuole almeno uno fra nome, cognome ed email.',

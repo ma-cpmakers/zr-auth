@@ -30,6 +30,7 @@ return [
     'descrizione_non_nulla' => 'The description is never null: to clear it, send an empty string.',
     'campo_di_un_altro_metodo' => 'The :attribute field is not changed here: :metodo changes it.',
     'campo_di_nessun_metodo' => 'The :attribute field cannot be changed: the system sets it.',
+    'campo_del_workspace' => 'The :attribute field is changed with a workspace token: it belongs to the person in that workspace.',
     'numero_senza_archiviate' => 'With numero the card comes back in any state, archived or not: the archiviate parameter is not needed.',
     'password_attuale' => 'The current password is wrong: a new password is only set with the current one.',
     'contatto_vuoto' => 'A contact needs at least one of nome, cognome and email.',
