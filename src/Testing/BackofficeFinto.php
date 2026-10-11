@@ -127,6 +127,8 @@ final class BackofficeFinto
         ['POST', '#^/v1/password/reimpostazione$#', 'password.reimpostazione.crea'],
         ['POST', '#^/v1/utenti$#', 'utenti.crea'],
         ['PATCH', '#^/v1/workspace$#', 'workspace.modifica'],
+        ['GET', '#^/v1/legale/documenti$#', 'legale.documenti.elenca'],
+        ['POST', '#^/v1/legale/accettazioni$#', 'legale.accettazioni.crea'],
         ['GET', '#^/v1/workspace/link$#', 'workspace.link.mostra'],
         ['POST', '#^/v1/workspace/link$#', 'workspace.link.crea'],
         ['DELETE', '#^/v1/workspace/link$#', 'workspace.link.elimina'],
@@ -214,7 +216,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
@@ -313,6 +315,12 @@ final class BackofficeFinto
 
     /** @var array<string, string> l'ultimo codice d'invito partito, per email */
     private array $postaInviti = [];
+
+    /** @var array<string, array{versione: string, in_vigore_dal: string, impronta: string}> i documenti legali in vigore: vuoto è l'interruttore spento, come in produzione (config/legale.php) */
+    private array $documentiLegali = [];
+
+    /** @var array<string, array<string, string>> le accettazioni di ogni persona: per persona, «documento@versione» → l'istante */
+    private array $accettazioni = [];
 
     /** @var array<string, array{codice: string, scade: CarbonImmutable, massimi: int, usati: int}> il link d'invito vivo di ogni workspace (LinkInvito), per workspace: uno solo */
     private array $links = [];
@@ -1012,6 +1020,8 @@ final class BackofficeFinto
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
                 'link.accettazione.crea' => $this->accettaLink($richiesta, $corpo),
                 'link.verifica.crea' => $this->verificaLink($corpo),
+                'legale.documenti.elenca' => $this->elencaDocumentiLegali($richiesta),
+                'legale.accettazioni.crea' => $this->accettaDocumentoLegale($richiesta, $corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
                 'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
                 'io.notifiche.letture.crea' => $this->segnaNotificheLette($richiesta, $corpo),
@@ -2030,6 +2040,64 @@ final class BackofficeFinto
         unset($this->links[$chi['workspace']]);
 
         return [204, null];
+    }
+
+    /**
+     * Accende i documenti legali (config/legale.php del backoffice): senza, come in produzione oggi, l'elenco è vuoto e nessuna
+     * accettazione è possibile.
+     *
+     * @param  array<string, array{versione: string, in_vigore_dal: string, impronta: string}>  $documenti
+     */
+    public function documentiLegali(array $documenti): static
+    {
+        $this->documentiLegali = $documenti;
+
+        return $this;
+    }
+
+    /**
+     * legale.documenti.elenca (LegaleController::documentiElenca): i documenti in vigore con, per la persona del gettone, se ha
+     * accettato proprio la versione in vigore. Vuoto a interruttore spento.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaDocumentiLegali(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $elenco = [];
+
+        foreach ($this->documentiLegali as $documento => $dati) {
+            $elenco[] = ['documento' => $documento, 'versione' => $dati['versione'], 'in_vigore_dal' => $dati['in_vigore_dal'], 'impronta' => $dati['impronta'],
+                'accettato' => isset($this->accettazioni[$chi['persona']][$documento.'@'.$dati['versione']])];
+        }
+
+        return [200, ['data' => $elenco]];
+    }
+
+    /**
+     * legale.accettazioni.crea (LegaleController::accettazioniCrea): la persona del gettone accetta la versione in vigore di un
+     * documento: 201 la prima volta, 200 con la stessa riga se la ripete. Un documento o una versione fuori vigore è 422.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function accettaDocumentoLegale(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+        $documento = $corpo['documento'] ?? null;
+        $versione = is_string($documento) ? ($this->documentiLegali[$documento]['versione'] ?? null) : null;
+
+        $campi = $this->testi->validaStretta($corpo, [
+            'documento' => ['required', 'bail', 'string', Rule::in(array_keys($this->documentiLegali))],
+            'versione' => ['required', 'bail', 'string', Rule::in($versione === null ? [] : [$versione])],
+        ]);
+        $this->frena('legale-accettazioni:'.$chi['persona'], self::FRENI['legale_accettazioni_per_persona'], self::ORA);
+
+        $chiave = $campi['documento'].'@'.$campi['versione'];
+        $nuova = ! isset($this->accettazioni[$chi['persona']][$chiave]);
+        $this->accettazioni[$chi['persona']][$chiave] ??= self::iso(now());
+
+        return [$nuova ? 201 : 200, ['data' => ['documento' => $campi['documento'], 'versione' => $campi['versione'], 'accettata_il' => $this->accettazioni[$chi['persona']][$chiave]]]];
     }
 
     /**
