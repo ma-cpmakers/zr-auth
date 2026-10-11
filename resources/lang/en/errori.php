@@ -103,7 +103,7 @@ return [
     ],
     'posizione_cambiata' => [
         'title' => 'Position changed',
-        'detail' => 'The card given as the anchor is no longer where the request expected: read the list again and repeat the move.',
+        'detail' => 'The item given as the anchor (a card, a stage, a deal) is no longer where the request expected: read the list again and repeat the move.',
     ],
     'scheda_archiviata' => [
         'title' => 'Card archived',
@@ -147,7 +147,7 @@ return [
     ],
     'fase_non_vuota' => [
         'title' => 'Stage not empty',
-        'detail' => 'This stage still has open deals and can only be deleted without them: close or move its deals first, then try again.',
+        'detail' => 'This stage still has deals (open, won, lost or archived) and can only be deleted without them: move its deals to another stage (a closed or archived deal is first reopened or restored with crm.trattative.modifica), then try again.',
     ],
     'ultima_fase' => [
         'title' => 'Last stage',
@@ -171,7 +171,7 @@ return [
     ],
     'transizione_non_valida' => [
         'title' => 'Invalid state transition',
-        'detail' => 'The requested state cannot be reached from the state the resource is in now: for a board, active goes to closed, closed goes to active or to trash, and trash goes to closed.',
+        'detail' => 'The requested state cannot be reached from the state the resource is in now: for a board, active goes to closed, closed goes to active or to trash, and trash goes to closed. A deal moves between stages only while it is open and not archived.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor expired',

@@ -37,4 +37,11 @@ return [
     'responsabile_del_workspace' => 'This person is not a member of the workspace: member ids come from workspace.membri.elenca.',
     'organizzazione_non_esiste' => "The contact's company does not exist in this workspace.",
     'email_doppia' => 'This address appears twice in the list.',
+    'valuta_del_workspace' => "The currency must be the one of the workspace's CRM (:valuta): crm.impostazioni.mostra gives it.",
+    'fase_della_pipeline' => 'The pipeline has no stage with this id: crm.pipeline.mostra gives the stage ids.',
+    'pipeline_archiviata' => 'An archived pipeline does not accept new deals: restore it with crm.pipeline.modifica.',
+    'contatto_non_esiste' => 'The workspace has no contact with this id: crm.persone.elenca gives the contact ids.',
+    'azienda_non_esiste' => 'The workspace has no company with this id: crm.organizzazioni.elenca gives the company ids.',
+    'fase_con_la_pipeline' => 'The stage is given together with the pipeline: crm.trattative.spostamento.crea moves a deal inside its own pipeline.',
+    'motivo_solo_se_persa' => 'The loss reason only applies to a lost deal: send the `persa` status as well, or leave the reason null.',
 ];

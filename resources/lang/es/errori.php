@@ -103,7 +103,7 @@ return [
     ],
     'posizione_cambiata' => [
         'title' => 'Posición cambiada',
-        'detail' => 'La tarjeta dada como ancla ya no está donde la solicitud esperaba: vuelve a leer la lista y repite el movimiento.',
+        'detail' => 'El elemento dado como ancla (una tarjeta, una fase, una negociación) ya no está donde la solicitud esperaba: vuelve a leer la lista y repite el movimiento.',
     ],
     'scheda_archiviata' => [
         'title' => 'Tarjeta archivada',
@@ -147,7 +147,7 @@ return [
     ],
     'fase_non_vuota' => [
         'title' => 'Fase no vacía',
-        'detail' => 'Esta fase aún tiene negociaciones abiertas y solo se elimina sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',
+        'detail' => 'Esta fase aún tiene negociaciones (abiertas, ganadas, perdidas o archivadas) y solo se elimina sin ellas: mueve sus negociaciones a otra fase (una cerrada o archivada se reabre o se restaura antes con crm.trattative.modifica) y vuelve a intentarlo.',
     ],
     'ultima_fase' => [
         'title' => 'Última fase',
@@ -171,7 +171,7 @@ return [
     ],
     'transizione_non_valida' => [
         'title' => 'Transición de estado no válida',
-        'detail' => 'El estado pedido no se alcanza desde el estado en que está ahora el recurso: en un tablero, de activo se pasa a cerrado, de cerrado a activo o a papelera, y de la papelera a cerrado.',
+        'detail' => 'El estado pedido no se alcanza desde el estado en que está ahora el recurso: en un tablero, de activo se pasa a cerrado, de cerrado a activo o a papelera, y de la papelera a cerrado. Una negociación se mueve entre fases solo si está abierta y no archivada.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor caducado',

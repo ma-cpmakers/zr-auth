@@ -103,7 +103,7 @@ return [
     ],
     'posizione_cambiata' => [
         'title' => 'Posizione cambiata',
-        'detail' => 'La scheda data come ancora non è più dove la richiesta pensava: rileggi la lista e ripeti lo spostamento.',
+        'detail' => "L'elemento dato come ancora (una scheda, una fase, una trattativa) non è più dove la richiesta pensava: rileggi la lista e ripeti lo spostamento.",
     ],
     'scheda_archiviata' => [
         'title' => 'Scheda archiviata',
@@ -147,7 +147,7 @@ return [
     ],
     'fase_non_vuota' => [
         'title' => 'Fase non vuota',
-        'detail' => 'Questa fase ha ancora trattative aperte e si elimina solo senza: chiudi o sposta prima le sue trattative, poi ripeti.',
+        'detail' => "Questa fase ha ancora trattative (aperte, vinte, perse o archiviate) e si elimina solo senza: sposta le sue trattative in un'altra fase (una chiusa o archiviata si riapre o si ripristina prima con crm.trattative.modifica), poi ripeti.",
     ],
     'ultima_fase' => [
         'title' => 'Ultima fase',
@@ -171,7 +171,7 @@ return [
     ],
     'transizione_non_valida' => [
         'title' => 'Transizione di stato non valida',
-        'detail' => 'Lo stato chiesto non si raggiunge da quello in cui la risorsa sta ora: per una board, da attiva si passa a chiusa, da chiusa ad attiva o a cestino, dal cestino a chiusa.',
+        'detail' => 'Lo stato chiesto non si raggiunge da quello in cui la risorsa sta ora: per una board, da attiva si passa a chiusa, da chiusa ad attiva o a cestino, dal cestino a chiusa. Una trattativa si sposta fra le fasi solo se è aperta e non archiviata.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursore scaduto',
