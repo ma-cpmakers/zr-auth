@@ -55,14 +55,14 @@ it("la notifica porta l'autore col nome di oggi, il nome della risorsa e per_me 
     $diSistema = array_values(array_filter($elenco, fn (array $n) => $n['risorsa_nome'] === null))[0];
 
     expect($diBruno['autore'])->toBe(['nome' => 'Bruno'])
-        ->and($diBruno['per_me'])->toBeFalse()
+        ->and($diBruno['per_me'])->toBeNull()
         ->and($diSistema['autore'])->toBeNull()
-        ->and($diSistema['per_me'])->toBeFalse();
+        ->and($diSistema['per_me'])->toBeNull();
     expect(json_encode($diBruno['autore']))->not->toContain('@')->not->toContain($bruno['id']);
 
     // La risposta della lettura ha gli stessi campi.
     $letta = alFinto('PATCH', "/v1/io/notifiche/{$diBruno['id']}/lettura", ['letta' => true], $gettone)->json('data');
-    expect($letta['autore'])->toBe(['nome' => 'Bruno'])->and($letta['risorsa_nome'])->toBe('Clienti')->and($letta['per_me'])->toBeFalse();
+    expect($letta['autore'])->toBe(['nome' => 'Bruno'])->and($letta['risorsa_nome'])->toBe('Clienti')->and($letta['per_me'])->toBeNull();
 });
 
 it('un autore che non è del finto è un errore del test, e chi non è più membro non è nominato (#1670)', function () {

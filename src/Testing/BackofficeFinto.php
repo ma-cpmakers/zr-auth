@@ -567,7 +567,7 @@ final class BackofficeFinto
      * @param  array<string, mixed>  $dati  quale risorsa è cambiata, coi soli id (come `data` dell'evento)
      * @param  array<string, mixed>|null  $autore  la persona che ha fatto, di persona(): `autore` dice il suo nome di oggi finché è membra del workspace, poi `null`; senza, `null` (lo ha fatto il sistema)
      * @param  string|null  $risorsaNome  il nome della cosa a cui si riferisce il soggetto; senza, `risorsa_nome` è `null`
-     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, autore: ?array{nome: string}, risorsa_nome: ?string, per_me: bool}
+     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, autore: ?array{nome: string}, risorsa_nome: ?string, per_me: null}
      */
     public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null, ?array $autore = null, ?string $risorsaNome = null): array
     {
@@ -2243,7 +2243,7 @@ final class BackofficeFinto
             'creata_il' => self::iso($notifica['creata_il']),
             'autore' => $notifica['autore'] !== null && isset($this->membri[$notifica['workspace']][$notifica['autore']]) ? ['nome' => $this->persone[$notifica['autore']]['nome']] : null,
             'risorsa_nome' => $notifica['risorsa_nome'],
-            'per_me' => false,
+            'per_me' => null,
         ];
     }
 
