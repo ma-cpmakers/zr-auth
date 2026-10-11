@@ -83,6 +83,9 @@ final class BackofficeFinto
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
+        ['GET', '#^/v1/board/cartelle$#', 'board.cartelle.elenca'],
+        ['GET', '#^/v1/board/board$#', 'board.board.elenca'],
+        ['GET', '#^/v1/board/schede$#', 'board.schede.elenca'],
         ['GET', '#^/v1/board/schede/([^/]+)$#', 'board.schede.mostra'],
         ['POST', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.elimina'],
@@ -295,8 +298,14 @@ final class BackofficeFinto
     /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable}> le notifiche (notifica()), per id */
     private array $notifiche = [];
 
-    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
+    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
     private array $schede = [];
+
+    /** @var array<string, array{id: string, workspace: string, nome: string, colore: string, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le cartelle (cartella()), per id */
+    private array $cartelle = [];
+
+    /** @var array<string, array{id: string, workspace: string, nome: string, cartella: string, stato: string, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable, chiusa_il: ?CarbonImmutable, nel_cestino_il: ?CarbonImmutable}> le board (board()), per id */
+    private array $boards = [];
 
     /** @var array<string, array{id: string, scheda: string, aspettata: string, creato_il: CarbonImmutable}> i collegamenti «aspetta» vivi, per id */
     private array $collegamenti = [];
@@ -410,12 +419,14 @@ final class BackofficeFinto
      * Una scheda di una board del workspace, per provare i collegamenti «aspetta» (`board.schede.collegamenti.*`): il finto non
      * modella boards, liste né schede vere, solo il minimo che le attese guardano (la board, il numero, il titolo, se è
      * completata o archiviata). Il `numero` parte da 1 per ogni board e non si riusa. Le schede di una stessa `$board` si
-     * possono collegare fra loro; una scheda di un'altra board è «di un'altra board».
+     * possono collegare fra loro; una scheda di un'altra board è «di un'altra board». `$board` è l'id di una board() o un nome
+     * qualunque. `$scadenza` è un giorno `AAAA-MM-GG`; `$assegnatari` le persone (di workspace() o persona()) o i loro id.
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     * @param  list<array<string, mixed>|string>  $assegnatari
      * @return array{id: string, board_id: string, numero: int, titolo: string}
      */
-    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova'): array
+    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = []): array
     {
         $idWorkspace = $workspace['id'] ?? null;
 
@@ -426,9 +437,84 @@ final class BackofficeFinto
         $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
-        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'scadenza' => $scadenza, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
         return ['id' => $id, 'board_id' => $board, 'numero' => $numero, 'titolo' => $titolo];
+    }
+
+    /**
+     * Una cartella delle board del workspace, per provare `board.cartelle.elenca` e il selettore di cartelle di un frontend.
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     * @return array{id: string, nome: string, colore: string}
+     */
+    public function cartella(array $workspace, string $nome, string $colore = 'pine'): array
+    {
+        $idWorkspace = $this->workspaceDelFinto($workspace);
+
+        if (! in_array($colore, ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'], true)) {
+            throw new InvalidArgumentException("Il colore «{$colore}» non c'è: sono pine, citrus, coral, sky, plum e neutral.");
+        }
+
+        $id = self::id();
+        $ora = now()->toImmutable()->startOfMillisecond();
+        $this->cartelle[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'colore' => $colore, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+
+        return ['id' => $id, 'nome' => $nome, 'colore' => $colore];
+    }
+
+    /**
+     * Una board del workspace, per provare `board.board.elenca` e le schede di una board vera: sta in una `$cartella` di cartella()
+     * (senza, in una «Generale» che nasce con la prima board), `attiva`, `chiusa` o nel `cestino`. Il finto non modella liste né
+     * etichette: la board porta il minimo (nome, cartella, stato e il conto delle schede non archiviate che scheda() le ha date).
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     * @param  array<string, mixed>|null  $cartella  una cartella di cartella() dello stesso workspace
+     * @return array{id: string, nome: string, cartella_id: string, stato: string}
+     */
+    public function board(array $workspace, string $nome, ?array $cartella = null, string $stato = 'attiva'): array
+    {
+        $idWorkspace = $this->workspaceDelFinto($workspace);
+
+        if (! in_array($stato, ['attiva', 'chiusa', 'cestino'], true)) {
+            throw new InvalidArgumentException("Lo stato «{$stato}» non c'è: sono attiva, chiusa e cestino.");
+        }
+
+        $idCartella = $cartella['id'] ?? null;
+
+        if ($idCartella === null) {
+            $generale = array_values(array_filter($this->cartelle, fn (array $voce) => $voce['workspace'] === $idWorkspace && $voce['nome'] === 'Generale'));
+            $idCartella = $generale[0]['id'] ?? $this->cartella($workspace, 'Generale')['id'];
+        }
+
+        if (! is_string($idCartella) || ($this->cartelle[$idCartella]['workspace'] ?? null) !== $idWorkspace) {
+            throw new InvalidArgumentException('La cartella non è di questo workspace: nasce con cartella().');
+        }
+
+        $id = self::id();
+        $ora = now()->toImmutable()->startOfMillisecond();
+        $this->boards[$id] = [
+            'id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'cartella' => $idCartella, 'stato' => $stato, 'creata_il' => $ora, 'aggiornata_il' => $ora,
+            'chiusa_il' => $stato === 'chiusa' ? $ora : null, 'nel_cestino_il' => $stato === 'cestino' ? $ora : null,
+        ];
+
+        return ['id' => $id, 'nome' => $nome, 'cartella_id' => $idCartella, 'stato' => $stato];
+    }
+
+    /**
+     * L'id di un workspace di workspace(), o un errore se non è del finto.
+     *
+     * @param  array<string, mixed>  $workspace
+     */
+    private function workspaceDelFinto(array $workspace): string
+    {
+        $id = $workspace['id'] ?? null;
+
+        if (! is_string($id) || ! isset($this->workspace[$id])) {
+            throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
+        }
+
+        return $id;
     }
 
     /**
@@ -857,6 +943,9 @@ final class BackofficeFinto
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
                 'accessi.provider.crea' => $this->creaAccessoDalProvider($corpo, $parametri[0]),
+                'board.cartelle.elenca' => $this->elencaCartelle($richiesta),
+                'board.board.elenca' => $this->elencaBoard($richiesta),
+                'board.schede.elenca' => $this->elencaSchede($richiesta),
                 'board.schede.mostra' => $this->mostraScheda($richiesta, $parametri[0]),
                 'board.schede.completamento.crea' => $this->completaScheda($richiesta, $parametri[0], true),
                 'board.schede.completamento.elimina' => $this->completaScheda($richiesta, $parametri[0], false),
@@ -991,10 +1080,10 @@ final class BackofficeFinto
             'titolo' => $scheda['titolo'],
             'descrizione' => '',
             'inizio' => null,
-            'scadenza' => null,
+            'scadenza' => $scheda['scadenza'],
             'copertina' => null,
             'etichette' => [],
-            'assegnatari' => [],
+            'assegnatari' => $scheda['assegnatari'],
             'numero_voci' => 0,
             'numero_voci_spuntate' => 0,
             'numero_commenti' => 0,
@@ -1004,6 +1093,139 @@ final class BackofficeFinto
             'creata_il' => self::iso($scheda['creata_il']),
             'aggiornata_il' => self::iso($scheda['aggiornata_il']),
         ];
+    }
+
+    /**
+     * board.cartelle.elenca (CartelleController::elenca): le cartelle del workspace del gettone, in ordine di nome (maiuscole e
+     * accenti non contano) e poi di id, a cursore.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaCartelle(Request $richiesta): array
+    {
+        $chi = $this->conPm($richiesta);
+        $voci = [];
+
+        foreach ($this->cartelle as $cartella) {
+            if ($cartella['workspace'] === $chi['workspace']) {
+                $voci[] = ['id' => $cartella['id'], 'nome' => $cartella['nome'], 'colore' => $cartella['colore'], 'creata_il' => self::iso($cartella['creata_il']), 'aggiornata_il' => self::iso($cartella['aggiornata_il'])];
+            }
+        }
+
+        return $this->pagina($richiesta, 'board.cartelle.elenca', 'id', $voci, self::perNomeEId(...),
+            fn (string $id) => isset($this->cartelle[$id]) ? self::perNomeEId($this->cartelle[$id]) : null);
+    }
+
+    /** Le schede non archiviate di una board: il `numero_schede` che la board dà (CS8). */
+    private function schedeDellaBoard(string $board): int
+    {
+        return count(array_filter($this->schede, fn (array $scheda) => $scheda['board'] === $board && $scheda['archiviata_il'] === null));
+    }
+
+    /**
+     * board.board.elenca (BoardController::elenca): le board del workspace, di tutte le cartelle, in ordine di nome e poi di id.
+     * `stato` (`attiva` se manca, `chiusa` o `cestino`) ne sceglie uno; le altre non compaiono.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaBoard(Request $richiesta): array
+    {
+        $chi = $this->conPm($richiesta);
+        $query = $this->testi->validaQuery(self::query($richiesta), ['stato' => ['sometimes', 'string', 'in:attiva,chiusa,cestino']]);
+        $stato = (string) ($query['stato'] ?? 'attiva');
+        $voci = [];
+
+        foreach ($this->boards as $board) {
+            if ($board['workspace'] === $chi['workspace'] && $board['stato'] === $stato) {
+                $voci[] = [
+                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'creata_il' => self::iso($board['creata_il']),
+                    'aggiornata_il' => self::iso($board['aggiornata_il']), 'numero_schede' => $this->schedeDellaBoard($board['id']), 'descrizione' => null,
+                    'sfondo' => 'neutral', 'stato' => $board['stato'], 'applica_regole' => true,
+                    'chiusa_il' => $board['chiusa_il'] === null ? null : self::iso($board['chiusa_il']),
+                    'nel_cestino_il' => $board['nel_cestino_il'] === null ? null : self::iso($board['nel_cestino_il']),
+                    'cancellata_il' => $board['nel_cestino_il'] === null ? null : self::iso($board['nel_cestino_il']->addDays(30)),
+                ];
+            }
+        }
+
+        return $this->pagina($richiesta, 'board.board.elenca:'.$stato, 'id', $voci, self::perNomeEId(...),
+            fn (string $id) => isset($this->boards[$id]) ? self::perNomeEId($this->boards[$id]) : null);
+    }
+
+    /**
+     * board.schede.elenca (SchedeController::elenca), nelle due forme che un frontend chiama: le schede non archiviate di una
+     * board (`board_id`), nell'ordine del numero (il finto ha una lista sola), e quelle di una persona (`assegnatario_id`): le
+     * aperte per scadenza, le senza data in fondo, poi per board e numero; con `completate=true` le completate, dalla più recente,
+     * e in tutte e due il `totale` del filtro. Le schede arrivano nella forma breve, senza `descrizione`. `archiviate` e `numero`
+     * il finto non li fa: sono un errore di chi lo usa, non una risposta.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaSchede(Request $richiesta): array
+    {
+        $chi = $this->conPm($richiesta);
+        $grezzo = self::query($richiesta);
+
+        if (isset($grezzo['archiviate']) || isset($grezzo['numero'])) {
+            throw new LogicException('Il finto non fa board.schede.elenca con archiviate né con numero: sono la lista delle archiviate e la ricerca per numero del backoffice.');
+        }
+
+        $query = $this->testi->validaQuery($grezzo, [
+            'board_id' => ['bail', 'required_without:assegnatario_id', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($chi) {
+                if (($this->boards[$valore]['workspace'] ?? null) !== $chi['workspace'] && ! $this->laBoardDiProva($chi['workspace'], $valore)) {
+                    $this->testi->dichiara($attributo, 'non_trovato');
+                    $fail('regole.board_del_workspace')->translate();
+                }
+            }],
+            'assegnatario_id' => ['bail', 'required_with:completate', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($chi) {
+                if (! isset($this->membri[$chi['workspace']][$valore])) {
+                    $this->testi->dichiara($attributo, 'non_trovato');
+                    $fail('regole.utente_del_workspace')->translate();
+                }
+            }],
+            'completate' => ['sometimes', 'string', 'in:true,false'],
+        ]);
+        $persona = $query['assegnatario_id'] ?? null;
+        $board = $query['board_id'] ?? null;
+        $completate = ($query['completate'] ?? 'false') === 'true';
+        $breve = fn (array $scheda) => array_diff_key($this->voceScheda($scheda), ['descrizione' => true]);
+        $giuste = array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $chi['workspace'] && $scheda['archiviata_il'] === null
+            && ($board === null || $scheda['board'] === $board)
+            && ($persona === null || (in_array($persona, $scheda['assegnatari'], true) && ($board !== null || ($this->boards[$scheda['board']]['stato'] ?? 'attiva') === 'attiva')))
+            && ($persona === null || $completate === ($scheda['completata_il'] !== null)));
+
+        if ($persona === null) {
+            $posizione = fn (array $scheda) => [sprintf('%010d', $scheda['numero']), $scheda['id']];
+            $lista = 'board.schede.elenca:'.$board;
+            $dalPiuRecente = false;
+        } elseif ($completate) {
+            $posizione = fn (array $scheda) => [self::iso($scheda['completata_il']), $scheda['id']];
+            $lista = 'board.schede.elenca:'.$persona.':completate:'.($board ?? '');
+            $dalPiuRecente = true;
+        } else {
+            $posizione = fn (array $scheda) => [$scheda['scadenza'] === null ? '1' : '0', $scheda['scadenza'] ?? '', $scheda['board'], sprintf('%010d', $scheda['numero']), $scheda['id']];
+            $lista = 'board.schede.elenca:'.$persona.':aperte:'.($board ?? '');
+            $dalPiuRecente = false;
+        }
+
+        [$stato, $pagina] = $this->pagina(
+            $richiesta, $lista, 'id', array_map(fn (array $scheda) => ['id' => $scheda['id']] + $breve($scheda), array_values($giuste)),
+            fn (array $voce) => $posizione($this->schede[$voce['id']]),
+            fn (string $id) => isset($this->schede[$id]) ? $posizione($this->schede[$id]) : null,
+            $dalPiuRecente,
+        );
+
+        if ($persona !== null) {
+            $pagina['totale'] = count($giuste);
+        }
+
+        return [$stato, $pagina];
+    }
+
+    /** Se `$board` è il nome di una scheda() senza board() (il «board-di-prova» di chi non modella le board) che il workspace ha. */
+    private function laBoardDiProva(string $workspace, string $board): bool
+    {
+        return ! isset($this->boards[$board]) && array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $workspace && $scheda['board'] === $board) !== [];
     }
 
     /**
