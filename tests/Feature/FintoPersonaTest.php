@@ -76,6 +76,30 @@ it('io.modifica cambia solo i campi mandati e risponde con la forma di io.mostra
         ->and($risposta->json())->toBe(alFinto('GET', '/v1/io', gettone: $gettone)->json());
 });
 
+it('io.modifica cambia cognome, mansione e telefono, e null li toglie; un telefono che non va è 422 e non salva niente (sprint 25d, T5)', function () {
+    [, , $gettone] = fintoDellaPersona();
+
+    expect(alFinto('GET', '/v1/io', gettone: $gettone)->json('data.utente'))->toMatchArray(['cognome' => null, 'mansione' => null, 'telefono' => null]);
+
+    $risposta = alFinto('PATCH', '/v1/io', ['utente' => ['cognome' => '  Bianchi ', 'mansione' => 'Direttrice', 'telefono' => '+39 02 1234 5678']], $gettone);
+
+    expect($risposta->status())->toBe(200)
+        ->and($risposta->json('data.utente'))->toMatchArray(['cognome' => 'Bianchi', 'mansione' => 'Direttrice', 'telefono' => '+39 02 1234 5678'])
+        ->and($risposta->json())->toBe(alFinto('GET', '/v1/io', gettone: $gettone)->json());
+
+    $tolto = alFinto('PATCH', '/v1/io', ['utente' => ['cognome' => null]], $gettone);
+
+    expect($tolto->json('data.utente'))->toMatchArray(['cognome' => null, 'mansione' => 'Direttrice', 'telefono' => '+39 02 1234 5678']);
+
+    $prima = alFinto('GET', '/v1/io', gettone: $gettone)->json();
+    $sbagliato = alFinto('PATCH', '/v1/io', ['utente' => ['mansione' => 'Altra', 'telefono' => '123']], $gettone);
+
+    expect($sbagliato->status())->toBe(422)
+        ->and(array_column($sbagliato->json('errors'), 'pointer'))->toBe(['#/utente/telefono'])
+        ->and($sbagliato->json('errors.0.regola'))->toBe('formato')
+        ->and(alFinto('GET', '/v1/io', gettone: $gettone)->json())->toBe($prima);
+});
+
 it('io.modifica è tutto o niente: un valore sbagliato non lascia salvato un altro campo (T3.2)', function () {
     [, , $gettone] = fintoDellaPersona();
     $prima = alFinto('GET', '/v1/io', gettone: $gettone)->json();

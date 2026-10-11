@@ -44,7 +44,7 @@ it("un'email della lista si registra: 202 con l'email normalizzata, e nasce una 
 
     expect($verifica->status())->toBe(200)
         ->and(Arr::except($verifica->json('data'), ['id', 'email_verificata_il']))
-        ->toBe(['nome' => 'anna', 'email' => 'anna@example.com', 'lingua' => 'it', 'fuso_orario' => 'Europe/Rome']);
+        ->toBe(['nome' => 'anna', 'email' => 'anna@example.com', 'lingua' => 'it', 'fuso_orario' => 'Europe/Rome', 'cognome' => null, 'mansione' => null, 'telefono' => null]);
 });
 
 it('il nome, la lingua e il fuso orario dati restano alla persona (T3.1)', function () {
@@ -64,7 +64,7 @@ it('il nome, la lingua e il fuso orario dati restano alla persona (T3.1)', funct
     ]);
 
     expect(Arr::except($verifica->json('data'), ['id', 'email_verificata_il']))
-        ->toBe(['nome' => 'Bruno Bianchi', 'email' => 'bruno@altro.it', 'lingua' => 'es', 'fuso_orario' => 'America/New_York']);
+        ->toBe(['nome' => 'Bruno Bianchi', 'email' => 'bruno@altro.it', 'lingua' => 'es', 'fuso_orario' => 'America/New_York', 'cognome' => null, 'mansione' => null, 'telefono' => null]);
 });
 
 it("un'email che ha già un account risponde 202 come una nuova: l'account non cambia e non parte nessun codice (T3.1)", function () {
