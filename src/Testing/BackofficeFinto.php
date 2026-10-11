@@ -1172,7 +1172,9 @@ final class BackofficeFinto
             throw new LogicException('Il finto non fa board.schede.elenca con archiviate né con numero: sono la lista delle archiviate e la ricerca per numero del backoffice.');
         }
 
+        // Come SchedeElencaRequest: il limite della lista e i parametri della richiesta si guardano insieme, il limite per primo.
         $query = $this->testi->validaQuery($grezzo, [
+            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO],
             'board_id' => ['bail', 'required_without:assegnatario_id', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($chi) {
                 if (($this->boards[$valore]['workspace'] ?? null) !== $chi['workspace'] && ! $this->laBoardDiProva($chi['workspace'], $valore)) {
                     $this->testi->dichiara($attributo, 'non_trovato');

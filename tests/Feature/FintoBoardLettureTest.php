@@ -168,3 +168,13 @@ it('board.schede.elenca non fa archiviate né numero: è un errore di chi usa il
 
     expect(fn () => alFinto('GET', "/v1/board/schede?board_id={$lancio['id']}&{$query}", null, $gettone))->toThrow(LogicException::class);
 })->with(['archiviate=true', 'numero=1']);
+
+it('board.schede.elenca guarda insieme il limite e i parametri, come la richiesta del backoffice: due errori, il limite per primo', function () {
+    [, , , , $gettone] = conLeBoard();
+
+    $risposta = alFinto('GET', '/v1/board/schede?limite=500&assegnatario_id=01k6w6a2c4e6g8j0m2p4r6t8v2', null, $gettone);
+
+    expect($risposta->status())->toBe(422)
+        ->and(array_map(fn (array $errore) => [$errore['parameter'], $errore['regola']], $risposta->json('errors')))
+        ->toBe([['limite', 'fuori_intervallo'], ['assegnatario_id', 'non_trovato']]);
+});
