@@ -290,6 +290,9 @@ final class BackofficeFinto
     /** @var array<string, array<string, true>> le app che il workspace ha attivato (app.modifica), per workspace e per codice */
     private array $attive = [];
 
+    /** @var array<string, array<string, bool>> workspace → persona → ha nascosto la guida dei primi passi (#1664); assente = false */
+    private array $primiPassiNascosti = [];
+
     /** @var array<string, string> dove un'app riceve il codice di un ingresso (ZR_RITORNO_<CODICE>), per codice dell'app */
     private array $ritorni = [];
 
@@ -1946,6 +1949,7 @@ final class BackofficeFinto
             'workspace' => $workspace === null ? null : $this->workspace[$workspace],
             'ruolo' => $workspace === null ? null : $this->membri[$workspace][$chi['persona']],
             'notifiche_non_lette' => $workspace === null ? null : count(array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $workspace && $notifica['persona'] === $chi['persona'] && $notifica['letta_il'] === null)),
+            'primi_passi_nascosti' => $workspace === null ? null : ($this->primiPassiNascosti[$workspace][$chi['persona']] ?? false),
         ];
     }
 
@@ -2069,8 +2073,10 @@ final class BackofficeFinto
 
     /**
      * io.modifica (IoController::modifica): il nome, la lingua e il fuso orario della persona del gettone, come JSON Merge
-     * Patch sotto `utente`. Vale il solo gettone dell'accesso (#1412): uno di un workspace è 403
-     * `gettone_con_workspace` prima del corpo (workspace, ruolo e notifiche null nella risposta); nell'ordine del backoffice: tutti i campi insieme, un valore sbagliato non ne lascia salvato nessuno (422 sul pointer del campo, anche
+     * Patch sotto `utente`. I campi di `utente` valgono col solo gettone dell'accesso (#1412): con uno di un workspace un corpo
+     * che ne ha è 403 `gettone_con_workspace`, prima di guardarlo. Col gettone di un workspace il corpo è `primi_passi_nascosti`
+     * (#1664), un booleano stretto per la persona del gettone in quel workspace; col gettone dell'accesso è 422 `campo_vietato`
+     * sul suo pointer (workspace, ruolo, notifiche e primi passi null nella risposta); nell'ordine del backoffice: tutti i campi insieme, un valore sbagliato non ne lascia salvato nessuno (422 sul pointer del campo, anche
      * per un campo di altre risposte o che non esiste); un corpo senza campi da cambiare è un errore sul corpo. La persona è
      * sempre quella del gettone. Risponde con la forma di io.mostra, già aggiornata; la lingua nuova vale dalla chiamata dopo.
      *
@@ -2081,10 +2087,14 @@ final class BackofficeFinto
     {
         $chi = $this->autentica($richiesta);
 
-        // Dal #1412 la scrittura sulla persona vuole il gettone dell'accesso: con quello di un workspace, 403 prima del corpo.
-        if ($chi['workspace'] !== null) {
+        // Dal #1412 la scrittura sulla persona vuole il gettone dell'accesso: con quello di un workspace un corpo con `utente` è 403
+        // prima di guardarlo. Il corpo di un gettone di un workspace è `primi_passi_nascosti` (#1664).
+        $conWorkspace = $chi['workspace'] !== null;
+
+        if ($conWorkspace && array_key_exists('utente', $corpo)) {
             throw new Problema('gettone_con_workspace');
         }
+
         $regole = [
             'utente' => ['sometimes', 'array'],
             'utente.nome' => ['filled', 'string', 'max:255'],
@@ -2093,6 +2103,10 @@ final class BackofficeFinto
             'utente.cognome' => ['sometimes', 'nullable', 'string', 'max:255'],
             'utente.mansione' => ['sometimes', 'nullable', 'string', 'max:100'],
             'utente.telefono' => ['sometimes', 'nullable', 'bail', 'string', 'max:32', 'regex:/^(?=(?:\\D*\\d){5})[0-9+().\\- ]+$/'],
+            'primi_passi_nascosti' => $conWorkspace ? ['filled', 'boolean:strict'] : [function (string $attributo, mixed $valore, Closure $rifiuta) {
+                $this->testi->dichiara($attributo, 'campo_vietato');
+                $rifiuta('regole.campo_del_workspace')->translate(['attribute' => $this->testi->nome($attributo)]);
+            }],
         ];
 
         foreach (self::ALTRI_CAMPI_DI_IO as $campo => $metodo) {
@@ -2104,6 +2118,21 @@ final class BackofficeFinto
         }
 
         $campi = $this->testi->validaCorpo($corpo, $regole);
+
+        if ($conWorkspace) {
+            if (! array_key_exists('primi_passi_nascosti', $campi)) {
+                throw new Problema('dati_non_validi', [[
+                    'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'primi_passi_nascosti']),
+                    'regola' => 'obbligatorio',
+                    'pointer' => '#',
+                ]]);
+            }
+
+            $this->primiPassiNascosti[$chi['workspace']][$chi['persona']] = (bool) $campi['primi_passi_nascosti'];
+
+            return [200, ['data' => $this->io($chi)]];
+        }
+
         $utente = $campi['utente'] ?? [];
 
         if (! is_array($utente) || $utente === []) {
@@ -2374,7 +2403,7 @@ final class BackofficeFinto
      * chiave vale per la persona, ma il metodo vuole il gettone dell'accesso: uno di un workspace è 403 prima di ogni altra cosa), l'email non verificata (403, prima del corpo), il corpo (422 su `nome`; un campo in più
      * si ignora, come Corpo::soloCorpo, perché un corpo con un campo in più non rompe una rotta nata prima della regola), l'azienda che non è della persona (404, come un id altrui) o dove è solo membro (403 permesso_negato), il freno di
      * workspace nuovi all'ora per persona (429; una risposta ripetuta dalla chiave non arriva al freno); poi nasce, con
-     * un'azienda sua se non ne dà una. Il workspace non ha app attive. La risposta è lo schema WorkspaceConRuolo, senza
+     * un'azienda sua se non ne dà una. Il workspace nasce con l'app pm attiva (#1577). La risposta è lo schema WorkspaceConRuolo, senza
      * `Location` (il contratto ha il solo `Link`).
      *
      * @param  array<mixed>  $corpo
@@ -2437,6 +2466,8 @@ final class BackofficeFinto
                 'lingua_contenuti' => $campi['lingua_contenuti'] ?? $this->persone[$persona]['lingua'],
             ];
             $this->membri[$id][$persona] = 'proprietario';
+            // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
+            $this->attive[$id]['pm'] = true;
 
             return [201, ['data' => [...$this->workspace[$id], 'ruolo' => 'proprietario']], []];
         });
