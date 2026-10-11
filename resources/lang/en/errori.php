@@ -155,7 +155,7 @@ return [
     ],
     'valuta_in_uso' => [
         'title' => 'Currency in use',
-        'detail' => 'This workspace has open amounts in the current currency. Changing the currency does not convert them: the numbers stay the same. To change it anyway, send `senza_conversione: true` together with `valuta`.',
+        'detail' => 'This workspace has deals with an amount (open, won, lost or archived) in the current currency. Changing the currency does not convert the amounts: the numbers stay the same. To change it anyway, send `senza_conversione: true` together with `valuta`.',
     ],
     'collegamento_esistente' => [
         'title' => 'Link already exists',

@@ -155,7 +155,7 @@ return [
     ],
     'valuta_in_uso' => [
         'title' => 'Moneda en uso',
-        'detail' => 'Este workspace tiene importes abiertos en la moneda actual. Cambiar la moneda no los convierte: los números siguen siendo los mismos. Para cambiarla igualmente, envía `senza_conversione: true` junto con `valuta`.',
+        'detail' => 'Este workspace tiene negociaciones con un importe (abiertas, ganadas, perdidas o archivadas) en la moneda actual. Cambiar la moneda no convierte los importes: los números siguen siendo los mismos. Para cambiarla igualmente, envía `senza_conversione: true` junto con `valuta`.',
     ],
     'collegamento_esistente' => [
         'title' => 'Vínculo ya existente',

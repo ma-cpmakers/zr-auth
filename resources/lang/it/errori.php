@@ -155,7 +155,7 @@ return [
     ],
     'valuta_in_uso' => [
         'title' => 'Valuta in uso',
-        'detail' => 'In questo workspace ci sono importi aperti nella valuta di adesso. Cambiare la valuta non li converte: restano gli stessi numeri. Per cambiarla comunque manda `senza_conversione: true` insieme a `valuta`.',
+        'detail' => 'In questo workspace ci sono trattative con un importo (aperte, vinte, perse o archiviate) nella valuta di adesso. Cambiare la valuta non converte gli importi: restano gli stessi numeri. Per cambiarla comunque manda `senza_conversione: true` insieme a `valuta`.',
     ],
     'collegamento_esistente' => [
         'title' => 'Collegamento già presente',
