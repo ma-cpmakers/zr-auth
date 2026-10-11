@@ -157,6 +157,10 @@ return [
         'title' => 'Moneda en uso',
         'detail' => 'Este workspace tiene negociaciones con un importe (abiertas, ganadas, perdidas o archivadas) en la moneda actual. Cambiar la moneda no convierte los importes: los números siguen siendo los mismos. Para cambiarla igualmente, envía `senza_conversione: true` junto con `valuta`.',
     ],
+    'accettazione_richiesta' => [
+        'title' => 'Aceptación requerida',
+        'detail' => 'Para usar Zeiras debes aceptar el aviso de privacidad y las condiciones de uso en su versión vigente. El problema lleva junto al código `mancanti`, los documentos por aceptar: acéptalos con legale.accettazioni.crea (los lista legale.documenti.elenca) y repite la solicitud.',
+    ],
     'collegamento_esistente' => [
         'title' => 'Vínculo ya existente',
         'detail' => 'La tarjeta ya espera a esa tarjeta: no repitas la solicitud. El vínculo lo encuentras en board.schede.collegamenti.elenca.',

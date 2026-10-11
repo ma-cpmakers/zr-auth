@@ -19,6 +19,7 @@ final class Problema extends RuntimeException
         'permesso_negato' => 403,
         'cliente_non_riconosciuto' => 401,
         'app_non_attiva' => 403,
+        'accettazione_richiesta' => 403,
         'registrazione_non_aperta' => 403,
         'non_trovato' => 404,
         'app_in_arrivo' => 409,
@@ -44,7 +45,7 @@ final class Problema extends RuntimeException
     /**
      * @param  list<array{detail: string, regola: string, pointer?: string, parameter?: string}>  $errori  per `dati_non_validi`, e solo per lui
      * @param  array<string, string>  $header  per `troppe_richieste` Retry-After, in secondi
-     * @param  array<string, int|string>  $estensioni  i membri estesi del problema: `limite` e `direzione` di `limite_raggiunto`
+     * @param  array<string, mixed>  $estensioni  i membri estesi del problema: `limite` e `direzione` di `limite_raggiunto`, `mancanti` di `accettazione_richiesta`
      * @param  ?string  $verifica  per `verifica_non_riuscita`, e solo per lui: l'operazione di cui il `detail` dice il caso
      *                             (`email`, `password`, `ingresso`, `invito`, `registrazione`, `provider`)
      */

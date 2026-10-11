@@ -388,6 +388,9 @@ final class BackofficeFinto
     /** L'IP firmato della richiesta in corso; null se è anonima. */
     private ?string $ipFirmato = null;
 
+    /** L'operationId del metodo in corso: la guardia del gettone lo confronta con quelli che l'accettazione obbligatoria lascia aperti (#1699). */
+    private ?string $operazioneInCorso = null;
+
     /** Turnstile in utenti.crea: spento (null), `acceso`, o `guasto` (Cloudflare non risponde). */
     private ?string $turnstile = null;
 
@@ -918,6 +921,9 @@ final class BackofficeFinto
     }
 
     /** Le rotte senza gettone a cui un client firma l'IP. */
+    /** I metodi che chi non ha accettato i documenti legali può chiamare (Accettazione::ESENTI del backoffice, #1699). */
+    private const APERTI_SENZA_ACCETTAZIONE = ['legale.documenti.elenca', 'legale.accettazioni.crea', 'io.mostra', 'accessi.corrente.elimina', 'accessi.elimina'];
+
     private const SENZA_GETTONE = ['accessi.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
 
     /**
@@ -986,6 +992,7 @@ final class BackofficeFinto
         $corpo = is_array($corpo) ? $corpo : [];
 
         $this->ipFirmato = null;
+        $this->operazioneInCorso = $operazione;
 
         try {
             if (in_array($operazione, self::SENZA_GETTONE, true)) {
@@ -1928,6 +1935,7 @@ final class BackofficeFinto
                     'fuso_orario' => 'Europe/Rome',
                     'password' => Str::random(64),
                 ];
+                $this->accettaIDocumentiInVigore($persona);
             } else {
                 $this->controllaInvitoDelProvider($invito, $this->persone[$persona]['email'], $persona);
 
@@ -2337,6 +2345,7 @@ final class BackofficeFinto
                 'fuso_orario' => $dati['fuso_orario'] ?? 'Europe/Rome',
                 'password' => $dati['password'],
             ];
+            $this->accettaIDocumentiInVigore($id);
 
             if ($invito === null) {
                 $this->chiediCodice($id);
@@ -3792,7 +3801,41 @@ final class BackofficeFinto
 
         $this->freni->hit($chiave, self::MINUTO);
 
+        // L'accettazione obbligatoria (middleware Accettazione, #1699): dopo il freno del gettone e prima del workspace e dei modelli.
+        $this->richiedeLeAccettazioni($accesso['utente']);
+
         return ['persona' => $accesso['utente'], 'accesso' => $riga['accesso'], 'workspace' => $riga['workspace']];
+    }
+
+    /**
+     * Con i documenti legali in vigore, chi non ha accettato la versione in vigore apre solo i metodi di APERTI_SENZA_ACCETTAZIONE:
+     * ogni altro è 403 accettazione_richiesta, con i `mancanti` accanto al codice (Accettazione::handle). Spenti, niente.
+     */
+    private function richiedeLeAccettazioni(string $persona): void
+    {
+        if ($this->documentiLegali === [] || in_array($this->operazioneInCorso, self::APERTI_SENZA_ACCETTAZIONE, true)) {
+            return;
+        }
+
+        $mancanti = [];
+
+        foreach ($this->documentiLegali as $documento => $dati) {
+            if (! isset($this->accettazioni[$persona][$documento.'@'.$dati['versione']])) {
+                $mancanti[] = ['documento' => $documento, 'versione' => $dati['versione']];
+            }
+        }
+
+        if ($mancanti !== []) {
+            throw new Problema('accettazione_richiesta', estensioni: ['mancanti' => $mancanti]);
+        }
+    }
+
+    /** Chi si registra accetta i documenti in vigore insieme ai termini (Legale::accettaInVigore, #1699). */
+    private function accettaIDocumentiInVigore(string $persona): void
+    {
+        foreach ($this->documentiLegali as $documento => $dati) {
+            $this->accettazioni[$persona][$documento.'@'.$dati['versione']] ??= self::iso(now());
+        }
     }
 
     /**
