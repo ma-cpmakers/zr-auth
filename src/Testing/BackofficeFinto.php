@@ -1582,6 +1582,9 @@ final class BackofficeFinto
             $id = self::id();
             $this->persone[$id] = [
                 'nome' => $dati['nome'] ?? Str::before($email, '@'),
+                'cognome' => null,
+                'mansione' => null,
+                'telefono' => null,
                 'email' => $email,
                 // L'invito è arrivato a quell'indirizzo: la persona che lo accetta ha già verificato l'email.
                 'email_verificata_il' => $invito === null ? null : now()->toImmutable(),
