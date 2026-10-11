@@ -26,6 +26,7 @@ function accessoConIDocumentiAccettati(string $email): string
 }
 
 it('board.cartelle.elenca: ogni cartella porta stato e cestino; di default le attive, con ?stato=cestino le nel cestino (#1695)', function () {
+    $this->freezeTime();
     [$finto, $studio, , , $gettone] = conLeBoard();
     $finto->cartella($studio, 'Viva');
     $finto->cartella($studio, 'Vecchia', stato: 'cestino');
