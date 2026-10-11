@@ -5,6 +5,7 @@
 return [
     'cursore' => 'The :attribute field is not a cursor of this list: use the successivo value of the previous page.',
     'chiave_idempotenza' => 'The Idempotency-Key header needs 1 to 255 visible ASCII characters, without spaces.',
+    'if_match' => 'The If-Match header needs `*` or one or more quoted entity-tags separated by commas (like a response `ETag`).',
     'workspace_non_tuo' => 'You are not a member of a workspace with this id: the id is given by io.workspace.crea, when the workspace is born.',
     'sequenza' => 'The :attribute field needs the sequence of an event: 1 to 12 digits.',
     'troppi_byte' => 'The :attribute field may be at most :max bytes long (accented letters count as 2).',

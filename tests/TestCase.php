@@ -56,6 +56,10 @@ abstract class TestCase extends Testbench
 
             return ['ok' => true];
         })->withoutMiddleware(ConGettone::class);
+        // Una scrittura e la pagina dell'accettazione di zr-home (qui sullo stesso host, per provare che non rimanda a sé stessa).
+        $router->post('scrive', fn () => Api::workspace()->post('/v1/x', ['a' => 1]));
+        $router->get('legale/accetta', fn () => Api::workspace()->get('/v1/io'));
+        $router->get('{lingua}/legale/accetta', fn () => Api::workspace()->get('/v1/io'))->where('lingua', '[a-z]{2}');
         $router->get('pubblica', fn () => 'pubblica')->withoutMiddleware(ConGettone::class);
     }
 

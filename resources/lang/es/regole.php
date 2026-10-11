@@ -5,6 +5,7 @@
 return [
     'cursore' => 'El campo :attribute no es un cursor de esta lista: usa el valor de successivo de la página anterior.',
     'chiave_idempotenza' => 'El encabezado Idempotency-Key admite de 1 a 255 caracteres ASCII visibles, sin espacios.',
+    'if_match' => 'El encabezado If-Match admite `*` o uno o más entity-tags entre comillas separados por comas (como el `ETag` de una respuesta).',
     'workspace_non_tuo' => 'No eres miembro de un workspace con este id: el id lo da io.workspace.crea, cuando nace el workspace.',
     'sequenza' => 'El campo :attribute necesita la secuencia de un evento: de 1 a 12 cifras.',
     'troppi_byte' => 'El campo :attribute puede tener como máximo :max bytes (las letras con tilde valen 2).',
