@@ -31,7 +31,7 @@ it('board.board.viste.crea salva la vista con i filtri nell\'ordine dei cinque c
     $crea = alFinto('POST', "/v1/board/board/{$board}/viste", ['nome' => '  Urgenti ', 'filtri' => ['testo' => 'rosso', 'etichette' => ['e1'], 'stato' => null, 'persone' => []]], $anna);
 
     expect($crea->status())->toBe(201)
-        ->and($crea->header('Location'))->toBeNull()
+        ->and($crea->header('Location'))->toBe('')
         ->and(array_keys($crea->json('data')))->toBe(['id', 'board_id', 'nome', 'filtri', 'condivisa', 'creata_da', 'creata_il', 'aggiornata_il'])
         ->and($crea->json('data.nome'))->toBe('Urgenti')
         ->and($crea->json('data.filtri'))->toBe(['etichette' => ['e1'], 'testo' => 'rosso'])
