@@ -71,10 +71,13 @@ it('inviti.verifica.crea: un invito revocato o scaduto non vale; il freno è per
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'eva@example.com', 'ruolo' => 'membro'], $anna);
     $scaduto = $finto->ultimoInvito('eva@example.com');
 
+    // Il revocato si prova prima di far scadere il tempo: dopo 8 giorni sarebbe comunque scaduto, e il test passerebbe anche se la revoca fosse ignorata.
+    expect(alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato])->json('data'))->toBe(['valido' => false])
+        ->and(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto])->json('data.valido'))->toBeTrue();
+
     $this->travel(8)->days();
 
-    expect(alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato])->json('data'))->toBe(['valido' => false])
-        ->and(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto])->json('data'))->toBe(['valido' => false]);
+    expect(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto])->json('data'))->toBe(['valido' => false]);
 
     foreach (range(1, 30) as $i) {
         alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato]);

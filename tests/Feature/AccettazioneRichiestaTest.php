@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Zeiras\Auth\Api;
 use Zeiras\Auth\Errori\AccettazioneRichiesta;
 use Zeiras\Auth\Errori\ErroreApi;
@@ -44,8 +45,35 @@ it('un ritorno oltre i 2000 caratteri diventa la radice (T5.3)', function () {
 it('una richiesta JSON riceve 403 con il codice e i mancanti, una visita di Inertia 409 con X-Inertia-Location (T5.4)', function () {
     accettazioneRichiesta();
     $this->getJson('/io')->assertForbidden()->assertExactJson(['codice' => 'accettazione_richiesta', 'mancanti' => MANCANTI]);
-    $this->get(FRONTEND.'/io', ['X-Inertia' => 'true'])->assertStatus(409)
+    // Come la manda una visita di Inertia vera: X-Inertia, X-Requested-With e un Accept da pagina.
+    $inertia = ['X-Inertia' => 'true', 'X-Requested-With' => 'XMLHttpRequest', 'Accept' => 'text/html, application/xhtml+xml'];
+    $this->get(FRONTEND.'/io', $inertia)->assertStatus(409)
         ->assertHeader('X-Inertia-Location', ACCETTAZIONE.'?ritorno='.rawurlencode(FRONTEND.'/io'));
+});
+
+it('il ritorno di 2000 caratteri passa com\'è, di 2001 diventa la radice (T5.3)', function () {
+    accettazioneRichiesta();
+    $base = FRONTEND.'/io?x=';
+
+    $this->get($base.str_repeat('a', 2000 - strlen($base)))->assertRedirect(ACCETTAZIONE.'?ritorno='.rawurlencode($base.str_repeat('a', 2000 - strlen($base))));
+    $this->get($base.str_repeat('a', 2001 - strlen($base)))->assertRedirect(ACCETTAZIONE.'?ritorno='.rawurlencode(FRONTEND));
+});
+
+it('non va nel log, mentre un altro errore del backoffice sì (T5.7, deve fallire se report() manca)', function () {
+    Log::spy();
+    Http::fake([
+        '*/v1/io' => problema(403, 'accettazione_richiesta', ['mancanti' => MANCANTI]),
+        '*/v1/x' => problema(403, 'permesso_negato'),
+    ]);
+
+    $this->get(FRONTEND.'/io')->assertRedirect();
+
+    Log::shouldNotHaveReceived('error');
+
+    // La prova del controllo: un altro errore non catturato, sulla stessa strada, nel log ci va.
+    $this->post(FRONTEND.'/scrive');
+
+    Log::shouldHaveReceived('error');
 });
 
 it('la pagina dell\'accettazione non rimanda a sé stessa, anche con la lingua davanti (T5.5, deve fallire se c\'è un ciclo)', function () {

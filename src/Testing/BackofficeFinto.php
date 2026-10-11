@@ -353,7 +353,7 @@ final class BackofficeFinto
     /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
     private array $schede = [];
 
-    /** @var array<string, array{id: string, workspace: string, nome: string, colore: string, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le cartelle (cartella()), per id */
+    /** @var array<string, array{id: string, workspace: string, nome: string, colore: string, stato: string, nel_cestino_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le cartelle (cartella()), per id */
     private array $cartelle = [];
 
     /** @var array<string, array{id: string, workspace: string, nome: string, cartella: string, stato: string, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable, chiusa_il: ?CarbonImmutable, nel_cestino_il: ?CarbonImmutable}> le board (board()), per id */

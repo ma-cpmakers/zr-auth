@@ -55,7 +55,10 @@ final class AccettazioneRichiesta extends ErroreApi
             return $indirizzo;
         }
 
-        return $richiesta->root();
+        // La radice è quella del frontend in config (`app.url`), non Host e schema della richiesta: dietro un proxy non fidato sarebbero http://, e zr-home la rifiuterebbe.
+        $radice = rtrim((string) config('app.url'), '/');
+
+        return str_starts_with($radice, 'https://') ? $radice : $richiesta->root();
     }
 
     /** Stesso host e stesso percorso dell'accettazione, con o senza il prefisso della lingua davanti (`/<lingua>/legale/accetta`). */
