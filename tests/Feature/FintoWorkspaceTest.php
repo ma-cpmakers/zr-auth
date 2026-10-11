@@ -531,7 +531,8 @@ it('io.workspace.crea fa nascere il workspace con la persona proprietaria, e il 
     expect($gettone->status())->toBe(201)->and($gettone->json('data.ruolo'))->toBe('proprietario');
 
     $app = alFinto('GET', '/v1/app', gettone: $gettone->json('data.gettone'))->json('data');
-    expect(collect($app)->pluck('stato')->contains('attivo'))->toBeFalse();
+    // L'app pm nasce attiva (#1577), come nel backoffice, e nessun'altra.
+    expect(collect($app)->where('stato', 'attivo')->pluck('codice')->all())->toBe(['pm']);
 });
 
 it('io.workspace.crea con la stessa Idempotency-Key non fa nascere un secondo workspace (T1.3)', function () {
