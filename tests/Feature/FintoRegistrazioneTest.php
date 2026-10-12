@@ -34,7 +34,8 @@ it("un'email della lista si registra: 202 con l'email normalizzata, e nasce una 
     expect($risposta->status())->toBe(202)
         ->and($risposta->header('Content-Type'))->toBe('application/json')
         ->and($risposta->header('Link'))->toBe(linkDi('utenti.crea'))
-        ->and($risposta->json())->toBe(['data' => ['email' => 'anna@example.com']])
+        ->and(array_keys($risposta->json('data')))->toBe(['email', 'scade_il', 'nuovo_codice_dal'])
+        ->and($risposta->json('data.email'))->toBe('anna@example.com')
         ->and($codice)->toMatch('/^[0-9]{6}$/')
         // Prima della verifica la password non apre un accesso.
         ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->json('codice'))
@@ -83,10 +84,12 @@ it("un'email che ha già un account risponde 202 come una nuova: l'account non c
     expect($nuova->status())->toBe(202)
         ->and($anna->status())->toBe(202)
         ->and($anna->headers())->toBe($nuova->headers())
-        ->and($anna->json())->toBe(['data' => ['email' => 'anna@example.com']])
+        ->and(array_keys($anna->json('data')))->toBe(['email', 'scade_il', 'nuovo_codice_dal'])
+        ->and($anna->json('data.email'))->toBe('anna@example.com')
         ->and($bruno->status())->toBe(202)
         ->and($bruno->headers())->toBe($nuova->headers())
-        ->and($bruno->json())->toBe(['data' => ['email' => 'bruno@example.com']])
+        ->and(array_keys($bruno->json('data')))->toBe(['email', 'scade_il', 'nuovo_codice_dal'])
+        ->and($bruno->json('data.email'))->toBe('bruno@example.com')
         ->and($finto->ultimoCodice('anna@example.com'))->toBeNull()
         ->and($finto->ultimoCodice('bruno@example.com'))->toBe($primo);
 

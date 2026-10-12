@@ -134,3 +134,20 @@ it('ricerca.elenca (deprecato) dà solo board e cartelle, senza maiuscole né ac
         ->and(array_keys($risposta->json('data.0')))->toBe(['tipo', 'id', 'titolo'])
         ->and(alFinto('GET', '/v1/ricerca?q=a', null, $gettone)->json('errors.0.parameter'))->toBe('q');
 });
+
+it('ricerca.crea trova i colleghi per nome anche con pm spenta, con ruolo e indirizzo, mai l\'email (#1774)', function () {
+    [, $studio, $gettone] = conLaRicerca(pm: false);
+
+    $risposta = alFinto('POST', '/v1/ricerca', ['q' => 'ANNA'], $gettone);
+    $anna = $risposta->json('data.0');
+
+    expect($risposta->status())->toBe(200)
+        ->and(array_column($risposta->json('data'), 'tipo'))->toBe(['workspace.membro'])
+        ->and(array_keys($anna))->toBe(['tipo', 'id', 'titolo', 'contesto', 'indirizzo'])
+        ->and($anna['titolo'])->toBe('Anna')
+        ->and($anna['contesto'])->toBe(['ruolo' => 'proprietario'])
+        ->and($anna['indirizzo'])->toBe('/v1/workspace/membri/'.$anna['id']);
+    // Per nome, non per email: un termine che sta solo nell'email non trova nessuno.
+    expect(alFinto('POST', '/v1/ricerca', ['q' => 'example'], $gettone)->json('data'))->toBe([]);
+    unset($studio);
+});
