@@ -141,6 +141,10 @@ return [
         'title' => 'Correo ya presente',
         'detail' => 'Este correo ya pertenece a otro contacto del workspace, incluso archivado: su id está en la respuesta, en `persona_id`. Ábrelo con crm.persone.mostra, o usa otro correo.',
     ],
+    'persona_anonimizzata' => [
+        'title' => 'Contacto anonimizado',
+        'detail' => 'Este contacto ha sido anonimizado (derecho al olvido): ya no se puede modificar ni vincular a notas, actividades o negociaciones. Su id permanece en los recursos que ya lo citan.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline no vacío',
         'detail' => 'Este pipeline aún tiene negociaciones abiertas y solo se archiva sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',

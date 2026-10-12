@@ -141,6 +141,10 @@ return [
         'title' => 'Email already in use',
         'detail' => 'This email already belongs to another contact in the workspace, even an archived one: its id is in the response, in `persona_id`. Open it with crm.persone.mostra, or use another email.',
     ],
+    'persona_anonimizzata' => [
+        'title' => 'Contact anonymised',
+        'detail' => 'This contact has been anonymised (right to erasure): it can no longer be changed or linked to notes, activities or deals. Its id stays in the resources that already refer to it.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline not empty',
         'detail' => 'This pipeline still has open deals and can only be archived without them: close or move its deals first, then try again.',
