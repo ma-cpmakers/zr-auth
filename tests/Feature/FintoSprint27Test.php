@@ -141,3 +141,24 @@ it('accordo: aziende.modifica lo vuole se l\'azienda non ha accettato, e il camp
     expect(esito($vuoto))->toBe([422, 'dati_non_validi'])
         ->and($vuoto->json('errors.0.pointer'))->toBe('#');
 });
+
+it('accordo: aziende.mostra dice se l\'azienda deve ancora accettare, e aziende.modifica lo dice false dopo l\'accettazione (#1765)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio', $anna);
+    $percorso = "/v1/aziende/{$studio['azienda_id']}";
+    $spento = entraNelFinto('anna@example.com')['gettone']['gettone'];
+
+    expect(alFinto('GET', $percorso, gettone: $spento)->json('data.accordo_trattamento_dati_da_accettare'))->toBeFalse();
+
+    $finto->documentiLegali(DOCUMENTI_DELLO_SPRINT_27, ACCORDO_DI_PROVA);
+    $acceso = accessoConIDocumentiAccettati('anna@example.com');
+
+    expect(alFinto('GET', $percorso, gettone: $acceso)->json('data.accordo_trattamento_dati_da_accettare'))->toBeTrue();
+
+    $accettato = alFinto('PATCH', $percorso, ['accordo_trattamento_dati_accettato' => true], $acceso);
+
+    expect($accettato->status())->toBe(200)
+        ->and($accettato->json('data.accordo_trattamento_dati_da_accettare'))->toBeFalse()
+        ->and(alFinto('GET', $percorso, gettone: $acceso)->json('data.accordo_trattamento_dati_da_accettare'))->toBeFalse();
+});
