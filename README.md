@@ -503,6 +503,9 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `422`, il proprietario `409` `proprietario_intoccabile`, e un amministratore che tocca un amministratore, o ne fa uno, `403`.
   Togliere un membro toglie i suoi gettoni **di quel workspace** (`401`, anche se rientra); quello dell'accesso e gli altri
   workspace restano.
+  Ogni membro (`workspace.membri.elenca`, `.modifica` e le due accettazioni) porta `entrato_il`: l'istante in cui la
+  persona è entrata in quel workspace (`workspace()`, `membro()` o un'accettazione), ISO 8601 UTC coi millisecondi; una
+  persona che è in due workspace ha due istanti, e cambiare il ruolo non lo cambia.
 - **La nascita di un workspace.** `io.workspace.crea` (`{"nome"}`, 1-255 caratteri; `azienda_id` facoltativo) vale con
   ogni gettone della persona, anche quello dell'accesso, e risponde `201` con il workspace e il ruolo `proprietario` (senza
   `Location`: il contratto ha il solo `Link`). Il workspace compare in `io.workspace.elenca`, `gettoni.crea` ne dà il
