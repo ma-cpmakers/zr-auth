@@ -151,3 +151,17 @@ it('ricerca.crea trova i colleghi per nome anche con pm spenta, con ruolo e indi
     expect(alFinto('POST', '/v1/ricerca', ['q' => 'example'], $gettone)->json('data'))->toBe([]);
     unset($studio);
 });
+
+it('ricerca.crea non dà le schede di una board chiusa e mette prima i titoli che cominciano con la parola (#1776)', function () {
+    [$finto, $studio, $gettone] = conLaRicerca();
+    $chiusa = $finto->board($studio, 'Board chiusa', null, 'chiusa');
+    $viva = $finto->board($studio, 'Board viva');
+    $finto->scheda($studio, 'Bozza del piano', $viva['id']);
+    $comincia = $finto->scheda($studio, 'Piano di lancio', $viva['id']);
+    $finto->scheda($studio, 'Piano chiuso', $chiusa['id']);
+
+    $titoli = array_column(array_filter(alFinto('POST', '/v1/ricerca', ['q' => 'piano'], $gettone)->json('data'), fn (array $voce) => $voce['tipo'] === 'board.scheda'), 'titolo');
+
+    expect(array_values($titoli))->toBe(['Piano di lancio', 'Bozza del piano'])
+        ->and($comincia['titolo'])->toBe('Piano di lancio');
+});
