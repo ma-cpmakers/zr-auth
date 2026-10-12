@@ -1,5 +1,6 @@
 <?php
 
+use Carbon\CarbonImmutable;
 use Random\Engine\Mt19937;
 use Random\Randomizer;
 use Zeiras\Auth\Testing\BackofficeFinto;
@@ -194,6 +195,7 @@ it('app.elenca dà il catalogo delle app in ordine di codice, pm disponibile e l
 
 it('workspace.membri.elenca dà le persone del workspace del gettone, con id della persona, nome, email e ruolo, in ordine di nome e poi di id, ai tre ruoli (T6.1)', function (string $ruolo) {
     $finto = BackofficeFinto::attiva();
+    $this->travelTo(CarbonImmutable::parse('2026-10-01 08:00:00.123'));
     // In minuscolo anna e carla: in binario verrebbero dopo Bruno, e le maiuscole non contano.
     $anna = $finto->persona('anna@example.com', PASSWORD, nome: 'anna');
     $carla = $finto->persona('carla@example.com', PASSWORD, nome: 'carla');
@@ -201,16 +203,21 @@ it('workspace.membri.elenca dà le persone del workspace del gettone, con id del
     $altroBruno = $finto->persona('bruno.due@example.com', PASSWORD, nome: 'Bruno');
     $elena = $finto->persona('elena@example.com', PASSWORD, nome: 'Elena');
     $studio = $finto->workspace('Studio Anna', $anna);
+    $this->travelTo(CarbonImmutable::parse('2026-10-05 09:30:00.456'));
     $finto->membro($studio, $carla, 'amministratore');
     $finto->membro($studio, $bruno, 'membro');
     $finto->membro($studio, $altroBruno, 'membro');
-    // Un altro workspace, coi suoi membri: Bruno è anche lì, con un altro ruolo.
+    // Un altro workspace, coi suoi membri: Bruno è anche lì, con un altro ruolo e un altro istante di ingresso (`entrato_il`, #1791).
+    $this->travelTo(CarbonImmutable::parse('2026-10-09 17:45:10.789'));
     $altro = $finto->workspace('Altro', $elena);
     $franco = $finto->persona('franco@example.com', PASSWORD, nome: 'Franco');
     $finto->membro($altro, $franco, 'membro');
     $finto->membro($altro, $bruno, 'amministratore');
     $chi = ['proprietario' => 'anna@example.com', 'amministratore' => 'carla@example.com', 'membro' => 'bruno@example.com'][$ruolo];
-    $membro = fn (array $persona, string $ruolo) => ['id' => $persona['id'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => $ruolo];
+    $membro = fn (array $persona, string $ruolo, string $entrato) => ['id' => $persona['id'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => $ruolo, 'entrato_il' => $entrato];
+    $inizio = '2026-10-01T08:00:00.123Z';
+    $poi = '2026-10-05T09:30:00.456Z';
+    $infine = '2026-10-09T17:45:10.789Z';
 
     $gettone = gettoneDelFinto($chi, $studio);
     $risposta = alFinto('GET', '/v1/workspace/membri', gettone: $gettone);
@@ -220,15 +227,15 @@ it('workspace.membri.elenca dà le persone del workspace del gettone, con id del
     expect($risposta->status())->toBe(200)
         ->and($risposta->header('Link'))->toBe(linkDi('workspace.membri.elenca'))
         ->and($risposta->json())->toBe(['data' => [
-            $membro($anna, 'proprietario'),
-            ...perId($membro($bruno, 'membro'), $membro($altroBruno, 'membro')),
-            $membro($carla, 'amministratore'),
+            $membro($anna, 'proprietario', $inizio),
+            ...perId($membro($bruno, 'membro', $poi), $membro($altroBruno, 'membro', $poi)),
+            $membro($carla, 'amministratore', $poi),
         ], 'successivo' => null])
         ->and(tutteLePagine('/v1/workspace/membri', $gettone, 1))->toBe($risposta->json('data'))
         ->and($diAltro->json())->toBe(['data' => [
-            $membro($bruno, 'amministratore'),
-            $membro($elena, 'proprietario'),
-            $membro($franco, 'membro'),
+            $membro($bruno, 'amministratore', $infine),
+            $membro($elena, 'proprietario', $infine),
+            $membro($franco, 'membro', $infine),
         ], 'successivo' => null]);
 })->with(['proprietario', 'amministratore', 'membro']);
 

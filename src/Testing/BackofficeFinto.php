@@ -312,6 +312,9 @@ final class BackofficeFinto
     /** @var array<string, array<string, string>> il ruolo, per workspace e per persona */
     private array $membri = [];
 
+    /** @var array<string, array<string, CarbonImmutable>> da quando la persona è nel workspace (`entrato_il`, #1791), per workspace e per persona */
+    private array $entrati = [];
+
     /** @var array<string, array{codice: string, tentativi: int, scade: int}> il codice che vale, per persona */
     private array $codici = [];
 
@@ -753,7 +756,7 @@ final class BackofficeFinto
             throw new InvalidArgumentException("Il ruolo «{$ruolo}» non c'è: i ruoli sono ".implode(', ', self::RUOLI).'.');
         }
 
-        $this->membri[$idWorkspace][$idPersona] = $ruolo;
+        $this->entra($idWorkspace, $idPersona, $ruolo);
     }
 
     /**
@@ -2338,9 +2341,9 @@ final class BackofficeFinto
         $this->tettoDeiMembri($workspace);
 
         $this->links[$workspace]['usati']++;
-        $this->membri[$workspace][$chi['persona']] = 'membro';
+        $this->entra($workspace, $chi['persona'], 'membro');
 
-        return [201, ['data' => ['id' => $chi['persona'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => 'membro']]];
+        return [201, ['data' => $this->voceMembro($workspace, $chi['persona'])]];
     }
 
     /**
@@ -3236,7 +3239,7 @@ final class BackofficeFinto
                 $this->accordiAccettati[$this->workspace[$id]['azienda_id']][$this->accordoLegale['versione']] = true;
             }
 
-            $this->membri[$id][$persona] = 'proprietario';
+            $this->entra($id, $persona, 'proprietario');
             // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
             $this->attive[$id]['pm'] = true;
 
@@ -3539,8 +3542,8 @@ final class BackofficeFinto
         $workspace = $this->delWorkspace($richiesta);
         $voci = [];
 
-        foreach ($this->membri[$workspace] as $persona => $ruolo) {
-            $voci[] = ['id' => $persona, 'nome' => $this->persone[$persona]['nome'], 'email' => $this->persone[$persona]['email'], 'ruolo' => $ruolo];
+        foreach (array_keys($this->membri[$workspace]) as $persona) {
+            $voci[] = $this->voceMembro($workspace, $persona);
         }
 
         return $this->pagina($richiesta, 'workspace.membri.elenca', 'id', $voci, self::perNomeEId(...),
@@ -3588,7 +3591,7 @@ final class BackofficeFinto
 
         $this->membri[$workspace][$persona] = $ruolo;
 
-        return [200, ['data' => ['id' => $persona, 'nome' => $this->persone[$persona]['nome'], 'email' => $this->persone[$persona]['email'], 'ruolo' => $ruolo]]];
+        return [200, ['data' => $this->voceMembro($workspace, $persona)]];
     }
 
     /**
@@ -3605,7 +3608,7 @@ final class BackofficeFinto
         $this->membroDi($workspace, $persona);
         $this->controllaIlBersaglio($this->membri[$workspace][$chi['persona']], $this->membri[$workspace][$persona]);
 
-        unset($this->membri[$workspace][$persona]);
+        unset($this->membri[$workspace][$persona], $this->entrati[$workspace][$persona]);
 
         // I gettoni di quel workspace non tornano se la persona rientra: nel backoffice sono archiviati.
         foreach ($this->gettoni as $gettone => $riga) {
@@ -3778,7 +3781,7 @@ final class BackofficeFinto
         $workspace = $this->accettaCodice($codice, $chi['persona']);
         $persona = $this->persone[$chi['persona']];
 
-        return [201, ['data' => ['id' => $chi['persona'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => $this->membri[$workspace][$chi['persona']]]]];
+        return [201, ['data' => $this->voceMembro($workspace, $chi['persona'])]];
     }
 
     /** Un membro in più nel workspace dell'invito che si accetta (Tetti::membri): con 50 membri, 409 limite_raggiunto. */
@@ -3833,7 +3836,7 @@ final class BackofficeFinto
 
         $this->tettoDeiMembri($invito['workspace']);
 
-        $this->membri[$invito['workspace']][$persona] = $invito['ruolo'];
+        $this->entra($invito['workspace'], $persona, $invito['ruolo']);
         unset($this->inviti[$id]);
 
         return $invito['workspace'];
@@ -4336,6 +4339,30 @@ final class BackofficeFinto
         return [
             'scade_il' => self::iso($adesso->addMinutes(self::MINUTI_DEL_CODICE)),
             'nuovo_codice_dal' => self::iso($adesso->addSeconds(self::INVII['invio'][1])),
+        ];
+    }
+
+    /** La persona entra nel workspace col ruolo dato: da adesso, se non c'era già (`entrato_il`). */
+    private function entra(string $workspace, string $persona, string $ruolo): void
+    {
+        $this->membri[$workspace][$persona] = $ruolo;
+        $this->entrati[$workspace][$persona] ??= now()->toImmutable()->startOfMillisecond();
+    }
+
+    /**
+     * Lo schema Membro (workspace.membri.elenca, .modifica e le due accettazioni): l'id della persona, il nome, l'email, il ruolo e
+     * da quando è nel workspace.
+     *
+     * @return array<string, string>
+     */
+    private function voceMembro(string $workspace, string $persona): array
+    {
+        return [
+            'id' => $persona,
+            'nome' => $this->persone[$persona]['nome'],
+            'email' => $this->persone[$persona]['email'],
+            'ruolo' => $this->membri[$workspace][$persona],
+            'entrato_il' => self::iso($this->entrati[$workspace][$persona]),
         ];
     }
 
