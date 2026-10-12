@@ -10,6 +10,7 @@ return [
     'sequenza' => 'El campo :attribute necesita la secuencia de un evento: de 1 a 12 cifras.',
     'troppi_byte' => 'El campo :attribute puede tener como máximo :max bytes (las letras con tilde valen 2).',
     'carattere_nullo' => 'El campo :attribute no puede contener el carácter nulo (U+0000).',
+    'carattere_non_ammesso' => 'El campo :attribute no puede contener caracteres de control (saltos de línea, tabulaciones), de dirección del texto ni invisibles de ancho cero.',
     'almeno_un_campo' => 'El cuerpo necesita al menos uno de estos campos: :campi.',
     'cartella_del_workspace' => 'En el workspace no hay una carpeta con este id: los ids de las carpetas los da board.cartelle.elenca.',
     'board_del_workspace' => 'En el workspace no hay un tablero con este id: los ids de los tableros los da board.board.elenca.',

@@ -10,6 +10,7 @@ return [
     'sequenza' => 'The :attribute field needs the sequence of an event: 1 to 12 digits.',
     'troppi_byte' => 'The :attribute field may be at most :max bytes long (accented letters count as 2).',
     'carattere_nullo' => 'The :attribute field cannot contain the null character (U+0000).',
+    'carattere_non_ammesso' => 'The :attribute field cannot contain control characters (line breaks, tabs), text direction characters or invisible zero-width characters.',
     'almeno_un_campo' => 'The body needs at least one of these fields: :campi.',
     'cartella_del_workspace' => 'There is no folder with this id in the workspace: the ids of the folders are given by board.cartelle.elenca.',
     'board_del_workspace' => 'There is no board with this id in the workspace: the ids of the boards are given by board.board.elenca.',

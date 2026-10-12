@@ -19,6 +19,7 @@ use Random\Randomizer;
 use SensitiveParameter;
 use stdClass;
 use Zeiras\Auth\Eventi\Firma;
+use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
@@ -1796,7 +1797,7 @@ final class BackofficeFinto
         return $this->conIdempotenza($richiesta, 'board.board.viste.crea', $chi, ['corpo' => $corpo, 'percorso' => ['board' => $board]], function () use ($chi, $corpo, $board) {
             $this->frena('board.viste.crea:persona:'.$chi['persona'], self::VISTE_PER_PERSONA_ALL_ORA, self::ORA);
             $this->frena('board.viste.crea:board:'.$board, self::VISTE_PER_BOARD_ALL_ORA, self::ORA);
-            $campi = $this->testi->validaCorpo($corpo, [...$this->regoleDelleViste(), 'nome' => ['bail', 'required', 'string', 'max:'.self::VISTA_NOME]]);
+            $campi = $this->testi->validaCorpo($corpo, [...$this->regoleDelleViste(), 'nome' => ['bail', 'required', 'string', 'max:'.self::VISTA_NOME, new NomeScritto]]);
             $condivisa = $campi['condivisa'] ?? false;
             $this->tettoDelleViste($board, $chi['persona'], $condivisa);
 
@@ -1825,7 +1826,7 @@ final class BackofficeFinto
         $chi = $this->conPm($richiesta);
         $board = $this->boardDelPercorso($chi['workspace'], $board);
         $corrente = $this->vistaDelPercorso($board, $vista, $chi['persona']);
-        $regole = [...$this->regoleDelleViste(), 'nome' => ['bail', 'filled', 'string', 'max:'.self::VISTA_NOME]];
+        $regole = [...$this->regoleDelleViste(), 'nome' => ['bail', 'filled', 'string', 'max:'.self::VISTA_NOME, new NomeScritto]];
         $campi = $this->testi->validaCorpo($corpo, $regole);
 
         if ($campi === []) {
@@ -2091,7 +2092,7 @@ final class BackofficeFinto
 
                 $persona = self::id();
                 $this->persone[$persona] = [
-                    'nome' => $profilo['nome'] !== null && trim($profilo['nome']) !== '' ? mb_substr(trim($profilo['nome']), 0, 255) : Str::before($email, '@'),
+                    'nome' => ($profilo['nome'] !== null ? NomeScritto::pulisci($profilo['nome'], 255) : null) ?? Str::before($email, '@'),
                     'cognome' => null,
                     'mansione' => null,
                     'telefono' => null,
@@ -2542,7 +2543,7 @@ final class BackofficeFinto
                     $fail('validation.password.uncompromised')->translate();
                 }
             }],
-            'nome' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'nome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
             'lingua' => ['sometimes', 'nullable', 'string', Rule::in(Testi::LINGUE)],
             'fuso_orario' => ['sometimes', 'nullable', 'string', 'timezone:all'],
             'termini_accettati' => ['required', 'boolean', 'accepted'],
@@ -2856,10 +2857,10 @@ final class BackofficeFinto
 
         $regole = [
             'utente' => ['sometimes', 'array'],
-            'utente.nome' => ['filled', 'string', 'max:255'],
+            'utente.nome' => ['filled', 'string', 'max:255', new NomeScritto],
             'utente.lingua' => ['filled', 'string', Rule::in(Testi::LINGUE)],
             'utente.fuso_orario' => ['filled', 'string', 'timezone:all'],
-            'utente.cognome' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'utente.cognome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
             'utente.mansione' => ['sometimes', 'nullable', 'string', 'max:100'],
             'utente.telefono' => ['sometimes', 'nullable', 'bail', 'string', 'max:32', 'regex:/^(?=(?:\\D*\\d){5})[0-9+().\\- ]+$/'],
             'primi_passi_nascosti' => $conWorkspace ? ['filled', 'boolean:strict'] : [function (string $attributo, mixed $valore, Closure $rifiuta) {
@@ -3055,7 +3056,7 @@ final class BackofficeFinto
         }
 
         $regole = [
-            'nome' => ['filled', 'string', 'max:255'],
+            'nome' => ['filled', 'string', 'max:255', new NomeScritto],
             'partita_iva' => ['sometimes', 'nullable', 'bail', 'string', 'max:40', 'regex:/^(?=[A-Za-z0-9 .]*$)(?:[ .]*[A-Za-z0-9]){8,14}[ .]*$/'],
             'settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
             'persone' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PERSONE)],
@@ -3192,7 +3193,7 @@ final class BackofficeFinto
             }
 
             $campi = $this->testi->validaConOggetti($corpo, [
-                'nome' => ['required', 'string', 'max:255'],
+                'nome' => ['required', 'string', 'max:255', new NomeScritto],
                 'azienda_id' => ['sometimes', 'string'],
                 'settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
                 'lingua_contenuti' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(Testi::LINGUE)],
@@ -3562,7 +3563,7 @@ final class BackofficeFinto
     {
         $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
         $workspace = $chi['workspace'];
-        $this->workspace[$workspace]['nome'] = (string) $this->testi->validaStretta($corpo, ['nome' => ['required', 'string', 'max:255']])['nome'];
+        $this->workspace[$workspace]['nome'] = (string) $this->testi->validaStretta($corpo, ['nome' => ['required', 'string', 'max:255', new NomeScritto]])['nome'];
 
         return [200, ['data' => [...$this->workspace[$workspace], 'ruolo' => $this->membri[$workspace][$chi['persona']]]]];
     }

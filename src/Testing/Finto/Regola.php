@@ -35,6 +35,8 @@ final class Regola
 
     public const NON_VALIDA = 'non_valida';
 
+    public const CARATTERE_NON_AMMESSO = 'carattere_non_ammesso';
+
     private const DI_TIPO = ['String', 'Integer', 'Boolean', 'Array', 'List', 'Numeric', 'Decimal', 'Json'];
 
     private const DI_OBBLIGO = ['Required', 'RequiredWith', 'RequiredWithAll', 'RequiredWithout', 'RequiredWithoutAll', 'RequiredIf', 'RequiredUnless', 'Filled', 'Present'];
@@ -70,6 +72,7 @@ final class Regola
             in_array($nome, self::DI_VALORE, true) => self::VALORE_NON_AMMESSO,
             in_array($nome, self::DI_MISURA, true) => self::dellaMisura($validatore, $chiave, $nome),
             $nome === 'MassimoDiByte' => self::TROPPO_LUNGO,
+            $nome === 'NomeScritto' => self::CARATTERE_NON_AMMESSO,
             $nome === 'Distinct' => self::DUPLICATO,
             in_array($nome, ['Prohibited', 'Prohibits', 'Missing'], true) => self::CAMPO_VIETATO,
             $nome === 'Exists' => self::NON_TROVATO,
