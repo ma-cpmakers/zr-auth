@@ -79,9 +79,11 @@ it('il recupero manda il codice solo a un account, e la reimpostazione cambia la
     $codice = $finto->ultimoCodice('anna@example.com');
 
     expect($conAccount->status())->toBe(202)
-        ->and($conAccount->json())->toBe(['data' => ['email' => 'anna@example.com']])
+        ->and(array_keys($conAccount->json('data')))->toBe(['email', 'scade_il', 'nuovo_codice_dal'])
+        ->and($conAccount->json('data.email'))->toBe('anna@example.com')
         ->and($senzaAccount->status())->toBe(202)
-        ->and($senzaAccount->json())->toBe(['data' => ['email' => 'nessuno@example.com']])
+        ->and(array_keys($senzaAccount->json('data')))->toBe(['email', 'scade_il', 'nuovo_codice_dal'])
+        ->and($senzaAccount->json('data.email'))->toBe('nessuno@example.com')
         ->and($codice)->toMatch('/^[0-9]{6}$/')
         ->and($finto->ultimoCodice('nessuno@example.com'))->toBeNull();
 

@@ -1290,6 +1290,21 @@ final class BackofficeFinto
             $schede = array_slice($schede, 0, self::RICERCA_TETTO);
         }
 
+        // I colleghi (#1774): i membri del workspace il cui nome ha ogni parola, anche con `pm` spenta; mai l'email.
+        $parole = array_slice(array_values(array_unique(preg_split('/\s+/u', Str::lower(trim((string) $campi['q'])), -1, PREG_SPLIT_NO_EMPTY) ?: [])), 0, self::RICERCA_PAROLE);
+        $colleghi = [];
+
+        foreach ($this->membri[$chi['workspace']] ?? [] as $idPersona => $ruolo) {
+            $nome = Str::lower(Str::ascii($this->persone[$idPersona]['nome']));
+
+            if (array_filter($parole, fn (string $parola) => ! str_contains($nome, Str::ascii($parola))) === []) {
+                $colleghi[] = ['tipo' => 'workspace.membro', 'id' => $idPersona, 'titolo' => $this->persone[$idPersona]['nome'], 'contesto' => ['ruolo' => $ruolo], 'indirizzo' => '/v1/workspace/membri/'.$idPersona];
+            }
+        }
+
+        usort($colleghi, fn (array $una, array $altra) => self::confronta([Str::lower(Str::ascii($una['titolo'])), $una['id']], [Str::lower(Str::ascii($altra['titolo'])), $altra['id']]));
+        $colleghi = array_slice($colleghi, 0, self::RICERCA_TETTO);
+
         [$posizione, $dalCursore] = $this->posizioneDellaRicerca();
         $this->parametriDelCorpo = true;
 
@@ -1301,7 +1316,7 @@ final class BackofficeFinto
 
         // Le fonti nuove stanno nella sola prima pagina.
         if (! isset($campi['cursore'])) {
-            $risposta['data'] = [...$schede, ...$risposta['data']];
+            $risposta['data'] = [...$schede, ...$colleghi, ...$risposta['data']];
         }
 
         return [$stato, $risposta];
@@ -2532,7 +2547,7 @@ final class BackofficeFinto
 
         // Un link che non vale, a registrazione chiusa, risponde come uno vero senza far nascere niente (UtentiController).
         if ($link !== null && $this->linkDelCodice($link) === null && ! $this->consente($email)) {
-            return [202, ['data' => ['email' => $email]]];
+            return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
         }
 
         if ($this->conEmail($email) === null) {
@@ -2564,7 +2579,7 @@ final class BackofficeFinto
             }
         }
 
-        return [202, ['data' => ['email' => $email]]];
+        return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
     }
 
     /**
@@ -2631,7 +2646,7 @@ final class BackofficeFinto
             $this->chiediCodice($persona);
         }
 
-        return [202, ['data' => ['email' => $email]]];
+        return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
     }
 
     /**
@@ -3367,7 +3382,7 @@ final class BackofficeFinto
         // I freni contano ogni email, con o senza account (RecuperoPassword::chiedi).
         foreach (self::INVII as $freno => [$invii]) {
             if ($this->freni->tooManyAttempts("recupero-{$freno}:{$email}", $invii)) {
-                return [202, ['data' => ['email' => $email]]];
+                return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
             }
         }
 
@@ -3382,7 +3397,7 @@ final class BackofficeFinto
             $this->posta[$email] = $this->recuperi[$persona]['codice'];
         }
 
-        return [202, ['data' => ['email' => $email]]];
+        return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
     }
 
     /**
@@ -4304,6 +4319,22 @@ final class BackofficeFinto
     }
 
     /** Un istante come lo scrive il backoffice (Istante::iso): ISO 8601, in UTC, coi millesimi. */
+    /**
+     * I tempi nominali delle 202 dei codici (TempiDeiCodici del backoffice, #1568): quando scade il codice che parte e quando se ne può
+     * chiedere un altro. Le regole del servizio contate da adesso, uguali in ogni ramo: mai lo stato di un'email (G11).
+     *
+     * @return array{scade_il: string, nuovo_codice_dal: string}
+     */
+    private function tempiDeiCodici(): array
+    {
+        $adesso = now()->toImmutable();
+
+        return [
+            'scade_il' => self::iso($adesso->addMinutes(self::MINUTI_DEL_CODICE)),
+            'nuovo_codice_dal' => self::iso($adesso->addSeconds(self::INVII['invio'][1])),
+        ];
+    }
+
     private static function iso(CarbonInterface $istante): string
     {
         return $istante->copy()->utc()->format('Y-m-d\TH:i:s.v\Z');

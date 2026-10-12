@@ -459,7 +459,8 @@ it('utenti.crea con `invito`: la persona nasce con l\'email verificata ed entra 
     $accesso = entraNelFinto('dora@example.com');
 
     expect($risposta->status())->toBe(202)
-        ->and($risposta->json())->toBe(['data' => ['email' => 'dora@example.com']])
+        ->and(array_keys($risposta->json('data')))->toBe(['email', 'scade_il', 'nuovo_codice_dal'])
+        ->and($risposta->json('data.email'))->toBe('dora@example.com')
         ->and($finto->ultimoCodice('dora@example.com'))->toBeNull()
         ->and($accesso['gettone']['utente']['email_verificata_il'])->toBeString()
         ->and(alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso['gettone']['gettone'])->json('data.ruolo'))->toBe('membro')
