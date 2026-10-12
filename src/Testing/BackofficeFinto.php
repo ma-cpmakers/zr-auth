@@ -361,7 +361,7 @@ final class BackofficeFinto
     /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
     private array $ingressi = [];
 
-    /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, autore: ?string, risorsa_nome: ?string, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable}> le notifiche (notifica()), per id */
+    /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, autore: ?string, risorsa_nome: ?string, board: ?array{id: string, nome: string}, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable, ultima_azione_il: CarbonImmutable, azioni: int}> le notifiche (notifica()), per id */
     private array $notifiche = [];
 
     /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
@@ -620,16 +620,18 @@ final class BackofficeFinto
      * Una notifica di una persona nel workspace, per provare la campanella e la pagina delle notifiche (`io.notifiche.*`): il
      * finto non modella gli eventi che le generano, come il backoffice li scrive in `Scrittura::registra`. L'app di una
      * notifica la dà il tipo (`pm` per `com.zeiras.board.*`, altrimenti `null`): `$app` si dice solo per chiarezza, e un'app che
-     * il tipo non ha è un errore. `$creataIl` è adesso, `$lettaIl` null (non letta); i millesimi sono quelli del finto.
+     * il tipo non ha è un errore. `$creataIl` è adesso, `$lettaIl` null (non letta); i millesimi sono quelli del finto. Il finto non
+     * accorpa: una notifica che racconta più azioni (backoffice #1862) si semina con `$azioni` e `$ultimaAzioneIl` (senza, `$creataIl`).
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  array<string, mixed>  $persona  una persona di persona(), membra del workspace
      * @param  array<string, mixed>  $dati  quale risorsa è cambiata, coi soli id (come `data` dell'evento)
      * @param  array<string, mixed>|null  $autore  la persona che ha fatto, di persona(): `autore` dice il suo nome di oggi finché è membra del workspace, poi `null`; senza, `null` (lo ha fatto il sistema)
      * @param  string|null  $risorsaNome  il nome della cosa a cui si riferisce il soggetto; senza, `risorsa_nome` è `null`
-     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, autore: ?array{nome: string}, risorsa_nome: ?string, per_me: null}
+     * @param  array{id: string, nome: string}|null  $board  la board di ciò che sta dentro una board (scheda, lista, etichetta, vista); senza, `null`
+     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, ultima_azione_il: string, azioni: int, autore: ?array{nome: string}, risorsa_nome: ?string, board: ?array{id: string, nome: string}, per_me: null}
      */
-    public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null, ?array $autore = null, ?string $risorsaNome = null): array
+    public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null, ?array $autore = null, ?string $risorsaNome = null, ?array $board = null, int $azioni = 1, ?CarbonInterface $ultimaAzioneIl = null): array
     {
         $idWorkspace = $workspace['id'] ?? null;
         $idPersona = $persona['id'] ?? null;
@@ -658,7 +660,12 @@ final class BackofficeFinto
         $creata = ($creataIl ?? now())->toImmutable()->startOfMillisecond();
         $letta = $lettaIl?->toImmutable()->startOfMillisecond();
         $dati = $dati === [] ? ['id' => $id] : $dati;
-        $this->notifiche[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'persona' => $idPersona, 'tipo' => $tipo, 'soggetto' => $soggetto ?? '/v1/board/schede/'.$id, 'dati' => $dati, 'autore' => $idAutore, 'risorsa_nome' => $risorsaNome, 'letta_il' => $letta, 'creata_il' => $creata];
+        if ($azioni < 1) {
+            throw new InvalidArgumentException('Una notifica racconta almeno un\'azione.');
+        }
+
+        $ultima = $ultimaAzioneIl === null ? $creata : $ultimaAzioneIl->toImmutable()->startOfMillisecond();
+        $this->notifiche[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'persona' => $idPersona, 'tipo' => $tipo, 'soggetto' => $soggetto ?? '/v1/board/schede/'.$id, 'dati' => $dati, 'autore' => $idAutore, 'risorsa_nome' => $risorsaNome, 'board' => $board, 'letta_il' => $letta, 'creata_il' => $creata, 'ultima_azione_il' => $ultima, 'azioni' => $azioni];
 
         return $this->voceNotifica($this->notifiche[$id]);
     }
@@ -2712,8 +2719,9 @@ final class BackofficeFinto
 
     /**
      * io.notifiche.elenca (IoNotificheController::elenca): le notifiche della persona del gettone in questo workspace, più
-     * recenti prima (creata_il e id decrescenti). Il cursore porta l'id, e la posizione si rilegge fra le notifiche del
-     * workspace, di chiunque. Il gettone dell'accesso è 403 gettone_senza_workspace.
+     * recenti prima (ultima_azione_il e id decrescenti, backoffice #1862). Il cursore porta l'id, e la posizione si rilegge fra le
+     * notifiche del workspace, di chiunque: il finto non accorpa, e le posizioni non si muovono durante lo sfoglio. Il gettone
+     * dell'accesso è 403 gettone_senza_workspace.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -2721,10 +2729,10 @@ final class BackofficeFinto
     {
         $chi = $this->conWorkspace($richiesta);
         $voci = array_values(array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $chi['workspace'] && $notifica['persona'] === $chi['persona']));
-        $posizione = fn (array $notifica) => [self::iso($notifica['creata_il']), $notifica['id']];
+        $posizione = fn (array $notifica) => [self::iso($notifica['ultima_azione_il']), $notifica['id']];
 
         return $this->pagina($richiesta, 'io.notifiche.elenca', 'id', array_map($this->voceNotifica(...), $voci),
-            fn (array $voce) => [$voce['creata_il'], $voce['id']],
+            fn (array $voce) => [$voce['ultima_azione_il'], $voce['id']],
             fn (string $id) => isset($this->notifiche[$id]) && $this->notifiche[$id]['workspace'] === $chi['workspace'] ? $posizione($this->notifiche[$id]) : null,
             dalPiuRecente: true);
     }
@@ -2800,8 +2808,11 @@ final class BackofficeFinto
             'dati' => (object) $notifica['dati'],
             'letta_il' => $notifica['letta_il'] === null ? null : self::iso($notifica['letta_il']),
             'creata_il' => self::iso($notifica['creata_il']),
+            'ultima_azione_il' => self::iso($notifica['ultima_azione_il']),
+            'azioni' => $notifica['azioni'],
             'autore' => $notifica['autore'] !== null && isset($this->membri[$notifica['workspace']][$notifica['autore']]) ? ['nome' => $this->persone[$notifica['autore']]['nome']] : null,
             'risorsa_nome' => $notifica['risorsa_nome'],
+            'board' => $notifica['board'],
             'per_me' => null,
         ];
     }
