@@ -27,7 +27,10 @@ return [
     'etichetta_della_board' => "This label is not on the card's board: label ids come from board.board.mostra.",
     'utente_del_workspace' => 'The workspace has no user with this id: user ids come from workspace.membri.elenca.',
     'scheda_del_workspace' => 'The workspace has no card with this id: card ids come from board.schede.elenca.',
-    'inizio_dopo_la_scadenza' => 'The start cannot come after the due date: the two dates, the one sent and the one already saved, need a start equal to or before the due date.',
+    // #1843: :data è la data dell'altro campo nella forma breve di `data_breve` (giorno e mese, dalla libreria delle date).
+    'inizio_dopo_la_scadenza' => "The start date can't be after the due date (:data).",
+    'scadenza_prima_dell_inizio' => "The due date can't be before the start date (:data).",
+    'data_breve' => 'MMM D',
     'descrizione_non_nulla' => 'The description is never null: to clear it, send an empty string.',
     'campo_di_un_altro_metodo' => 'The :attribute field is not changed here: :metodo changes it.',
     'campo_di_nessun_metodo' => 'The :attribute field cannot be changed: the system sets it.',

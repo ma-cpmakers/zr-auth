@@ -27,7 +27,10 @@ return [
     'etichetta_della_board' => 'Esta etiqueta no es del tablero de la tarjeta: los ids de las etiquetas los da board.board.mostra.',
     'utente_del_workspace' => 'En el workspace no hay un usuario con este id: los ids de los usuarios los da workspace.membri.elenca.',
     'scheda_del_workspace' => 'En el workspace no hay una tarjeta con este id: los ids de las tarjetas los da board.schede.elenca.',
-    'inizio_dopo_la_scadenza' => 'El inicio no puede ser posterior al vencimiento: las dos fechas, la enviada y la ya guardada, necesitan un inicio igual o anterior al vencimiento.',
+    // #1843: :data è la data dell'altro campo nella forma breve di `data_breve` (giorno e mese, dalla libreria delle date).
+    'inizio_dopo_la_scadenza' => 'El inicio no puede ser posterior a la fecha límite (:data).',
+    'scadenza_prima_dell_inizio' => 'La fecha límite no puede ser anterior al inicio (:data).',
+    'data_breve' => 'D MMM',
     'descrizione_non_nulla' => 'La descripción nunca es null: para vaciarla envía una cadena vacía.',
     'campo_di_un_altro_metodo' => 'El campo :attribute no se cambia aquí: lo cambia :metodo.',
     'campo_di_nessun_metodo' => 'El campo :attribute no se cambia: lo da el sistema.',
