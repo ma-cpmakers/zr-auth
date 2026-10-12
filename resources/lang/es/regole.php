@@ -27,7 +27,10 @@ return [
     'etichetta_della_board' => 'Esta etiqueta no es del tablero de la tarjeta: los ids de las etiquetas los da board.board.mostra.',
     'utente_del_workspace' => 'En el workspace no hay un usuario con este id: los ids de los usuarios los da workspace.membri.elenca.',
     'scheda_del_workspace' => 'En el workspace no hay una tarjeta con este id: los ids de las tarjetas los da board.schede.elenca.',
-    'inizio_dopo_la_scadenza' => 'El inicio no puede ser posterior al vencimiento: las dos fechas, la enviada y la ya guardada, necesitan un inicio igual o anterior al vencimiento.',
+    // #1843: :data è la data dell'altro campo nella forma breve di `data_breve` (giorno e mese, dalla libreria delle date).
+    'inizio_dopo_la_scadenza' => 'El inicio no puede ser posterior a la fecha límite (:data).',
+    'scadenza_prima_dell_inizio' => 'La fecha límite no puede ser anterior al inicio (:data).',
+    'data_breve' => 'D MMM',
     'descrizione_non_nulla' => 'La descripción nunca es null: para vaciarla envía una cadena vacía.',
     'campo_di_un_altro_metodo' => 'El campo :attribute no se cambia aquí: lo cambia :metodo.',
     'campo_di_nessun_metodo' => 'El campo :attribute no se cambia: lo da el sistema.',
@@ -45,4 +48,5 @@ return [
     'azienda_non_esiste' => 'El espacio de trabajo no tiene una empresa con este id: los ids de las empresas los da crm.organizzazioni.elenca.',
     'fase_con_la_pipeline' => 'La fase se da junto con la pipeline: para mover la negociación dentro de su pipeline está crm.trattative.spostamento.crea.',
     'motivo_solo_se_persa' => 'El motivo de pérdida solo vale para una negociación perdida: envía también el estado `persa`, o deja el motivo en null.',
+    'campi_estranei_della_riga' => 'La fila tiene campos que el método no conoce: los campos de una fila son los de la creación individual.',
 ];

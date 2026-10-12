@@ -28,7 +28,10 @@ return [
     'etichetta_della_board' => 'Questa etichetta non è della board della scheda: gli id delle etichette li dà board.board.mostra.',
     'utente_del_workspace' => "Nel workspace non c'è un utente con questo id: gli id degli utenti li dà workspace.membri.elenca.",
     'scheda_del_workspace' => "Nel workspace non c'è una scheda con questo id: gli id delle schede li dà board.schede.elenca.",
-    'inizio_dopo_la_scadenza' => "L'inizio non può venire dopo la scadenza: le due date, quella mandata e quella già salvata, vogliono un inizio uguale o prima della scadenza.",
+    // #1843: :data è la data dell'altro campo nella forma breve di `data_breve` (giorno e mese, dalla libreria delle date).
+    'inizio_dopo_la_scadenza' => "L'inizio non può essere dopo la scadenza (:data).",
+    'scadenza_prima_dell_inizio' => "La scadenza non può essere prima dell'inizio (:data).",
+    'data_breve' => 'D MMM',
     'descrizione_non_nulla' => 'La descrizione non è mai null: per svuotarla manda una stringa vuota.',
     'campo_di_un_altro_metodo' => 'Il campo :attribute non si cambia qui: lo cambia :metodo.',
     'campo_di_nessun_metodo' => 'Il campo :attribute non si cambia: lo dà il sistema.',
@@ -46,4 +49,5 @@ return [
     'azienda_non_esiste' => "Nel workspace non c'è un'azienda con questo id: gli id delle aziende li dà crm.organizzazioni.elenca.",
     'fase_con_la_pipeline' => "La fase si dà insieme alla pipeline: per spostare la trattativa dentro la sua pipeline c'è crm.trattative.spostamento.crea.",
     'motivo_solo_se_persa' => 'Il motivo di perdita vale solo per una trattativa persa: manda anche lo stato `persa`, o lascia il motivo a null.',
+    'campi_estranei_della_riga' => 'La riga ha campi che il metodo non conosce: i campi di una riga sono quelli della creazione singola.',
 ];
