@@ -81,7 +81,8 @@ it('workspace.membri.modifica cambia il ruolo, e membri.elenca e io.mostra del m
     $risposta = alFinto('PATCH', "/v1/workspace/membri/{$persone['carla']['id']}", ['ruolo' => 'amministratore'], $anna);
 
     expect($risposta->status())->toBe(200)
-        ->and($risposta->json('data'))->toBe(['id' => $persone['carla']['id'], 'nome' => 'Carla', 'email' => 'carla@example.com', 'ruolo' => 'amministratore'])
+        ->and(array_diff_key($risposta->json('data'), ['entrato_il' => 1]))->toBe(['id' => $persone['carla']['id'], 'nome' => 'Carla', 'email' => 'carla@example.com', 'ruolo' => 'amministratore'])
+        ->and($risposta->json('data')['entrato_il'])->toMatch('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/')
         ->and(collect(alFinto('GET', '/v1/workspace/membri', gettone: $anna)->json('data'))->firstWhere('id', $persone['carla']['id'])['ruolo'])->toBe('amministratore')
         ->and(alFinto('GET', '/v1/io', gettone: $carla)->json('data.ruolo'))->toBe('amministratore')
         // Lo stesso ruolo di prima non scrive niente, e risponde uguale.
@@ -411,7 +412,8 @@ it('inviti.accettazione.crea: la persona del gettone dell\'accesso entra col ruo
     $risposta = alFinto('POST', '/v1/inviti/accettazione', ['codice' => $codice], $accesso);
 
     expect($risposta->status())->toBe(201)
-        ->and($risposta->json('data'))->toBe(['id' => $dora['id'], 'nome' => 'Dora', 'email' => 'dora@example.com', 'ruolo' => 'amministratore'])
+        ->and(array_diff_key($risposta->json('data'), ['entrato_il' => 1]))->toBe(['id' => $dora['id'], 'nome' => 'Dora', 'email' => 'dora@example.com', 'ruolo' => 'amministratore'])
+        ->and($risposta->json('data')['entrato_il'])->toMatch('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/')
         ->and(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data.0.id'))->toBe($studio['id'])
         // L'invito si è consumato: non si accetta due volte, e non è più nell'elenco.
         ->and(esito(alFinto('POST', '/v1/inviti/accettazione', ['codice' => $codice], $accesso)))->toBe([422, 'verifica_non_riuscita'])
@@ -603,7 +605,8 @@ it('link.accettazione.crea: entra come membro e conta un ingresso; già membro �
     $entra = alFinto('POST', '/v1/link/accettazione', ['codice' => $codice], $accesso);
 
     expect($entra->status())->toBe(201)
-        ->and($entra->json('data'))->toBe(['id' => $dora['id'], 'nome' => 'Dora', 'email' => 'dora@example.com', 'ruolo' => 'membro'])
+        ->and(array_diff_key($entra->json('data'), ['entrato_il' => 1]))->toBe(['id' => $dora['id'], 'nome' => 'Dora', 'email' => 'dora@example.com', 'ruolo' => 'membro'])
+        ->and($entra->json('data')['entrato_il'])->toMatch('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/')
         ->and(alFinto('GET', '/v1/workspace/link', gettone: $anna)->json('data.ingressi_usati'))->toBe(1)
         ->and(esito(alFinto('POST', '/v1/link/accettazione', ['codice' => $codice], $accesso)))->toBe([409, 'gia_membro'])
         ->and(alFinto('GET', '/v1/workspace/link', gettone: $anna)->json('data.ingressi_usati'))->toBe(1)
