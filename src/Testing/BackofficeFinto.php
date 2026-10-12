@@ -76,6 +76,14 @@ final class BackofficeFinto
 
     private const SCHEDE_VISITATE = 2000;
 
+    /** Le voci di ogni fonte nuova di ricerca.crea, e le parole distinte del termine che contano (FontiDellaCornice del backoffice). */
+    private const RICERCA_TETTO = 10;
+
+    private const RICERCA_PAROLE = 8;
+
+    /** Se `impagina` legge i suoi parametri dal corpo (ricerca.crea): un cursore che non vale è 422 sul pointer, non sul parametro. */
+    private bool $parametriDelCorpo = false;
+
     /** L'id della lista di ogni scheda del finto, che non modella le liste. */
     private const LISTA_DI_PROVA = 'lista-di-prova';
 
@@ -84,6 +92,8 @@ final class BackofficeFinto
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
+        ['GET', '#^/v1/ricerca$#', 'ricerca.elenca'],
+        ['POST', '#^/v1/ricerca$#', 'ricerca.crea'],
         ['GET', '#^/v1/board/cartelle$#', 'board.cartelle.elenca'],
         ['GET', '#^/v1/board/board$#', 'board.board.elenca'],
         ['GET', '#^/v1/board/schede$#', 'board.schede.elenca'],
@@ -217,7 +227,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
@@ -1017,6 +1027,8 @@ final class BackofficeFinto
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
                 'accessi.provider.crea' => $this->creaAccessoDalProvider($corpo, $parametri[0]),
+                'ricerca.elenca' => $this->elencaRicerca($richiesta),
+                'ricerca.crea' => $this->creaRicerca($richiesta, $corpo),
                 'board.cartelle.elenca' => $this->elencaCartelle($richiesta),
                 'board.board.elenca' => $this->elencaBoard($richiesta),
                 'board.schede.elenca' => $this->elencaSchede($richiesta),
@@ -1180,6 +1192,123 @@ final class BackofficeFinto
             'creata_il' => self::iso($scheda['creata_il']),
             'aggiornata_il' => self::iso($scheda['aggiornata_il']),
         ];
+    }
+
+    /**
+     * Le board e le cartelle del workspace il cui nome contiene `$frase` (senza maiuscole né accenti), nel cestino no, nella forma di
+     * `ricerca.elenca`: `tipo`, `id`, `titolo`; con `$esteso`, anche `contesto` (null) e `indirizzo` come `ricerca.crea`.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function boardECartelleTrovate(string $workspace, string $frase, bool $esteso): array
+    {
+        $voci = [];
+
+        foreach ([['board.board', $this->boards, '/v1/board/board/'], ['board.cartelle', $this->cartelle, '/v1/board/cartelle/']] as [$tipo, $elenco, $indirizzo]) {
+            foreach ($elenco as $voce) {
+                if ($voce['workspace'] === $workspace && $voce['stato'] !== 'cestino' && str_contains(Str::lower(Str::ascii($voce['nome'])), Str::lower(Str::ascii($frase)))) {
+                    $voci[] = ['tipo' => $tipo, 'id' => $voce['id'], 'titolo' => $voce['nome']] + ($esteso ? ['contesto' => null, 'indirizzo' => $indirizzo.$voce['id']] : []);
+                }
+            }
+        }
+
+        return $voci;
+    }
+
+    /** La posizione di una voce di ricerca (titolo senza maiuscole né accenti, poi id) e quella della voce di un cursore (la sua id). */
+    private function posizioneDellaRicerca(): array
+    {
+        return [
+            fn (array $voce) => [Str::lower(Str::ascii($voce['titolo'])), $voce['id']],
+            function (string $id): ?array {
+                $voce = $this->boards[$id] ?? $this->cartelle[$id] ?? null;
+
+                return $voce === null ? null : self::perNomeEId($voce);
+            },
+        ];
+    }
+
+    /**
+     * ricerca.elenca (RicercaController::elenca, deprecato): le board e le cartelle del workspace del gettone il cui nome contiene `q`
+     * (da 2 a 100 caratteri), in ordine di titolo e poi di id, a cursore; senza `pm` nessuna. Mai un 403 `app_non_attiva`: è della cornice.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaRicerca(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $query = $this->testi->validaQuery(self::query($richiesta), ['q' => ['required', 'string', 'min:2', 'max:100']]);
+        [$posizione, $dalCursore] = $this->posizioneDellaRicerca();
+        $voci = $this->appAttiva($chi['workspace'], 'pm') ? $this->boardECartelleTrovate($chi['workspace'], (string) $query['q'], false) : [];
+
+        return $this->pagina($richiesta, 'ricerca.elenca', 'id', $voci, $posizione, $dalCursore);
+    }
+
+    /**
+     * ricerca.crea (RicercaController::crea): la stessa ricerca con `q` nel corpo, e in più, nella prima pagina, le schede del workspace
+     * (il titolo: ogni parola del termine, in qualsiasi ordine, le prime otto distinte) al più dieci, prima di board e cartelle. Ogni
+     * voce porta `contesto` e `indirizzo`. Il finto non modella il CRM: contatti, aziende e opportunità non compaiono mai. Il freno per
+     * persona (120 al minuto, 2.000 al giorno) è contato dopo la validazione e prima della ricerca; il cursore vale per questo termine
+     * (la lista porta l'impronta di `q`), per un altro è 422 su `#/cursore`. Risponde 200: nessuna risorsa nasce.
+     *
+     * @param  array<string, mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaRicerca(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $termine = is_string($corpo['q'] ?? null) ? $corpo['q'] : '';
+        $lista = 'ricerca.crea:'.hash('sha256', Str::lower($termine));
+        $campi = $this->testi->validaStretta($corpo, [
+            'q' => ['bail', 'required', 'string', 'min:2', 'max:100'],
+            'limite' => ['nullable', 'integer:strict', 'between:1,'.self::LIMITE_MASSIMO],
+            'cursore' => ['nullable', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($lista) {
+                if ($this->leggiCursore($lista, 'id', $valore) === null) {
+                    $this->testi->dichiara($attributo, 'formato');
+                    $fail('regole.cursore')->translate();
+                }
+            }],
+        ]);
+
+        $this->frena('ricerca.crea:minuto:'.$chi['persona'], self::FRENI['ricerca_minuto'], self::MINUTO);
+        $this->frena('ricerca.crea:giorno:'.$chi['persona'], self::FRENI['ricerca_giorno'], 86400);
+
+        $voci = [];
+        $schede = [];
+
+        if ($this->appAttiva($chi['workspace'], 'pm')) {
+            $voci = $this->boardECartelleTrovate($chi['workspace'], (string) $campi['q'], true);
+            $parole = array_slice(array_values(array_unique(preg_split('/\s+/u', Str::lower(trim((string) $campi['q'])), -1, PREG_SPLIT_NO_EMPTY) ?: [])), 0, self::RICERCA_PAROLE);
+
+            foreach ($this->schede as $scheda) {
+                $titolo = Str::lower(Str::ascii($scheda['titolo']));
+                $board = $this->boards[$scheda['board']] ?? null;
+
+                if ($scheda['workspace'] === $chi['workspace'] && $scheda['archiviata_il'] === null && ($board === null || $board['stato'] !== 'cestino')
+                    && array_filter($parole, fn (string $parola) => ! str_contains($titolo, Str::ascii($parola))) === []) {
+                    $schede[] = ['tipo' => 'board.scheda', 'id' => $scheda['id'], 'titolo' => $scheda['titolo'], 'contesto' => ['board' => $board['nome'] ?? '', 'lista' => 'Da fare'], 'indirizzo' => '/v1/board/schede/'.$scheda['id']];
+                }
+            }
+
+            usort($schede, fn (array $una, array $altra) => self::confronta([Str::lower(Str::ascii($una['titolo'])), $una['id']], [Str::lower(Str::ascii($altra['titolo'])), $altra['id']]));
+            $schede = array_slice($schede, 0, self::RICERCA_TETTO);
+        }
+
+        [$posizione, $dalCursore] = $this->posizioneDellaRicerca();
+        $this->parametriDelCorpo = true;
+
+        try {
+            [$stato, $risposta] = $this->impagina(array_filter($campi, fn (mixed $valore) => $valore !== null), $lista, 'id', $voci, $posizione, $dalCursore);
+        } finally {
+            $this->parametriDelCorpo = false;
+        }
+
+        // Le fonti nuove stanno nella sola prima pagina.
+        if (! isset($campi['cursore'])) {
+            $risposta['data'] = [...$schede, ...$risposta['data']];
+        }
+
+        return [$stato, $risposta];
     }
 
     /**
@@ -3775,14 +3904,28 @@ final class BackofficeFinto
                 }
             }],
         ]);
-        $voci = $voci instanceof Closure ? $voci() : $voci;
+
+        return $this->impagina($query, $lista, $chiave, $voci instanceof Closure ? $voci() : $voci, $posizione, $posizioneDelCursore, $dalPiuRecente);
+    }
+
+    /**
+     * La pagina di una lista, dai parametri già validati (`limite` e `cursore`, dalla query o dal corpo).
+     *
+     * @param  array<string, mixed>  $query
+     * @param  list<array<string, mixed>>  $voci
+     * @param  Closure(array<string, mixed>): list<string>  $posizione
+     * @param  Closure(string): (list<string>|null)  $posizioneDelCursore
+     * @return array{int, array<string, mixed>}
+     */
+    private function impagina(array $query, string $lista, string $chiave, array $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false): array
+    {
         $limite = (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO);
         $verso = $dalPiuRecente ? -1 : 1;
         usort($voci, fn (array $una, array $altra) => $verso * self::confronta($posizione($una), $posizione($altra)));
 
         if (isset($query['cursore'])) {
             $dopo = $posizioneDelCursore((string) $this->leggiCursore($lista, $chiave, $query['cursore']))
-                ?? throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.cursore', ['attribute' => 'cursore']), 'regola' => 'formato', 'parameter' => 'cursore']]);
+                ?? throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.cursore', ['attribute' => 'cursore']), 'regola' => 'formato'] + ($this->parametriDelCorpo ? ['pointer' => '#/cursore'] : ['parameter' => 'cursore'])]);
             $voci = array_values(array_filter($voci, fn (array $voce) => $verso * self::confronta($posizione($voce), $dopo) > 0));
         }
 
