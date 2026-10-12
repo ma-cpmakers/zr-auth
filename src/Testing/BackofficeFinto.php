@@ -2211,6 +2211,15 @@ final class BackofficeFinto
     }
 
     /**
+     * Il campo `accordo_trattamento_dati_da_accettare` di aziende.mostra e aziende.modifica (Legale::accordoAccettato, #1765): vero se c'è un
+     * accordo in vigore e l'azienda non ne ha accettato la versione; falso con l'accordo spento.
+     */
+    private function accordoDaAccettare(string $azienda): bool
+    {
+        return $this->accordoLegale !== null && ! isset($this->accordiAccettati[$azienda][$this->accordoLegale['versione']]);
+    }
+
+    /**
      * Rifiuta con 422 sul campo dell'accordo (obbligatorio, con `accordo` accanto) se l'azienda deve accettare e il corpo non dice
      * `true` (Legale::richiediAccordo); dice se l'accettazione va scritta. Spento, o già accettata la versione in vigore: no.
      */
@@ -2999,7 +3008,7 @@ final class BackofficeFinto
         $ruoli = $this->ruoliNellAzienda($this->autentica($richiesta)['persona'], $azienda);
         $piuAlto = collect(['proprietario', 'amministratore', 'membro'])->first(fn (string $ruolo) => in_array($ruolo, $ruoli, true));
 
-        return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto]]];
+        return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto, 'accordo_trattamento_dati_da_accettare' => $this->accordoDaAccettare($azienda)]]];
     }
 
     /**
@@ -3060,7 +3069,7 @@ final class BackofficeFinto
         $this->datiAziende[$azienda] = [...$this->voceAzienda($azienda), ...$campi];
         unset($this->datiAziende[$azienda]['id'], $this->datiAziende[$azienda]['nome']);
 
-        return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto]]];
+        return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto, 'accordo_trattamento_dati_da_accettare' => $this->accordoDaAccettare($azienda)]]];
     }
 
     /**
