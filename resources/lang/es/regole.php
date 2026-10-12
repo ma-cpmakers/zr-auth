@@ -48,4 +48,5 @@ return [
     'azienda_non_esiste' => 'El espacio de trabajo no tiene una empresa con este id: los ids de las empresas los da crm.organizzazioni.elenca.',
     'fase_con_la_pipeline' => 'La fase se da junto con la pipeline: para mover la negociación dentro de su pipeline está crm.trattative.spostamento.crea.',
     'motivo_solo_se_persa' => 'El motivo de pérdida solo vale para una negociación perdida: envía también el estado `persa`, o deja el motivo en null.',
+    'campi_estranei_della_riga' => 'La fila tiene campos que el método no conoce: los campos de una fila son los de la creación individual.',
 ];

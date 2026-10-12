@@ -48,4 +48,5 @@ return [
     'azienda_non_esiste' => 'The workspace has no company with this id: crm.organizzazioni.elenca gives the company ids.',
     'fase_con_la_pipeline' => 'The stage is given together with the pipeline: crm.trattative.spostamento.crea moves a deal inside its own pipeline.',
     'motivo_solo_se_persa' => 'The loss reason only applies to a lost deal: send the `persa` status as well, or leave the reason null.',
+    'campi_estranei_della_riga' => 'The row has fields the method does not know: the fields of a row are those of the single creation.',
 ];
