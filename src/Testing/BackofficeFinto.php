@@ -1262,12 +1262,8 @@ final class BackofficeFinto
         $campi = $this->testi->validaStretta($corpo, [
             'q' => ['bail', 'required', 'string', 'min:2', 'max:100'],
             'limite' => ['nullable', 'integer:strict', 'between:1,'.self::LIMITE_MASSIMO],
-            'cursore' => ['nullable', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($lista) {
-                if ($this->leggiCursore($lista, 'id', $valore) === null) {
-                    $this->testi->dichiara($attributo, 'formato');
-                    $fail('regole.cursore')->translate();
-                }
-            }],
+            // Il cursore che non vale lo dice `impagina`, dopo il freno e col nome «cursore» in ogni lingua, come il backoffice.
+            'cursore' => ['nullable', 'string'],
         ]);
 
         $this->frena('ricerca.crea:minuto:'.$chi['persona'], self::FRENI['ricerca_minuto'], self::MINUTO);
