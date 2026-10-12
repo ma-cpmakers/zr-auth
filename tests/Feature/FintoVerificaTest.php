@@ -61,7 +61,8 @@ it('io.email.codice.crea risponde 202 con l\'email normalizzata, la stessa rispo
         ->and(array_keys($giusta->json('data')))->toBe(['email', 'scade_il', 'nuovo_codice_dal'])
         ->and($giusta->json('data.email'))->toBe('bruno@example.com')
         ->and($sbagliata->status())->toBe(202)
-        ->and($sbagliata->body())->toBe($giusta->body())
+        // I due istanti sono «adesso più…» (G109): fra le due richieste passa un minuto, e il resto del corpo è lo stesso.
+        ->and(Illuminate\Support\Arr::except($sbagliata->json(), ['data.scade_il', 'data.nuovo_codice_dal']))->toBe(Illuminate\Support\Arr::except($giusta->json(), ['data.scade_il', 'data.nuovo_codice_dal']))
         ->and($sbagliata->headers())->toBe($giusta->headers())
         ->and($senzaAccount->status())->toBe(202)
         ->and(array_keys($senzaAccount->json('data')))->toBe(['email', 'scade_il', 'nuovo_codice_dal'])
