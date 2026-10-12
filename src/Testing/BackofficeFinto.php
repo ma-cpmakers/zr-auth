@@ -1246,7 +1246,7 @@ final class BackofficeFinto
 
     /**
      * ricerca.crea (RicercaController::crea): la stessa ricerca con `q` nel corpo, e in più, nella prima pagina, le schede del workspace
-     * (il titolo: ogni parola del termine, in qualsiasi ordine, le prime otto distinte) al più dieci, prima di board e cartelle. Ogni
+     * (il titolo: ogni parola del termine, in qualsiasi ordine, le prime otto distinte; non quelle di una board chiusa o nel cestino; prima i titoli che cominciano con la prima parola, poi le più recenti) al più dieci, prima di board e cartelle. Ogni
      * voce porta `contesto` e `indirizzo`. Il finto non modella il CRM: contatti, aziende e opportunità non compaiono mai. Il freno per
      * persona (120 al minuto, 2.000 al giorno) è contato dopo la validazione e prima della ricerca; il cursore vale per questo termine
      * (la lista porta l'impronta di `q`), per un altro è 422 su `#/cursore`. Risponde 200: nessuna risorsa nasce.
@@ -1280,13 +1280,17 @@ final class BackofficeFinto
                 $titolo = Str::lower(Str::ascii($scheda['titolo']));
                 $board = $this->boards[$scheda['board']] ?? null;
 
-                if ($scheda['workspace'] === $chi['workspace'] && $scheda['archiviata_il'] === null && ($board === null || $board['stato'] !== 'cestino')
+                if ($scheda['workspace'] === $chi['workspace'] && $scheda['archiviata_il'] === null && ($board === null || $board['stato'] === 'attiva')
                     && array_filter($parole, fn (string $parola) => ! str_contains($titolo, Str::ascii($parola))) === []) {
                     $schede[] = ['tipo' => 'board.scheda', 'id' => $scheda['id'], 'titolo' => $scheda['titolo'], 'contesto' => ['board' => $board['nome'] ?? '', 'lista' => 'Da fare'], 'indirizzo' => '/v1/board/schede/'.$scheda['id']];
                 }
             }
 
-            usort($schede, fn (array $una, array $altra) => self::confronta([Str::lower(Str::ascii($una['titolo'])), $una['id']], [Str::lower(Str::ascii($altra['titolo'])), $altra['id']]));
+            // Per pertinenza (FontiDellaCornice del backoffice): prima i titoli che cominciano con la prima parola del termine, poi le
+            // schede toccate più di recente, a parità l'id. Le board chiuse non compaiono, come quelle nel cestino.
+            $prima = Str::ascii($parole[0] ?? '');
+            $pertinenza = fn (array $voce): array => [str_starts_with(Str::lower(Str::ascii($voce['titolo'])), $prima) ? 0 : 1, -(int) $this->schede[$voce['id']]['aggiornata_il']->format('Uv')];
+            usort($schede, fn (array $una, array $altra) => ($pertinenza($una) <=> $pertinenza($altra)) ?: strcmp($una['id'], $altra['id']));
             $schede = array_slice($schede, 0, self::RICERCA_TETTO);
         }
 
