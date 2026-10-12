@@ -11,6 +11,7 @@ return [
     'sequenza' => 'Il campo :attribute vuole il sequence di un evento: da 1 a 12 cifre.',
     'troppi_byte' => 'Il campo :attribute può essere lungo al più :max byte (le lettere accentate ne valgono 2).',
     'carattere_nullo' => 'Il campo :attribute non può contenere il carattere nullo (U+0000).',
+    'carattere_non_ammesso' => 'Il campo :attribute non può contenere caratteri di controllo (a capo, tabulazione), di direzione del testo o invisibili a larghezza zero.',
     'almeno_un_campo' => 'Il corpo vuole almeno uno di questi campi: :campi.',
     'cartella_del_workspace' => "Nel workspace non c'è una cartella con questo id: gli id delle cartelle li dà board.cartelle.elenca.",
     'board_del_workspace' => "Nel workspace non c'è una board con questo id: gli id delle board li dà board.board.elenca.",

@@ -33,7 +33,10 @@ it('il seminatore crea le notifiche della persona, e notifiche_non_lette di io.m
     $uno = $finto->notifica($studio, $anna, 'com.zeiras.board.scheda.creata', 'pm', CarbonImmutable::parse('2026-10-10 09:00:00.123'));
     $finto->notifica($studio, $anna, 'com.zeiras.altro.fatto', null, CarbonImmutable::parse('2026-10-10 10:00:00'), CarbonImmutable::parse('2026-10-10 10:05:00'));
 
-    expect(array_keys($uno))->toBe(['id', 'tipo', 'app', 'soggetto', 'dati', 'letta_il', 'creata_il', 'autore', 'risorsa_nome', 'per_me'])
+    expect(array_keys($uno))->toBe(['id', 'tipo', 'app', 'soggetto', 'dati', 'letta_il', 'creata_il', 'ultima_azione_il', 'azioni', 'autore', 'risorsa_nome', 'board', 'per_me'])
+        ->and($uno['ultima_azione_il'])->toBe('2026-10-10T09:00:00.123Z')
+        ->and($uno['azioni'])->toBe(1)
+        ->and($uno['board'])->toBeNull()
         ->and($uno['app'])->toBe('pm')
         ->and($uno['creata_il'])->toBe('2026-10-10T09:00:00.123Z')
         ->and(alFinto('GET', '/v1/io', null, $gettone)->json('data.notifiche_non_lette'))->toBe(1);
@@ -63,6 +66,23 @@ it("la notifica porta l'autore col nome di oggi, il nome della risorsa e per_me 
     // La risposta della lettura ha gli stessi campi.
     $letta = alFinto('PATCH', "/v1/io/notifiche/{$diBruno['id']}/lettura", ['letta' => true], $gettone)->json('data');
     expect($letta['autore'])->toBe(['nome' => 'Bruno'])->and($letta['risorsa_nome'])->toBe('Clienti')->and($letta['per_me'])->toBeNull();
+});
+
+it("una notifica accorpata si semina con azioni e ultima_azione_il, e l'elenco va per ultima azione (backoffice #1862, deve fallire se va per creata_il)", function () {
+    [$finto, $studio, $anna, , $gettone] = conLeNotifiche();
+    $board = ['id' => '01k6w2c4e6g8j0m2p4r6t8v0x2', 'nome' => 'Lancio'];
+    $vecchia = $finto->notifica($studio, $anna, 'com.zeiras.board.lista.modificata', creataIl: CarbonImmutable::parse('2026-10-10 09:00:00'), board: $board, azioni: 2, ultimaAzioneIl: CarbonImmutable::parse('2026-10-10 11:00:00.250'));
+    $nuova = $finto->notifica($studio, $anna, 'com.zeiras.board.scheda.creata', creataIl: CarbonImmutable::parse('2026-10-10 10:00:00'));
+
+    $elenco = alFinto('GET', '/v1/io/notifiche', null, $gettone)->json('data');
+
+    expect(array_column($elenco, 'id'))->toBe([$vecchia['id'], $nuova['id']])
+        ->and($elenco[0]['azioni'])->toBe(2)
+        ->and($elenco[0]['ultima_azione_il'])->toBe('2026-10-10T11:00:00.250Z')
+        ->and($elenco[0]['creata_il'])->toBe('2026-10-10T09:00:00.000Z')
+        ->and($elenco[0]['board'])->toBe($board)
+        ->and($elenco[1]['ultima_azione_il'])->toBe($elenco[1]['creata_il']);
+    expect(fn () => $finto->notifica($studio, $anna, 'com.zeiras.altro.fatto', azioni: 0))->toThrow(InvalidArgumentException::class);
 });
 
 it('un autore che non è del finto è un errore del test, e chi non è più membro non è nominato (#1670)', function () {
