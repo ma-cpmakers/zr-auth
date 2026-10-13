@@ -40,22 +40,22 @@ trait CrmCampi
      */
     private const CRM_SEZIONI_STANDARD = [
         'persona' => [
-            ['chiave' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
-            ['chiave' => 'lavoro', 'nome' => ['it' => 'Lavoro', 'en' => 'Work', 'es' => 'Trabajo'], 'fissa' => false],
-            ['chiave' => 'dati_personali', 'nome' => ['it' => 'Dati personali', 'en' => 'Personal details', 'es' => 'Datos personales'], 'fissa' => false],
-            ['chiave' => 'recapiti', 'nome' => ['it' => 'Recapiti', 'en' => 'Contact details', 'es' => 'Datos de contacto'], 'fissa' => false],
-            ['chiave' => 'consensi', 'nome' => ['it' => 'Consensi', 'en' => 'Consents', 'es' => 'Consentimientos'], 'fissa' => false],
-            ['chiave' => 'altro', 'nome' => ['it' => 'Altro', 'en' => 'Other', 'es' => 'Otros'], 'fissa' => false],
+            ['codice' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
+            ['codice' => 'lavoro', 'nome' => ['it' => 'Lavoro', 'en' => 'Work', 'es' => 'Trabajo'], 'fissa' => false],
+            ['codice' => 'dati_personali', 'nome' => ['it' => 'Dati personali', 'en' => 'Personal details', 'es' => 'Datos personales'], 'fissa' => false],
+            ['codice' => 'recapiti', 'nome' => ['it' => 'Recapiti', 'en' => 'Contact details', 'es' => 'Datos de contacto'], 'fissa' => false],
+            ['codice' => 'consensi', 'nome' => ['it' => 'Consensi', 'en' => 'Consents', 'es' => 'Consentimientos'], 'fissa' => false],
+            ['codice' => 'altro', 'nome' => ['it' => 'Altro', 'en' => 'Other', 'es' => 'Otros'], 'fissa' => false],
         ],
         'organizzazione' => [
-            ['chiave' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
-            ['chiave' => 'dati_aziendali', 'nome' => ['it' => 'Dati aziendali', 'en' => 'Company details', 'es' => 'Datos de la empresa'], 'fissa' => false],
-            ['chiave' => 'recapiti', 'nome' => ['it' => 'Recapiti', 'en' => 'Contact details', 'es' => 'Datos de contacto'], 'fissa' => false],
-            ['chiave' => 'altro', 'nome' => ['it' => 'Altro', 'en' => 'Other', 'es' => 'Otros'], 'fissa' => false],
+            ['codice' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
+            ['codice' => 'dati_aziendali', 'nome' => ['it' => 'Dati aziendali', 'en' => 'Company details', 'es' => 'Datos de la empresa'], 'fissa' => false],
+            ['codice' => 'recapiti', 'nome' => ['it' => 'Recapiti', 'en' => 'Contact details', 'es' => 'Datos de contacto'], 'fissa' => false],
+            ['codice' => 'altro', 'nome' => ['it' => 'Altro', 'en' => 'Other', 'es' => 'Otros'], 'fissa' => false],
         ],
         'trattativa' => [
-            ['chiave' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
-            ['chiave' => 'dettagli', 'nome' => ['it' => 'Dettagli', 'en' => 'Details', 'es' => 'Detalles'], 'fissa' => false],
+            ['codice' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
+            ['codice' => 'dettagli', 'nome' => ['it' => 'Dettagli', 'en' => 'Details', 'es' => 'Detalles'], 'fissa' => false],
         ],
     ];
 
@@ -66,61 +66,61 @@ trait CrmCampi
      */
     private const CRM_CAMPI_STANDARD = [
         'persona' => [
-            ['chiave' => 'nome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
-            ['chiave' => 'cognome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Cognome', 'en' => 'Last name', 'es' => 'Apellido'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
-            ['chiave' => 'email', 'tipo' => 'email', 'sistema' => null, 'nome' => ['it' => 'Email', 'en' => 'Email', 'es' => 'Correo'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
-            ['chiave' => 'telefoni', 'tipo' => 'telefono', 'sistema' => null, 'nome' => ['it' => 'Telefoni', 'en' => 'Phones', 'es' => 'Teléfonos'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'organizzazione_id', 'tipo' => 'sistema', 'sistema' => 'organizzazione', 'nome' => ['it' => 'Azienda', 'en' => 'Company', 'es' => 'Empresa'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'responsabile_id', 'tipo' => 'membro', 'sistema' => null, 'nome' => ['it' => 'Proprietario', 'en' => 'Owner', 'es' => 'Propietario'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'stato', 'tipo' => 'sistema', 'sistema' => 'stato', 'nome' => ['it' => 'Stato', 'en' => 'Status', 'es' => 'Estado'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'ruolo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Ruolo', 'en' => 'Role', 'es' => 'Cargo'], 'sezione' => 'lavoro', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'reparto', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Reparto', 'en' => 'Department', 'es' => 'Departamento'], 'sezione' => 'lavoro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'titolo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Titolo', 'en' => 'Title', 'es' => 'Tratamiento'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'secondo_nome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Secondo nome', 'en' => 'Middle name', 'es' => 'Segundo nombre'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'genere', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Genere', 'en' => 'Gender', 'es' => 'Género'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'data_nascita', 'tipo' => 'data', 'sistema' => null, 'nome' => ['it' => 'Data di nascita', 'en' => 'Date of birth', 'es' => 'Fecha de nacimiento'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'luogo_nascita', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Luogo di nascita', 'en' => 'Place of birth', 'es' => 'Lugar de nacimiento'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'cittadinanza', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Cittadinanza', 'en' => 'Citizenship', 'es' => 'Nacionalidad'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'lingua_preferita', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Lingua preferita', 'en' => 'Preferred language', 'es' => 'Idioma preferido'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'canale_preferito', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Canale preferito', 'en' => 'Preferred channel', 'es' => 'Canal preferido'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'sito', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'Sito', 'en' => 'Website', 'es' => 'Sitio web'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'linkedin', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'LinkedIn', 'en' => 'LinkedIn', 'es' => 'LinkedIn'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'consenso_marketing', 'tipo' => 'sistema', 'sistema' => 'consenso', 'nome' => ['it' => 'Consenso marketing', 'en' => 'Marketing consent', 'es' => 'Consentimiento de marketing'], 'sezione' => 'consensi', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'base_giuridica', 'tipo' => 'sistema', 'sistema' => 'base_giuridica', 'nome' => ['it' => 'Base giuridica', 'en' => 'Legal basis', 'es' => 'Base jurídica'], 'sezione' => 'consensi', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'fonte', 'tipo' => 'sistema', 'sistema' => 'fonte', 'nome' => ['it' => 'Fonte', 'en' => 'Source', 'es' => 'Origen'], 'sezione' => 'altro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'codice_cliente', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Codice cliente', 'en' => 'Customer code', 'es' => 'Código de cliente'], 'sezione' => 'altro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'data_primo_contatto', 'tipo' => 'data', 'sistema' => null, 'nome' => ['it' => 'Data primo contatto', 'en' => 'First contact date', 'es' => 'Fecha del primer contacto'], 'sezione' => 'altro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'nome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
+            ['codice' => 'cognome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Cognome', 'en' => 'Last name', 'es' => 'Apellido'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
+            ['codice' => 'email', 'tipo' => 'email', 'sistema' => null, 'nome' => ['it' => 'Email', 'en' => 'Email', 'es' => 'Correo'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
+            ['codice' => 'telefoni', 'tipo' => 'telefono', 'sistema' => null, 'nome' => ['it' => 'Telefoni', 'en' => 'Phones', 'es' => 'Teléfonos'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'organizzazione_id', 'tipo' => 'sistema', 'sistema' => 'organizzazione', 'nome' => ['it' => 'Azienda', 'en' => 'Company', 'es' => 'Empresa'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'responsabile_id', 'tipo' => 'membro', 'sistema' => null, 'nome' => ['it' => 'Proprietario', 'en' => 'Owner', 'es' => 'Propietario'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'stato', 'tipo' => 'sistema', 'sistema' => 'stato', 'nome' => ['it' => 'Stato', 'en' => 'Status', 'es' => 'Estado'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'ruolo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Ruolo', 'en' => 'Role', 'es' => 'Cargo'], 'sezione' => 'lavoro', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'reparto', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Reparto', 'en' => 'Department', 'es' => 'Departamento'], 'sezione' => 'lavoro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'titolo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Titolo', 'en' => 'Title', 'es' => 'Tratamiento'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'secondo_nome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Secondo nome', 'en' => 'Middle name', 'es' => 'Segundo nombre'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'genere', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Genere', 'en' => 'Gender', 'es' => 'Género'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'data_nascita', 'tipo' => 'data', 'sistema' => null, 'nome' => ['it' => 'Data di nascita', 'en' => 'Date of birth', 'es' => 'Fecha de nacimiento'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'luogo_nascita', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Luogo di nascita', 'en' => 'Place of birth', 'es' => 'Lugar de nacimiento'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'cittadinanza', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Cittadinanza', 'en' => 'Citizenship', 'es' => 'Nacionalidad'], 'sezione' => 'dati_personali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'lingua_preferita', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Lingua preferita', 'en' => 'Preferred language', 'es' => 'Idioma preferido'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'canale_preferito', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Canale preferito', 'en' => 'Preferred channel', 'es' => 'Canal preferido'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'sito', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'Sito', 'en' => 'Website', 'es' => 'Sitio web'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'linkedin', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'LinkedIn', 'en' => 'LinkedIn', 'es' => 'LinkedIn'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'consenso_marketing', 'tipo' => 'sistema', 'sistema' => 'consenso', 'nome' => ['it' => 'Consenso marketing', 'en' => 'Marketing consent', 'es' => 'Consentimiento de marketing'], 'sezione' => 'consensi', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'base_giuridica', 'tipo' => 'sistema', 'sistema' => 'base_giuridica', 'nome' => ['it' => 'Base giuridica', 'en' => 'Legal basis', 'es' => 'Base jurídica'], 'sezione' => 'consensi', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'fonte', 'tipo' => 'sistema', 'sistema' => 'fonte', 'nome' => ['it' => 'Fonte', 'en' => 'Source', 'es' => 'Origen'], 'sezione' => 'altro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'codice_cliente', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Codice cliente', 'en' => 'Customer code', 'es' => 'Código de cliente'], 'sezione' => 'altro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'data_primo_contatto', 'tipo' => 'data', 'sistema' => null, 'nome' => ['it' => 'Data primo contatto', 'en' => 'First contact date', 'es' => 'Fecha del primer contacto'], 'sezione' => 'altro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
         ],
         'organizzazione' => [
-            ['chiave' => 'nome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Ragione sociale', 'en' => 'Company name', 'es' => 'Razón social'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
-            ['chiave' => 'sito', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'Sito', 'en' => 'Website', 'es' => 'Sitio web'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'telefono', 'tipo' => 'telefono', 'sistema' => null, 'nome' => ['it' => 'Telefono', 'en' => 'Phone', 'es' => 'Teléfono'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'indirizzo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Indirizzo', 'en' => 'Address', 'es' => 'Dirección'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'responsabile_id', 'tipo' => 'membro', 'sistema' => null, 'nome' => ['it' => 'Proprietario', 'en' => 'Owner', 'es' => 'Propietario'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'stato', 'tipo' => 'sistema', 'sistema' => 'stato', 'nome' => ['it' => 'Stato', 'en' => 'Status', 'es' => 'Estado'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'nome_commerciale', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Nome commerciale', 'en' => 'Trade name', 'es' => 'Nombre comercial'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'forma_giuridica', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Forma giuridica', 'en' => 'Legal form', 'es' => 'Forma jurídica'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'codice_ateco', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Codice ATECO', 'en' => 'Industry code (ATECO)', 'es' => 'Código ATECO'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'numero_dipendenti', 'tipo' => 'numero', 'sistema' => null, 'nome' => ['it' => 'Numero dipendenti', 'en' => 'Employees', 'es' => 'Número de empleados'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'fascia_fatturato', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Fascia di fatturato', 'en' => 'Revenue range', 'es' => 'Rango de facturación'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'email', 'tipo' => 'email', 'sistema' => null, 'nome' => ['it' => 'Email', 'en' => 'Email', 'es' => 'Correo'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'pec', 'tipo' => 'email', 'sistema' => null, 'nome' => ['it' => 'PEC', 'en' => 'Certified email (PEC)', 'es' => 'PEC'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'codice_sdi', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Codice SDI', 'en' => 'SDI code', 'es' => 'Código SDI'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'linkedin', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'LinkedIn', 'en' => 'LinkedIn', 'es' => 'LinkedIn'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'codice_cliente', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Codice cliente', 'en' => 'Customer code', 'es' => 'Código de cliente'], 'sezione' => 'altro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'nome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Ragione sociale', 'en' => 'Company name', 'es' => 'Razón social'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
+            ['codice' => 'sito', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'Sito', 'en' => 'Website', 'es' => 'Sitio web'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'telefono', 'tipo' => 'telefono', 'sistema' => null, 'nome' => ['it' => 'Telefono', 'en' => 'Phone', 'es' => 'Teléfono'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'indirizzo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Indirizzo', 'en' => 'Address', 'es' => 'Dirección'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'responsabile_id', 'tipo' => 'membro', 'sistema' => null, 'nome' => ['it' => 'Proprietario', 'en' => 'Owner', 'es' => 'Propietario'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'stato', 'tipo' => 'sistema', 'sistema' => 'stato', 'nome' => ['it' => 'Stato', 'en' => 'Status', 'es' => 'Estado'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'nome_commerciale', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Nome commerciale', 'en' => 'Trade name', 'es' => 'Nombre comercial'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'forma_giuridica', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Forma giuridica', 'en' => 'Legal form', 'es' => 'Forma jurídica'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'codice_ateco', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Codice ATECO', 'en' => 'Industry code (ATECO)', 'es' => 'Código ATECO'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'numero_dipendenti', 'tipo' => 'numero', 'sistema' => null, 'nome' => ['it' => 'Numero dipendenti', 'en' => 'Employees', 'es' => 'Número de empleados'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'fascia_fatturato', 'tipo' => 'elenco', 'sistema' => null, 'nome' => ['it' => 'Fascia di fatturato', 'en' => 'Revenue range', 'es' => 'Rango de facturación'], 'sezione' => 'dati_aziendali', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'email', 'tipo' => 'email', 'sistema' => null, 'nome' => ['it' => 'Email', 'en' => 'Email', 'es' => 'Correo'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'pec', 'tipo' => 'email', 'sistema' => null, 'nome' => ['it' => 'PEC', 'en' => 'Certified email (PEC)', 'es' => 'PEC'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'codice_sdi', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Codice SDI', 'en' => 'SDI code', 'es' => 'Código SDI'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'linkedin', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'LinkedIn', 'en' => 'LinkedIn', 'es' => 'LinkedIn'], 'sezione' => 'recapiti', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'codice_cliente', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Codice cliente', 'en' => 'Customer code', 'es' => 'Código de cliente'], 'sezione' => 'altro', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
         ],
         'trattativa' => [
-            ['chiave' => 'titolo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Titolo', 'en' => 'Title', 'es' => 'Título'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
-            ['chiave' => 'persona_id', 'tipo' => 'sistema', 'sistema' => 'persona', 'nome' => ['it' => 'Contatto', 'en' => 'Contact', 'es' => 'Contacto'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'organizzazione_id', 'tipo' => 'sistema', 'sistema' => 'organizzazione', 'nome' => ['it' => 'Azienda', 'en' => 'Company', 'es' => 'Empresa'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'valore', 'tipo' => 'valuta', 'sistema' => null, 'nome' => ['it' => 'Valore', 'en' => 'Value', 'es' => 'Valor'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'fase_id', 'tipo' => 'sistema', 'sistema' => 'fase', 'nome' => ['it' => 'Fase', 'en' => 'Stage', 'es' => 'Fase'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'chiusura_prevista', 'tipo' => 'data', 'sistema' => null, 'nome' => ['it' => 'Chiusura prevista', 'en' => 'Expected close', 'es' => 'Cierre previsto'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'responsabile_id', 'tipo' => 'membro', 'sistema' => null, 'nome' => ['it' => 'Proprietario', 'en' => 'Owner', 'es' => 'Propietario'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'probabilita', 'tipo' => 'percentuale', 'sistema' => null, 'nome' => ['it' => 'Probabilità', 'en' => 'Probability', 'es' => 'Probabilidad'], 'sezione' => 'dettagli', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
-            ['chiave' => 'campagna', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Campagna', 'en' => 'Campaign', 'es' => 'Campaña'], 'sezione' => 'dettagli', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'concorrente', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Concorrente', 'en' => 'Competitor', 'es' => 'Competidor'], 'sezione' => 'dettagli', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
-            ['chiave' => 'prossimo_passo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Prossimo passo', 'en' => 'Next step', 'es' => 'Próximo paso'], 'sezione' => 'dettagli', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'titolo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Titolo', 'en' => 'Title', 'es' => 'Título'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
+            ['codice' => 'persona_id', 'tipo' => 'sistema', 'sistema' => 'persona', 'nome' => ['it' => 'Contatto', 'en' => 'Contact', 'es' => 'Contacto'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'organizzazione_id', 'tipo' => 'sistema', 'sistema' => 'organizzazione', 'nome' => ['it' => 'Azienda', 'en' => 'Company', 'es' => 'Empresa'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'valore', 'tipo' => 'valuta', 'sistema' => null, 'nome' => ['it' => 'Valore', 'en' => 'Value', 'es' => 'Valor'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'fase_id', 'tipo' => 'sistema', 'sistema' => 'fase', 'nome' => ['it' => 'Fase', 'en' => 'Stage', 'es' => 'Fase'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'chiusura_prevista', 'tipo' => 'data', 'sistema' => null, 'nome' => ['it' => 'Chiusura prevista', 'en' => 'Expected close', 'es' => 'Cierre previsto'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'responsabile_id', 'tipo' => 'membro', 'sistema' => null, 'nome' => ['it' => 'Proprietario', 'en' => 'Owner', 'es' => 'Propietario'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'probabilita', 'tipo' => 'percentuale', 'sistema' => null, 'nome' => ['it' => 'Probabilità', 'en' => 'Probability', 'es' => 'Probabilidad'], 'sezione' => 'dettagli', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
+            ['codice' => 'campagna', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Campagna', 'en' => 'Campaign', 'es' => 'Campaña'], 'sezione' => 'dettagli', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'concorrente', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Concorrente', 'en' => 'Competitor', 'es' => 'Competidor'], 'sezione' => 'dettagli', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
+            ['codice' => 'prossimo_passo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Prossimo passo', 'en' => 'Next step', 'es' => 'Próximo paso'], 'sezione' => 'dettagli', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
         ],
     ];
 
@@ -181,7 +181,7 @@ trait CrmCampi
             $id = self::id();
             $ora = self::adessoCrm();
             $this->campiCrm[$chi['workspace']][$campi['oggetto']]['sezioni'][$id] = [
-                'id' => $id, 'oggetto' => $campi['oggetto'], 'chiave' => null, 'catalogo' => [],
+                'id' => $id, 'oggetto' => $campi['oggetto'], 'codice' => null, 'catalogo' => [],
                 'scritti' => array_filter($campi['nome'], fn ($nome) => is_string($nome) && $nome !== ''),
                 'ord' => $vive[array_key_last($vive)]['ord'] + self::CRM_PASSO, 'fissa' => false,
                 'creato_il' => $ora, 'aggiornato_il' => $ora, 'eliminata' => false,
@@ -215,7 +215,7 @@ trait CrmCampi
             throw new Problema('sezione_di_sistema');
         }
 
-        $nome = $this->nomiNuoviCrm($riga['catalogo'], $riga['scritti'], $campi['nome'] ?? [], $riga['chiave'] === null, false);
+        $nome = $this->nomiNuoviCrm($riga['catalogo'], $riga['scritti'], $campi['nome'] ?? [], $riga['codice'] === null, false);
 
         if ($nome['it'] !== self::nomiCrm($riga['catalogo'], $riga['scritti'])['it']) {
             $this->sezioneUnicaCrm($lista, $nome['it'], $riga['id']);
@@ -375,7 +375,7 @@ trait CrmCampi
 
         $ordine = $altri;
         array_splice($ordine, $posto - 1, 0, [$voce]);
-        $riga = $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$voce['chiave']];
+        $riga = $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$voce['codice']];
         $riga['scritti'] = $nome['riga'];
         $riga['visibilita'] = $visibilita;
         $riga['sezione_id'] = $sezione;
@@ -386,12 +386,12 @@ trait CrmCampi
 
             foreach ($ordine as $i => $altro) {
                 if ($altro['id'] !== $voce['id'] && $altro['ord'] !== ($i + 1) * self::CRM_PASSO) {
-                    $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$altro['chiave']]['ord'] = ($i + 1) * self::CRM_PASSO;
+                    $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$altro['codice']]['ord'] = ($i + 1) * self::CRM_PASSO;
                 }
             }
         }
 
-        $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$voce['chiave']] = $riga;
+        $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$voce['codice']] = $riga;
         [$nuovo] = $this->trovaCampoCrm($chi['workspace'], $voce['id']);
 
         return [200, ['data' => $this->voceCampoCrm($nuovo)]];
@@ -412,9 +412,9 @@ trait CrmCampi
             $this->campiCrm[$workspace][$oggetto] = ['sezioni' => [], 'campi' => []];
 
             foreach ($sezioni as $i => $sezione) {
-                $id = "{$oggetto}.{$sezione['chiave']}";
+                $id = "{$oggetto}.{$sezione['codice']}";
                 $this->campiCrm[$workspace][$oggetto]['sezioni'][$id] = [
-                    'id' => $id, 'oggetto' => $oggetto, 'chiave' => $sezione['chiave'], 'catalogo' => $sezione['nome'], 'scritti' => [],
+                    'id' => $id, 'oggetto' => $oggetto, 'codice' => $sezione['codice'], 'catalogo' => $sezione['nome'], 'scritti' => [],
                     'ord' => ($i + 1) * self::CRM_PASSO, 'fissa' => $sezione['fissa'], 'creato_il' => $dal, 'aggiornato_il' => $dal, 'eliminata' => false,
                 ];
             }
@@ -424,8 +424,8 @@ trait CrmCampi
             foreach (self::CRM_CAMPI_STANDARD[$oggetto] as $campo) {
                 $sezione = "{$oggetto}.{$campo['sezione']}";
                 $inSezione[$sezione] = ($inSezione[$sezione] ?? 0) + self::CRM_PASSO;
-                $this->campiCrm[$workspace][$oggetto]['campi'][$campo['chiave']] = [
-                    'id' => "{$oggetto}.{$campo['chiave']}", 'oggetto' => $oggetto, 'chiave' => $campo['chiave'], 'tipo' => $campo['tipo'], 'sistema' => $campo['sistema'],
+                $this->campiCrm[$workspace][$oggetto]['campi'][$campo['codice']] = [
+                    'id' => "{$oggetto}.{$campo['codice']}", 'oggetto' => $oggetto, 'codice' => $campo['codice'], 'tipo' => $campo['tipo'], 'sistema' => $campo['sistema'],
                     'catalogo' => ['nome' => $campo['nome']], 'scritti' => [], 'visibilita' => $campo['visibilita'], 'sezione_id' => $sezione,
                     'ord' => $inSezione[$sezione], 'indispensabile' => $campo['indispensabile'], 'in_campi' => $campo['in_campi'],
                     'creato_il' => $dal, 'aggiornato_il' => $dal,
@@ -457,7 +457,7 @@ trait CrmCampi
     {
         $ordineDelleSezioni = array_flip(array_column($this->sezioniViveCrm($workspace, $oggetto), 'id'));
         $campi = array_values($this->campiCrm[$workspace][$oggetto]['campi']);
-        usort($campi, fn (array $a, array $b) => [$ordineDelleSezioni[$a['sezione_id']] ?? PHP_INT_MAX, $a['ord'], $a['chiave']] <=> [$ordineDelleSezioni[$b['sezione_id']] ?? PHP_INT_MAX, $b['ord'], $b['chiave']]);
+        usort($campi, fn (array $a, array $b) => [$ordineDelleSezioni[$a['sezione_id']] ?? PHP_INT_MAX, $a['ord'], $a['codice']] <=> [$ordineDelleSezioni[$b['sezione_id']] ?? PHP_INT_MAX, $b['ord'], $b['codice']]);
         $contati = [];
 
         foreach ($campi as $i => $campo) {
@@ -534,7 +534,7 @@ trait CrmCampi
         return [
             'id' => $campo['id'],
             'oggetto' => $campo['oggetto'],
-            'chiave' => $campo['chiave'],
+            'chiave' => $campo['codice'],
             'origine' => 'standard',
             'tipo' => $campo['tipo'],
         ] + ($campo['tipo'] === 'sistema' ? ['sistema' => $campo['sistema']] : []) + [

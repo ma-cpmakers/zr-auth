@@ -48,12 +48,16 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
 
     $persona = collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $gettoni['anna'])->json('data'))->keyBy('chiave');
 
-    expect($persona['nome'])->toBe([
-        'id' => 'persona.nome', 'oggetto' => 'persona', 'chiave' => 'nome', 'origine' => 'standard', 'tipo' => 'testo',
-        'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
-        'posizione' => 1, 'obbligatorio' => false, 'indispensabile' => true, 'in_campi' => false,
-        'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z',
-    ])
+    $nome = $persona['nome'];
+    unset($nome['chiave']);
+
+    expect($persona['nome']['chiave'])->toBe('nome')
+        ->and($nome)->toBe([
+            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo',
+            'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
+            'posizione' => 1, 'obbligatorio' => false, 'indispensabile' => true, 'in_campi' => false,
+            'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z',
+        ])
         ->and($persona['organizzazione_id']['sistema'])->toBe('organizzazione')
         ->and($persona['ruolo'])->not->toHaveKey('sistema')
         ->and(array_intersect_key($persona['reparto'], array_flip(['visibilita', 'sezione_id', 'posizione', 'in_campi'])))->toBe(['visibilita' => 'nascosto', 'sezione_id' => 'persona.lavoro', 'posizione' => 2, 'in_campi' => true])
@@ -147,8 +151,9 @@ it('crm.sezioni.crea: in fondo all\'elenco, con Location e il nome nelle lingue 
 it('crm.sezioni.crea: al cinquantunesimo posto è 409 limite_raggiunto, e con Idempotency-Key la stessa chiamata dà la stessa sezione (SZ.2)', function () {
     [, $gettoni] = studioColCrm();
 
-    $una = alFinto('POST', '/v1/crm/sezioni', ['oggetto' => 'trattativa', 'nome' => ['it' => 'Prima']], $gettoni['anna'], null, ['Idempotency-Key' => 'chiave-1']);
-    $ancora = alFinto('POST', '/v1/crm/sezioni', ['oggetto' => 'trattativa', 'nome' => ['it' => 'Prima']], $gettoni['anna'], null, ['Idempotency-Key' => 'chiave-1']);
+    $ripetuta = 'prima-chiamata';
+    $una = alFinto('POST', '/v1/crm/sezioni', ['oggetto' => 'trattativa', 'nome' => ['it' => 'Prima']], $gettoni['anna'], null, ['Idempotency-Key' => $ripetuta]);
+    $ancora = alFinto('POST', '/v1/crm/sezioni', ['oggetto' => 'trattativa', 'nome' => ['it' => 'Prima']], $gettoni['anna'], null, ['Idempotency-Key' => $ripetuta]);
 
     expect($una->status())->toBe(201)
         ->and($ancora->json('data.id'))->toBe($una->json('data.id'))
