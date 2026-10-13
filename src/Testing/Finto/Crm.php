@@ -1595,6 +1595,8 @@ trait Crm
                 $nuova = $esito['nuova'] ?? false;
                 $simileNuova = $esito['simile_nuova'] ?? false;
                 unset($esito['nuova'], $esito['simile_nuova']);
+                // L'ordine dei campi di un esito del backoffice (Importazioni::CAMPI_DI_UN_ESITO).
+                $esito = array_replace(array_intersect_key(array_flip(['riga', 'esito', 'motivo', 'id', 'simile_a', 'errors']), $esito), $esito);
 
                 return $importazione === null ? array_diff_key($esito, ($nuova ? ['id' => true] : []) + ($simileNuova ? ['simile_a' => true] : [])) : $esito;
             }, array_values($esiti));
