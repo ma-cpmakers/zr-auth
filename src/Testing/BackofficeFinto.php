@@ -20,6 +20,7 @@ use SensitiveParameter;
 use stdClass;
 use Zeiras\Auth\Eventi\Firma;
 use Zeiras\Auth\Testing\Finto\Crm;
+use Zeiras\Auth\Testing\Finto\CrmCampi;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
@@ -48,6 +49,7 @@ use Zeiras\Auth\Testing\Finto\Testi;
 final class BackofficeFinto
 {
     use Crm;
+    use CrmCampi;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
     public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';

@@ -573,10 +573,15 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - **Le app.** Un'app `disponibile` del catalogo (oggi `pm` e `crm`) è `attivo` in un workspace dopo `app.modifica`
   (`{"stato": "attivo"}`, del proprietario o dell'amministratore) o, nel test, dopo `attivaApp($workspace, 'pm')`;
   `app.elenca` lo dice. Un membro è `403` `permesso_negato`, un'app `in_arrivo` `409` `app_in_arrivo`.
-- **Il CRM.** I 46 metodi `crm.*` del contratto rispondono come il backoffice, in memoria e per workspace: aziende, contatti,
+- **Il CRM.** I 52 metodi `crm.*` del contratto rispondono come il backoffice, in memoria e per workspace: aziende, contatti,
   trattative (e il loro riepilogo per fase), pipeline e fasi, attività, note, impostazioni, utilizzo, le cronologie, le ricerche (il termine nel corpo), gli
   spostamenti, le eliminazioni (da lì `404`), le importazioni (con `prova`, `simili` dei contatti e `Location` sul `201`), la loro lettura e il loro
-  annullamento entro 24 ore (`409` `annullamento_scaduto` oltre), e l'anonimizzazione. `crm` è `disponibile` per
+  annullamento entro 24 ore (`409` `annullamento_scaduto` oltre), e l'anonimizzazione. Le **sezioni** e i **campi** (`crm.sezioni.elenca`,
+  `crea`, `modifica` ed `elimina`, `crm.campi.elenca` e `modifica`, dalla v0.12.30) partono dal catalogo degli standard del backoffice
+  (persona 24 campi in 6 sezioni, organizzazione 16 in 4, trattativa 11 in 2; «Principali» è fissa), con un nome `{it, en, es}`, la
+  visibilità, la sezione e il posto: un campo `indispensabile` non si nasconde e non lascia «Principali» (`422` `campo_indispensabile`),
+  «Principali» non si cambia (`409` `sezione_di_sistema`) e una sezione con campi non si elimina (`409` `sezione_non_vuota`).
+  `crm` è `disponibile` per
   ogni workspace, come in produzione dal 12/10: si attiva con `app.modifica` o con `attivaApp($workspace, 'crm')`. Prima il
   ruolo (`403` `permesso_negato`), poi l'app (`403` `app_non_attiva`), poi l'id del percorso (`404`, anche di un altro
   workspace), poi il corpo (`422` sul pointer coi testi del backoffice). Gli elenchi hanno i filtri, `ordina`, `totale` e il
@@ -589,7 +594,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   anche in prova); l'ordine dei nomi nella collation di MySQL oltre a maiuscole e accenti; i tetti di contatti, aziende e
   trattative in `crea` e `modifica` (il finto guarda quelli di contatti e aziende solo nelle importazioni, e quelli di
   pipeline, fasi, attività e note dove li guarda il backoffice); il valore del cursore cifrato (il finto lo firma ma non
-  lo cifra: con `ordina=nome` il nome si legge nel cursore, nel backoffice no); gli eventi del CRM.
+  lo cifra: con `ordina=nome` il nome si legge nel cursore, nel backoffice no); gli eventi del CRM (compreso `com.zeiras.crm.campo.modificato`) e lo storico.
 - **L'ingresso nei moduli.** `ritorno($app, $indirizzo)` dice dove `pm` riceve il codice (nel backoffice
   `ZR_RITORNO_PM`); senza, `ingressi.crea` è `503` `servizio_non_disponibile`, e con `''` si toglie. `ingressi.crea`
   (`{"app", "sfida"}`, gettone di un workspace, app attiva: `403` `app_non_attiva` altrimenti) dà `{codice, ritorno,
