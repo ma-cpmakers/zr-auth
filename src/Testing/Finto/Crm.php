@@ -197,7 +197,7 @@ trait Crm
             'crm.persone.importazioni.crea' => $this->importaCrm($richiesta, $corpo, 'persone', $operazione),
             'crm.persone.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'persone', $parametri[0], $operazione),
             'crm.persone.anonimizzazione.crea' => $this->anonimizzaCrm($richiesta, $parametri[0]),
-            'crm.importazioni.mostra' => [200, ['data' => $this->voceImportazioneCrm($this->importazioneCrm($this->conCrm($richiesta)['workspace'], $parametri[0]))]],
+            'crm.importazioni.mostra' => [200, ['data' => $this->voceImportazioneCrm($this->importazioneCrm($this->conCrm($richiesta, ['proprietario', 'amministratore'])['workspace'], $parametri[0]))]],
             'crm.importazioni.annullamento.crea' => $this->annullaImportazioneCrm($richiesta, $corpo, $parametri[0]),
             'crm.motivi.elenca' => $this->elencaMotiviCrm($richiesta),
             'crm.motivi.crea' => $this->creaMotivoCrm($richiesta, $corpo),
