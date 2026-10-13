@@ -73,7 +73,8 @@ it('le importazioni del CRM portano RateLimit-Policy e RateLimit dopo ruolo e ap
 it('la risposta ricordata con la Idempotency-Key ha il residuo di adesso, e non conta di nuovo (#1911, R.4)', function () {
     $this->freezeTime();
     [, $gettoni] = studioColCrm();
-    $chiave = ['Idempotency-Key' => 'import-1'];
+    $valore = 'import-1';
+    $chiave = ['Idempotency-Key' => $valore];
     $corpo = ['righe' => [['nome' => 'Rossi Srl']]];
 
     $prima = alFinto('POST', '/v1/crm/organizzazioni/importazioni', $corpo, $gettoni['anna'], intestazioni: $chiave);
