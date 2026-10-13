@@ -536,9 +536,20 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   chiude coi suoi gettoni (`401` `gettone_non_valido`); ogni altro esito è la stessa `422` `verifica_non_riuscita`. Una
   password che non va è `422` su `#/password` e non consuma il codice. Turnstile, acceso o guasto, vale per il recupero come
   per `utenti.crea`; il freno è di 5 richieste al minuto per email in tutti e due i metodi.
-- **Le app.** Un'app `disponibile` del catalogo (oggi `pm`) è `attivo` in un workspace dopo `app.modifica`
+- **Le app.** Un'app `disponibile` del catalogo (oggi `pm` e `crm`) è `attivo` in un workspace dopo `app.modifica`
   (`{"stato": "attivo"}`, del proprietario o dell'amministratore) o, nel test, dopo `attivaApp($workspace, 'pm')`;
   `app.elenca` lo dice. Un membro è `403` `permesso_negato`, un'app `in_arrivo` `409` `app_in_arrivo`.
+- **Il CRM.** I 43 metodi `crm.*` del contratto rispondono come il backoffice, in memoria e per workspace: aziende, contatti,
+  trattative, pipeline e fasi, attività, note, impostazioni, utilizzo, le cronologie, le ricerche (il termine nel corpo), gli
+  spostamenti, le eliminazioni (da lì `404`), le importazioni (con `prova`) e l'anonimizzazione. `crm` è `disponibile` per
+  ogni workspace, come in produzione dal 12/10: si attiva con `app.modifica` o con `attivaApp($workspace, 'crm')`. Prima il
+  ruolo (`403` `permesso_negato`), poi l'app (`403` `app_non_attiva`), poi l'id del percorso (`404`, anche di un altro
+  workspace), poi il corpo (`422` sul pointer coi testi del backoffice). Gli elenchi hanno i filtri, `ordina`, `totale` e il
+  cursore, che vale solo per la stessa lista, lo stesso ordine e gli stessi filtri. Il finto **non** imita: i freni del CRM
+  (creazioni, ricerca per email, importazioni, anonimizzazione) e le loro intestazioni `RateLimit`; `ETag`, `If-None-Match` e
+  `If-Match` (`304` e `412`); la risposta ricordata di un'importazione (con `Idempotency-Key` il finto ripete la risposta intera,
+  anche in prova); l'ordine dei nomi nella collation di MySQL oltre a maiuscole e accenti; i tetti di contatti, aziende e
+  trattative oltre a quelli scritti in `CRM_TETTI`; gli eventi del CRM.
 - **L'ingresso nei moduli.** `ritorno($app, $indirizzo)` dice dove `pm` riceve il codice (nel backoffice
   `ZR_RITORNO_PM`); senza, `ingressi.crea` è `503` `servizio_non_disponibile`, e con `''` si toglie. `ingressi.crea`
   (`{"app", "sfida"}`, gettone di un workspace, app attiva: `403` `app_non_attiva` altrimenti) dà `{codice, ritorno,
