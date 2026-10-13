@@ -178,3 +178,19 @@ it('board.schede.elenca guarda insieme il limite e i parametri, come la richiest
         ->and(array_map(fn (array $errore) => [$errore['parameter'], $errore['regola']], $risposta->json('errors')))
         ->toBe([['limite', 'fuori_intervallo'], ['assegnatario_id', 'non_trovato']]);
 });
+
+it('board.schede.elenca ammette un limite fino a 1.000, come il backoffice (#1940), e rifiuta 1.001; gli altri elenchi restano a 100', function () {
+    [$finto, $studio, , , $gettone] = conLeBoard();
+    $lancio = $finto->board($studio, 'Lancio');
+    $finto->scheda($studio, 'Uno', $lancio['id']);
+
+    expect(alFinto('GET', '/v1/board/schede?board_id='.$lancio['id'].'&limite=1000', null, $gettone)->status())->toBe(200);
+
+    $troppo = alFinto('GET', '/v1/board/schede?board_id='.$lancio['id'].'&limite=1001', null, $gettone);
+
+    expect($troppo->status())->toBe(422)
+        ->and($troppo->json('errors.0.parameter'))->toBe('limite')
+        ->and($troppo->json('errors.0.detail'))->toBe('Il campo limite deve essere fra 1 e 1000.')
+        ->and(alFinto('GET', '/v1/board/board?limite=101', null, $gettone)->status())->toBe(422)
+        ->and(alFinto('GET', '/v1/board/schede?assegnatario_id=x&limite=101', null, $gettone)->json('errors.0.detail'))->toBe('Il campo limite deve essere fra 1 e 100.');
+});

@@ -220,6 +220,9 @@ final class BackofficeFinto
 
     private const LIMITE_MASSIMO = 100;
 
+    /** Il tetto del `limite` della lettura di una board con board.schede.elenca (#1940); con `assegnatario_id`, come gli altri elenchi, resta 100. */
+    private const LIMITE_MASSIMO_SCHEDE = 1000;
+
     /** Lo slug di un workspace (Workspace::nuovoSlug, D13): quanti caratteri del nome, poi quanti casuali, e da dove. */
     private const SLUG_DAL_NOME = 40;
 
@@ -1428,7 +1431,7 @@ final class BackofficeFinto
 
         // Come SchedeElencaRequest: il limite della lista e i parametri della richiesta si guardano insieme, il limite per primo.
         $query = $this->testi->validaQuery($grezzo, [
-            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO],
+            'limite' => ['sometimes', 'integer', 'between:1,'.(isset($grezzo['assegnatario_id']) ? self::LIMITE_MASSIMO : self::LIMITE_MASSIMO_SCHEDE)],
             'board_id' => ['bail', 'required_without:assegnatario_id', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($chi) {
                 if (($this->boards[$valore]['workspace'] ?? null) !== $chi['workspace'] && ! $this->laBoardDiProva($chi['workspace'], $valore)) {
                     $this->testi->dichiara($attributo, 'non_trovato');
@@ -1471,6 +1474,7 @@ final class BackofficeFinto
             fn (array $voce) => $posizione($this->schede[$voce['id']]),
             fn (string $id) => isset($this->schede[$id]) ? $posizione($this->schede[$id]) : null,
             $dalPiuRecente,
+            $persona === null ? self::LIMITE_MASSIMO_SCHEDE : self::LIMITE_MASSIMO,
         );
 
         if ($persona !== null) {
@@ -3937,12 +3941,13 @@ final class BackofficeFinto
      * @param  Closure(array<string, mixed>): list<string>  $posizione  la posizione di una voce nell'ordine della lista
      * @param  Closure(string): (list<string>|null)  $posizioneDelCursore  la posizione dalla chiave di un cursore
      * @param  bool  $dalPiuRecente  l'ordine al contrario, dalla posizione più alta (gli inviti: gli id sono ULID, in ordine di nascita)
+     * @param  int  $limiteMassimo  il tetto di `limite`, 100 salvo la lettura di una board con board.schede.elenca (#1940)
      * @return array{int, array<string, mixed>}
      */
-    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false): array
+    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, int $limiteMassimo = self::LIMITE_MASSIMO): array
     {
         $query = $this->testi->validaQuery(self::query($richiesta), [
-            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO],
+            'limite' => ['sometimes', 'integer', 'between:1,'.$limiteMassimo],
             'cursore' => ['sometimes', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($lista, $chiave) {
                 if ($this->leggiCursore($lista, $chiave, $valore) === null) {
                     $this->testi->dichiara($attributo, 'formato');
