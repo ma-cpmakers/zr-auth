@@ -39,6 +39,7 @@ final class Problema extends RuntimeException
         'ultima_fase' => 409,
         'valuta_in_uso' => 409,
         'persona_anonimizzata' => 409,
+        'annullamento_scaduto' => 409,
         'dati_non_validi' => 422,
         'collegamento_circolare' => 422,
         'catena_troppo_lunga' => 422,

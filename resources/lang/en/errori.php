@@ -145,6 +145,10 @@ return [
         'title' => 'Contact anonymised',
         'detail' => 'This contact has been anonymised (right to erasure): it can no longer be changed or linked to notes, activities or deals. Its id stays in the resources that already refer to it.',
     ],
+    'annullamento_scaduto' => [
+        'title' => 'Undo expired',
+        'detail' => 'This import is more than 24 hours old and can no longer be undone: nothing has changed. The companies or contacts it created can be archived one by one with their update method.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline not empty',
         'detail' => 'This pipeline still has open deals and can only be archived without them: close or move its deals first, then try again.',

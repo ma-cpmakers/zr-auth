@@ -37,6 +37,8 @@ trait Crm
         ['GET', '#^/v1/crm/organizzazioni/([^/]+)$#', 'crm.organizzazioni.mostra'],
         ['PATCH', '#^/v1/crm/organizzazioni/([^/]+)$#', 'crm.organizzazioni.modifica'],
         ['GET', '#^/v1/crm/organizzazioni/([^/]+)/cronologia$#', 'crm.organizzazioni.cronologia.elenca'],
+        ['GET', '#^/v1/crm/importazioni/([^/]+)$#', 'crm.importazioni.mostra'],
+        ['POST', '#^/v1/crm/importazioni/([^/]+)/annullamento$#', 'crm.importazioni.annullamento.crea'],
         ['GET', '#^/v1/crm/pipeline$#', 'crm.pipeline.elenca'],
         ['POST', '#^/v1/crm/pipeline$#', 'crm.pipeline.crea'],
         ['POST', '#^/v1/crm/pipeline/partenza$#', 'crm.pipeline.partenza.crea'],
@@ -131,6 +133,11 @@ trait Crm
     /** Quanti id al più nel filtro `id` (FiltroPerId::MASSIMO). */
     private const CRM_ID_NEL_FILTRO = 100;
 
+    /** Le ore entro cui un'importazione si annulla (Importazione::ORE_PER_ANNULLARE), e gli annullamenti all'ora di una persona. */
+    private const CRM_ORE_PER_ANNULLARE = 24;
+
+    private const CRM_ANNULLAMENTI_ALL_ORA = 30;
+
     /** Quante righe al più in un'importazione, e quanti errori al più per riga rifiutata (Importazioni::RIGHE, ERRORI_PER_RIGA). */
     private const CRM_RIGHE_DI_UN_IMPORT = 500;
 
@@ -180,6 +187,8 @@ trait Crm
             'crm.persone.importazioni.crea' => $this->importaCrm($richiesta, $corpo, 'persone', $operazione),
             'crm.persone.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'persone', $parametri[0], $operazione),
             'crm.persone.anonimizzazione.crea' => $this->anonimizzaCrm($richiesta, $parametri[0]),
+            'crm.importazioni.mostra' => [200, ['data' => $this->voceImportazioneCrm($this->importazioneCrm($this->conCrm($richiesta)['workspace'], $parametri[0]))]],
+            'crm.importazioni.annullamento.crea' => $this->annullaImportazioneCrm($richiesta, $corpo, $parametri[0]),
             'crm.pipeline.crea' => $this->creaPipelineCrm($richiesta, $corpo),
             'crm.pipeline.partenza.crea' => $this->partenzaPipelineCrm($richiesta, $corpo),
             'crm.pipeline.mostra' => $this->mostraCrm($richiesta, 'pipeline', $parametri[0]),
@@ -1032,7 +1041,7 @@ trait Crm
     }
 
     /** OrganizzazioniModifica::applica: i campi che cambiano davvero, l'archivio, la cronologia. */
-    private function applicaOrganizzazione(string $id, array $campi, string $autore): void
+    private function applicaOrganizzazione(string $id, array $campi, string $autore, ?string $importazione = null): void
     {
         $riga = $this->crm['organizzazioni'][$id];
         $cambi = [];
@@ -1076,7 +1085,7 @@ trait Crm
         }
 
         foreach ($tipi as $tipo) {
-            $this->cambioCrm('organizzazioni', $id, $autore, $tipo, []);
+            $this->cambioCrm('organizzazioni', $id, $autore, $tipo, [], $importazione);
         }
     }
 
@@ -1271,7 +1280,7 @@ trait Crm
     }
 
     /** PersoneModifica::applica: i campi che cambiano davvero, le liste sostituite, il conto dei contatti, la cronologia. */
-    private function applicaPersona(string $id, array $campi, string $autore): void
+    private function applicaPersona(string $id, array $campi, string $autore, ?string $importazione = null): void
     {
         $riga = $this->crm['persone'][$id];
         $ora = self::adessoCrm();
@@ -1366,7 +1375,7 @@ trait Crm
         }
 
         foreach ($tipi as $tipo) {
-            $this->cambioCrm('persone', $id, $autore, $tipo, []);
+            $this->cambioCrm('persone', $id, $autore, $tipo, [], $importazione);
         }
     }
 
@@ -1442,6 +1451,7 @@ trait Crm
                 $this->crm['importazioni'][$importazione] = [
                     'id' => $importazione, 'workspace' => $chi['workspace'], 'tipo' => $tipo, 'autore_id' => $chi['persona'], 'righe' => count($campi['righe']),
                     'create' => count($nuove), 'saltate' => $saltate, 'rifiutate' => count($campi['righe']) - count($nuove) - $saltate, 'creata_il' => self::adessoCrm(),
+                    'annullata_il' => null, 'annullamento' => null,
                 ];
 
                 foreach ($nuove as $indice => $valida) {
@@ -1468,8 +1478,108 @@ trait Crm
 
             return $importazione === null
                 ? [200, ['data' => ['righe' => $righe, 'totali' => $totali]], []]
-                : [201, ['data' => ['id' => $importazione, 'righe' => $righe, 'totali' => $totali]], []];
+                : [201, ['data' => ['id' => $importazione, 'righe' => $righe, 'totali' => $totali]], ['Location' => "/v1/crm/importazioni/{$importazione}"]];
         });
+    }
+
+    /** Un'importazione del workspace (404 non_trovato per una di un altro workspace o che non c'è). @return array<string, mixed> */
+    private function importazioneCrm(string $workspace, string $id): array
+    {
+        $importazione = $this->crm['importazioni'][strtolower($id)] ?? null;
+
+        return $importazione !== null && $importazione['workspace'] === $workspace ? $importazione : throw new Problema('non_trovato');
+    }
+
+    /**
+     * Lo schema Importazione (Forme::importazione): conti e istanti, mai un valore delle righe.
+     *
+     * @param  array<string, mixed>  $importazione
+     * @return array<string, mixed>
+     */
+    private function voceImportazioneCrm(array $importazione): array
+    {
+        return [
+            'id' => $importazione['id'], 'tipo' => $importazione['tipo'], 'autore_id' => $importazione['autore_id'], 'creata_il' => self::isoCrm($importazione['creata_il']),
+            'totali' => ['righe' => $importazione['righe'], 'create' => $importazione['create'], 'saltate' => $importazione['saltate'], 'rifiutate' => $importazione['rifiutate']],
+            'annullabile_fino' => self::isoCrm($importazione['creata_il']->addHours(self::CRM_ORE_PER_ANNULLARE)),
+            'annullata_il' => self::isoCrm($importazione['annullata_il']), 'annullamento' => $importazione['annullamento'],
+        ];
+    }
+
+    /**
+     * crm.importazioni.annullamento.crea (ImportazioniController, AnnullamentoDiImportazione): entro 24 ore archivia come a mano le righe
+     * nate dall'importazione e non toccate dopo, e conta le altre per motivo; una seconda volta l'esito salvato, oltre 409
+     * annullamento_scaduto. Proprietario e amministratori, 30 all'ora per persona, Idempotency-Key.
+     *
+     * @param  array<string, mixed>  $corpo
+     * @return array{0: int, 1: array<string, mixed>, 2: array<string, string>}
+     */
+    private function annullaImportazioneCrm(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+        $importazione = $this->importazioneCrm($chi['workspace'], $id);
+
+        return $this->conIdempotenza($richiesta, 'crm.importazioni.annullamento.crea', $chi, $corpo, function () use ($chi, $importazione) {
+            $this->frena('freni:crm.importazioni.annullamento.crea:'.$chi['persona'], self::CRM_ANNULLAMENTI_ALL_ORA, 3600);
+
+            if ($importazione['annullata_il'] === null) {
+                if (self::adessoCrm()->greaterThan($importazione['creata_il']->addHours(self::CRM_ORE_PER_ANNULLARE))) {
+                    throw new Problema('annullamento_scaduto');
+                }
+
+                $tipo = $importazione['tipo'];
+                $lasciate = ['modificate' => 0, 'collegate' => 0, 'gia_archiviate' => 0];
+                $archiviate = 0;
+                $nate = array_column(array_filter($this->crm['cambi'], fn (array $cambio) => $cambio['tipo_risorsa'] === $tipo && $cambio['tipo'] === 'creata' && $cambio['importazione_id'] === $importazione['id']), 'risorsa');
+                sort($nate);
+
+                foreach ($nate as $nata) {
+                    $motivo = match (true) {
+                        $this->crm[$tipo][$nata]['archiviata_il'] !== null || ($this->crm[$tipo][$nata]['eliminata'] ?? false) => 'gia_archiviate',
+                        $this->toccataCrm($tipo, $nata) => 'modificate',
+                        $this->collegataCrm($tipo, $nata) => 'collegate',
+                        default => null,
+                    };
+
+                    if ($motivo !== null) {
+                        $lasciate[$motivo]++;
+                    } else {
+                        $tipo === 'persone'
+                            ? $this->applicaPersona($nata, ['archiviato' => true], $chi['persona'], $importazione['id'])
+                            : $this->applicaOrganizzazione($nata, ['archiviata' => true], $chi['persona'], $importazione['id']);
+                        $archiviate++;
+                    }
+                }
+
+                $importazione = $this->crm['importazioni'][$importazione['id']] = [
+                    ...$importazione, 'annullata_il' => self::adessoCrm(), 'annullamento' => ['archiviate' => $archiviate, 'lasciate' => $lasciate],
+                ];
+            }
+
+            return [200, ['data' => $this->voceImportazioneCrm($importazione)], []];
+        });
+    }
+
+    /** Se la cronologia di una riga ha una voce dopo `creata`. */
+    private function toccataCrm(string $tipo, string $id): bool
+    {
+        return array_filter($this->crm['cambi'], fn (array $cambio) => $cambio['tipo_risorsa'] === $tipo && $cambio['risorsa'] === $id && $cambio['tipo'] !== 'creata') !== [];
+    }
+
+    /** Se una nota, un'attività, una trattativa (e per un'azienda un contatto) citano la riga, anche archiviati o eliminati. */
+    private function collegataCrm(string $tipo, string $id): bool
+    {
+        $colonna = $tipo === 'persone' ? 'persona_id' : 'organizzazione_id';
+
+        foreach ($tipo === 'persone' ? ['note', 'attivita', 'trattative'] : ['note', 'attivita', 'trattative', 'persone'] as $altre) {
+            foreach ($this->crm[$altre] as $riga) {
+                if (($riga[$colonna] ?? null) === $id) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
