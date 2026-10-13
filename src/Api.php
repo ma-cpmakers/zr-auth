@@ -35,6 +35,9 @@ final class Api
     /** Quante pagine scorre al più tutti(): oltre, la lista non finisce, e non è una lista. */
     public const PAGINE = 100;
 
+    /** I freni dell'ultima risposta di questa istanza (#1911): `null` prima della prima, o se non ne diceva nessuno. */
+    private ?Freni $freni = null;
+
     private function __construct(private readonly ?string $gettone) {}
 
     /** Senza gettone: i metodi che lo fanno nascere (accessi.crea) o che non lo vogliono (utenti.crea). */
@@ -173,6 +176,16 @@ final class Api
     }
 
     /**
+     * I freni del backoffice all'ultima risposta di questa istanza, da `RateLimit-Policy` e `RateLimit` (#1911): il residuo per
+     * nome di freno, anche dopo un errore (il 429 del freno compreso: si legge nel `catch`). `null` è «nessun freno noto»:
+     * prima della prima chiamata, dopo una risposta senza le intestazioni, o se il backoffice non ha risposto.
+     */
+    public function freni(): ?Freni
+    {
+        return $this->freni;
+    }
+
+    /**
      * @param  \Closure(PendingRequest): Response  $invia
      * @return array<mixed>
      */
@@ -199,6 +212,9 @@ final class Api
             $richiesta = $this->firmata($richiesta);
         }
 
+        // Niente resta della chiamata prima: un guasto del trasporto lascia nessun freno noto.
+        $this->freni = null;
+
         try {
             $risposta = $invia($richiesta);
         } catch (HttpClientException $e) {
@@ -207,6 +223,8 @@ final class Api
             // ConnectionException.
             throw new BackofficeNonRisponde('Il backoffice non risponde.', previous: $e);
         }
+
+        $this->freni = Freni::daRisposta($risposta);
 
         // Il 304 di una GET condizionale non è un redirect e non è un errore: la versione di chi chiama è ancora quella buona.
         // Senza una versione mandata nessuno lo ha chiesto, e quel 304 è un backoffice che sbaglia.

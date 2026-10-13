@@ -147,6 +147,12 @@ trait Crm
 
     private const CRM_ERRORI_PER_RIGA = 3;
 
+    /**
+     * I freni delle importazioni, coi tetti all'ora (Importazioni::FRENI e config zeiras.freni.crm_importazioni_*, #1894): le chiamate di
+     * una persona, prova compresa, e le righe per persona e per workspace, la prova separata dalla scrittura.
+     */
+    private const CRM_FRENI_DELLE_IMPORTAZIONI = ['chiamate_persona' => 300, 'prova_persona' => 30000, 'prova_workspace' => 60000, 'scrittura_persona' => 12000, 'scrittura_workspace' => 24000];
+
     /** Le trattative collegate più recenti che danno righe alla cronologia di un contatto (config zeiras.crm.cronologia_trattative_per_contatto). */
     private const CRM_FINESTRA_DELLE_TRATTATIVE = 200;
 
@@ -1494,6 +1500,24 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
 
+        // RateLimit-Policy e RateLimit su ogni risposta dopo il ruolo e l'app (FreniDelleImportazioni): errori, 429 e risposta ricordata
+        // compresi, col residuo di adesso.
+        try {
+            $esito = $this->importaCrmFrenata($richiesta, $corpo, $tipo, $operazione, $chi);
+        } catch (Problema $problema) {
+            throw $problema->conHeader($this->intestazioniImportazioniCrm($chi));
+        }
+
+        return [$esito[0], $esito[1], $esito[2] + $this->intestazioniImportazioniCrm($chi)];
+    }
+
+    /**
+     * @param  array<mixed>  $corpo
+     * @param  array{persona: string, accesso: string, workspace: string}  $chi
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function importaCrmFrenata(Request $richiesta, array $corpo, string $tipo, string $operazione, array $chi): array
+    {
         return $this->conIdempotenza($richiesta, $operazione, $chi, $corpo, function () use ($chi, $corpo, $tipo) {
             $campi = $this->testi->validaCorpo($corpo, [
                 'prova' => ['nullable', 'boolean:strict'],
@@ -1502,6 +1526,7 @@ trait Crm
                 ...($tipo === 'persone' ? ['simili' => ['nullable', 'string', Rule::in(['crea', 'salta'])]] : []),
             ]);
             $prova = (bool) ($campi['prova'] ?? false);
+            $this->frenaImportazioniCrm($chi, $prova, count($campi['righe']));
             $salta = ($campi['simili'] ?? null) === 'salta';
             $esiti = [];
             $nuove = [];
@@ -1613,6 +1638,59 @@ trait Crm
                 ? [200, ['data' => ['righe' => $righe, 'totali' => $totali]], []]
                 : [201, ['data' => ['id' => $importazione, 'righe' => $righe, 'totali' => $totali]], ['Location' => "/v1/crm/importazioni/{$importazione}"]];
         });
+    }
+
+    /**
+     * Importazioni::frena: la chiamata e le sue righe, in prova o in scrittura, per persona e per workspace, dopo il corpo e prima del
+     * lavoro. Oltre un tetto è 429 col `freno` che ha fermato e Retry-After, e la chiamata non consuma niente.
+     *
+     * @param  array{persona: string, accesso: string, workspace: string}  $chi
+     */
+    private function frenaImportazioniCrm(array $chi, bool $prova, int $righe): void
+    {
+        $tipo = $prova ? 'prova' : 'scrittura';
+        $contate = [];
+
+        foreach (['chiamate_persona' => 1, "{$tipo}_persona" => $righe, "{$tipo}_workspace" => $righe] as $freno => $unita) {
+            $chiave = self::chiaveImportazioniCrm($chi, $freno);
+
+            if ($this->freni->attempts($chiave) + $unita > self::CRM_FRENI_DELLE_IMPORTAZIONI[$freno]) {
+                foreach ($contate as $contata => $quante) {
+                    $this->freni->decrement($contata, self::ORA, $quante);
+                }
+
+                throw new Problema('troppe_richieste', header: ['Retry-After' => (string) $this->freni->availableIn($chiave)], estensioni: ['freno' => $freno]);
+            }
+
+            $this->freni->increment($chiave, self::ORA, $unita);
+            $contate[$chiave] = $unita;
+        }
+    }
+
+    /**
+     * Importazioni::intestazioni: una politica per freno, col tetto e l'ora, e il residuo coi secondi al ripristino (0 se la finestra non è aperta).
+     *
+     * @param  array{persona: string, accesso: string, workspace: string}  $chi
+     * @return array{RateLimit-Policy: string, RateLimit: string}
+     */
+    private function intestazioniImportazioniCrm(array $chi): array
+    {
+        $politiche = [];
+        $residui = [];
+
+        foreach (self::CRM_FRENI_DELLE_IMPORTAZIONI as $freno => $tetto) {
+            $chiave = self::chiaveImportazioniCrm($chi, $freno);
+            $politiche[] = "\"{$freno}\";q={$tetto};w=".self::ORA;
+            $residui[] = "\"{$freno}\";r=".max(0, $tetto - $this->freni->attempts($chiave)).';t='.$this->freni->availableIn($chiave);
+        }
+
+        return ['RateLimit-Policy' => implode(', ', $politiche), 'RateLimit' => implode(', ', $residui)];
+    }
+
+    /** @param  array{persona: string, accesso: string, workspace: string}  $chi */
+    private static function chiaveImportazioniCrm(array $chi, string $freno): string
+    {
+        return "freni:crm.importazioni:{$freno}:".(str_ends_with($freno, '_persona') ? $chi['persona'] : $chi['workspace']);
     }
 
     /** La chiave di un nome e cognome (SomiglianzaDiNomi::chiave): senza spazi ai bordi, senza accenti (NFD senza segni), piegata. */
