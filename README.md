@@ -541,7 +541,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `app.elenca` lo dice. Un membro è `403` `permesso_negato`, un'app `in_arrivo` `409` `app_in_arrivo`.
 - **Il CRM.** I 46 metodi `crm.*` del contratto rispondono come il backoffice, in memoria e per workspace: aziende, contatti,
   trattative (e il loro riepilogo per fase), pipeline e fasi, attività, note, impostazioni, utilizzo, le cronologie, le ricerche (il termine nel corpo), gli
-  spostamenti, le eliminazioni (da lì `404`), le importazioni (con `prova`, e `Location` sul `201`), la loro lettura e il loro
+  spostamenti, le eliminazioni (da lì `404`), le importazioni (con `prova`, `simili` dei contatti e `Location` sul `201`), la loro lettura e il loro
   annullamento entro 24 ore (`409` `annullamento_scaduto` oltre), e l'anonimizzazione. `crm` è `disponibile` per
   ogni workspace, come in produzione dal 12/10: si attiva con `app.modifica` o con `attivaApp($workspace, 'crm')`. Prima il
   ruolo (`403` `permesso_negato`), poi l'app (`403` `app_non_attiva`), poi l'id del percorso (`404`, anche di un altro

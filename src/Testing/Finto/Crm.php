@@ -1493,11 +1493,14 @@ trait Crm
                 'prova' => ['nullable', 'boolean:strict'],
                 'righe' => ['required', 'array', 'list', 'min:1', 'max:'.self::CRM_RIGHE_DI_UN_IMPORT],
                 'righe.*' => ['array'],
+                ...($tipo === 'persone' ? ['simili' => ['nullable', 'string', Rule::in(['crea', 'salta'])]] : []),
             ]);
             $prova = (bool) ($campi['prova'] ?? false);
+            $salta = ($campi['simili'] ?? null) === 'salta';
             $esiti = [];
             $nuove = [];
             $viste = [];
+            $righeSimili = [];
 
             foreach (array_values($campi['righe']) as $indice => $riga) {
                 try {
@@ -1524,6 +1527,29 @@ trait Crm
                     $esiti[$indice] = ['riga' => $indice, 'esito' => 'saltata', 'motivo' => $archiviata ? 'duplicata_archiviata' : 'duplicata', 'id' => $esistente];
                 } elseif ($vista !== null) {
                     $esiti[$indice] = ['riga' => $indice, 'esito' => 'saltata', 'motivo' => 'duplicata', 'uguale_a' => $vista, 'nuova' => true];
+                } elseif ($tipo === 'persone' && $chiavi === []) {
+                    // I simili (SomiglianzaDiNomi, #1896): senza email, lo stesso nome e cognome di un contatto vivo o di una riga prima.
+                    $nome = self::nomeSimileCrm($valida['nome'], $valida['cognome']);
+                    $contatto = $this->contattoSimileCrm($chi['workspace'], $nome, $valida['organizzazione_id']);
+                    $prima = null;
+
+                    foreach ($contatto === null ? $righeSimili[$nome] ?? [] : [] as [$altra, $azienda]) {
+                        if ($valida['organizzazione_id'] === null || $azienda === $valida['organizzazione_id']) {
+                            $prima = $altra;
+
+                            break;
+                        }
+                    }
+
+                    if (($contatto !== null || $prima !== null) && $salta) {
+                        $esiti[$indice] = ['riga' => $indice, 'esito' => 'saltata', 'motivo' => 'simile']
+                            + ($contatto !== null ? ['id' => $contatto] : ['uguale_a' => $prima, 'nuova' => true]);
+                    } else {
+                        $righeSimili[$nome][] = [$indice, $valida['organizzazione_id']];
+                        $nuove[$indice] = $valida;
+                        $esiti[$indice] = ['riga' => $indice, 'esito' => 'creata', 'nuova' => true]
+                            + ($contatto !== null ? ['simile_a' => $contatto] : ($prima !== null ? ['simile_della_riga' => $prima] : []));
+                    }
                 } else {
                     $viste += array_fill_keys($chiavi, $indice);
                     $nuove[$indice] = $valida;
@@ -1556,14 +1582,21 @@ trait Crm
                     $esiti[$indice]['id'] = $esiti[$esito['uguale_a']]['id'] ?? null;
                     unset($esiti[$indice]['uguale_a']);
                 }
+
+                if (isset($esito['simile_della_riga'])) {
+                    $esiti[$indice]['simile_a'] = $esiti[$esito['simile_della_riga']]['id'] ?? null;
+                    $esiti[$indice]['simile_nuova'] = true;
+                    unset($esiti[$indice]['simile_della_riga']);
+                }
             }
 
             ksort($esiti);
             $righe = array_map(function (array $esito) use ($importazione) {
                 $nuova = $esito['nuova'] ?? false;
-                unset($esito['nuova']);
+                $simileNuova = $esito['simile_nuova'] ?? false;
+                unset($esito['nuova'], $esito['simile_nuova']);
 
-                return $importazione === null && $nuova ? array_diff_key($esito, ['id' => true]) : $esito;
+                return $importazione === null ? array_diff_key($esito, ($nuova ? ['id' => true] : []) + ($simileNuova ? ['simile_a' => true] : [])) : $esito;
             }, array_values($esiti));
             $conta = fn (string $esito) => count(array_filter($righe, fn (array $riga) => $riga['esito'] === $esito));
             $totali = ['create' => $conta('creata'), 'saltate' => $conta('saltata'), 'rifiutate' => $conta('rifiutata')];
@@ -1572,6 +1605,30 @@ trait Crm
                 ? [200, ['data' => ['righe' => $righe, 'totali' => $totali]], []]
                 : [201, ['data' => ['id' => $importazione, 'righe' => $righe, 'totali' => $totali]], ['Location' => "/v1/crm/importazioni/{$importazione}"]];
         });
+    }
+
+    /** La chiave di un nome e cognome (SomiglianzaDiNomi::chiave): senza spazi ai bordi, senza accenti (NFD senza segni), piegata. */
+    private static function nomeSimileCrm(?string $nome, ?string $cognome): string
+    {
+        $piega = function (?string $testo): string {
+            $testo = trim((string) $testo);
+            $scomposto = \Normalizer::normalize($testo, \Normalizer::FORM_D);
+
+            return mb_convert_case(preg_replace('/\p{Mn}+/u', '', is_string($scomposto) ? $scomposto : $testo) ?? $testo, MB_CASE_FOLD, 'UTF-8');
+        };
+
+        return $piega($nome)."\u{1F}".$piega($cognome);
+    }
+
+    /** Il primo per id dei contatti vivi (non archiviati, non anonimizzati) con quella chiave; con un'azienda, della stessa azienda. */
+    private function contattoSimileCrm(string $workspace, string $nome, ?string $azienda): ?string
+    {
+        $simili = array_filter($this->righeCrm('persone', $workspace), fn (array $riga) => $riga['archiviata_il'] === null && $riga['anonimizzata_il'] === null
+            && self::nomeSimileCrm($riga['nome'], $riga['cognome']) === $nome && ($azienda === null || $riga['organizzazione_id'] === $azienda));
+        $id = array_column($simili, 'id');
+        sort($id);
+
+        return $id[0] ?? null;
     }
 
     /** Un'importazione del workspace (404 non_trovato per una di un altro workspace o che non c'è). @return array<string, mixed> */
