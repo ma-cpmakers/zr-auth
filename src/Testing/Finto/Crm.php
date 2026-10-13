@@ -2423,6 +2423,7 @@ trait Crm
             'in_fase_dal' => self::iso($riga['in_fase_dal']),
             'stato' => $riga['stato'],
             'motivo_perdita' => $riga['motivo_perdita'],
+            'motivo_perdita_id' => $riga['motivo_perdita_id'] ?? null,
             'chiusa_il' => self::isoCrm($riga['chiusa_il']),
             'chiusura_prevista' => $riga['chiusura_prevista'],
             'responsabile_id' => $riga['responsabile_id'],
@@ -2478,6 +2479,7 @@ trait Crm
         ] + ($nuova ? [] : [
             'stato' => ['bail', 'filled', 'string', Rule::in(self::CRM_STATI_TRATTATIVA)],
             'motivo_perdita' => ['nullable', 'string', 'max:500'],
+            'motivo_perdita_id' => ['bail', 'nullable', 'string', 'max:64', $this->regolaCheEsiste($workspace, 'motivi', 'regole.motivo_non_esiste')],
             'archiviata' => ['filled', 'boolean:strict'],
         ]);
     }
@@ -2526,7 +2528,7 @@ trait Crm
                 'id' => $id, 'workspace' => $chi['workspace'], 'titolo' => $campi['titolo'], 'importo' => $campi['valore']['importo'] ?? null,
                 'pipeline_id' => $pipeline['id'], 'fase_id' => $fase, 'persona_id' => $persona,
                 'organizzazione_id' => isset($campi['organizzazione_id']) ? strtolower($campi['organizzazione_id']) : null,
-                'probabilita' => $campi['probabilita'] ?? null, 'in_fase_dal' => $ora, 'stato' => 'aperta', 'motivo_perdita' => null, 'chiusa_il' => null,
+                'probabilita' => $campi['probabilita'] ?? null, 'in_fase_dal' => $ora, 'stato' => 'aperta', 'motivo_perdita' => null, 'motivo_perdita_id' => null, 'chiusa_il' => null,
                 'chiusura_prevista' => $campi['chiusura_prevista'] ?? null,
                 'responsabile_id' => isset($campi['responsabile_id']) ? strtolower($campi['responsabile_id']) : $chi['persona'],
                 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona'],
@@ -2604,7 +2606,7 @@ trait Crm
             unset($campi['valore']);
         }
 
-        foreach (['pipeline_id', 'fase_id', 'persona_id', 'organizzazione_id', 'responsabile_id'] as $campo) {
+        foreach (['pipeline_id', 'fase_id', 'persona_id', 'organizzazione_id', 'responsabile_id', 'motivo_perdita_id'] as $campo) {
             if (isset($campi[$campo])) {
                 $campi[$campo] = strtolower($campi[$campo]);
             }
@@ -2660,6 +2662,10 @@ trait Crm
             throw $this->erroreCrm('motivo_perdita', 'regole.motivo_solo_se_persa', Regola::CAMPO_VIETATO);
         }
 
+        if (array_key_exists('motivo_perdita_id', $campi) && $campi['motivo_perdita_id'] !== null && $stato !== 'persa') {
+            throw $this->erroreCrm('motivo_perdita_id', 'regole.motivo_solo_se_persa', Regola::CAMPO_VIETATO);
+        }
+
         if ($stato !== $riga['stato']) {
             $cambi['stato'] = ['prima' => $riga['stato'], 'dopo' => $stato];
             $dopo['stato'] = $stato;
@@ -2671,6 +2677,14 @@ trait Crm
         if ($motivo !== $riga['motivo_perdita']) {
             $cambi['motivo_perdita'] = [];
             $dopo['motivo_perdita'] = $motivo;
+        }
+
+        // Il motivo scelto dall'elenco (#1904): la stessa regola della nota libera, e la cronologia ne dice prima e dopo.
+        $scelto = $stato === 'persa' ? (array_key_exists('motivo_perdita_id', $campi) ? $campi['motivo_perdita_id'] : ($riga['motivo_perdita_id'] ?? null)) : null;
+
+        if ($scelto !== ($riga['motivo_perdita_id'] ?? null)) {
+            $cambi['motivo_perdita_id'] = ['prima' => $riga['motivo_perdita_id'] ?? null, 'dopo' => $scelto];
+            $dopo['motivo_perdita_id'] = $scelto;
         }
 
         if ($destinazione !== $riga['pipeline_id']) {
@@ -2704,10 +2718,10 @@ trait Crm
             $this->toccaPipelineCrm($dopo['pipeline_id']);
         }
 
-        $valori = ['valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'pipeline_id', 'fase_id'];
+        $valori = ['valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita_id', 'pipeline_id', 'fase_id'];
         $voci = [];
 
-        foreach (['titolo', 'valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita', 'pipeline_id', 'fase_id'] as $campo) {
+        foreach (['titolo', 'valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita', 'motivo_perdita_id', 'pipeline_id', 'fase_id'] as $campo) {
             if (isset($cambi[$campo])) {
                 $voci[] = in_array($campo, $valori, true) ? ['campo' => $campo, ...$cambi[$campo]] : ['campo' => $campo];
             }

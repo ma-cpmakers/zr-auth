@@ -54,5 +54,6 @@ return [
     'motivo_solo_se_persa' => 'Il motivo di perdita vale solo per una trattativa persa: manda anche lo stato `persa`, o lascia il motivo a null.',
     'motivo_duplicato' => "C'è già un motivo di perdita con questo nome, senza contare maiuscole e accenti: scegli un altro nome.",
     'motivo_archiviato_senza_posto' => "Un motivo archiviato non ha un posto nell'elenco: ripristinalo con archiviato false, insieme alla posizione.",
+    'motivo_non_esiste' => "Nel workspace non c'è un motivo di perdita con questo id: gli id dei motivi li dà crm.motivi.elenca.",
     'campi_estranei_della_riga' => 'La riga ha campi che il metodo non conosce: i campi di una riga sono quelli della creazione singola.',
 ];

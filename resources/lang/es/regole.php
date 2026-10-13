@@ -53,5 +53,6 @@ return [
     'motivo_solo_se_persa' => 'El motivo de pérdida solo vale para una negociación perdida: envía también el estado `persa`, o deja el motivo en null.',
     'motivo_duplicato' => 'Ya existe un motivo de pérdida con este nombre, sin contar mayúsculas ni acentos: elige otro nombre.',
     'motivo_archiviato_senza_posto' => 'Un motivo archivado no tiene un lugar en la lista: restáuralo con archiviato false, junto con la posición.',
+    'motivo_non_esiste' => 'El espacio de trabajo no tiene un motivo de pérdida con este id: los ids de los motivos los da crm.motivi.elenca.',
     'campi_estranei_della_riga' => 'La fila tiene campos que el método no conoce: los campos de una fila son los de la creación individual.',
 ];

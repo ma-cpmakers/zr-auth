@@ -53,5 +53,6 @@ return [
     'motivo_solo_se_persa' => 'The loss reason only applies to a lost deal: send the `persa` status as well, or leave the reason null.',
     'motivo_duplicato' => 'A loss reason with this name already exists, ignoring case and accents: choose another name.',
     'motivo_archiviato_senza_posto' => 'An archived reason has no place in the list: restore it with archiviato false, together with the position.',
+    'motivo_non_esiste' => 'The workspace has no loss reason with this id: crm.motivi.elenca gives the reason ids.',
     'campi_estranei_della_riga' => 'The row has fields the method does not know: the fields of a row are those of the single creation.',
 ];
