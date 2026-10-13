@@ -459,15 +459,15 @@ it('le sezioni e i campi sono di ogni workspace, e il CRM spento è 403 app_non_
     }
 });
 
-it('i testi dei nuovi errori sono quelli del backoffice, nella lingua della richiesta (FC.1)', function () {
+it('i testi dei nuovi errori sono quelli del backoffice (FC.1)', function () {
     [, $gettoni] = studioColCrm();
 
-    $sistema = alFinto('PATCH', '/v1/crm/sezioni/persona.principali', ['posizione' => 3], $gettoni['anna'], 'en');
-    $vuota = alFinto('DELETE', '/v1/crm/sezioni/persona.lavoro', null, $gettoni['anna'], 'es');
+    $sistema = alFinto('PATCH', '/v1/crm/sezioni/persona.principali', ['posizione' => 3], $gettoni['anna']);
+    $vuota = alFinto('DELETE', '/v1/crm/sezioni/persona.lavoro', null, $gettoni['anna']);
     $indispensabile = alFinto('PATCH', '/v1/crm/campi/persona.nome', ['visibilita' => 'nascosto'], $gettoni['anna']);
 
     expect($sistema->json('title'))->toBe('Sezione di sistema')
-        ->and($sistema->json('detail'))->toBe("“Principali” (Main) is the fixed section of an object's fields: it cannot be renamed, moved or deleted. Nothing was written.")
-        ->and($vuota->json('detail'))->toBe('Esta sección aún tiene campos y solo se elimina sin ellos. Mueve sus campos a otra sección con crm.campi.modifica y vuelve a intentarlo.')
+        ->and($sistema->json('detail'))->toBe('«Principali» è la sezione fissa dei campi di un oggetto: non si rinomina, non si sposta e non si elimina. Il metodo non ha scritto niente.')
+        ->and($vuota->json('detail'))->toBe("Questa sezione ha ancora campi: si elimina solo senza. Sposta i suoi campi in un'altra sezione con crm.campi.modifica, poi ripeti.")
         ->and($indispensabile->json('errors.0.detail'))->toBe('Questo campo è indispensabile e non si nasconde: lascia `visibilita` a `visibile`.');
 });
