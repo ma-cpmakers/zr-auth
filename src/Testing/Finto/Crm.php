@@ -236,6 +236,14 @@ trait Crm
         return now()->toImmutable()->startOfMillisecond();
     }
 
+    /** L'istante di una scrittura (NelRegistro::istanteDopo, AP6): adesso, e almeno un millisecondo dopo quello che la riga aveva. */
+    private static function dopoCrm(?CarbonInterface $prima): CarbonImmutable
+    {
+        $ora = self::adessoCrm();
+
+        return $prima !== null && $ora->lessThanOrEqualTo($prima) ? CarbonImmutable::instance($prima)->addMillisecond() : $ora;
+    }
+
     private static function isoCrm(?CarbonInterface $istante): ?string
     {
         return $istante === null ? null : self::iso($istante);
@@ -266,7 +274,8 @@ trait Crm
         }
 
         if ($cambiata) {
-            $riga[$tipo === 'persone' ? 'aggiornato_il' : 'aggiornata_il'] = self::adessoCrm();
+            $colonna = $tipo === 'persone' ? 'aggiornato_il' : 'aggiornata_il';
+            $riga[$colonna] = self::dopoCrm($riga[$colonna]);
             $this->crm[$tipo][$id] = $riga;
         }
 
@@ -844,7 +853,7 @@ trait Crm
 
         // Cambiano solo le liste: il contatto si tocca comunque (Registro::segnala).
         if (! $this->salvaCrm('persone', $id, $nuovi)) {
-            $this->crm['persone'][$id]['aggiornato_il'] = $ora;
+            $this->crm['persone'][$id]['aggiornato_il'] = self::dopoCrm($this->crm['persone'][$id]['aggiornato_il']);
         }
 
         $dopo = $this->crm['persone'][$id];
@@ -925,7 +934,7 @@ trait Crm
     /** Una scrittura di una fase tocca la sua pipeline (Fase::$touches). */
     private function toccaPipelineCrm(string $pipeline): void
     {
-        $this->crm['pipeline'][$pipeline]['aggiornata_il'] = self::adessoCrm();
+        $this->crm['pipeline'][$pipeline]['aggiornata_il'] = self::dopoCrm($this->crm['pipeline'][$pipeline]['aggiornata_il']);
     }
 
     /** @return array<string, mixed> le regole di `PipelineNuova` (Pipelines::corpoDellaCreazione) */
@@ -1379,7 +1388,7 @@ trait Crm
             return $diventati;
         }
 
-        $dopo['aggiornata_il'] = $ora;
+        $dopo['aggiornata_il'] = self::dopoCrm($riga['aggiornata_il']);
         $this->crm['trattative'][$riga['id']] = $dopo;
         $this->riportaCrm($prima, self::contributoCrm($dopo));
 
@@ -1751,7 +1760,7 @@ trait Crm
             return;
         }
 
-        $dopo['aggiornata_il'] = $ora;
+        $dopo['aggiornata_il'] = self::dopoCrm($riga['aggiornata_il']);
         $this->crm['attivita'][$riga['id']] = $dopo;
         $this->riassuntiAttivitaCrm($riga, $dopo);
 
