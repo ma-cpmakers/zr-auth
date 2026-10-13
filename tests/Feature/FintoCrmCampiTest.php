@@ -194,6 +194,12 @@ it('crm.sezioni.modifica: il nome (null torna al catalogo, o toglie la lingua di
     expect($torna->json('data.nome.it'))->toBe('Lavoro')
         ->and($uguale->json('data'))->toBe($torna->json('data'));
 
+    // Il nome del catalogo scritto per esteso non cambia niente, come nel backoffice.
+    $this->travel(5)->seconds();
+    $catalogo = alFinto('PATCH', '/v1/crm/sezioni/persona.altro', ['nome' => ['it' => 'Altro', 'en' => 'Other']], $gettoni['anna']);
+
+    expect($catalogo->status())->toBe(200)->and($catalogo->json('data.aggiornato_il'))->toBe('2026-10-13T00:00:00.000Z');
+
     // Una creata: l'inglese si toglie con null, l'italiano no.
     $senzaInglese = alFinto('PATCH', "/v1/crm/sezioni/{$creata}", ['nome' => ['en' => null, 'es' => 'Familia']], $gettoni['anna']);
     $senzaItaliano = alFinto('PATCH', "/v1/crm/sezioni/{$creata}", ['nome' => ['it' => null]], $gettoni['anna']);

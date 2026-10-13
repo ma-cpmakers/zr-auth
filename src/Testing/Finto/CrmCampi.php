@@ -215,7 +215,7 @@ trait CrmCampi
             throw new Problema('sezione_di_sistema');
         }
 
-        $nome = $this->nomiNuoviCrm($riga['catalogo'], $riga['scritti'], $campi['nome'] ?? [], $riga['codice'] === null, false);
+        $nome = $this->nomiNuoviCrm($riga['catalogo'], $riga['scritti'], $campi['nome'] ?? [], $riga['codice'] === null);
 
         if ($nome['it'] !== self::nomiCrm($riga['catalogo'], $riga['scritti'])['it']) {
             $this->sezioneUnicaCrm($lista, $nome['it'], $riga['id']);
@@ -233,8 +233,10 @@ trait CrmCampi
             array_splice($ordine, (int) array_search($riga['id'], array_column($lista, 'id'), true), 0, [$riga]);
         }
 
+        $sposta = array_column($ordine, 'id') !== array_column($lista, 'id');
+
         foreach ($ordine as $i => $altra) {
-            $ord = ($i + 1) * self::CRM_PASSO;
+            $ord = $sposta ? ($i + 1) * self::CRM_PASSO : $altra['ord'];
             $nomeCambiato = $altra['id'] === $riga['id'] && ! self::scrittiUgualiCrm($nome['riga'], $altra['scritti']);
 
             if ($altra['ord'] === $ord && ! $nomeCambiato) {
@@ -320,7 +322,7 @@ trait CrmCampi
         [$voce, $lista] = $this->trovaCampoCrm($chi['workspace'], $id);
         $oggetto = $voce['oggetto'];
         $cambiati = [];
-        $nome = $this->nomiNuoviCrm($voce['catalogo']['nome'], $voce['scritti'], $campi['nome'] ?? [], false, true);
+        $nome = $this->nomiNuoviCrm($voce['catalogo']['nome'], $voce['scritti'], $campi['nome'] ?? [], false);
 
         if (! self::scrittiUgualiCrm($nome['riga'], $voce['scritti'])) {
             $cambiati[] = 'nome';
@@ -569,8 +571,8 @@ trait CrmCampi
     }
 
     /**
-     * I nomi dopo una modifica: le lingue date in `$cambi` (`null` torna al catalogo, o toglie la lingua se non ce n'è uno; per un
-     * campo, un nome uguale a quello del catalogo non si scrive). `it` di una sezione creata non si toglie: 422 `obbligatorio` su
+     * I nomi dopo una modifica: le lingue date in `$cambi` (`null` torna al catalogo, o toglie la lingua se non ce n'è uno; un nome uguale
+     * a quello del catalogo non si scrive). `it` di una sezione creata non si toglie: 422 `obbligatorio` su
      * `#/nome/it`.
      *
      * @param  array<string, string>  $catalogo
@@ -578,14 +580,14 @@ trait CrmCampi
      * @param  array<string, ?string>  $cambi
      * @return array{it: ?string, en: ?string, es: ?string, riga: array<string, string>}
      */
-    private function nomiNuoviCrm(array $catalogo, array $scritti, array $cambi, bool $creata, bool $campo): array
+    private function nomiNuoviCrm(array $catalogo, array $scritti, array $cambi, bool $creata): array
     {
         foreach ($cambi as $lingua => $valore) {
             if ($valore === null && $creata && $lingua === 'it') {
                 throw $this->erroreCrm('nome.it', 'regole.nome_obbligatorio', Regola::OBBLIGATORIO);
             }
 
-            if ($valore === null || ($campo && $valore === ($catalogo[$lingua] ?? null))) {
+            if ($valore === null || $valore === ($catalogo[$lingua] ?? null)) {
                 unset($scritti[$lingua]);
             } else {
                 $scritti[$lingua] = $valore;
