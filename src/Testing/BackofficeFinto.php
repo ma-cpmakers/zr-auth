@@ -19,6 +19,7 @@ use Random\Randomizer;
 use SensitiveParameter;
 use stdClass;
 use Zeiras\Auth\Eventi\Firma;
+use Zeiras\Auth\Testing\Finto\Crm;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
@@ -46,6 +47,8 @@ use Zeiras\Auth\Testing\Finto\Testi;
  */
 final class BackofficeFinto
 {
+    use Crm;
+
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
     public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';
 
@@ -152,12 +155,15 @@ final class BackofficeFinto
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
     ];
 
-    /** Il catalogo delle app (config/catalogo.php del backoffice, D15): lo stato di ogni app, per codice. */
+    /**
+     * Il catalogo delle app (config/catalogo.php del backoffice, D15): lo stato di ogni app, per codice. `crm` è disponibile per
+     * ogni workspace, come in produzione dal 12/10 (l'anteprima aperta a tutti, #1856).
+     */
     private const CATALOGO = [
         'automations' => 'in_arrivo',
         'bookings' => 'in_arrivo',
         'content' => 'in_arrivo',
-        'crm' => 'in_arrivo',
+        'crm' => 'disponibile',
         'pm' => 'disponibile',
         'reports' => 'in_arrivo',
     ];
@@ -1002,7 +1008,7 @@ final class BackofficeFinto
             return null;
         }
 
-        foreach (self::METODI as [$verbo, $forma, $operazione]) {
+        foreach ([...self::METODI, ...self::METODI_CRM] as [$verbo, $forma, $operazione]) {
             if ($richiesta->method() === $verbo && preg_match($forma, $percorso, $parti) === 1) {
                 return $this->esegue($operazione, $richiesta, array_map(rawurldecode(...), array_slice($parti, 1)));
             }
@@ -1092,6 +1098,7 @@ final class BackofficeFinto
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
+                default => $this->eseguiCrm($operazione, $richiesta, $corpo, $parametri),
             };
             // Le intestazioni di una risposta riuscita (la Location di una creazione) sono il terzo elemento, se c'è.
             [$stato, $dati] = $esito;

@@ -32,7 +32,7 @@ it("attivaApp() e ritorno() rifiutano ciò che il backoffice non conosce: un wor
     $studio = $finto->workspace('Studio', $finto->persona('anna@example.com', PASSWORD));
 
     expect(fn () => $finto->attivaApp(['id' => 'inventato'], 'pm'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->attivaApp($studio, 'crm'))->toThrow(InvalidArgumentException::class, 'crm')
+        ->and(fn () => $finto->attivaApp($studio, 'reports'))->toThrow(InvalidArgumentException::class, 'reports')
         ->and(fn () => $finto->attivaApp($studio, 'inesistente'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => $finto->ritorno('inesistente', RITORNO_DI_PM))->toThrow(InvalidArgumentException::class);
 });
@@ -49,7 +49,7 @@ it("app.elenca dice `attivo` per l'app che il workspace ha attivato, e app.modif
         ->and(alFinto('PATCH', '/v1/app/pm', ['stato' => 'disponibile'], $gettone)->json('data.stato'))->toBe('disponibile')
         ->and($stato())->toBe('disponibile')
         // Un'app in arrivo non si attiva.
-        ->and(alFinto('PATCH', '/v1/app/crm', ['stato' => 'attivo'], $gettone)->json('codice'))->toBe('app_in_arrivo');
+        ->and(alFinto('PATCH', '/v1/app/reports', ['stato' => 'attivo'], $gettone)->json('codice'))->toBe('app_in_arrivo');
 });
 
 it("app.modifica non è di un membro: 403 permesso_negato prima dell'app e del corpo (T1.3)", function () {
