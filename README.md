@@ -292,6 +292,24 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   hanno un `getPrevious()`.
 - Un redirect non si segue: un 307 rimanderebbe il corpo, una password compresa, al `Location`.
 
+### Scaricare un file: `Api::scarica`
+
+Le risposte di `/v1` sono JSON, salvo l'esportazione CSV del CRM (`crm.persone.esportazione.mostra`, `crm.organizzazioni.esportazione.mostra`).
+`scarica` è la GET che le passa a flusso: stesso gettone, stessa firma, stessi errori delle altre chiamate (`ErroreApi`, col `riprovaFra` di un
+429; `GettoneRifiutato`; `BackofficeNonRisponde`), e restituisce uno `Scaricamento`.
+
+```php
+return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'lead'])->comeRisposta();
+```
+
+- Il percorso sta dentro `/v1`, senza query (la query è il secondo argomento) e un redirect non si segue.
+- Il corpo non sta mai tutto in memoria: `blocchi()` lo legge a pezzi, `comeRisposta()` lo passa al browser a pezzi. Il tempo massimo è
+  `zr-auth.scarico` (60 secondi): oltre, `BackofficeNonRisponde`.
+- Il tipo è uno di `Scaricamento::TIPI` (oggi `text/csv`); un `text/html`, un JSON o una risposta senza tipo non sono un file.
+- Il nome del file è ripulito (niente cartelle, caratteri di controllo, a capo; sempre `.csv`), e `comeRisposta()` aggiunge
+  `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.
+- Il finto (`BackofficeFinto`) risponde ai due metodi con il CSV dei suoi contatti e delle sue aziende, a proprietario e amministratore.
+
 ## L'ingresso da zr-home: la partenza e il ricevitore
 
 Un modulo non ha una pagina di accesso sua: la persona entra da zr-home e torna con un codice monouso. zr-auth fa le due

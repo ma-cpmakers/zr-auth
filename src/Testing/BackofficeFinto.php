@@ -1105,7 +1105,8 @@ final class BackofficeFinto
             };
             // Le intestazioni di una risposta riuscita (la Location di una creazione) sono il terzo elemento, se c'è.
             [$stato, $dati] = $esito;
-            $header = ($dati === null ? [] : ['Content-Type' => 'application/json']) + ($esito[2] ?? []);
+            // Un file (l'esportazione CSV del CRM) è una stringa, con le sue intestazioni: non si codifica in JSON.
+            $header = ($dati === null || is_string($dati) ? [] : ['Content-Type' => 'application/json']) + ($esito[2] ?? []);
         } catch (Problema $problema) {
             [$stato, $dati] = [$problema->stato(), $this->testi->problema($problema)];
             $header = ['Content-Type' => 'application/problem+json', ...$problema->header];
@@ -1113,7 +1114,7 @@ final class BackofficeFinto
 
         $header['Link'] = '<'.self::DOCUMENTAZIONE.$operazione.'>; rel="describedby"';
 
-        return Http::response($dati === null ? null : json_encode($dati, JSON_THROW_ON_ERROR), $stato, $header);
+        return Http::response(is_string($dati) ? $dati : ($dati === null ? null : json_encode($dati, JSON_THROW_ON_ERROR)), $stato, $header);
     }
 
     /**
