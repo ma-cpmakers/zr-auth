@@ -145,6 +145,10 @@ return [
         'title' => 'Persona anonimizzata',
         'detail' => "Questo contatto è stato anonimizzato (diritto all'oblio): non si modifica e non si collega più a note, attività o trattative. Il suo id resta nelle risorse che già lo citano.",
     ],
+    'annullamento_scaduto' => [
+        'title' => 'Annullamento scaduto',
+        'detail' => 'Questa importazione è di più di 24 ore fa e non si annulla più: niente è cambiato. Le aziende o i contatti che ha creato si archiviano uno per uno con la loro modifica.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline non vuota',
         'detail' => 'Questa pipeline ha ancora trattative aperte e si archivia solo senza: chiudi o sposta prima le sue trattative, poi ripeti.',
