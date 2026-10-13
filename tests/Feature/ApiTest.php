@@ -444,6 +444,16 @@ it('un backoffice che non risponde lascia nessun freno noto, non quello della ch
         ->and($api->freni())->toBeNull();
 });
 
+it('una chiamata che non parte lascia nessun freno noto, non quello della chiamata prima (#1911, R.1)', function () {
+    Http::fake(['*' => Http::response(['data' => []], 200, ['RateLimit-Policy' => '"chiamate_persona";q=300;w=3600', 'RateLimit' => '"chiamate_persona";r=299;t=3600'])]);
+    apriSessione();
+    $api = Api::workspace();
+
+    $api->get('/v1/crm/persone');
+    expect(fn () => $api->get('/v1/crm/persone?q=x'))->toThrow(InvalidArgumentException::class)
+        ->and($api->freni())->toBeNull();
+});
+
 it('il parser regge le maiuscole del nome delle intestazioni, i token e gli spazi, e ignora senza lanciare ciò che non legge (#1911, R.3)', function (array $intestazioni, ?array $atteso) {
     Http::fake(['*' => Http::response(['data' => []], 200, $intestazioni)]);
     apriSessione();

@@ -106,7 +106,7 @@ trait Crm
         'XAF', 'XCD', 'XCG', 'XOF', 'XPF', 'YER', 'ZAR', 'ZMW', 'ZWG',
     ];
 
-    /** I tetti di crm.utilizzo.mostra (config zeiras.crm e le costanti dei controller), nell'ordine della risposta. */
+    /** I tetti del CRM (config zeiras.crm e le costanti dei controller): quelli di crm.utilizzo.mostra nell'ordine della risposta, poi i motivi, che non vi compaiono. */
     private const CRM_TETTI = [
         'trattative' => 25000, 'trattative_aperte_per_pipeline' => 5000, 'attivita_non_fatte' => 10000, 'attivita' => 50000,
         'persone' => 25000, 'organizzazioni' => 10000, 'note' => 50000, 'pipeline' => 10, 'fasi_per_pipeline' => 20, 'motivi' => 50,

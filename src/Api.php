@@ -191,6 +191,9 @@ final class Api
      */
     private function chiama(\Closure $invia, string $percorso, bool $condizionale = false, ?string $versione = null): array
     {
+        // Niente resta della chiamata prima: una chiamata che non parte, o un guasto del trasporto, lascia nessun freno noto.
+        $this->freni = null;
+
         // Il gettone va solo al backoffice: un percorso che porta altrove (un indirizzo intero, `//host`) non parte. La query
         // sta in `$query`: in un GET Guzzle sostituirebbe in silenzio quella scritta nel percorso.
         if (! str_starts_with($percorso, '/v1') || str_contains($percorso, '?') || str_contains($percorso, '#')) {
@@ -211,9 +214,6 @@ final class Api
         } else {
             $richiesta = $this->firmata($richiesta);
         }
-
-        // Niente resta della chiamata prima: un guasto del trasporto lascia nessun freno noto.
-        $this->freni = null;
 
         try {
             $risposta = $invia($richiesta);
