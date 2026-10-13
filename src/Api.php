@@ -35,6 +35,9 @@ final class Api
     /** Quante pagine scorre al più tutti(): oltre, la lista non finisce, e non è una lista. */
     public const PAGINE = 100;
 
+    /** I freni dell'ultima risposta di questa istanza (#1911): `null` prima della prima, o se non ne diceva nessuno. */
+    private ?Freni $freni = null;
+
     private function __construct(private readonly ?string $gettone) {}
 
     /** Senza gettone: i metodi che lo fanno nascere (accessi.crea) o che non lo vogliono (utenti.crea). */
@@ -125,10 +128,16 @@ final class Api
         return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->withHeaders($header)->patch($percorso, $corpo), $percorso);
     }
 
-    /** @return array<mixed> */
-    public function delete(string $percorso): array
+    /**
+     * La query (es. `sposta_in` di crm.fasi.elimina) va nei parametri della richiesta, mai nel percorso, e mai nel corpo: un DELETE di
+     * /v1 non ha corpo.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<mixed>
+     */
+    public function delete(string $percorso, array $query = []): array
     {
-        return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->delete($percorso), $percorso);
+        return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->withQueryParameters($query)->delete($percorso), $percorso);
     }
 
     /**
@@ -167,11 +176,24 @@ final class Api
     }
 
     /**
+     * I freni del backoffice all'ultima risposta di questa istanza, da `RateLimit-Policy` e `RateLimit` (#1911): il residuo per
+     * nome di freno, anche dopo un errore (il 429 del freno compreso: si legge nel `catch`). `null` è «nessun freno noto»:
+     * prima della prima chiamata, dopo una risposta senza le intestazioni, o se il backoffice non ha risposto.
+     */
+    public function freni(): ?Freni
+    {
+        return $this->freni;
+    }
+
+    /**
      * @param  \Closure(PendingRequest): Response  $invia
      * @return array<mixed>
      */
     private function chiama(\Closure $invia, string $percorso, bool $condizionale = false, ?string $versione = null): array
     {
+        // Niente resta della chiamata prima: una chiamata che non parte, o un guasto del trasporto, lascia nessun freno noto.
+        $this->freni = null;
+
         // Il gettone va solo al backoffice: un percorso che porta altrove (un indirizzo intero, `//host`) non parte. La query
         // sta in `$query`: in un GET Guzzle sostituirebbe in silenzio quella scritta nel percorso.
         if (! str_starts_with($percorso, '/v1') || str_contains($percorso, '?') || str_contains($percorso, '#')) {
@@ -201,6 +223,8 @@ final class Api
             // ConnectionException.
             throw new BackofficeNonRisponde('Il backoffice non risponde.', previous: $e);
         }
+
+        $this->freni = Freni::daRisposta($risposta);
 
         // Il 304 di una GET condizionale non è un redirect e non è un errore: la versione di chi chiama è ancora quella buona.
         // Senza una versione mandata nessuno lo ha chiesto, e quel 304 è un backoffice che sbaglia.

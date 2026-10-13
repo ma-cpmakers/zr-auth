@@ -13,6 +13,7 @@ use Zeiras\Auth\Errori\BackofficeNonRisponde;
 use Zeiras\Auth\Errori\ErroreApi;
 use Zeiras\Auth\Errori\GettoneRifiutato;
 use Zeiras\Auth\Errori\IndirizzoNonSicuro;
+use Zeiras\Auth\Freno;
 
 // T1.2 (Z3): chi chiama, dove, con quale gettone.
 
@@ -353,3 +354,129 @@ it('senza membri estesi, estensioni è vuoto: i testi e gli errori dei campi non
     expect(fn () => Api::senzaGettone()->post('/v1/utenti', []))
         ->toThrow(fn (ErroreApi $e) => expect($e->estensioni)->toBe([]));
 });
+
+it('delete() manda la query nei parametri della richiesta, senza corpo, e rifiuta un percorso con la query dentro (#1902, T1.4)', function () {
+    Http::fake(['*' => Http::response(null, 204)]);
+    apriSessione();
+
+    expect(Api::workspace()->delete('/v1/crm/fasi/f1', ['sposta_in' => 'f2']))->toBe([])
+        ->and(Api::workspace()->delete('/v1/crm/fasi/f3'))->toBe([]);
+
+    $inviate = Http::recorded()->map(fn (array $coppia) => $coppia[0])->values();
+
+    expect($inviate[0]->method())->toBe('DELETE')
+        ->and($inviate[0]->url())->toBe(API.'/v1/crm/fasi/f1?sposta_in=f2')
+        ->and($inviate[0]->body())->toBe('')
+        ->and($inviate[1]->url())->toBe(API.'/v1/crm/fasi/f3');
+
+    expect(fn () => Api::workspace()->delete('/v1/crm/fasi/f1?sposta_in=f2'))->toThrow(InvalidArgumentException::class, 'senza query');
+});
+
+// #1911 (T4): il residuo dei freni dopo una chiamata, da RateLimit-Policy e RateLimit (draft IETF httpapi-ratelimit-headers).
+
+it('freni() dà, per nome, quota e finestra della politica e residuo e ripristino dell\'ultima risposta (#1911, R.1)', function () {
+    Http::fake(['*' => Http::sequence()
+        ->push(['data' => []], 201, [
+            'RateLimit-Policy' => '"chiamate_persona";q=300;w=3600, "prova_persona";q=30000;w=3600',
+            'RateLimit' => '"chiamate_persona";r=299;t=3600, "prova_persona";r=29996;t=3599',
+        ])
+        ->push(['data' => []], 201, ['RateLimit-Policy' => '"chiamate_persona";q=300;w=3600', 'RateLimit' => '"chiamate_persona";r=298;t=3540'])]);
+    apriSessione();
+    $api = Api::workspace();
+
+    expect($api->freni())->toBeNull();
+
+    $api->post('/v1/crm/persone/importazioni', ['righe' => [[]]]);
+    $freni = $api->freni();
+
+    expect(array_keys($freni->tutti()))->toBe(['chiamate_persona', 'prova_persona'])
+        ->and($freni->freno('prova_persona'))->toEqual(new Freno('prova_persona', q: 30000, w: 3600, r: 29996, t: 3599))
+        ->and($freni->freno('chiamate_persona')->r)->toBe(299)
+        ->and($freni->freno('inventato'))->toBeNull();
+
+    // La seconda chiamata sostituisce la prima: niente resta della risposta di prima.
+    $api->post('/v1/crm/persone/importazioni', ['righe' => [[]]]);
+
+    expect(array_keys($api->freni()->tutti()))->toBe(['chiamate_persona'])
+        ->and($api->freni()->freno('chiamate_persona'))->toEqual(new Freno('chiamate_persona', q: 300, w: 3600, r: 298, t: 3540));
+});
+
+it('freni() si legge anche dopo un errore: il 429 del freno e un 422 portano il residuo (#1911, R.1)', function (int $stato, string $codice) {
+    Http::fake(['*' => problema($stato, $codice, header: ['RateLimit-Policy' => '"scrittura_persona";q=12000;w=3600', 'RateLimit' => '"scrittura_persona";r=0;t=1200'])]);
+    apriSessione();
+    $api = Api::workspace();
+
+    expect(fn () => $api->post('/v1/crm/persone/importazioni', ['righe' => [[]]]))->toThrow(ErroreApi::class)
+        ->and($api->freni()->freno('scrittura_persona'))->toEqual(new Freno('scrittura_persona', q: 12000, w: 3600, r: 0, t: 1200));
+})->with([[429, 'troppe_richieste'], [422, 'dati_non_validi']]);
+
+it('una risposta senza le intestazioni dà nessun freno noto (null), non un residuo zero, anche dopo una che le aveva (#1911, R.2)', function () {
+    Http::fake(['*' => Http::sequence()
+        ->push(['data' => []], 200, ['RateLimit-Policy' => '"chiamate_persona";q=300;w=3600', 'RateLimit' => '"chiamate_persona";r=299;t=3600'])
+        ->push(['data' => []], 200)
+        ->push(['data' => []], 200, ['RateLimit-Policy' => '', 'RateLimit' => ''])
+        ->pushStatus(204)]);
+    apriSessione();
+    $api = Api::workspace();
+
+    $api->get('/v1/crm/persone');
+    expect($api->freni())->not->toBeNull();
+
+    $api->get('/v1/crm/persone');
+    expect($api->freni())->toBeNull();
+
+    $api->get('/v1/crm/persone');
+    expect($api->freni())->toBeNull();
+
+    $api->delete('/v1/crm/fasi/f1');
+    expect($api->freni())->toBeNull();
+});
+
+it('un backoffice che non risponde lascia nessun freno noto, non quello della chiamata prima (#1911, R.1, R.2)', function () {
+    Http::fake(['*' => Http::sequence()
+        ->push(['data' => []], 200, ['RateLimit-Policy' => '"chiamate_persona";q=300;w=3600', 'RateLimit' => '"chiamate_persona";r=299;t=3600'])
+        ->pushFailedConnection()]);
+    apriSessione();
+    $api = Api::workspace();
+
+    $api->get('/v1/crm/persone');
+    expect(fn () => $api->get('/v1/crm/persone'))->toThrow(BackofficeNonRisponde::class)
+        ->and($api->freni())->toBeNull();
+});
+
+it('una chiamata che non parte lascia nessun freno noto, non quello della chiamata prima (#1911, R.1)', function () {
+    Http::fake(['*' => Http::response(['data' => []], 200, ['RateLimit-Policy' => '"chiamate_persona";q=300;w=3600', 'RateLimit' => '"chiamate_persona";r=299;t=3600'])]);
+    apriSessione();
+    $api = Api::workspace();
+
+    $api->get('/v1/crm/persone');
+    expect(fn () => $api->get('/v1/crm/persone?q=x'))->toThrow(InvalidArgumentException::class)
+        ->and($api->freni())->toBeNull();
+});
+
+it('il parser regge le maiuscole del nome delle intestazioni, i token e gli spazi, e ignora senza lanciare ciò che non legge (#1911, R.3)', function (array $intestazioni, ?array $atteso) {
+    Http::fake(['*' => Http::response(['data' => []], 200, $intestazioni)]);
+    apriSessione();
+    $api = Api::workspace();
+
+    $api->get('/v1/crm/persone');
+    $freni = $api->freni();
+
+    expect($freni === null ? null : array_map(fn (Freno $f) => [$f->q, $f->w, $f->r, $f->t], $freni->tutti()))->toBe($atteso);
+})->with([
+    'minuscole' => [['ratelimit-policy' => '"a";q=10;w=60', 'ratelimit' => '"a";r=4;t=30'], ['a' => [10, 60, 4, 30]]],
+    'maiuscole' => [['RATELIMIT-POLICY' => '"a";q=10;w=60', 'RATELIMIT' => '"a";r=4;t=30'], ['a' => [10, 60, 4, 30]]],
+    'token e spazi' => [['RateLimit-Policy' => ' a ; q=10 ;w=60 ,  b;q=5', 'RateLimit' => 'b;r=1, a;t=30;r=4'], ['a' => [10, 60, 4, 30], 'b' => [5, null, 1, null]]],
+    'parametri sconosciuti' => [['RateLimit-Policy' => '"a";q=10;w=60;qu="requests";pk=:YWJj:', 'RateLimit' => '"a";r=4;t=30;pk=:YWJj:'], ['a' => [10, 60, 4, 30]]],
+    'politica senza residuo' => [['RateLimit-Policy' => '"a";q=10;w=60', 'RateLimit' => '"b";r=1;t=2'], ['a' => [10, 60, null, null]]],
+    'residuo senza politica' => [['RateLimit' => '"a";r=4;t=30'], null],
+    'politica senza q' => [['RateLimit-Policy' => '"a";w=60, "b";q=3', 'RateLimit' => '"a";r=4, "b";r=2'], ['b' => [3, null, 2, null]]],
+    'q non intero' => [['RateLimit-Policy' => '"a";q=1.5;w=60, "b";q=3', 'RateLimit' => '"a";r=1;t=1, "b";r=2'], ['b' => [3, null, 2, null]]],
+    'negativo' => [['RateLimit-Policy' => '"a";q=-1, "b";q=3', 'RateLimit' => '"b";r=-2'], ['b' => [3, null, null, null]]],
+    'stringa aperta' => [['RateLimit-Policy' => '"a;q=10, "b";q=3', 'RateLimit' => '"b";r=2;t=1'], null],
+    'virgola nel nome' => [['RateLimit-Policy' => '"a,b";q=10', 'RateLimit' => '"a,b";r=4;t=30'], ['a,b' => [10, null, 4, 30]]],
+    'rumore' => [['RateLimit-Policy' => ';;;,,=,"";q=1, 9x;q=2, "c";q=3;q=4', 'RateLimit' => '"c";r=1;r=2'], ['c' => [4, null, 2, null]]],
+    'doppione' => [['RateLimit-Policy' => '"a";q=10, "a";q=20', 'RateLimit' => '"a";r=4, "a";r=9'], ['a' => [10, null, 4, null]]],
+    'enorme' => [['RateLimit-Policy' => '"a";q=99999999999999999999, "b";q=3', 'RateLimit' => '"b";r=1'], ['b' => [3, null, 1, null]]],
+    'oltre i limiti di PCRE' => [['RateLimit-Policy' => '"'.str_repeat('a\\"', 200000).'";q=1', 'RateLimit' => '"a";r=1'], null],
+]);

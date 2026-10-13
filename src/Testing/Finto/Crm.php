@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
 use LogicException;
 
 /**
- * Il CRM del backoffice finto (#1856, G67): aziende (`organizzazioni`), contatti (`persone`), trattative, pipeline e fasi, attività,
+ * Il CRM del backoffice finto (#1856, G67): aziende (`organizzazioni`), contatti (`persone`), trattative, pipeline e fasi, motivi di perdita, attività,
  * note, impostazioni e utilizzo, in memoria e per workspace, con le forme del contratto, i codici del catalogo e le regole dei corpi
  * del backoffice (`app/Http/Controllers/Crm`). Un metodo `crm.*` vuole l'app `crm` attiva nel workspace del gettone (attivaApp()):
  * prima il ruolo (403 permesso_negato), poi l'app (403 app_non_attiva), poi la risorsa del percorso (404 non_trovato, anche per
@@ -39,6 +39,9 @@ trait Crm
         ['GET', '#^/v1/crm/organizzazioni/([^/]+)/cronologia$#', 'crm.organizzazioni.cronologia.elenca'],
         ['GET', '#^/v1/crm/importazioni/([^/]+)$#', 'crm.importazioni.mostra'],
         ['POST', '#^/v1/crm/importazioni/([^/]+)/annullamento$#', 'crm.importazioni.annullamento.crea'],
+        ['GET', '#^/v1/crm/motivi$#', 'crm.motivi.elenca'],
+        ['POST', '#^/v1/crm/motivi$#', 'crm.motivi.crea'],
+        ['PATCH', '#^/v1/crm/motivi/([^/]+)$#', 'crm.motivi.modifica'],
         ['GET', '#^/v1/crm/pipeline$#', 'crm.pipeline.elenca'],
         ['POST', '#^/v1/crm/pipeline$#', 'crm.pipeline.crea'],
         ['POST', '#^/v1/crm/pipeline/partenza$#', 'crm.pipeline.partenza.crea'],
@@ -103,10 +106,10 @@ trait Crm
         'XAF', 'XCD', 'XCG', 'XOF', 'XPF', 'YER', 'ZAR', 'ZMW', 'ZWG',
     ];
 
-    /** I tetti di crm.utilizzo.mostra (config zeiras.crm e le costanti dei controller), nell'ordine della risposta. */
+    /** I tetti del CRM (config zeiras.crm e le costanti dei controller): quelli di crm.utilizzo.mostra nell'ordine della risposta, poi i motivi, che non vi compaiono. */
     private const CRM_TETTI = [
         'trattative' => 25000, 'trattative_aperte_per_pipeline' => 5000, 'attivita_non_fatte' => 10000, 'attivita' => 50000,
-        'persone' => 25000, 'organizzazioni' => 10000, 'note' => 50000, 'pipeline' => 10, 'fasi_per_pipeline' => 20,
+        'persone' => 25000, 'organizzazioni' => 10000, 'note' => 50000, 'pipeline' => 10, 'fasi_per_pipeline' => 20, 'motivi' => 50,
     ];
 
     /** Il titolo di un'opportunità di un contatto anonimizzato (Anonimizzazione::TITOLO_OPPORTUNITA). */
@@ -144,6 +147,12 @@ trait Crm
 
     private const CRM_ERRORI_PER_RIGA = 3;
 
+    /**
+     * I freni delle importazioni, coi tetti all'ora (Importazioni::FRENI e config zeiras.freni.crm_importazioni_*, #1894): le chiamate di
+     * una persona, prova compresa, e le righe per persona e per workspace, la prova separata dalla scrittura.
+     */
+    private const CRM_FRENI_DELLE_IMPORTAZIONI = ['chiamate_persona' => 300, 'prova_persona' => 30000, 'prova_workspace' => 60000, 'scrittura_persona' => 12000, 'scrittura_workspace' => 24000];
+
     /** Le trattative collegate più recenti che danno righe alla cronologia di un contatto (config zeiras.crm.cronologia_trattative_per_contatto). */
     private const CRM_FINESTRA_DELLE_TRATTATIVE = 200;
 
@@ -157,9 +166,9 @@ trait Crm
      * Lo stato del CRM, per tipo e per id: ogni riga porta il suo `workspace`. Le righe eliminate (fasi, attività, note) restano con
      * `eliminata`, come nell'archivio di sistema; le `cambi` sono le righe delle cronologie di contatti, aziende e trattative.
      *
-     * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>}
+     * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -188,8 +197,11 @@ trait Crm
             'crm.persone.importazioni.crea' => $this->importaCrm($richiesta, $corpo, 'persone', $operazione),
             'crm.persone.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'persone', $parametri[0], $operazione),
             'crm.persone.anonimizzazione.crea' => $this->anonimizzaCrm($richiesta, $parametri[0]),
-            'crm.importazioni.mostra' => [200, ['data' => $this->voceImportazioneCrm($this->importazioneCrm($this->conCrm($richiesta)['workspace'], $parametri[0]))]],
+            'crm.importazioni.mostra' => [200, ['data' => $this->voceImportazioneCrm($this->importazioneCrm($this->conCrm($richiesta, ['proprietario', 'amministratore'])['workspace'], $parametri[0]))]],
             'crm.importazioni.annullamento.crea' => $this->annullaImportazioneCrm($richiesta, $corpo, $parametri[0]),
+            'crm.motivi.elenca' => $this->elencaMotiviCrm($richiesta),
+            'crm.motivi.crea' => $this->creaMotivoCrm($richiesta, $corpo),
+            'crm.motivi.modifica' => $this->modificaMotivoCrm($richiesta, $corpo, $parametri[0]),
             'crm.pipeline.crea' => $this->creaPipelineCrm($richiesta, $corpo),
             'crm.pipeline.partenza.crea' => $this->partenzaPipelineCrm($richiesta, $corpo),
             'crm.pipeline.mostra' => $this->mostraCrm($richiesta, 'pipeline', $parametri[0]),
@@ -351,7 +363,7 @@ trait Crm
         }
 
         if ($cambiata) {
-            $colonna = $tipo === 'persone' ? 'aggiornato_il' : 'aggiornata_il';
+            $colonna = in_array($tipo, ['persone', 'motivi'], true) ? 'aggiornato_il' : 'aggiornata_il';
             $riga[$colonna] = self::dopoCrm($riga[$colonna]);
             $this->crm[$tipo][$id] = $riga;
         }
@@ -1488,6 +1500,24 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
 
+        // RateLimit-Policy e RateLimit su ogni risposta dopo il ruolo e l'app (FreniDelleImportazioni): errori, 429 e risposta ricordata
+        // compresi, col residuo di adesso.
+        try {
+            $esito = $this->importaCrmFrenata($richiesta, $corpo, $tipo, $operazione, $chi);
+        } catch (Problema $problema) {
+            throw $problema->conHeader($this->intestazioniImportazioniCrm($chi));
+        }
+
+        return [$esito[0], $esito[1], $esito[2] + $this->intestazioniImportazioniCrm($chi)];
+    }
+
+    /**
+     * @param  array<mixed>  $corpo
+     * @param  array{persona: string, accesso: string, workspace: string}  $chi
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function importaCrmFrenata(Request $richiesta, array $corpo, string $tipo, string $operazione, array $chi): array
+    {
         return $this->conIdempotenza($richiesta, $operazione, $chi, $corpo, function () use ($chi, $corpo, $tipo) {
             $campi = $this->testi->validaCorpo($corpo, [
                 'prova' => ['nullable', 'boolean:strict'],
@@ -1496,6 +1526,7 @@ trait Crm
                 ...($tipo === 'persone' ? ['simili' => ['nullable', 'string', Rule::in(['crea', 'salta'])]] : []),
             ]);
             $prova = (bool) ($campi['prova'] ?? false);
+            $this->frenaImportazioniCrm($chi, $prova, count($campi['righe']));
             $salta = ($campi['simili'] ?? null) === 'salta';
             $esiti = [];
             $nuove = [];
@@ -1607,6 +1638,59 @@ trait Crm
                 ? [200, ['data' => ['righe' => $righe, 'totali' => $totali]], []]
                 : [201, ['data' => ['id' => $importazione, 'righe' => $righe, 'totali' => $totali]], ['Location' => "/v1/crm/importazioni/{$importazione}"]];
         });
+    }
+
+    /**
+     * Importazioni::frena: la chiamata e le sue righe, in prova o in scrittura, per persona e per workspace, dopo il corpo e prima del
+     * lavoro. Oltre un tetto è 429 col `freno` che ha fermato e Retry-After, e la chiamata non consuma niente.
+     *
+     * @param  array{persona: string, accesso: string, workspace: string}  $chi
+     */
+    private function frenaImportazioniCrm(array $chi, bool $prova, int $righe): void
+    {
+        $tipo = $prova ? 'prova' : 'scrittura';
+        $contate = [];
+
+        foreach (['chiamate_persona' => 1, "{$tipo}_persona" => $righe, "{$tipo}_workspace" => $righe] as $freno => $unita) {
+            $chiave = self::chiaveImportazioniCrm($chi, $freno);
+
+            if ($this->freni->attempts($chiave) + $unita > self::CRM_FRENI_DELLE_IMPORTAZIONI[$freno]) {
+                foreach ($contate as $contata => $quante) {
+                    $this->freni->decrement($contata, self::ORA, $quante);
+                }
+
+                throw new Problema('troppe_richieste', header: ['Retry-After' => (string) $this->freni->availableIn($chiave)], estensioni: ['freno' => $freno]);
+            }
+
+            $this->freni->increment($chiave, self::ORA, $unita);
+            $contate[$chiave] = $unita;
+        }
+    }
+
+    /**
+     * Importazioni::intestazioni: una politica per freno, col tetto e l'ora, e il residuo coi secondi al ripristino (0 se la finestra non è aperta).
+     *
+     * @param  array{persona: string, accesso: string, workspace: string}  $chi
+     * @return array{RateLimit-Policy: string, RateLimit: string}
+     */
+    private function intestazioniImportazioniCrm(array $chi): array
+    {
+        $politiche = [];
+        $residui = [];
+
+        foreach (self::CRM_FRENI_DELLE_IMPORTAZIONI as $freno => $tetto) {
+            $chiave = self::chiaveImportazioniCrm($chi, $freno);
+            $politiche[] = "\"{$freno}\";q={$tetto};w=".self::ORA;
+            $residui[] = "\"{$freno}\";r=".max(0, $tetto - $this->freni->attempts($chiave)).';t='.$this->freni->availableIn($chiave);
+        }
+
+        return ['RateLimit-Policy' => implode(', ', $politiche), 'RateLimit' => implode(', ', $residui)];
+    }
+
+    /** @param  array{persona: string, accesso: string, workspace: string}  $chi */
+    private static function chiaveImportazioniCrm(array $chi, string $freno): string
+    {
+        return "freni:crm.importazioni:{$freno}:".(str_ends_with($freno, '_persona') ? $chi['persona'] : $chi['workspace']);
     }
 
     /** La chiave di un nome e cognome (SomiglianzaDiNomi::chiave): senza spazi ai bordi, senza accenti (NFD senza segni), piegata. */
@@ -1826,6 +1910,149 @@ trait Crm
         $this->cambioCrm('persone', $persona['id'], $chi['persona'], 'anonimizzata', []);
 
         return [200, ['data' => ['attivita_eliminate' => $eliminate, 'opportunita_rinominate' => $rinominate]]];
+    }
+
+    // ———————————————————————————————————————— Motivi di perdita
+
+    /**
+     * crm.motivi.crea (MotiviController::crea): in fondo all'elenco; il tetto di 50 (archiviati compresi), poi il nome unico fra i
+     * non archiviati senza maiuscole né accenti (422 `duplicato` su `#/nome`).
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaMotivoCrm(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+
+        return $this->conIdempotenza($richiesta, 'crm.motivi.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $campi = $this->testi->validaCorpo($corpo, ['nome' => ['bail', 'required', 'string', 'max:60', new NomeScritto]]);
+
+            if (count($this->righeCrm('motivi', $chi['workspace'])) >= self::CRM_TETTI['motivi']) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['motivi']]);
+            }
+
+            $this->motivoUnicoCrm($chi['workspace'], $campi['nome'], null, 'nome');
+            $vivi = $this->motiviViviCrm($chi['workspace']);
+            $id = self::id();
+            $ora = self::adessoCrm();
+            $this->crm['motivi'][$id] = [
+                'id' => $id, 'workspace' => $chi['workspace'], 'nome' => $campi['nome'],
+                'posizione' => $vivi === [] ? self::CRM_PASSO : end($vivi)['posizione'] + self::CRM_PASSO,
+                'archiviata_il' => null, 'creato_il' => $ora, 'aggiornato_il' => $ora,
+            ];
+
+            return [201, ['data' => $this->voceMotivoCrm($this->crm['motivi'][$id])], ['Location' => "/v1/crm/motivi/{$id}"]];
+        });
+    }
+
+    /**
+     * crm.motivi.modifica (MotiviController::modifica): JSON Merge Patch di `nome`, `posizione` (il posto fra i non archiviati) e
+     * `archiviato`; un motivo archiviato non ha posto (422 su `#/posizione`), ripristinato torna in fondo, e ripristinarlo con un nome
+     * preso è 422 `duplicato` su `#/archiviato`. Il finto rinumera i vivi a passo pieno invece di collocare a metà: l'ordine è lo stesso.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaMotivoCrm(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+        $riga = $this->rigaCrm('motivi', $chi['workspace'], $id);
+        $campi = $this->modificaCrm($corpo, [
+            'nome' => ['bail', 'filled', 'string', 'max:60', new NomeScritto],
+            'posizione' => ['filled', 'integer:strict', 'min:1'],
+            'archiviato' => ['filled', 'boolean:strict'],
+        ]);
+        $archiviato = $campi['archiviato'] ?? ($riga['archiviata_il'] !== null);
+
+        if (array_key_exists('posizione', $campi) && $archiviato) {
+            throw $this->erroreCrm('posizione', 'regole.motivo_archiviato_senza_posto', Regola::VALORE_NON_AMMESSO);
+        }
+
+        $nome = $campi['nome'] ?? $riga['nome'];
+
+        if (! $archiviato && ($nome !== $riga['nome'] || $riga['archiviata_il'] !== null)) {
+            $this->motivoUnicoCrm($chi['workspace'], $nome, $riga['id'], array_key_exists('nome', $campi) && $nome !== $riga['nome'] ? 'nome' : 'archiviato');
+        }
+
+        $nuovi = ['nome' => $nome];
+
+        if ($archiviato !== ($riga['archiviata_il'] !== null)) {
+            $nuovi['archiviata_il'] = $archiviato ? self::adessoCrm() : null;
+        }
+
+        if (! $archiviato && (array_key_exists('posizione', $campi) || $riga['archiviata_il'] !== null)) {
+            $altri = array_values(array_filter($this->motiviViviCrm($chi['workspace']), fn (array $altro) => $altro['id'] !== $riga['id']));
+            $posto = min($campi['posizione'] ?? PHP_INT_MAX, count($altri) + 1);
+
+            if ($riga['archiviata_il'] !== null || $this->postoMotivoCrm($riga) !== $posto) {
+                array_splice($altri, $posto - 1, 0, [$riga]);
+
+                foreach ($altri as $i => $motivo) {
+                    if ($motivo['id'] !== $riga['id']) {
+                        $this->crm['motivi'][$motivo['id']]['posizione'] = self::CRM_PASSO * ($i + 1);
+                    } else {
+                        $nuovi['posizione'] = self::CRM_PASSO * ($i + 1);
+                    }
+                }
+            }
+        }
+
+        $this->salvaCrm('motivi', $riga['id'], $nuovi);
+
+        return [200, ['data' => $this->voceMotivoCrm($this->crm['motivi'][$riga['id']])]];
+    }
+
+    /**
+     * crm.motivi.elenca: per posizione, a cursore; senza `archiviati` (o con `false`) i non archiviati col loro posto, con `true` gli
+     * archiviati. Un cursore degli archiviati non vale per gli altri.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaMotiviCrm(Request $richiesta): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $query = $this->testi->validaQuery(self::query($richiesta), ['archiviati' => ['sometimes', 'string', Rule::in(['true', 'false'])]]);
+        $archiviati = ($query['archiviati'] ?? null) === 'true';
+        $righe = array_values(array_filter($this->righeCrm('motivi', $chi['workspace']), fn (array $riga) => ($riga['archiviata_il'] !== null) === $archiviati));
+
+        return $this->paginaCrm($richiesta, 'crm.motivi.elenca'.($archiviati ? ':archiviati' : ''), $righe, fn (array $una, array $altra) => [$una['posizione'], $una['id']] <=> [$altra['posizione'], $altra['id']], fn (array $riga) => $this->voceMotivoCrm($riga));
+    }
+
+    /** @return array<string, mixed> lo schema Motivo (Forme::motivo) */
+    private function voceMotivoCrm(array $riga): array
+    {
+        return [
+            'id' => $riga['id'],
+            'nome' => $riga['nome'],
+            'posizione' => $riga['archiviata_il'] === null ? $this->postoMotivoCrm($riga) : null,
+            'archiviato_il' => self::isoCrm($riga['archiviata_il']),
+            'creato_il' => self::iso($riga['creato_il']),
+            'aggiornato_il' => self::iso($riga['aggiornato_il']),
+        ];
+    }
+
+    /** @return list<array<string, mixed>> i motivi non archiviati del workspace, per posizione */
+    private function motiviViviCrm(string $workspace): array
+    {
+        $vivi = array_values(array_filter($this->righeCrm('motivi', $workspace), fn (array $riga) => $riga['archiviata_il'] === null));
+        usort($vivi, fn (array $una, array $altra) => [$una['posizione'], $una['id']] <=> [$altra['posizione'], $altra['id']]);
+
+        return $vivi;
+    }
+
+    /** Il posto di un motivo vivo fra i vivi del suo workspace (1 = in cima). */
+    private function postoMotivoCrm(array $riga): int
+    {
+        return (int) array_search($riga['id'], array_column($this->motiviViviCrm($riga['workspace']), 'id'), true) + 1;
+    }
+
+    /** Il nome non è di un altro motivo vivo, senza maiuscole, accenti e spazi ai bordi: altrimenti 422 `duplicato` sul campo dato. */
+    private function motivoUnicoCrm(string $workspace, string $nome, ?string $tranne, string $campo): void
+    {
+        foreach ($this->motiviViviCrm($workspace) as $altro) {
+            if ($altro['id'] !== $tranne && self::nomeSimileCrm($altro['nome'], null) === self::nomeSimileCrm($nome, null)) {
+                throw $this->erroreCrm($campo, 'regole.motivo_duplicato', Regola::DUPLICATO);
+            }
+        }
     }
 
     // ———————————————————————————————————————— Pipeline e fasi
@@ -2182,8 +2409,11 @@ trait Crm
     }
 
     /**
-     * FasiController::elimina: mai la sola fase della pipeline (409 ultima_fase), mai una con trattative, aperte o no (409
-     * fase_non_vuota), in quest'ordine. La fase passa nell'archivio di sistema e da lì è 404. Risponde 204.
+     * FasiController::elimina: mai la sola fase della pipeline (409 ultima_fase); una fase con trattative, aperte o no, solo con
+     * `sposta_in` nella query (#1902), altrimenti 409 fase_non_vuota. Con `sposta_in` tutte le trattative passano in coda all'altra
+     * fase della pipeline, nel loro ordine, con la cronologia di uno spostamento di fase; un `sposta_in` che non va è 422 sul
+     * parameter (`valore_non_ammesso` la fase stessa o di un'altra pipeline, `non_trovato` il resto). Con una fase vuota si ignora.
+     * La fase passa nell'archivio di sistema e da lì è 404. Risponde 204.
      *
      * @return array{int, null}
      */
@@ -2191,19 +2421,61 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
         $fase = $this->rigaCrm('fasi', $chi['workspace'], $id);
+        $query = self::query($richiesta);
+        $spostaIn = null;
+
+        if (array_key_exists('sposta_in', $query)) {
+            if (! is_string($query['sposta_in']) || $query['sposta_in'] === '' || strlen($query['sposta_in']) > 64) {
+                throw $this->erroreDiParametroCrm('regole.sposta_in', Regola::TIPO);
+            }
+
+            $spostaIn = strtolower($query['sposta_in']);
+        }
 
         if (count($this->fasiCrm($fase['pipeline_id'])) <= 1) {
             throw new Problema('ultima_fase');
         }
 
-        if (array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $fase['id']) !== []) {
-            throw new Problema('fase_non_vuota');
+        $nellaFase = array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $fase['id']);
+
+        if ($nellaFase !== []) {
+            if ($spostaIn === null) {
+                throw new Problema('fase_non_vuota');
+            }
+
+            $destinazione = $this->crm['fasi'][$spostaIn] ?? null;
+            $viva = $destinazione !== null && $destinazione['workspace'] === $chi['workspace'] && ! ($destinazione['eliminata'] ?? false);
+
+            if (! $viva) {
+                throw $this->erroreDiParametroCrm($spostaIn === $fase['id'] ? 'regole.sposta_in_altra_fase' : 'regole.fase_della_pipeline', $spostaIn === $fase['id'] ? Regola::VALORE_NON_AMMESSO : Regola::NON_TROVATO);
+            }
+
+            if ($spostaIn === $fase['id'] || $destinazione['pipeline_id'] !== $fase['pipeline_id']) {
+                throw $this->erroreDiParametroCrm('regole.sposta_in_altra_fase', Regola::VALORE_NON_AMMESSO);
+            }
+
+            usort($nellaFase, fn (array $una, array $altra) => [$una['posizione'], $una['id']] <=> [$altra['posizione'], $altra['id']]);
+            $ora = self::adessoCrm();
+
+            foreach ($nellaFase as $riga) {
+                $spostata = ['fase_id' => $spostaIn, 'in_fase_dal' => $ora, 'aggiornata_il' => self::dopoCrm($riga['aggiornata_il'])] + $riga;
+                $this->crm['trattative'][$riga['id']] = $spostata;
+                $this->collocaCrm('trattative', array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $spostaIn), $riga['id'], null, true);
+                $this->riportaCrm(self::contributoCrm($riga), self::contributoCrm($spostata));
+                $this->cambioCrm('trattative', $riga['id'], $chi['persona'], 'modificata', [['campo' => 'fase_id', 'prima' => $fase['id'], 'dopo' => $spostaIn]]);
+            }
         }
 
         $this->crm['fasi'][$fase['id']]['eliminata'] = true;
         $this->toccaPipelineCrm($fase['pipeline_id']);
 
         return [204, null];
+    }
+
+    /** Un 422 dati_non_validi su un parameter della query (ErroreDiCampo::parameter del backoffice). */
+    private function erroreDiParametroCrm(string $chiave, string $regola): Problema
+    {
+        return new Problema('dati_non_validi', [['detail' => $this->testi->testo($chiave), 'regola' => $regola, 'parameter' => 'sposta_in']]);
     }
 
     // ———————————————————————————————————————— Trattative
@@ -2229,6 +2501,7 @@ trait Crm
             'in_fase_dal' => self::iso($riga['in_fase_dal']),
             'stato' => $riga['stato'],
             'motivo_perdita' => $riga['motivo_perdita'],
+            'motivo_perdita_id' => $riga['motivo_perdita_id'] ?? null,
             'chiusa_il' => self::isoCrm($riga['chiusa_il']),
             'chiusura_prevista' => $riga['chiusura_prevista'],
             'responsabile_id' => $riga['responsabile_id'],
@@ -2284,6 +2557,7 @@ trait Crm
         ] + ($nuova ? [] : [
             'stato' => ['bail', 'filled', 'string', Rule::in(self::CRM_STATI_TRATTATIVA)],
             'motivo_perdita' => ['nullable', 'string', 'max:500'],
+            'motivo_perdita_id' => ['bail', 'nullable', 'string', 'max:64', $this->regolaCheEsiste($workspace, 'motivi', 'regole.motivo_non_esiste')],
             'archiviata' => ['filled', 'boolean:strict'],
         ]);
     }
@@ -2332,7 +2606,7 @@ trait Crm
                 'id' => $id, 'workspace' => $chi['workspace'], 'titolo' => $campi['titolo'], 'importo' => $campi['valore']['importo'] ?? null,
                 'pipeline_id' => $pipeline['id'], 'fase_id' => $fase, 'persona_id' => $persona,
                 'organizzazione_id' => isset($campi['organizzazione_id']) ? strtolower($campi['organizzazione_id']) : null,
-                'probabilita' => $campi['probabilita'] ?? null, 'in_fase_dal' => $ora, 'stato' => 'aperta', 'motivo_perdita' => null, 'chiusa_il' => null,
+                'probabilita' => $campi['probabilita'] ?? null, 'in_fase_dal' => $ora, 'stato' => 'aperta', 'motivo_perdita' => null, 'motivo_perdita_id' => null, 'chiusa_il' => null,
                 'chiusura_prevista' => $campi['chiusura_prevista'] ?? null,
                 'responsabile_id' => isset($campi['responsabile_id']) ? strtolower($campi['responsabile_id']) : $chi['persona'],
                 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona'],
@@ -2410,7 +2684,7 @@ trait Crm
             unset($campi['valore']);
         }
 
-        foreach (['pipeline_id', 'fase_id', 'persona_id', 'organizzazione_id', 'responsabile_id'] as $campo) {
+        foreach (['pipeline_id', 'fase_id', 'persona_id', 'organizzazione_id', 'responsabile_id', 'motivo_perdita_id'] as $campo) {
             if (isset($campi[$campo])) {
                 $campi[$campo] = strtolower($campi[$campo]);
             }
@@ -2466,6 +2740,10 @@ trait Crm
             throw $this->erroreCrm('motivo_perdita', 'regole.motivo_solo_se_persa', Regola::CAMPO_VIETATO);
         }
 
+        if (array_key_exists('motivo_perdita_id', $campi) && $campi['motivo_perdita_id'] !== null && $stato !== 'persa') {
+            throw $this->erroreCrm('motivo_perdita_id', 'regole.motivo_solo_se_persa', Regola::CAMPO_VIETATO);
+        }
+
         if ($stato !== $riga['stato']) {
             $cambi['stato'] = ['prima' => $riga['stato'], 'dopo' => $stato];
             $dopo['stato'] = $stato;
@@ -2477,6 +2755,14 @@ trait Crm
         if ($motivo !== $riga['motivo_perdita']) {
             $cambi['motivo_perdita'] = [];
             $dopo['motivo_perdita'] = $motivo;
+        }
+
+        // Il motivo scelto dall'elenco (#1904): la stessa regola della nota libera, e la cronologia ne dice prima e dopo.
+        $scelto = $stato === 'persa' ? (array_key_exists('motivo_perdita_id', $campi) ? $campi['motivo_perdita_id'] : ($riga['motivo_perdita_id'] ?? null)) : null;
+
+        if ($scelto !== ($riga['motivo_perdita_id'] ?? null)) {
+            $cambi['motivo_perdita_id'] = ['prima' => $riga['motivo_perdita_id'] ?? null, 'dopo' => $scelto];
+            $dopo['motivo_perdita_id'] = $scelto;
         }
 
         if ($destinazione !== $riga['pipeline_id']) {
@@ -2510,10 +2796,10 @@ trait Crm
             $this->toccaPipelineCrm($dopo['pipeline_id']);
         }
 
-        $valori = ['valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'pipeline_id', 'fase_id'];
+        $valori = ['valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita_id', 'pipeline_id', 'fase_id'];
         $voci = [];
 
-        foreach (['titolo', 'valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita', 'pipeline_id', 'fase_id'] as $campo) {
+        foreach (['titolo', 'valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita', 'motivo_perdita_id', 'pipeline_id', 'fase_id'] as $campo) {
             if (isset($cambi[$campo])) {
                 $voci[] = in_array($campo, $valori, true) ? ['campo' => $campo, ...$cambi[$campo]] : ['campo' => $campo];
             }

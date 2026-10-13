@@ -70,6 +70,16 @@ final class Problema extends RuntimeException
         parent::__construct($codice);
     }
 
+    /**
+     * Lo stesso problema con altri header in più (le intestazioni dei freni che il backoffice aggiunge a ogni risposta di un metodo).
+     *
+     * @param  array<string, string>  $header
+     */
+    public function conHeader(array $header): self
+    {
+        return new self($this->codice, $this->errori, [...$this->header, ...$header], $this->estensioni, $this->verifica);
+    }
+
     public function stato(): int
     {
         return self::STATI[$this->codice];

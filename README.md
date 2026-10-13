@@ -241,6 +241,20 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
   return $ultimo['corpo'];                                 // 304: si serve ciò che si aveva
   ```
 
+- `freni()` dice il residuo dei freni dopo l'**ultima** chiamata di quell'istanza, letto da `RateLimit-Policy` e `RateLimit`
+  (draft IETF httpapi-ratelimit-headers): `?Freni`, con `freno($nome)` e `tutti()`; ogni `Freno` ha `nome`, la quota `q` e la
+  finestra `w` in secondi della politica, il residuo `r` e i secondi `t` al ripristino (un valore che la risposta non dice è
+  `null`). `null` vuol dire **nessun freno noto** (prima della prima chiamata, dopo una risposta senza le intestazioni o un
+  backoffice che non risponde), mai residuo zero. Si legge anche dopo un errore: il `429` del freno porta il residuo. Un
+  elemento che il client non legge si ignora, senza lanciare. Oggi le mandano le importazioni del CRM (#1894).
+
+  ```php
+  // zr-crm: prima del primo pezzo di «Importa», il freno regge il file?
+  $api = Api::workspace();
+  $api->post('/v1/crm/persone/importazioni', ['prova' => true, 'righe' => $primoPezzo]);
+  $residuo = $api->freni()?->freno('scrittura_persona')?->r;   // null: non si sa
+  ```
+
 - **L'IP vero della persona (client registrato).** Le rotte senza gettone (`accessi.crea`, `utenti.crea`, le verifiche
   dell'email, il recupero della password, lo scambio dell'ingresso e i tre metodi dei provider) hanno i loro freni per IP: se il
   frontend non dice chi chiama, il backoffice vede il suo server (`127.0.0.1`) e tutte le persone di Zeiras dividono lo stesso
@@ -546,8 +560,11 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   ogni workspace, come in produzione dal 12/10: si attiva con `app.modifica` o con `attivaApp($workspace, 'crm')`. Prima il
   ruolo (`403` `permesso_negato`), poi l'app (`403` `app_non_attiva`), poi l'id del percorso (`404`, anche di un altro
   workspace), poi il corpo (`422` sul pointer coi testi del backoffice). Gli elenchi hanno i filtri, `ordina`, `totale` e il
-  cursore, che vale solo per la stessa lista, lo stesso ordine e gli stessi filtri. Il finto **non** imita: i freni del CRM
-  (creazioni, ricerca per email, importazioni, anonimizzazione) e le loro intestazioni `RateLimit`; `ETag`, `If-None-Match` e
+  cursore, che vale solo per la stessa lista, lo stesso ordine e gli stessi filtri. Il freno delle importazioni è quello del
+  backoffice (le chiamate di una persona, 300 all'ora, e le righe all'ora, in prova e in scrittura, per persona e per
+  workspace: `429` `troppe_richieste` col `freno` che ha fermato), con `RateLimit-Policy` e `RateLimit` su ogni risposta
+  dopo il ruolo e l'app, errori e risposta ricordata compresi. Il finto **non** imita: gli altri freni del CRM
+  (creazioni, ricerca per email, anonimizzazione); `ETag`, `If-None-Match` e
   `If-Match` (`304` e `412`); la risposta ricordata di un'importazione (con `Idempotency-Key` il finto ripete la risposta intera,
   anche in prova); l'ordine dei nomi nella collation di MySQL oltre a maiuscole e accenti; i tetti di contatti, aziende e
   trattative in `crea` e `modifica` (il finto guarda quelli di contatti e aziende solo nelle importazioni, e quelli di
