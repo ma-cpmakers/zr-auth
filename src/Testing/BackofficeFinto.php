@@ -220,6 +220,9 @@ final class BackofficeFinto
 
     private const LIMITE_MASSIMO = 100;
 
+    /** Il tetto del `limite` di board.schede.elenca (#1940): una board grande si legge in poche pagine; gli altri elenchi restano a 100. */
+    private const LIMITE_MASSIMO_SCHEDE = 1000;
+
     /** Lo slug di un workspace (Workspace::nuovoSlug, D13): quanti caratteri del nome, poi quanti casuali, e da dove. */
     private const SLUG_DAL_NOME = 40;
 
@@ -1428,7 +1431,7 @@ final class BackofficeFinto
 
         // Come SchedeElencaRequest: il limite della lista e i parametri della richiesta si guardano insieme, il limite per primo.
         $query = $this->testi->validaQuery($grezzo, [
-            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO],
+            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO_SCHEDE],
             'board_id' => ['bail', 'required_without:assegnatario_id', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($chi) {
                 if (($this->boards[$valore]['workspace'] ?? null) !== $chi['workspace'] && ! $this->laBoardDiProva($chi['workspace'], $valore)) {
                     $this->testi->dichiara($attributo, 'non_trovato');
