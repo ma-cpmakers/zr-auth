@@ -466,7 +466,7 @@ it('i testi dei nuovi errori sono quelli del backoffice, nella lingua della rich
     $vuota = alFinto('DELETE', '/v1/crm/sezioni/persona.lavoro', null, $gettoni['anna'], 'es');
     $indispensabile = alFinto('PATCH', '/v1/crm/campi/persona.nome', ['visibilita' => 'nascosto'], $gettoni['anna']);
 
-    expect($sistema->json('title'))->toBe('System section')
+    expect($sistema->json('title'))->toBe('Sezione di sistema')
         ->and($sistema->json('detail'))->toBe("“Principali” (Main) is the fixed section of an object's fields: it cannot be renamed, moved or deleted. Nothing was written.")
         ->and($vuota->json('detail'))->toBe('Esta sección aún tiene campos y solo se elimina sin ellos. Mueve sus campos a otra sección con crm.campi.modifica y vuelve a intentarlo.')
         ->and($indispensabile->json('errors.0.detail'))->toBe('Questo campo è indispensabile e non si nasconde: lascia `visibilita` a `visibile`.');
