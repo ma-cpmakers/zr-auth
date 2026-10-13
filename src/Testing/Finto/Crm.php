@@ -25,6 +25,7 @@ trait Crm
         ['GET', '#^/v1/crm/persone$#', 'crm.persone.elenca'],
         ['POST', '#^/v1/crm/persone/ricerca$#', 'crm.persone.ricerca.crea'],
         ['POST', '#^/v1/crm/persone/importazioni$#', 'crm.persone.importazioni.crea'],
+        ['GET', '#^/v1/crm/persone/esportazione$#', 'crm.persone.esportazione.mostra'],
         ['POST', '#^/v1/crm/persone$#', 'crm.persone.crea'],
         ['GET', '#^/v1/crm/persone/([^/]+)$#', 'crm.persone.mostra'],
         ['PATCH', '#^/v1/crm/persone/([^/]+)$#', 'crm.persone.modifica'],
@@ -33,6 +34,7 @@ trait Crm
         ['GET', '#^/v1/crm/organizzazioni$#', 'crm.organizzazioni.elenca'],
         ['POST', '#^/v1/crm/organizzazioni/ricerca$#', 'crm.organizzazioni.ricerca.crea'],
         ['POST', '#^/v1/crm/organizzazioni/importazioni$#', 'crm.organizzazioni.importazioni.crea'],
+        ['GET', '#^/v1/crm/organizzazioni/esportazione$#', 'crm.organizzazioni.esportazione.mostra'],
         ['POST', '#^/v1/crm/organizzazioni$#', 'crm.organizzazioni.crea'],
         ['GET', '#^/v1/crm/organizzazioni/([^/]+)$#', 'crm.organizzazioni.mostra'],
         ['PATCH', '#^/v1/crm/organizzazioni/([^/]+)$#', 'crm.organizzazioni.modifica'],
@@ -134,6 +136,11 @@ trait Crm
     /** Oltre quante righe `totale` si ferma e porta `totale_almeno` (*::TETTO_DEL_TOTALE). */
     private const CRM_TETTO_DEL_TOTALE = 10000;
 
+    /** I freni delle esportazioni, all'ora (config zeiras.freni.crm_esportazioni_*, #1905): per persona e per workspace, i due metodi insieme. */
+    private const CRM_ESPORTAZIONI_PERSONA_ALL_ORA = 10;
+
+    private const CRM_ESPORTAZIONI_WORKSPACE_ALL_ORA = 20;
+
     /** Quanti id al più nel filtro `id` (FiltroPerId::MASSIMO). */
     private const CRM_ID_NEL_FILTRO = 100;
 
@@ -186,6 +193,7 @@ trait Crm
             'crm.organizzazioni.mostra' => $this->mostraCrm($richiesta, 'organizzazioni', $parametri[0]),
             'crm.organizzazioni.modifica' => $this->modificaOrganizzazioneCrm($richiesta, $corpo, $parametri[0]),
             'crm.organizzazioni.elenca' => $this->elencaCrm($richiesta, 'organizzazioni', $operazione),
+            'crm.organizzazioni.esportazione.mostra' => $this->esportaCrm($richiesta, 'organizzazioni', $operazione),
             'crm.organizzazioni.ricerca.crea' => $this->ricercaCrm($richiesta, $corpo, 'organizzazioni', $operazione),
             'crm.organizzazioni.importazioni.crea' => $this->importaCrm($richiesta, $corpo, 'organizzazioni', $operazione),
             'crm.organizzazioni.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'organizzazioni', $parametri[0], $operazione),
@@ -193,6 +201,7 @@ trait Crm
             'crm.persone.mostra' => $this->mostraCrm($richiesta, 'persone', $parametri[0]),
             'crm.persone.modifica' => $this->modificaPersonaCrm($richiesta, $corpo, $parametri[0]),
             'crm.persone.elenca' => $this->elencaCrm($richiesta, 'persone', $operazione),
+            'crm.persone.esportazione.mostra' => $this->esportaCrm($richiesta, 'persone', $operazione),
             'crm.persone.ricerca.crea' => $this->ricercaCrm($richiesta, $corpo, 'persone', $operazione),
             'crm.persone.importazioni.crea' => $this->importaCrm($richiesta, $corpo, 'persone', $operazione),
             'crm.persone.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'persone', $parametri[0], $operazione),
@@ -486,6 +495,94 @@ trait Crm
             is_int($valore) => $valore,
             default => Str::lower(Str::ascii((string) $valore)),
         };
+    }
+
+    /**
+     * crm.persone.esportazione.mostra e crm.organizzazioni.esportazione.mostra (Esportazioni, #1905): il CSV di ciò che l'elenco mostra
+     * coi suoi filtri, a proprietario e amministratore (403 prima di tutto il resto), 10 all'ora per persona e 20 per workspace. I filtri
+     * e le loro regole sono quelli di `elenca`; `limite`, `cursore`, `totale` e ogni parametro ignoto sono 422 `campo_estraneo`, i testi
+     * liberi 422 `campo_vietato`. Il corpo è una stringa: UTF-8 con BOM, virgola, CRLF, l'intestazione, e un apostrofo davanti a una
+     * cella che comincia come una formula. Il finto non scrive a blocchi: tiene il file in memoria.
+     *
+     * @return array{int, string, array<string, string>}
+     */
+    private function esportaCrm(Request $richiesta, string $tipo, string $operazione): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+        $query = self::query($richiesta);
+        $testo = fn (string $parametro) => isset($query[$parametro]) && is_string($query[$parametro]) && $query[$parametro] !== '' ? $query[$parametro] : null;
+        $vero = fn (string $parametro) => ($query[$parametro] ?? null) === 'true';
+        $siONo = ['sometimes', 'string', Rule::in(['true', 'false'])];
+        $regole = [
+            'ordina' => ['sometimes', 'string', Rule::in(self::ordiniAmmessiCrm($tipo))],
+            'id' => $this->regolaDelFiltroPerId(),
+            'stato' => $this->regolaDelleVociCrm('stato', self::CRM_STATI),
+            'responsabile_id' => ['sometimes', 'nullable', 'string', 'max:64'],
+            ...($tipo === 'persone' ? ['organizzazione_id' => ['sometimes', 'nullable', 'string', 'max:64'], 'archiviati' => $siONo] : ['archiviate' => $siONo]),
+            ...array_fill_keys(self::CRM_VIETATI[$tipo], ['prohibited']),
+        ];
+        $estranei = array_diff(array_map('strval', array_keys($query)), array_keys($regole));
+        $this->testi->validaQuery($query, $regole + array_fill_keys($estranei, [function (string $campo, mixed $valore, Closure $fail) {
+            $this->rifiutaCrm($fail, $campo, Regola::CAMPO_ESTRANEO, 'validation.prohibited', ['attribute' => $campo]);
+        }]));
+
+        $filtri = [
+            'stati' => self::vociCrm($testo('stato')), 'responsabile' => self::idCrm($testo('responsabile_id')),
+            'archiviate' => $vero($tipo === 'persone' ? 'archiviati' : 'archiviate'), 'ricerca' => null, 'id' => self::idDelFiltroCrm($testo('id')),
+            ...($tipo === 'persone' ? ['email' => null, 'organizzazione' => self::idCrm($testo('organizzazione_id'))] : []),
+        ];
+
+        $this->frena('freni:crm.esportazioni:persona:'.$chi['persona'], self::CRM_ESPORTAZIONI_PERSONA_ALL_ORA, 3600);
+        $this->frena('freni:crm.esportazioni:workspace:'.$chi['workspace'], self::CRM_ESPORTAZIONI_WORKSPACE_ALL_ORA, 3600);
+
+        $ordina = $testo('ordina') ?? (string) array_key_first(self::CRM_ORDINI[$tipo]);
+        $campo = self::CRM_ORDINI[$tipo][ltrim($ordina, '-')];
+        $righe = array_values(array_filter($this->righeCrm($tipo, $chi['workspace']), fn (array $riga) => $this->tieneCrm($tipo, $chi['workspace'], $filtri, $riga)));
+        usort($righe, self::ordineCrm($campo, str_starts_with($ordina, '-')));
+        $nome = fn (?string $id) => $id === null ? null : ($this->persone[$id]['nome'] ?? null);
+        $celle = [];
+
+        foreach (array_slice($righe, 0, $tipo === 'persone' ? 25000 : 10000) as $riga) {
+            if ($tipo === 'persone') {
+                $voce = $this->vocePersona($riga);
+                $celle[] = [
+                    $voce['id'], $voce['nome'], $voce['cognome'], $voce['ruolo'], $voce['stato'],
+                    implode('; ', array_column($voce['email'], 'indirizzo')), implode('; ', array_column($voce['telefoni'], 'numero')),
+                    $voce['organizzazione_id'], $voce['organizzazione']['nome'] ?? null, $voce['responsabile_id'], $nome($voce['responsabile_id']), $voce['creato_il'],
+                ];
+            } else {
+                $voce = $this->voceOrganizzazione($riga);
+                $indirizzo = $voce['indirizzo'] ?? [];
+                $celle[] = [
+                    $voce['id'], $voce['nome'], $voce['sito'], $voce['telefono'], $indirizzo['via'] ?? null, $indirizzo['cap'] ?? null, $indirizzo['citta'] ?? null,
+                    $indirizzo['provincia'] ?? null, $indirizzo['paese'] ?? null, $voce['stato'], $voce['responsabile_id'], $nome($voce['responsabile_id']),
+                    $voce['numero_contatti'], $voce['creata_il'],
+                ];
+            }
+        }
+
+        $intestazione = $tipo === 'persone'
+            ? ['id', 'nome', 'cognome', 'ruolo', 'stato', 'email', 'telefoni', 'organizzazione_id', 'organizzazione', 'responsabile_id', 'responsabile', 'creato_il']
+            : ['id', 'nome', 'sito', 'telefono', 'via', 'cap', 'citta', 'provincia', 'paese', 'stato', 'responsabile_id', 'responsabile', 'numero_contatti', 'creata_il'];
+        $file = "\xEF\xBB\xBF".implode('', array_map(self::rigaCsvCrm(...), [$intestazione, ...$celle]));
+
+        return [200, $file, [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="'.($tipo === 'persone' ? 'contatti' : 'aziende').'-'.gmdate('Y-m-d').'.csv"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'no-store, private',
+        ]];
+    }
+
+    /** @param  array<int, string|int|null>  $celle */
+    private static function rigaCsvCrm(array $celle): string
+    {
+        return implode(',', array_map(function (string|int|null $valore): string {
+            $testo = (string) $valore;
+            $testo = $testo !== '' && str_contains("=+-@\t\r\n", $testo[0]) ? "'".$testo : $testo;
+
+            return preg_match('/[",;\r\n]/', $testo) === 1 ? '"'.str_replace('"', '""', $testo).'"' : $testo;
+        }, $celle))."\r\n";
     }
 
     /**

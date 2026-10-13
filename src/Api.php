@@ -186,27 +186,75 @@ final class Api
     }
 
     /**
+     * Una GET di /v1 passata a flusso, per le risposte che non sono JSON (l'esportazione CSV del CRM, `crm.persone.esportazione.mostra`
+     * e `crm.organizzazioni.esportazione.mostra`, #1906): il percorso è dentro /v1 dello stesso host, senza query (la query sta in
+     * `$query`), con lo stesso gettone o la stessa firma delle altre chiamate e un redirect non si segue. Gli errori sono quelli di ogni
+     * chiamata: `ErroreApi` (il 429 col suo `Retry-After`), `GettoneRifiutato`, `BackofficeNonRisponde`. Il corpo non si legge qui e non
+     * sta mai tutto in memoria: lo legge, a blocchi e entro `zr-auth.scarico` secondi, chi usa lo Scaricamento. Un tipo che non è fra
+     * `Scaricamento::TIPI` non è un file: `BackofficeNonRisponde`.
+     *
+     * @param  array<string, mixed>  $query
+     */
+    public function scarica(string $percorso, array $query = []): Scaricamento
+    {
+        $risposta = $this->controllata(
+            fn (PendingRequest $richiesta) => $richiesta->withOptions(['stream' => true, 'read_timeout' => max(1, (int) config('zr-auth.letture'))])->withQueryParameters($query)->get($percorso),
+            $percorso,
+            false,
+            null,
+            true,
+        );
+
+        if (! $risposta instanceof Response) {
+            throw new LogicException('Una chiamata a flusso torna una risposta.');
+        }
+
+        if ($risposta->status() !== 200) {
+            throw new BackofficeNonRisponde("Il backoffice ha risposto {$risposta->status()} a uno scaricamento, non un 200.");
+        }
+
+        return Scaricamento::da($risposta);
+    }
+
+    /**
      * @param  \Closure(PendingRequest): Response  $invia
      * @return array<mixed>
      */
     private function chiama(\Closure $invia, string $percorso, bool $condizionale = false, ?string $versione = null): array
+    {
+        $esito = $this->controllata($invia, $percorso, $condizionale, $versione, false);
+
+        return is_array($esito) ? $esito : throw new LogicException('Una chiamata JSON torna un array.');
+    }
+
+    /**
+     * Il percorso, la spedizione e i controlli che ogni chiamata ha in comune: il freno letto, un 3xx, il gettone rifiutato (401),
+     * l'errore di /v1. Con `$flusso` una risposta riuscita torna com'è, col corpo ancora da leggere (`scarica`); altrimenti il suo JSON.
+     *
+     * @param  \Closure(PendingRequest): Response  $invia
+     * @return array<mixed>|Response
+     */
+    private function controllata(\Closure $invia, string $percorso, bool $condizionale, ?string $versione, bool $flusso): array|Response
     {
         // Niente resta della chiamata prima: una chiamata che non parte, o un guasto del trasporto, lascia nessun freno noto.
         $this->freni = null;
 
         // Il gettone va solo al backoffice: un percorso che porta altrove (un indirizzo intero, `//host`) non parte. La query
         // sta in `$query`: in un GET Guzzle sostituirebbe in silenzio quella scritta nel percorso.
-        if (! str_starts_with($percorso, '/v1') || str_contains($percorso, '?') || str_contains($percorso, '#')) {
+        // Uno scaricamento vuole di più: `/v1` o `/v1/…` e nessun segmento `..` (`/v1/../up` resterebbe sullo stesso host, ma fuori da /v1).
+        $dentro = ! $flusso || ($percorso === '/v1' || str_starts_with($percorso, '/v1/')) && ! str_contains($percorso, '/..') && ! str_contains($percorso, '\\');
+
+        if (! str_starts_with($percorso, '/v1') || ! $dentro || str_contains($percorso, '?') || str_contains($percorso, '#')) {
             throw new InvalidArgumentException("Il percorso dev'essere un percorso di /v1 («/v1/…»), senza query: non «{$percorso}».");
         }
 
         $richiesta = Http::baseUrl(self::indirizzo())
-            ->timeout((int) config('zr-auth.timeout'))
+            ->timeout((int) config($flusso ? 'zr-auth.scarico' : 'zr-auth.timeout'))
             ->connectTimeout((int) config('zr-auth.connessione'))
             // Un redirect non si segue (R31): un 307 rimanderebbe il corpo, una password compresa, al Location, e il tetto
             // di tempo varrebbe per ogni salto.
             ->withoutRedirecting()
-            ->acceptJson()
+            ->accept($flusso ? implode(', ', Scaricamento::TIPI) : 'application/json')
             ->withHeaders(['Accept-Language' => app()->getLocale()]);
 
         if ($this->gettone !== null) {
@@ -260,6 +308,10 @@ final class Api
             $errore = ErroreApi::daRisposta($risposta, $corpo);
 
             throw $risposta->status() === 403 && $errore->codice === 'accettazione_richiesta' ? AccettazioneRichiesta::da($errore) : $errore;
+        }
+
+        if ($flusso) {
+            return $risposta;
         }
 
         if ($condizionale) {
