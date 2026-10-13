@@ -5,6 +5,7 @@ namespace Zeiras\Auth;
 use Generator;
 use Illuminate\Http\Client\Response;
 use Psr\Http\Message\StreamInterface;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Zeiras\Auth\Errori\BackofficeNonRisponde;
 
@@ -80,12 +81,21 @@ final class Scaricamento
         $inizio = microtime(true);
 
         try {
-            while (! $this->flusso->eof()) {
-                if (microtime(true) - $inizio > $this->secondi) {
-                    throw new BackofficeNonRisponde("Lo scaricamento ha superato i {$this->secondi} secondi.");
-                }
+            while (true) {
+                try {
+                    if ($this->flusso->eof()) {
+                        return;
+                    }
 
-                $blocco = $this->flusso->read(max(1, $byte));
+                    if (microtime(true) - $inizio > $this->secondi) {
+                        throw new BackofficeNonRisponde("Lo scaricamento ha superato i {$this->secondi} secondi.");
+                    }
+
+                    $blocco = $this->flusso->read(max(1, $byte));
+                } catch (RuntimeException $e) {
+                    // Una lettura che scade o una connessione che cade a metà (Guzzle: TimeoutException, «Unable to read from stream»).
+                    throw $e instanceof BackofficeNonRisponde ? $e : new BackofficeNonRisponde('Il backoffice ha interrotto lo scaricamento.', previous: $e);
+                }
 
                 if ($blocco !== '') {
                     yield $blocco;
@@ -116,8 +126,14 @@ final class Scaricamento
     public function comeRisposta(): StreamedResponse
     {
         return new StreamedResponse(function () {
-            foreach ($this->blocchi() as $blocco) {
-                echo $blocco;
+            try {
+                foreach ($this->blocchi() as $blocco) {
+                    echo $blocco;
+                }
+            } catch (BackofficeNonRisponde $e) {
+                // Dopo il primo byte gli header sono partiti: rilanciare farebbe accodare al file la pagina d'errore di Laravel.
+                // Il file finisce lì, e l'errore resta nel log.
+                report($e);
             }
         }, 200, $this->intestazioni());
     }

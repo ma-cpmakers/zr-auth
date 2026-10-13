@@ -570,7 +570,7 @@ trait Crm
             'Content-Type' => 'text/csv; charset=utf-8',
             'Content-Disposition' => 'attachment; filename="'.($tipo === 'persone' ? 'contatti' : 'aziende').'-'.gmdate('Y-m-d').'.csv"',
             'X-Content-Type-Options' => 'nosniff',
-            'Cache-Control' => 'no-store',
+            'Cache-Control' => 'no-store, private',
         ]];
     }
 
@@ -581,7 +581,7 @@ trait Crm
             $testo = (string) $valore;
             $testo = $testo !== '' && str_contains("=+-@\t\r\n", $testo[0]) ? "'".$testo : $testo;
 
-            return preg_match('/[",\r\n]/', $testo) === 1 ? '"'.str_replace('"', '""', $testo).'"' : $testo;
+            return preg_match('/[",;\r\n]/', $testo) === 1 ? '"'.str_replace('"', '""', $testo).'"' : $testo;
         }, $celle))."\r\n";
     }
 

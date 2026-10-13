@@ -198,7 +198,7 @@ final class Api
     public function scarica(string $percorso, array $query = []): Scaricamento
     {
         $risposta = $this->controllata(
-            fn (PendingRequest $richiesta) => $richiesta->withOptions(['stream' => true])->withQueryParameters($query)->get($percorso),
+            fn (PendingRequest $richiesta) => $richiesta->withOptions(['stream' => true, 'read_timeout' => max(1, (int) config('zr-auth.letture'))])->withQueryParameters($query)->get($percorso),
             $percorso,
             false,
             null,
@@ -241,7 +241,10 @@ final class Api
 
         // Il gettone va solo al backoffice: un percorso che porta altrove (un indirizzo intero, `//host`) non parte. La query
         // sta in `$query`: in un GET Guzzle sostituirebbe in silenzio quella scritta nel percorso.
-        if (! str_starts_with($percorso, '/v1') || str_contains($percorso, '?') || str_contains($percorso, '#')) {
+        // Uno scaricamento vuole di più: `/v1` o `/v1/…` e nessun segmento `..` (`/v1/../up` resterebbe sullo stesso host, ma fuori da /v1).
+        $dentro = ! $flusso || ($percorso === '/v1' || str_starts_with($percorso, '/v1/')) && ! str_contains($percorso, '/..') && ! str_contains($percorso, '\\');
+
+        if (! str_starts_with($percorso, '/v1') || ! $dentro || str_contains($percorso, '?') || str_contains($percorso, '#')) {
             throw new InvalidArgumentException("Il percorso dev'essere un percorso di /v1 («/v1/…»), senza query: non «{$percorso}».");
         }
 

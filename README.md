@@ -302,9 +302,11 @@ Le risposte di `/v1` sono JSON, salvo l'esportazione CSV del CRM (`crm.persone.e
 return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'lead'])->comeRisposta();
 ```
 
-- Il percorso sta dentro `/v1`, senza query (la query è il secondo argomento) e un redirect non si segue.
+- Il percorso sta dentro `/v1` (`/v1/…`, mai un segmento `..`), senza query (la query è il secondo argomento) e un redirect non si segue.
 - Il corpo non sta mai tutto in memoria: `blocchi()` lo legge a pezzi, `comeRisposta()` lo passa al browser a pezzi. Il tempo massimo è
-  `zr-auth.scarico` (60 secondi): oltre, `BackofficeNonRisponde`.
+  `zr-auth.scarico` (60 secondi) e ogni lettura non aspetta più di `zr-auth.letture` (10 secondi): oltre, o se la connessione cade a
+  metà, `BackofficeNonRisponde`. `comeRisposta()` non rilancia un errore dopo il primo byte (accoderebbe la pagina d'errore al file): lo
+  scrive nel log e il file finisce lì, troncato.
 - Il tipo è uno di `Scaricamento::TIPI` (oggi `text/csv`); un `text/html`, un JSON o una risposta senza tipo non sono un file.
 - Il nome del file è ripulito (niente cartelle, caratteri di controllo, a capo; sempre `.csv`), e `comeRisposta()` aggiunge
   `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.

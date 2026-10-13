@@ -57,6 +57,8 @@ it('accetta solo un percorso dentro /v1 senza query: un indirizzo intero, un per
     'fuori da /v1' => ['/crm/persone/esportazione'],
     'la query nel percorso' => ['/v1/crm/persone/esportazione?stato=lead'],
     'un frammento' => ['/v1/crm/persone/esportazione#x'],
+    'un segmento ..' => ['/v1/../up'],
+    'un prefisso che non è /v1' => ['/v1x/crm/persone/esportazione'],
 ]);
 
 it('un redirect non si segue, nemmeno verso un altro host (S.1)', function () {
@@ -261,7 +263,8 @@ it('la chiamata ha un tempo massimo dichiarato, e la lettura lo rispetta (S.4)',
     Api::workspace()->scarica(SCARICA_CSV);
 
     expect(config('zr-auth.scarico'))->toBe(60)
-        ->and($opzioni['timeout'])->toBe(60)->and($opzioni['connect_timeout'])->toBe(2)->and($opzioni['stream'])->toBeTrue();
+        ->and($opzioni['timeout'])->toBe(60)->and($opzioni['connect_timeout'])->toBe(2)->and($opzioni['stream'])->toBeTrue()
+        ->and($opzioni['read_timeout'])->toBe(10);
 
     config(['zr-auth.scarico' => 1]);
     $lento = new class(Utils::streamFor(str_repeat('x', 10))) implements StreamInterface
@@ -345,4 +348,51 @@ it('la chiamata ha un tempo massimo dichiarato, e la lettura lo rispetta (S.4)',
     $file = Api::workspace()->scarica(SCARICA_CSV);
 
     expect(fn () => iterator_to_array($file->blocchi(1), false))->toThrow(BackofficeNonRisponde::class);
+});
+
+
+it('una lettura che cade o scade a metà è BackofficeNonRisponde, e il flusso si chiude (S.4)', function () {
+    $cade = new GuzzleHttp\Psr7\PumpStream(fn () => throw new RuntimeException('Unable to read from stream'));
+    Http::swap(new Factory);
+    Http::fake(['*' => fn () => Create::promiseFor(new RispostaPsr(200, ['Content-Type' => 'text/csv'], $cade))]);
+    apriSessione();
+
+    $file = Api::workspace()->scarica(SCARICA_CSV);
+
+    expect(fn () => iterator_to_array($file->blocchi(), false))->toThrow(BackofficeNonRisponde::class);
+});
+
+it('un errore dopo il primo byte non accoda la pagina d\'errore al file: finisce nel log e il file finisce lì (S.4)', function () {
+    $cade = new GuzzleHttp\Psr7\PumpStream(fn () => throw new RuntimeException('Unable to read from stream'));
+    Http::swap(new Factory);
+    Http::fake(['*' => fn () => Create::promiseFor(new RispostaPsr(200, ['Content-Type' => 'text/csv'], $cade))]);
+    apriSessione();
+    $segnalati = [];
+    app()->instance(Illuminate\Contracts\Debug\ExceptionHandler::class, new class($segnalati) implements Illuminate\Contracts\Debug\ExceptionHandler
+    {
+        public function __construct(public array &$segnalati) {}
+
+        public function report(Throwable $e): void
+        {
+            $this->segnalati[] = $e;
+        }
+
+        public function shouldReport(Throwable $e): bool
+        {
+            return true;
+        }
+
+        public function render($request, Throwable $e)
+        {
+            return response('');
+        }
+
+        public function renderForConsole($output, Throwable $e): void {}
+    });
+
+    ob_start();
+    Api::workspace()->scarica(SCARICA_CSV)->comeRisposta()->sendContent();
+    $uscito = ob_get_clean();
+
+    expect($uscito)->toBe('')->and($segnalati)->toHaveCount(1)->and($segnalati[0])->toBeInstanceOf(BackofficeNonRisponde::class);
 });

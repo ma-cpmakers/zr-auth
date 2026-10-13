@@ -22,6 +22,10 @@ return [
     // aspetta il primo byte, e quello in cui `Scaricamento::blocchi()` legge il resto. Oltre, BackofficeNonRisponde.
     'scarico' => 60,
 
+    // Quanto si aspetta ogni lettura di un file a flusso, in secondi. Con `stream` Guzzle non usa curl: `timeout` vale per ogni lettura e
+    // `connessione` non vale, quindi questo limite breve vale anche per la connessione e per ogni pausa del backoffice.
+    'letture' => 10,
+
     // La pagina d'accesso. Senza sessione, col gettone scaduto o con un gettone che il backoffice non accetta più, la
     // guardia rimanda qui (ConGettone).
     'ingresso' => env('ZR_AUTH_INGRESSO', 'https://app.zeiras.com/accedi'),
