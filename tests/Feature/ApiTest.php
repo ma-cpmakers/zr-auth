@@ -468,4 +468,5 @@ it('il parser regge le maiuscole del nome delle intestazioni, i token e gli spaz
     'rumore' => [['RateLimit-Policy' => ';;;,,=,"";q=1, 9x;q=2, "c";q=3;q=4', 'RateLimit' => '"c";r=1;r=2'], ['c' => [4, null, 2, null]]],
     'doppione' => [['RateLimit-Policy' => '"a";q=10, "a";q=20', 'RateLimit' => '"a";r=4, "a";r=9'], ['a' => [10, null, 4, null]]],
     'enorme' => [['RateLimit-Policy' => '"a";q=99999999999999999999, "b";q=3', 'RateLimit' => '"b";r=1'], ['b' => [3, null, 1, null]]],
+    'oltre i limiti di PCRE' => [['RateLimit-Policy' => '"'.str_repeat('a\\"', 200000).'";q=1', 'RateLimit' => '"a";r=1'], null],
 ]);

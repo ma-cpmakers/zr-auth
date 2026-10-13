@@ -75,7 +75,10 @@ final class Freni
      */
     private static function elementi(string $valore): array
     {
-        preg_match_all('/(?:"(?:[^"\\\\]|\\\\.)*"?|[^,"])+/', $valore, $pezzi);
+        // Un valore che PCRE non regge (oltre il limite dello stack o del backtracking) non si legge: nessun freno noto.
+        if (preg_match_all('/(?:"(?:[^"\\\\]|\\\\.)*"?|[^,"])+/', $valore, $pezzi) === false) {
+            return [];
+        }
 
         return array_values(array_filter(array_map('trim', $pezzi[0]), fn (string $pezzo) => $pezzo !== ''));
     }
@@ -102,7 +105,10 @@ final class Freni
             return null;
         }
 
-        preg_match_all('/;\s*([a-z*][a-z0-9_\-.*]*)(?:=('.$valore.'))?/', $parti[2], $coppie, PREG_SET_ORDER);
+        if (preg_match_all('/;\s*([a-z*][a-z0-9_\-.*]*)(?:=('.$valore.'))?/', $parti[2], $coppie, PREG_SET_ORDER) === false) {
+            return null;
+        }
+
         $parametri = [];
 
         foreach ($coppie as $coppia) {
