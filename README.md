@@ -549,7 +549,9 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   (creazioni, ricerca per email, importazioni, anonimizzazione) e le loro intestazioni `RateLimit`; `ETag`, `If-None-Match` e
   `If-Match` (`304` e `412`); la risposta ricordata di un'importazione (con `Idempotency-Key` il finto ripete la risposta intera,
   anche in prova); l'ordine dei nomi nella collation di MySQL oltre a maiuscole e accenti; i tetti di contatti, aziende e
-  trattative oltre a quelli scritti in `CRM_TETTI`; gli eventi del CRM.
+  trattative in `crea` e `modifica` (il finto guarda quelli di contatti e aziende solo nelle importazioni, e quelli di
+  pipeline, fasi, attività e note dove li guarda il backoffice); il valore del cursore cifrato (il finto lo firma ma non
+  lo cifra: con `ordina=nome` il nome si legge nel cursore, nel backoffice no); gli eventi del CRM.
 - **L'ingresso nei moduli.** `ritorno($app, $indirizzo)` dice dove `pm` riceve il codice (nel backoffice
   `ZR_RITORNO_PM`); senza, `ingressi.crea` è `503` `servizio_non_disponibile`, e con `''` si toglie. `ingressi.crea`
   (`{"app", "sfida"}`, gettone di un workspace, app attiva: `403` `app_non_attiva` altrimenti) dà `{codice, ritorno,
