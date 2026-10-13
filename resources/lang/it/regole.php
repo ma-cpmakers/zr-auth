@@ -52,5 +52,7 @@ return [
     'azienda_non_esiste' => "Nel workspace non c'è un'azienda con questo id: gli id delle aziende li dà crm.organizzazioni.elenca.",
     'fase_con_la_pipeline' => "La fase si dà insieme alla pipeline: per spostare la trattativa dentro la sua pipeline c'è crm.trattative.spostamento.crea.",
     'motivo_solo_se_persa' => 'Il motivo di perdita vale solo per una trattativa persa: manda anche lo stato `persa`, o lascia il motivo a null.',
+    'motivo_duplicato' => "C'è già un motivo di perdita con questo nome, senza contare maiuscole e accenti: scegli un altro nome.",
+    'motivo_archiviato_senza_posto' => "Un motivo archiviato non ha un posto nell'elenco: ripristinalo con archiviato false, insieme alla posizione.",
     'campi_estranei_della_riga' => 'La riga ha campi che il metodo non conosce: i campi di una riga sono quelli della creazione singola.',
 ];
