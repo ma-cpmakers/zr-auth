@@ -2182,8 +2182,11 @@ trait Crm
     }
 
     /**
-     * FasiController::elimina: mai la sola fase della pipeline (409 ultima_fase), mai una con trattative, aperte o no (409
-     * fase_non_vuota), in quest'ordine. La fase passa nell'archivio di sistema e da lì è 404. Risponde 204.
+     * FasiController::elimina: mai la sola fase della pipeline (409 ultima_fase); una fase con trattative, aperte o no, solo con
+     * `sposta_in` nella query (#1902), altrimenti 409 fase_non_vuota. Con `sposta_in` tutte le trattative passano in coda all'altra
+     * fase della pipeline, nel loro ordine, con la cronologia di uno spostamento di fase; un `sposta_in` che non va è 422 sul
+     * parameter (`valore_non_ammesso` la fase stessa o di un'altra pipeline, `non_trovato` il resto). Con una fase vuota si ignora.
+     * La fase passa nell'archivio di sistema e da lì è 404. Risponde 204.
      *
      * @return array{int, null}
      */
@@ -2191,19 +2194,61 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
         $fase = $this->rigaCrm('fasi', $chi['workspace'], $id);
+        $query = self::query($richiesta);
+        $spostaIn = null;
+
+        if (array_key_exists('sposta_in', $query)) {
+            if (! is_string($query['sposta_in']) || $query['sposta_in'] === '' || strlen($query['sposta_in']) > 64) {
+                throw $this->erroreDiParametroCrm('regole.sposta_in', Regola::TIPO);
+            }
+
+            $spostaIn = strtolower($query['sposta_in']);
+        }
 
         if (count($this->fasiCrm($fase['pipeline_id'])) <= 1) {
             throw new Problema('ultima_fase');
         }
 
-        if (array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $fase['id']) !== []) {
-            throw new Problema('fase_non_vuota');
+        $nellaFase = array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $fase['id']);
+
+        if ($nellaFase !== []) {
+            if ($spostaIn === null) {
+                throw new Problema('fase_non_vuota');
+            }
+
+            $destinazione = $this->crm['fasi'][$spostaIn] ?? null;
+            $viva = $destinazione !== null && $destinazione['workspace'] === $chi['workspace'] && ! ($destinazione['eliminata'] ?? false);
+
+            if (! $viva) {
+                throw $this->erroreDiParametroCrm($spostaIn === $fase['id'] ? 'regole.sposta_in_altra_fase' : 'regole.fase_della_pipeline', $spostaIn === $fase['id'] ? Regola::VALORE_NON_AMMESSO : Regola::NON_TROVATO);
+            }
+
+            if ($spostaIn === $fase['id'] || $destinazione['pipeline_id'] !== $fase['pipeline_id']) {
+                throw $this->erroreDiParametroCrm('regole.sposta_in_altra_fase', Regola::VALORE_NON_AMMESSO);
+            }
+
+            usort($nellaFase, fn (array $una, array $altra) => [$una['posizione'], $una['id']] <=> [$altra['posizione'], $altra['id']]);
+            $ora = self::adessoCrm();
+
+            foreach ($nellaFase as $riga) {
+                $spostata = ['fase_id' => $spostaIn, 'in_fase_dal' => $ora, 'aggiornata_il' => self::dopoCrm($riga['aggiornata_il'])] + $riga;
+                $this->crm['trattative'][$riga['id']] = $spostata;
+                $this->collocaCrm('trattative', array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $spostaIn), $riga['id'], null, true);
+                $this->riportaCrm(self::contributoCrm($riga), self::contributoCrm($spostata));
+                $this->cambioCrm('trattative', $riga['id'], $chi['persona'], 'modificata', [['campo' => 'fase_id', 'prima' => $fase['id'], 'dopo' => $spostaIn]]);
+            }
         }
 
         $this->crm['fasi'][$fase['id']]['eliminata'] = true;
         $this->toccaPipelineCrm($fase['pipeline_id']);
 
         return [204, null];
+    }
+
+    /** Un 422 dati_non_validi su un parameter della query (ErroreDiCampo::parameter del backoffice). */
+    private function erroreDiParametroCrm(string $chiave, string $regola): Problema
+    {
+        return new Problema('dati_non_validi', [['detail' => $this->testi->testo($chiave), 'regola' => $regola, 'parameter' => 'sposta_in']]);
     }
 
     // ———————————————————————————————————————— Trattative

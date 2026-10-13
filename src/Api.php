@@ -125,10 +125,16 @@ final class Api
         return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->withHeaders($header)->patch($percorso, $corpo), $percorso);
     }
 
-    /** @return array<mixed> */
-    public function delete(string $percorso): array
+    /**
+     * La query (es. `sposta_in` di crm.fasi.elimina) va nei parametri della richiesta, mai nel percorso, e mai nel corpo: un DELETE di
+     * /v1 non ha corpo.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<mixed>
+     */
+    public function delete(string $percorso, array $query = []): array
     {
-        return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->delete($percorso), $percorso);
+        return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->withQueryParameters($query)->delete($percorso), $percorso);
     }
 
     /**

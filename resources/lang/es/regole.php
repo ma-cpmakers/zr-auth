@@ -44,6 +44,8 @@ return [
     'email_doppia' => 'Esta dirección aparece dos veces en la lista.',
     'valuta_del_workspace' => 'La moneda debe ser la del CRM del espacio de trabajo (:valuta): la da crm.impostazioni.mostra.',
     'fase_della_pipeline' => 'La pipeline no tiene una fase con este id: los ids de las fases los da crm.pipeline.mostra.',
+    'sposta_in' => 'sposta_in es el id de una fase de la misma pipeline, como cadena.',
+    'sposta_in_altra_fase' => 'sposta_in debe ser otra fase de la misma pipeline: no la fase que se elimina, ni una fase de otra pipeline.',
     'pipeline_archiviata' => 'Una pipeline archivada no acepta negociaciones nuevas: se restaura con crm.pipeline.modifica.',
     'contatto_non_esiste' => 'El espacio de trabajo no tiene un contacto con este id: los ids de los contactos los da crm.persone.elenca.',
     'azienda_non_esiste' => 'El espacio de trabajo no tiene una empresa con este id: los ids de las empresas los da crm.organizzazioni.elenca.',

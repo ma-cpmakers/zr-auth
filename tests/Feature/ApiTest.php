@@ -353,3 +353,20 @@ it('senza membri estesi, estensioni è vuoto: i testi e gli errori dei campi non
     expect(fn () => Api::senzaGettone()->post('/v1/utenti', []))
         ->toThrow(fn (ErroreApi $e) => expect($e->estensioni)->toBe([]));
 });
+
+it('delete() manda la query nei parametri della richiesta, senza corpo, e rifiuta un percorso con la query dentro (#1902, T1.4)', function () {
+    Http::fake(['*' => Http::response(null, 204)]);
+    apriSessione();
+
+    expect(Api::workspace()->delete('/v1/crm/fasi/f1', ['sposta_in' => 'f2']))->toBe([])
+        ->and(Api::workspace()->delete('/v1/crm/fasi/f3'))->toBe([]);
+
+    $inviate = Http::recorded()->map(fn (array $coppia) => $coppia[0])->values();
+
+    expect($inviate[0]->method())->toBe('DELETE')
+        ->and($inviate[0]->url())->toBe(API.'/v1/crm/fasi/f1?sposta_in=f2')
+        ->and($inviate[0]->body())->toBe('')
+        ->and($inviate[1]->url())->toBe(API.'/v1/crm/fasi/f3');
+
+    expect(fn () => Api::workspace()->delete('/v1/crm/fasi/f1?sposta_in=f2'))->toThrow(InvalidArgumentException::class, 'senza query');
+});

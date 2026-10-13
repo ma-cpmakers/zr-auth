@@ -44,6 +44,8 @@ return [
     'email_doppia' => 'This address appears twice in the list.',
     'valuta_del_workspace' => "The currency must be the one of the workspace's CRM (:valuta): crm.impostazioni.mostra gives it.",
     'fase_della_pipeline' => 'The pipeline has no stage with this id: crm.pipeline.mostra gives the stage ids.',
+    'sposta_in' => 'sposta_in is the id of a stage of the same pipeline, as a string.',
+    'sposta_in_altra_fase' => 'sposta_in must be another stage of the same pipeline: not the stage being deleted, nor a stage of another pipeline.',
     'pipeline_archiviata' => 'An archived pipeline does not accept new deals: restore it with crm.pipeline.modifica.',
     'contatto_non_esiste' => 'The workspace has no contact with this id: crm.persone.elenca gives the contact ids.',
     'azienda_non_esiste' => 'The workspace has no company with this id: crm.organizzazioni.elenca gives the company ids.',
