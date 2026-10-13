@@ -163,7 +163,7 @@ it('io.workspace.elenca dà le pagine a cursore: ogni workspace una volta, e il 
         ->and(tutteLePagine('/v1/io/workspace', $gettone, 2))->toBe($tutti);
 });
 
-it('app.elenca dà il catalogo delle app in ordine di codice, pm disponibile e le altre in_arrivo, ai tre ruoli del workspace, e a pagine col solo codice (T6.1; #1289, AP3)', function (string $ruolo) {
+it('app.elenca dà il catalogo delle app in ordine di codice, pm e crm disponibili e le altre in_arrivo, ai tre ruoli del workspace, e a pagine col solo codice (T6.1; #1289, AP3)', function (string $ruolo) {
     $finto = BackofficeFinto::attiva();
     $anna = $finto->persona('anna@example.com', PASSWORD);
     $bruno = $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
@@ -176,13 +176,14 @@ it('app.elenca dà il catalogo delle app in ordine di codice, pm disponibile e l
 
     $gettone = gettoneDelFinto($chi, $studio);
     $risposta = alFinto('GET', '/v1/app', gettone: $gettone);
-    // Lo stato di ogni app, scritto per intero (R23): pm è disponibile dallo sprint 5 del backoffice (#1289, AP3).
+    // Lo stato di ogni app, scritto per intero (R23): pm è disponibile dallo sprint 5 del backoffice (#1289, AP3), crm per ogni
+    // workspace dal 12/10, come in produzione (#1856).
     $nome = fn (string $testo) => ['it' => $testo, 'en' => $testo, 'es' => $testo];
     $catalogo = [
         ['codice' => 'automations', 'stato' => 'in_arrivo', 'nome' => $nome('Automations')],
         ['codice' => 'bookings', 'stato' => 'in_arrivo', 'nome' => $nome('Bookings')],
         ['codice' => 'content', 'stato' => 'in_arrivo', 'nome' => $nome('Content')],
-        ['codice' => 'crm', 'stato' => 'in_arrivo', 'nome' => $nome('CRM')],
+        ['codice' => 'crm', 'stato' => 'disponibile', 'nome' => $nome('CRM')],
         ['codice' => 'pm', 'stato' => 'disponibile', 'nome' => $nome('Project Management')],
         ['codice' => 'reports', 'stato' => 'in_arrivo', 'nome' => $nome('Reports')],
     ];
