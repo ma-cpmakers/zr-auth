@@ -37,6 +37,8 @@ final class Regola
 
     public const CARATTERE_NON_AMMESSO = 'carattere_non_ammesso';
 
+    public const CAMPO_INDISPENSABILE = 'campo_indispensabile';
+
     private const DI_TIPO = ['String', 'Integer', 'Boolean', 'Array', 'List', 'Numeric', 'Decimal', 'Json'];
 
     private const DI_OBBLIGO = ['Required', 'RequiredWith', 'RequiredWithAll', 'RequiredWithout', 'RequiredWithoutAll', 'RequiredIf', 'RequiredUnless', 'Filled', 'Present'];

@@ -157,6 +157,14 @@ return [
         'title' => 'Fase no vacía',
         'detail' => 'Esta fase aún tiene negociaciones (abiertas, ganadas, perdidas o archivadas) y solo se elimina sin ellas: mueve sus negociaciones a otra fase (una cerrada o archivada se reabre o se restaura antes con crm.trattative.modifica) y vuelve a intentarlo.',
     ],
+    'sezione_di_sistema' => [
+        'title' => 'Sección del sistema',
+        'detail' => '«Principali» (Principales) es la sección fija de los campos de un objeto: no se renombra, no se mueve y no se elimina. No se escribió nada.',
+    ],
+    'sezione_non_vuota' => [
+        'title' => 'Sección no vacía',
+        'detail' => 'Esta sección aún tiene campos y solo se elimina sin ellos. Mueve sus campos a otra sección con crm.campi.modifica y vuelve a intentarlo.',
+    ],
     'ultima_fase' => [
         'title' => 'Última fase',
         'detail' => 'Esta es la última fase del pipeline y no se elimina: un pipeline siempre tiene al menos una fase. Añade otra con crm.fasi.crea, o archiva el pipeline con crm.pipeline.modifica.',

@@ -157,6 +157,14 @@ return [
         'title' => 'Stage not empty',
         'detail' => 'This stage still has deals (open, won, lost or archived) and can only be deleted without them: move its deals to another stage (a closed or archived deal is first reopened or restored with crm.trattative.modifica), then try again.',
     ],
+    'sezione_di_sistema' => [
+        'title' => 'System section',
+        'detail' => "“Principali” (Main) is the fixed section of an object's fields: it cannot be renamed, moved or deleted. Nothing was written.",
+    ],
+    'sezione_non_vuota' => [
+        'title' => 'Section not empty',
+        'detail' => 'This section still has fields and can only be deleted without them. Move its fields to another section with crm.campi.modifica, then try again.',
+    ],
     'ultima_fase' => [
         'title' => 'Last stage',
         'detail' => 'This is the last stage of the pipeline and cannot be deleted: a pipeline always has at least one stage. Add another with crm.fasi.crea, or archive the pipeline with crm.pipeline.modifica.',

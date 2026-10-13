@@ -13,7 +13,7 @@ use LogicException;
 
 /**
  * Il CRM del backoffice finto (#1856, G67): aziende (`organizzazioni`), contatti (`persone`), trattative, pipeline e fasi, motivi di perdita, attività,
- * note, impostazioni e utilizzo, in memoria e per workspace, con le forme del contratto, i codici del catalogo e le regole dei corpi
+ * note, impostazioni e utilizzo (le sezioni e i campi sono di CrmCampi), in memoria e per workspace, con le forme del contratto, i codici del catalogo e le regole dei corpi
  * del backoffice (`app/Http/Controllers/Crm`). Un metodo `crm.*` vuole l'app `crm` attiva nel workspace del gettone (attivaApp()):
  * prima il ruolo (403 permesso_negato), poi l'app (403 app_non_attiva), poi la risorsa del percorso (404 non_trovato, anche per
  * quella di un altro workspace), poi il corpo (422). Ciò che il finto non imita è nel README.
@@ -44,6 +44,12 @@ trait Crm
         ['GET', '#^/v1/crm/motivi$#', 'crm.motivi.elenca'],
         ['POST', '#^/v1/crm/motivi$#', 'crm.motivi.crea'],
         ['PATCH', '#^/v1/crm/motivi/([^/]+)$#', 'crm.motivi.modifica'],
+        ['GET', '#^/v1/crm/sezioni$#', 'crm.sezioni.elenca'],
+        ['POST', '#^/v1/crm/sezioni$#', 'crm.sezioni.crea'],
+        ['PATCH', '#^/v1/crm/sezioni/([^/]+)$#', 'crm.sezioni.modifica'],
+        ['DELETE', '#^/v1/crm/sezioni/([^/]+)$#', 'crm.sezioni.elimina'],
+        ['GET', '#^/v1/crm/campi$#', 'crm.campi.elenca'],
+        ['PATCH', '#^/v1/crm/campi/([^/]+)$#', 'crm.campi.modifica'],
         ['GET', '#^/v1/crm/pipeline$#', 'crm.pipeline.elenca'],
         ['POST', '#^/v1/crm/pipeline$#', 'crm.pipeline.crea'],
         ['POST', '#^/v1/crm/pipeline/partenza$#', 'crm.pipeline.partenza.crea'],
@@ -211,6 +217,12 @@ trait Crm
             'crm.motivi.elenca' => $this->elencaMotiviCrm($richiesta),
             'crm.motivi.crea' => $this->creaMotivoCrm($richiesta, $corpo),
             'crm.motivi.modifica' => $this->modificaMotivoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.sezioni.elenca' => $this->elencaSezioniCrm($richiesta),
+            'crm.sezioni.crea' => $this->creaSezioneCrm($richiesta, $corpo),
+            'crm.sezioni.modifica' => $this->modificaSezioneCrm($richiesta, $corpo, $parametri[0]),
+            'crm.sezioni.elimina' => $this->eliminaSezioneCrm($richiesta, $parametri[0]),
+            'crm.campi.elenca' => $this->elencaCampiCrm($richiesta),
+            'crm.campi.modifica' => $this->modificaCampoCrm($richiesta, $corpo, $parametri[0]),
             'crm.pipeline.crea' => $this->creaPipelineCrm($richiesta, $corpo),
             'crm.pipeline.partenza.crea' => $this->partenzaPipelineCrm($richiesta, $corpo),
             'crm.pipeline.mostra' => $this->mostraCrm($richiesta, 'pipeline', $parametri[0]),
