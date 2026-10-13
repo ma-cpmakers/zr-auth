@@ -12,6 +12,7 @@ use Zeiras\Auth\Errori\BackofficeNonRisponde;
 use Zeiras\Auth\Errori\ErroreApi;
 use Zeiras\Auth\Errori\GettoneRifiutato;
 use Zeiras\Auth\Scaricamento;
+use Zeiras\Auth\Testing\BackofficeFinto;
 
 // T6 (#1906, S.1-S.5): Api::scarica, una GET di /v1 passata a flusso per le risposte che non sono JSON (l'esportazione CSV del CRM).
 
@@ -71,10 +72,10 @@ it('senza sessione apre GettoneRifiutato, e senzaGettone() manda la firma Zr-* c
 
     expect(fn () => Api::workspace()->scarica(SCARICA_CSV))->toThrow(GettoneRifiutato::class);
 
-    config(['zr-auth.cliente' => 'zr-home', 'zr-auth.segreto' => 'un-segreto']);
+    config(['zr-auth.cliente' => BackofficeFinto::CLIENTE, 'zr-auth.segreto' => BackofficeFinto::SEGRETO_DEL_CLIENTE]);
     Api::senzaGettone()->scarica(SCARICA_CSV);
 
-    Http::assertSent(fn (Request $r) => ! $r->hasHeader('Authorization') && $r->hasHeader('Zr-Firma') && $r->header('Zr-Cliente') === ['zr-home']);
+    Http::assertSent(fn (Request $r) => ! $r->hasHeader('Authorization') && $r->hasHeader('Zr-Firma') && $r->header('Zr-Cliente') === [BackofficeFinto::CLIENTE]);
 });
 
 it('gli errori problem+json sono quelli di ogni chiamata: ErroreApi, e il 429 col suo Retry-After (S.3)', function (int $stato, string $codice, array $header, ?int $riprova) {
