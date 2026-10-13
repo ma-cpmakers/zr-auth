@@ -50,6 +50,7 @@ trait Crm
         ['DELETE', '#^/v1/crm/fasi/([^/]+)$#', 'crm.fasi.elimina'],
         ['GET', '#^/v1/crm/trattative$#', 'crm.trattative.elenca'],
         ['POST', '#^/v1/crm/trattative/ricerca$#', 'crm.trattative.ricerca.crea'],
+        ['GET', '#^/v1/crm/trattative/riepilogo$#', 'crm.trattative.riepilogo.mostra'],
         ['POST', '#^/v1/crm/trattative$#', 'crm.trattative.crea'],
         ['GET', '#^/v1/crm/trattative/([^/]+)$#', 'crm.trattative.mostra'],
         ['PATCH', '#^/v1/crm/trattative/([^/]+)$#', 'crm.trattative.modifica'],
@@ -204,6 +205,7 @@ trait Crm
             'crm.trattative.spostamento.crea' => $this->spostaTrattativaCrm($richiesta, $corpo, $parametri[0]),
             'crm.trattative.elenca' => $this->elencaCrm($richiesta, 'trattative', $operazione),
             'crm.trattative.ricerca.crea' => $this->ricercaCrm($richiesta, $corpo, 'trattative', $operazione),
+            'crm.trattative.riepilogo.mostra' => $this->riepilogoTrattativeCrm($richiesta),
             'crm.trattative.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'trattative', $parametri[0], $operazione),
             'crm.attivita.crea' => $this->creaAttivitaCrm($richiesta, $corpo),
             'crm.attivita.mostra' => $this->mostraCrm($richiesta, 'attivita', $parametri[0]),
@@ -495,12 +497,7 @@ trait Crm
                 'stati' => self::vociCrm($testo('stato')), 'responsabile' => self::idCrm($testo('responsabile_id')), 'archiviate' => $vero('archiviate') === true,
                 'ricerca' => null, 'id' => self::idDelFiltroCrm($testo('id')),
             ],
-            'trattative' => [
-                'pipeline' => self::idCrm($testo('pipeline_id')), 'fase' => self::idCrm($testo('fase_id')), 'stati' => self::vociCrm($testo('stato')),
-                'responsabile' => self::idCrm($testo('responsabile_id')), 'persona' => self::idCrm($testo('persona_id')),
-                'organizzazione' => self::idCrm($testo('organizzazione_id')), 'chiusa_dal' => $testo('chiusa_dal'), 'archiviate' => $vero('archiviate') === true,
-                'ricerca' => null, 'id' => self::idDelFiltroCrm($testo('id')),
-            ],
+            'trattative' => [...self::filtriDelleTrattativeCrm($query), 'archiviate' => $vero('archiviate') === true],
             default => [
                 'responsabile' => self::idCrm($testo('responsabile_id')), 'persona' => self::idCrm($testo('persona_id')),
                 'organizzazione' => self::idCrm($testo('organizzazione_id')), 'trattativa' => self::idCrm($testo('trattativa_id')), 'fatta' => $vero('fatta'),
@@ -515,15 +512,7 @@ trait Crm
             'cursore' => $testo('cursore'),
             'filtri' => $filtri,
         ];
-        $voci = fn (string $parametro, array $ammesse) => ['bail', 'sometimes', 'nullable', 'string', function (string $campo, mixed $valore, Closure $fail) use ($parametro, $ammesse) {
-            $voci = array_values(array_filter(array_map('trim', explode(',', (string) $valore)), fn (string $voce) => $voce !== ''));
-
-            if (array_diff($voci, $ammesse) !== []) {
-                $this->rifiutaCrm($fail, $campo, Regola::VALORE_NON_AMMESSO, 'validation.in', ['attribute' => $parametro]);
-            } elseif (count($voci) !== count(array_unique($voci))) {
-                $this->rifiutaCrm($fail, $campo, Regola::DUPLICATO, 'validation.distinct', ['attribute' => $parametro]);
-            }
-        }];
+        $voci = fn (string $parametro, array $ammesse) => $this->regolaDelleVociCrm($parametro, $ammesse);
         $siONo = ['sometimes', 'string', Rule::in(['true', 'false'])];
         $regole = [
             'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO],
@@ -543,11 +532,7 @@ trait Crm
                     'id' => $this->regolaDelFiltroPerId(), 'stato' => $voci('stato', self::CRM_STATI),
                     'responsabile_id' => ['sometimes', 'nullable', 'string', 'max:64'], 'archiviate' => $siONo,
                 ],
-                'trattative' => [
-                    'id' => $this->regolaDelFiltroPerId(), 'stato' => $voci('stato', self::CRM_STATI_TRATTATIVA),
-                    ...array_map(fn (array $regole) => ['sometimes', ...$regole], $this->regoleDegliIdDelleTrattative($chi['workspace'])),
-                    'chiusa_dal' => ['sometimes', 'string', 'date_format:Y-m-d'], 'archiviate' => $siONo,
-                ],
+                'trattative' => [...$this->regoleDeiFiltriDelleTrattativeCrm($chi['workspace']), 'archiviate' => $siONo],
                 default => [
                     'tipo' => $voci('tipo', self::CRM_TIPI_ATTIVITA),
                     ...array_map(fn (array $regole) => ['sometimes', ...$regole], $this->regoleDegliIdDelleAttivita($chi['workspace'])),
@@ -562,6 +547,113 @@ trait Crm
         $this->testi->validaQuery($query, $regole);
 
         return $this->paginaFiltrataCrm($chi['workspace'], $tipo, $lista, $chiesta);
+    }
+
+    /**
+     * I filtri delle trattative dalla query (TrattativeElencaRequest::filtri), senza `archiviate`: li leggono `elenca` e il riepilogo.
+     *
+     * @param  array<mixed>  $query
+     * @return array<string, mixed>
+     */
+    private static function filtriDelleTrattativeCrm(array $query): array
+    {
+        $testo = fn (string $parametro) => isset($query[$parametro]) && is_string($query[$parametro]) && $query[$parametro] !== '' ? $query[$parametro] : null;
+
+        return [
+            'pipeline' => self::idCrm($testo('pipeline_id')), 'fase' => self::idCrm($testo('fase_id')), 'stati' => self::vociCrm($testo('stato')),
+            'responsabile' => self::idCrm($testo('responsabile_id')), 'persona' => self::idCrm($testo('persona_id')),
+            'organizzazione' => self::idCrm($testo('organizzazione_id')), 'chiusa_dal' => $testo('chiusa_dal'),
+            'ricerca' => null, 'id' => self::idDelFiltroCrm($testo('id')),
+        ];
+    }
+
+    /**
+     * Le regole dei filtri delle trattative (TrattativeElencaRequest::regoleDeiFiltri), senza `archiviate`: `id`, `stato`, gli id,
+     * `chiusa_dal` e i testi liberi vietati. Le stesse per `elenca` e per il riepilogo.
+     *
+     * @return array<string, mixed>
+     */
+    private function regoleDeiFiltriDelleTrattativeCrm(string $workspace): array
+    {
+        return [
+            'id' => $this->regolaDelFiltroPerId(), 'stato' => $this->regolaDelleVociCrm('stato', self::CRM_STATI_TRATTATIVA),
+            ...array_map(fn (array $regole) => ['sometimes', ...$regole], $this->regoleDegliIdDelleTrattative($workspace)),
+            'chiusa_dal' => ['sometimes', 'string', 'date_format:Y-m-d'],
+            ...array_fill_keys(self::CRM_VIETATI['trattative'], ['prohibited']),
+        ];
+    }
+
+    /** Un parametro con una o più voci separate da virgola, tutte fra le ammesse e senza ripetizioni. @return list<mixed> */
+    private function regolaDelleVociCrm(string $parametro, array $ammesse): array
+    {
+        return ['bail', 'sometimes', 'nullable', 'string', function (string $campo, mixed $valore, Closure $fail) use ($parametro, $ammesse) {
+            $voci = array_values(array_filter(array_map('trim', explode(',', (string) $valore)), fn (string $voce) => $voce !== ''));
+
+            if (array_diff($voci, $ammesse) !== []) {
+                $this->rifiutaCrm($fail, $campo, Regola::VALORE_NON_AMMESSO, 'validation.in', ['attribute' => $parametro]);
+            } elseif (count($voci) !== count(array_unique($voci))) {
+                $this->rifiutaCrm($fail, $campo, Regola::DUPLICATO, 'validation.distinct', ['attribute' => $parametro]);
+            }
+        }];
+    }
+
+    /**
+     * crm.trattative.riepilogo.mostra (Trattative::riepilogo, #1869): le aperte non archiviate dei filtri di `elenca`, in totale e per
+     * fase. Il ponderato di una fase è la somma di valore × probabilità (della trattativa, o della fase) diviso 100, arrotondato una
+     * volta con la metà in su; il totale è la somma delle fasi. Un parametro che non è un filtro è 422 `campo_estraneo`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function riepilogoTrattativeCrm(Request $richiesta): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $query = self::query($richiesta);
+        $regole = $this->regoleDeiFiltriDelleTrattativeCrm($chi['workspace']);
+        $estranei = array_diff(array_map('strval', array_keys($query)), array_keys($regole));
+        $this->testi->validaQuery($query, $regole + array_fill_keys($estranei, [function (string $campo, mixed $valore, Closure $fail) {
+            $this->rifiutaCrm($fail, $campo, Regola::CAMPO_ESTRANEO, 'validation.prohibited', ['attribute' => $campo]);
+        }]));
+
+        $filtri = [...self::filtriDelleTrattativeCrm($query), 'archiviate' => false];
+        $somme = [];
+
+        foreach ($this->righeCrm('trattative', $chi['workspace']) as $riga) {
+            if ($riga['stato'] !== 'aperta' || ! $this->tieneCrm('trattative', $chi['workspace'], $filtri, $riga)) {
+                continue;
+            }
+
+            $fase = $this->crm['fasi'][$riga['fase_id']];
+            $voce = $somme[$riga['fase_id']] ?? ['fase' => $fase, 'aperte' => 0, 'valore_aperto' => 0, 'per_cento' => 0, 'senza_valore' => 0];
+            $voce['aperte']++;
+
+            if ($riga['importo'] === null) {
+                $voce['senza_valore']++;
+            } else {
+                $voce['valore_aperto'] += $riga['importo'];
+                $voce['per_cento'] += $riga['importo'] * ($riga['probabilita'] ?? $fase['probabilita']);
+            }
+
+            $somme[$riga['fase_id']] = $voce;
+        }
+
+        usort($somme, fn (array $una, array $altra) => [$una['fase']['pipeline_id'], $una['fase']['posizione'], $una['fase']['id']]
+            <=> [$altra['fase']['pipeline_id'], $altra['fase']['posizione'], $altra['fase']['id']]);
+        $perFase = array_map(fn (array $voce) => [
+            'fase_id' => $voce['fase']['id'],
+            'aperte' => $voce['aperte'],
+            'valore_aperto' => $voce['valore_aperto'],
+            'ponderato' => intdiv($voce['per_cento'] + 50, 100),
+            'senza_valore' => $voce['senza_valore'],
+        ], $somme);
+
+        return [200, ['data' => [
+            'valuta' => $this->valutaCrm($chi['workspace']),
+            'aperte' => array_sum(array_column($perFase, 'aperte')),
+            'valore_aperto' => array_sum(array_column($perFase, 'valore_aperto')),
+            'ponderato' => array_sum(array_column($perFase, 'ponderato')),
+            'senza_valore' => array_sum(array_column($perFase, 'senza_valore')),
+            'per_fase' => $perFase,
+        ]]];
     }
 
     /**
