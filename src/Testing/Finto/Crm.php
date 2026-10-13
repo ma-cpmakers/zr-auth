@@ -9,6 +9,7 @@ use DateTimeZone;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use LogicException;
 
 /**
  * Il CRM del backoffice finto (#1856, G67): aziende (`organizzazioni`), contatti (`persone`), trattative, pipeline e fasi, attività,
@@ -141,6 +142,7 @@ trait Crm
             'crm.impostazioni.mostra' => [200, ['data' => ['valuta' => $this->valutaCrm($this->conCrm($richiesta)['workspace'])]]],
             'crm.impostazioni.modifica' => $this->modificaImpostazioniCrm($richiesta, $corpo, $amministra),
             'crm.utilizzo.mostra' => $this->utilizzoCrm($richiesta),
+            default => throw new LogicException("Il finto non fa {$operazione}."),
         };
     }
 
