@@ -32,6 +32,7 @@ final class Problema extends RuntimeException
         'limite_raggiunto' => 409,
         'proprietario_intoccabile' => 409,
         'posizione_cambiata' => 409,
+        'transizione_non_valida' => 409,
         'email_gia_presente' => 409,
         'pipeline_non_vuota' => 409,
         'fase_non_vuota' => 409,
