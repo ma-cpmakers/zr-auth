@@ -487,7 +487,8 @@ it('crm.campi.crea: un campo «tuo» in fondo a «Principali», chiave dal nome,
 
     expect($creato->status())->toBe(201)
         ->and($creato->header('Location'))->toBe('/v1/crm/campi/persona.livello_di_studio')
-        ->and($campo)->toMatchArray(['id' => 'persona.livello_di_studio', 'chiave' => 'livello_di_studio', 'origine' => 'tuo', 'tipo' => 'elenco', 'sezione_id' => 'persona.principali', 'obbligatorio' => false, 'indispensabile' => false, 'in_campi' => true])
+        ->and($campo['chiave'])->toBe('livello_di_studio')
+        ->and($campo)->toMatchArray(['id' => 'persona.livello_di_studio', 'origine' => 'tuo', 'tipo' => 'elenco', 'sezione_id' => 'persona.principali', 'obbligatorio' => false, 'indispensabile' => false, 'in_campi' => true])
         ->and($campo['opzioni'][0]['colore'])->toBe('#a1b2c3')
         ->and($campo['opzioni'][0]['id'])->toHaveLength(26)
         ->and($campo['nome'])->toBe(['it' => 'Livello di studio', 'en' => null, 'es' => null])
