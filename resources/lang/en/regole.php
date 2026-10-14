@@ -69,4 +69,8 @@ return [
     'motivo_archiviato_senza_posto' => 'An archived reason has no place in the list: restore it with archiviato false, together with the position.',
     'motivo_non_esiste' => 'The workspace has no loss reason with this id: crm.motivi.elenca gives the reason ids.',
     'campi_estranei_della_riga' => 'The row has fields the method does not know: the fields of a row are those of the single creation.',
+    'campo_numero' => 'The value must be a JSON number (not a string), at most 10,000,000,000 in absolute value and with at most 4 decimals.',
+    'campo_valuta' => 'A currency value is an object with its `importo`, an integer in minor units (cents for EUR); `valuta`, if present, is the CRM currency.',
+    'campo_data_ora' => 'The date and time are ISO 8601 UTC with the final Z, for example 2026-10-14T09:30:00Z.',
+    'campo_opzione' => 'This option is not one of the field\'s options: option ids come from crm.campi.elenca.',
 ];

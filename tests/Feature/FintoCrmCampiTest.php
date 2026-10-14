@@ -505,3 +505,77 @@ it('crm.campi.crea: un campo «tuo» in fondo a «Principali», chiave dal nome,
     expect($nome->json('data.nome'))->toBe(['it' => 'Livello di studio', 'en' => 'Education', 'es' => null]);
     expect(alFinto('PATCH', '/v1/crm/campi/persona.livello_di_studio', ['nome' => ['it' => null]], $anna)->status())->toBe(422);
 });
+
+// #2125 (CRM-12 B): i valori dei campi «tuoi» sui contatti. Che le risposte siano quelle del backoffice lo prova il suo FintoTest.
+it('i valori dei campi «tuoi» di un contatto: campi {} senza valori, normalizzati, Merge Patch che toglie con null, e nessuno nell\'elenco (CV.1-CV.5, CV.7)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Pagina'], 'tipo' => 'url'], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Budget'], 'tipo' => 'valuta'], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Punteggio'], 'tipo' => 'numero'], $anna));
+    $taglia = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Taglia'], 'tipo' => 'elenco', 'opzioni' => [['nome' => ['it' => 'S']], ['nome' => ['it' => 'M']]]], $anna))->json('data');
+
+    $creato = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia'], $anna));
+    $id = $creato->json('data.id');
+
+    // Senza valori è un oggetto vuoto in JSON, mai una lista.
+    expect($creato->status())->toBe(201)
+        ->and($creato->body())->toContain('"campi":{}')
+        ->and(alFinto('GET', "/v1/crm/persone/{$id}", null, $anna)->body())->toContain('"campi":{}');
+
+    $risposta = riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => [
+        'punteggio' => 10.0, 'budget' => ['importo' => 700], 'taglia' => strtoupper($taglia['opzioni'][1]['id']), 'pagina' => 'https://example.com/a',
+    ]], $anna));
+
+    // L'ordine è quello dei campi; l'intero resta intero, la valuta è quella del CRM, l'id dell'opzione sta in minuscolo.
+    expect($risposta->json('data.campi'))->toBe([
+        'pagina' => 'https://example.com/a', 'budget' => ['importo' => 700, 'valuta' => 'EUR'], 'punteggio' => 10, 'taglia' => $taglia['opzioni'][1]['id'],
+    ]);
+
+    $prima = alFinto('GET', "/v1/crm/persone/{$id}", null, $anna)->json('data.aggiornato_il');
+    $uguale = riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => ['punteggio' => 10]], $anna));
+    expect($uguale->json('data.aggiornato_il'))->toBe($prima);
+
+    $tolto = riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => ['pagina' => null, 'budget' => ['importo' => 800]]], $anna));
+    expect($tolto->json('data.campi'))->toBe(['budget' => ['importo' => 800, 'valuta' => 'EUR'], 'punteggio' => 10, 'taglia' => $taglia['opzioni'][1]['id']]);
+
+    // L'elenco e la ricerca hanno la forma breve, senza `campi`.
+    expect(alFinto('GET', '/v1/crm/persone', null, $anna)->json('data.0'))->not->toHaveKey('campi');
+
+    // La cronologia nomina `campi.<chiave>`: col prima e il dopo per i tipi che lo ammettono, il solo nome per un url.
+    $voci = collect(alFinto('GET', "/v1/crm/persone/{$id}/cronologia", null, $anna)->json('data'))->where('tipo', 'modificata')->sortBy(fn (array $voce) => count($voce['campi']))->values();
+    expect($voci)->toHaveCount(2)
+        ->and($voci[0]['campi'])->toBe([['campo' => 'campi.pagina'], ['campo' => 'campi.budget', 'prima' => ['importo' => 700, 'valuta' => 'EUR'], 'dopo' => ['importo' => 800, 'valuta' => 'EUR']]])
+        ->and(array_column($voci[1]['campi'], 'campo'))->toBe(['campi.pagina', 'campi.budget', 'campi.punteggio', 'campi.taglia']);
+});
+
+it('un valore che non va, uno standard o una chiave che non c\'è è 422 sul pointer del campo e non scrive niente (CV.2, CV.3, CV.6)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Punteggio'], 'tipo' => 'numero'], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Obbligo'], 'tipo' => 'testo', 'obbligatorio' => true], $anna));
+    $id = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => ['obbligo' => 'x']], $anna))->json('data.id');
+
+    foreach ([
+        [['punteggio' => '12'], '#/campi/punteggio'],
+        [['punteggio' => 1.23456], '#/campi/punteggio'],
+        [['ruolo' => 'x'], '#/campi/ruolo'],
+        [['non_c_e' => 1], '#/campi/non_c_e'],
+        [['obbligo' => null], '#/campi/obbligo'],
+    ] as [$campi, $pointer]) {
+        $risposta = alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => $campi + ['punteggio' => 5]], $anna);
+
+        expect($risposta->status())->toBe(422, $risposta->body())
+            ->and($risposta->json('errors.0.pointer'))->toBe($pointer);
+    }
+
+    // Un campo obbligatorio vuole il suo valore alla creazione.
+    expect(alFinto('POST', '/v1/crm/persone', ['nome' => 'Altro'], $anna)->status())->toBe(422)
+        ->and(alFinto('GET', "/v1/crm/persone/{$id}", null, $anna)->json('data.campi'))->toBe(['obbligo' => 'x']);
+
+    // L'oblio svuota i valori.
+    riuscita(alFinto('POST', "/v1/crm/persone/{$id}/anonimizzazione", null, $anna));
+    expect(alFinto('GET', "/v1/crm/persone/{$id}", null, $anna)->body())->toContain('"campi":{}');
+});
