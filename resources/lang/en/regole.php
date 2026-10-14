@@ -73,4 +73,5 @@ return [
     'campo_valuta' => 'A currency value is an object with its `importo`, an integer in minor units (cents for EUR); `valuta`, if present, is the CRM currency.',
     'campo_data_ora' => 'The date and time are ISO 8601 UTC with the final Z, for example 2026-10-14T09:30:00Z.',
     'campo_opzione' => 'This option is not one of the field\'s options: option ids come from crm.campi.elenca.',
+    'campo_scelte_doppie' => 'The same option appears twice in the list, ignoring case: each id goes once.',
 ];

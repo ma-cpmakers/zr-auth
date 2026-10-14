@@ -71,8 +71,6 @@ trait CrmValori
                         $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.valuta_del_workspace', ['valuta' => $this->valutaCrm($workspace)]);
                     }
                 }];
-            } elseif ($campo['tipo'] === 'scelta_multipla') {
-                $regole["{$attributo}.*"] = ['bail', 'string', 'distinct:ignore_case', $this->unaOpzioneCrm($campo)];
             }
         }
 
@@ -88,9 +86,9 @@ trait CrmValori
     private function regoleDelTipoCrm(string $workspace, string $tipo, array $campo): array
     {
         return match ($tipo) {
-            'testo' => ['string', 'max:'.self::CRM_VALORE_TESTO],
-            'testo_lungo' => ['string', 'max:'.self::CRM_VALORE_TESTO_LUNGO],
-            'url' => ['string', 'max:'.self::CRM_VALORE_URL, 'url:http,https'],
+            'testo' => ['string', 'max:'.self::CRM_VALORE_TESTO, new SenzaCarattereNullo],
+            'testo_lungo' => ['string', 'max:'.self::CRM_VALORE_TESTO_LUNGO, new SenzaCarattereNullo],
+            'url' => ['string', 'max:'.self::CRM_VALORE_URL, 'url:http,https', new SenzaCarattereNullo],
             'numero', 'percentuale' => [function (string $nome, mixed $valore, Closure $fail) {
                 if (! (is_int($valore) || is_float($valore)) || ! is_finite((float) $valore) || abs($valore) > self::CRM_VALORE_MASSIMO
                     || round((float) $valore, self::CRM_VALORE_DECIMALI) !== (float) $valore) {
@@ -115,13 +113,45 @@ trait CrmValori
             }],
             'si_no' => ['boolean:strict'],
             'elenco' => ['string', $this->unaOpzioneCrm($campo)],
-            'scelta_multipla' => ['array', 'list', 'min:1', 'max:'.self::CRM_VALORE_SCELTE],
-            'membro' => ['filled', 'string', function (string $nome, mixed $valore, Closure $fail) use ($workspace) {
+            'scelta_multipla' => ['array', 'list', 'min:1', 'max:'.self::CRM_VALORE_SCELTE, $this->scelteDelCampoCrm($campo)],
+            'membro' => ['string', function (string $nome, mixed $valore, Closure $fail) use ($workspace) {
                 if (! isset($this->membri[$workspace][strtolower((string) $valore)])) {
                     $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.responsabile_del_workspace');
                 }
             }],
             default => [],
+        };
+    }
+
+    /**
+     * La lista di una scelta multipla, già valida come lista di 1-50 voci: ogni voce è un'opzione viva del campo e nessuna compare due
+     * volte, senza distinguere le maiuscole. Una closure sola sulla lista (ValoriDeiCampi::scelteDelCampo): l'errore è sul pointer
+     * della lista, e nessuna regola per voce.
+     *
+     * @param  array<string, mixed>  $campo
+     */
+    private function scelteDelCampoCrm(array $campo): Closure
+    {
+        return function (string $nome, mixed $valore, Closure $fail) use ($campo) {
+            $vive = array_filter($campo['opzioni'] ?? [], fn (array $opzione) => ($opzione['archiviato_il'] ?? null) === null);
+            $ammessi = array_fill_keys(array_map(fn (mixed $id) => strtolower((string) $id), array_column($vive, 'id')), true);
+            $viste = [];
+
+            foreach ((array) $valore as $id) {
+                if (! is_string($id) || ! isset($ammessi[strtolower($id)])) {
+                    $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.campo_opzione');
+
+                    return;
+                }
+
+                if (isset($viste[strtolower($id)])) {
+                    $this->rifiutaCrm($fail, $nome, Regola::DUPLICATO, 'regole.campo_scelte_doppie');
+
+                    return;
+                }
+
+                $viste[strtolower($id)] = true;
+            }
         };
     }
 
