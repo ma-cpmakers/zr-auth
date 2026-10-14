@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Cache\ArrayStore;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Manager;
 use Zeiras\Auth\Http\Middleware\ConGettone;
@@ -42,7 +44,7 @@ function cookieDellaSessione($risposta): ?string
     return $cookie?->getValue();
 }
 
-it('una risposta lenta di Ada, finita dopo l\'ingresso di Grace, non ricrea la sessione di Ada né rimanda il suo cookie (CS.7)', function () {
+it('una risposta lenta di Ada, finita dopo l\'ingresso di Grace, non ricrea la sessione di Ada né rimanda il suo cookie (CS.7)', function (array $intestazioni) {
     $apertura = $this->get('/apri-sessione');
     $idAda = $apertura->json('id');
     $cookieAda = cookieDellaSessione($apertura);
@@ -71,7 +73,7 @@ it('una risposta lenta di Ada, finita dopo l\'ingresso di Grace, non ricrea la s
         return ['lenta' => true];
     })->withoutMiddleware(ConGettone::class);
 
-    $tardiva = $this->call('GET', '/lenta', [], [$nome => $cookieAda]);
+    $tardiva = $this->withHeaders($intestazioni)->call('GET', '/lenta', [], [$nome => $cookieAda]);
 
     expect($tardiva->getStatusCode())->toBe(200)
         ->and($idGrace)->not->toBe($idAda)
@@ -80,4 +82,54 @@ it('una risposta lenta di Ada, finita dopo l\'ingresso di Grace, non ricrea la s
         // E la sessione di Ada non è tornata sul disco; quella di Grace c'è.
         ->and(file_exists($this->cartellaSessioni.'/'.$idAda))->toBeFalse()
         ->and(file_exists($this->cartellaSessioni.'/'.$idGrace))->toBeTrue();
+})->with([
+    'pagina normale' => [[]],
+    // Una visita di Inertia (anche una richiesta rimandata): nessuna rotta dichiara `->bloccaSessione()`, la chiusura vale per tutte.
+    'visita Inertia' => [['X-Inertia' => 'true', 'X-Requested-With' => 'XMLHttpRequest', 'X-Inertia-Version' => 'abc']],
+    'richiesta rimandata di Inertia' => [['X-Inertia' => 'true', 'X-Inertia-Partial-Component' => 'Pagina', 'X-Inertia-Partial-Data' => 'cornice', 'X-Requested-With' => 'XMLHttpRequest']],
+]);
+
+it('una richiesta normale dopo un ingresso tiene il suo cookie: la chiusura riguarda solo l\'id di prima (CS.7)', function () {
+    $apertura = $this->get('/apri-sessione');
+    $cookieAda = cookieDellaSessione($apertura);
+    $this->call('POST', '/entra-grace', [], [config('session.cookie') => $cookieAda]);
+
+    $nuova = $this->get('/apri-sessione');
+
+    expect(cookieDellaSessione($nuova))->not->toBeNull();
+});
+
+it('se la cache dei segni non risponde, una risposta con sessione è 503 e senza cookie; il lato prudente è rifiutare (CS.7)', function () {
+    Cache::extend('guasta', fn () => Cache::repository(new class extends ArrayStore
+    {
+        public function get($key)
+        {
+            throw new RuntimeException('la cache non risponde');
+        }
+    }));
+    config(['cache.stores.guasta' => ['driver' => 'guasta'], 'session.block_store' => 'guasta']);
+
+    $risposta = $this->get('/apri-sessione');
+
+    expect($risposta->getStatusCode())->toBe(503)
+        ->and($risposta->headers->get('Retry-After'))->toBe('1')
+        ->and(cookieDellaSessione($risposta))->toBeNull();
+});
+
+it('se la cache dei segni non risponde in scrittura, l\'ingresso fallisce e la sessione resta com\'era (CS.7)', function () {
+    $apertura = $this->get('/apri-sessione');
+    $idAda = $apertura->json('id');
+    Cache::extend('guasta-in-scrittura', fn () => Cache::repository(new class extends ArrayStore
+    {
+        public function put($key, $value, $seconds)
+        {
+            throw new RuntimeException('la cache non risponde');
+        }
+    }));
+    config(['cache.stores.guasta-in-scrittura' => ['driver' => 'guasta-in-scrittura'], 'session.block_store' => 'guasta-in-scrittura']);
+
+    $this->withoutExceptionHandling();
+
+    expect(fn () => $this->call('POST', '/entra-grace', [], [config('session.cookie') => cookieDellaSessione($apertura)]))->toThrow(RuntimeException::class)
+        ->and(file_exists($this->cartellaSessioni.'/'.$idAda))->toBeTrue();
 });

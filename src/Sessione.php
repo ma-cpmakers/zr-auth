@@ -45,10 +45,10 @@ final class Sessione
     {
         self::controllaIlDriver();
         $gettone = $accesso['gettone'];
-        $vecchia = session()->getId();
+        // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
+        self::segnaChiusa(session()->getId());
 
         session()->regenerate(true);
-        self::segnaChiusa($vecchia);
         session()->put(self::CHIAVE, [
             'accesso' => $accesso['id'],
             'gettoni' => ['accesso' => $gettone['gettone']],
@@ -75,10 +75,10 @@ final class Sessione
             $stato = ['accesso' => null, 'gettoni' => []];
         }
 
-        $vecchia = session()->getId();
+        // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
+        self::segnaChiusa(session()->getId());
 
         session()->regenerate(true);
-        self::segnaChiusa($vecchia);
         session()->put(self::CHIAVE, [
             'accesso' => $stato['accesso'],
             'gettoni' => [...$stato['gettoni'], 'workspace' => $gettone['gettone']],
@@ -191,11 +191,10 @@ final class Sessione
      */
     public static function chiudi(): void
     {
-        $vecchia = session()->getId();
+        self::segnaChiusa(session()->getId());
 
         session()->invalidate();
         session()->regenerateToken();
-        self::segnaChiusa($vecchia);
     }
 
     /**
@@ -203,7 +202,9 @@ final class Sessione
      * Laravel riscrive la sessione, col suo cookie, a ogni risposta: una risposta lenta partita prima del cambio, finendo dopo,
      * la ricreerebbe e rimanderebbe al browser il cookie di prima, mentre nel browser c'è ormai la sessione di un'altra persona.
      * Il segno sta nello store di cache del blocco (`session.block_store`, quello del modulo se non lo cambi: lo vedono tutti i
-     * processi) e dura quanto la sessione; l'id non ci sta in chiaro. Lo legge SessioneChiusa.
+     * processi) e dura quanto la sessione; l'id non ci sta in chiaro. Lo legge SessioneChiusa. Se la cache non risponde la scrittura
+     * lancia, e il cambio non avviene. Una cache svuotata perde i segni: per i secondi di una risposta ancora in volo torna il
+     * comportamento di prima.
      */
     private static function segnaChiusa(string $id): void
     {

@@ -5,6 +5,7 @@ namespace Zeiras\Auth\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 use Symfony\Component\HttpFoundation\Response;
 use Zeiras\Auth\Sessione;
 
@@ -23,23 +24,47 @@ final class SessioneChiusa
     {
         $risposta = $next($richiesta);
 
-        if (! $richiesta->hasSession() || ! Sessione::eChiusa($richiesta->session()->getId())) {
+        if (! $richiesta->hasSession()) {
+            return $risposta;
+        }
+
+        try {
+            $chiusa = Sessione::eChiusa($richiesta->session()->getId());
+        } catch (Throwable $errore) {
+            // La cache non risponde: non si sa se la sessione è chiusa, e il lato prudente è rifiutare. Nessun cookie esce (al browser
+            // resta quello che ha), la risposta è 503 e chi chiama riprova tra un istante. La sessione non si distrugge: un guasto
+            // della cache non deve far uscire tutti.
+            report($errore);
+
+            return self::senzaCookie(response('Riprova tra un istante.', 503, ['Retry-After' => '1', 'Cache-Control' => 'no-store']));
+        }
+
+        if (! $chiusa) {
             return $risposta;
         }
 
         $richiesta->session()->getHandler()->destroy($richiesta->session()->getId());
 
-        $percorso = (string) config('session.path', '/');
-        $dominio = config('session.domain');
-        foreach ([config('session.cookie'), 'XSRF-TOKEN'] as $nome) {
-            $risposta->headers->removeCookie((string) $nome, $percorso, is_string($dominio) ? $dominio : null);
-        }
+        self::senzaCookie($risposta);
 
         // Né l'id né il percorso con i valori: solo che è successo e dove (il disegno della rotta).
         Log::info('zr-auth: scartata la risposta tardiva di una sessione chiusa', [
             'metodo' => $richiesta->method(),
             'rotta' => $richiesta->route()?->uri(),
         ]);
+
+        return $risposta;
+    }
+
+    /** Toglie dalla risposta il cookie di sessione e quello del gettone CSRF: al browser resta quello che ha. */
+    private static function senzaCookie(Response $risposta): Response
+    {
+        $percorso = (string) config('session.path', '/');
+        $dominio = config('session.domain');
+
+        foreach ([config('session.cookie'), 'XSRF-TOKEN'] as $nome) {
+            $risposta->headers->removeCookie((string) $nome, $percorso, is_string($dominio) ? $dominio : null);
+        }
 
         return $risposta;
     }
