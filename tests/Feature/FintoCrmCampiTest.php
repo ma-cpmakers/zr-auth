@@ -53,7 +53,7 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
 
     expect($persona['nome']['chiave'])->toBe('nome')
         ->and($nome)->toBe([
-            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo',
+            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null,
             'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
             'posizione' => 1, 'obbligatorio' => false, 'indispensabile' => true, 'in_campi' => false,
             'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z',
@@ -476,4 +476,32 @@ it('i testi dei nuovi errori sono quelli del backoffice (FC.1)', function () {
         ->and($sistema->json('detail'))->toBe('«Principali» è la sezione fissa dei campi di un oggetto: non si rinomina, non si sposta e non si elimina. Il metodo non ha scritto niente.')
         ->and($vuota->json('detail'))->toBe("Questa sezione ha ancora campi: si elimina solo senza. Sposta i suoi campi in un'altra sezione con crm.campi.modifica, poi ripeti.")
         ->and($indispensabile->json('errors.0.detail'))->toBe('Questo campo è indispensabile e non si nasconde: lascia `visibilita` a `visibile`.');
+});
+
+it('crm.campi.crea: un campo «tuo» in fondo a «Principali», chiave dal nome, opzioni con id, tipi di V1, tetto e nome unico; modifica lo accetta (CC.1-CC.7, CC.11)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    $creato = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello di studio'], 'tipo' => 'elenco', 'opzioni' => [['nome' => ['it' => 'Diploma'], 'colore' => '#A1B2C3'], ['nome' => ['it' => 'Laurea']]]], $anna));
+    $campo = $creato->json('data');
+
+    expect($creato->status())->toBe(201)
+        ->and($creato->header('Location'))->toBe('/v1/crm/campi/persona.livello_di_studio')
+        ->and($campo['chiave'])->toBe('livello_di_studio')
+        ->and($campo)->toMatchArray(['id' => 'persona.livello_di_studio', 'origine' => 'tuo', 'tipo' => 'elenco', 'sezione_id' => 'persona.principali', 'obbligatorio' => false, 'indispensabile' => false, 'in_campi' => true])
+        ->and($campo['opzioni'][0]['colore'])->toBe('#a1b2c3')
+        ->and($campo['opzioni'][0]['id'])->toHaveLength(26)
+        ->and($campo['nome'])->toBe(['it' => 'Livello di studio', 'en' => null, 'es' => null])
+        ->and(collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->pluck('id')->all())->toContain('persona.livello_di_studio');
+
+    foreach ([['tipo' => 'email'], ['tipo' => 'elenco'], ['tipo' => 'testo', 'opzioni' => [['nome' => ['it' => 'X']]]], ['nome' => ['it' => 'ruolo'], 'tipo' => 'testo'], ['tipo' => 'testo', 'sezione_id' => 'trattativa.dettagli']] as $corpo) {
+        $risposta = alFinto('POST', '/v1/crm/campi', $corpo + ['oggetto' => 'persona', 'nome' => ['it' => 'Altro']], $anna);
+        expect($risposta->status())->toBe(422, $risposta->body());
+    }
+
+    expect(riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Ruolo!'], 'tipo' => 'testo'], $anna))->json('data.chiave'))->toBe('ruolo_2');
+
+    $nome = riuscita(alFinto('PATCH', '/v1/crm/campi/persona.livello_di_studio', ['nome' => ['en' => 'Education']], $anna));
+    expect($nome->json('data.nome'))->toBe(['it' => 'Livello di studio', 'en' => 'Education', 'es' => null]);
+    expect(alFinto('PATCH', '/v1/crm/campi/persona.livello_di_studio', ['nome' => ['it' => null]], $anna)->status())->toBe(422);
 });
