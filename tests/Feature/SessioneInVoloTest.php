@@ -75,7 +75,7 @@ function adaEntra(): array
  */
 function registraLaRichiestaLenta(string &$cookieAda, array &$grace, ?Closure $poi = null): void
 {
-    Route::middleware('web')->get('lenta', function () use (&$cookieAda, &$grace, $poi) {
+    Route::middleware('web')->get('lenta', function (Request $lenta) use (&$cookieAda, &$grace, $poi) {
         $gestore = app('session');
         $drivers = new ReflectionProperty(Manager::class, 'drivers');
         $salvati = $drivers->getValue($gestore);
@@ -90,6 +90,8 @@ function registraLaRichiestaLenta(string &$cookieAda, array &$grace, ?Closure $p
         $grace['id'] = json_decode((string) $risposta->getContent(), true)['id'];
 
         $drivers->setValue($gestore, $salvati);
+        // La richiesta annidata ha preso il posto di `request()`: la lenta riprende la sua, come in un processo a parte (TARDIVA, MIE).
+        app()->instance('request', $lenta);
 
         return $poi ? $poi() : ['lenta' => true];
     })->withoutMiddleware(ConGettone::class);
@@ -149,7 +151,10 @@ it('l\'ingresso di una persona nel workspace tiene il suo cookie e la sua sessio
         ->and(file_exists($this->cartellaSessioni.'/'.$nuovo))->toBeTrue()
         ->and(file_exists($this->cartellaSessioni.'/'.$idAda))->toBeFalse()
         ->and(Sessione::eChiusa($idAda))->toBeTrue()
-        ->and(Sessione::eChiusa($nuovo))->toBeFalse();
+        ->and(Sessione::eChiusa($nuovo))->toBeFalse()
+        // Il segno non porta l'id in chiaro: la chiave ha il suo sha256.
+        ->and(Cache::store(config('session.block_store'))->has('zr-auth:sessione-chiusa:'.hash('sha256', $idAda)))->toBeTrue()
+        ->and(Cache::store(config('session.block_store'))->has('zr-auth:sessione-chiusa:'.$idAda))->toBeFalse();
 });
 
 it('anche l\'uscita chiude l\'id di prima; una sessione anonima non lascia nessun segno (CS.7)', function () {

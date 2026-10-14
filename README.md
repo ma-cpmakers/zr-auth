@@ -187,9 +187,13 @@ quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrat
 - **Dove sta il segno.** Nello store di `session.block_store` (quello del modulo se non lo cambi), per
   `zr-auth.sessione_chiusa_secondi` (300): quanto la richiesta più lunga che può essere ancora in volo. L'id non ci sta in chiaro
   (sha256). Una sessione anonima non lascia nessun segno.
-- **Cache giù.** Se lo store non risponde in **lettura**, la risposta è **503** con `Retry-After: 1` e senza cookie (il lato
+- **Cache giù.** Se lo store non risponde in **lettura**, la risposta di **ogni** pagina del gruppo `web` (anche anonima, come il ricevitore dell'ingresso) è **503** con `Retry-After: 1` e senza cookie (il lato
   prudente è rifiutare); se non risponde in **scrittura**, l'ingresso, il cambio di workspace o l'uscita **falliscono** e la
   sessione resta com'era. Una cache svuotata perde i segni: per i secondi di una risposta in volo torna il comportamento di prima.
+- **Un limite noto.** Se la risposta di un ingresso va persa, il browser resta con l'id chiuso fino alla scadenza del segno
+  (`sessione_chiusa_secondi`): ogni risposta toglie i cookie e il modulo di login dà 419 finché non scade. L'ingresso da una
+  sessione anonima non segna niente: una richiesta anonima lenta che finisce dopo l'ingresso rimette il cookie anonimo (come prima di v0.12.31).
+  Lo store del blocco deve essere condiviso fra i processi (non `array`), o la protezione si spegne in silenzio.
 - **Il log.** Una risposta scartata scrive un `Log::info` («zr-auth: scartata la risposta tardiva di una sessione chiusa») col
   metodo e il disegno della rotta, mai l'id né i valori, nel log di default del modulo (`storage/logs/laravel-*.log`; non Slack).
 - **Dove sta il middleware.** `SessioneChiusa` è il primo del gruppo `web`, fuori da StartSession; `RicordaLIdDellaSessione`
