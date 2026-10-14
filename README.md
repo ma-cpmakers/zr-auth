@@ -613,7 +613,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   (persona 24 campi in 6 sezioni, organizzazione 16 in 4, trattativa 11 in 2; «Principali» è fissa), con un nome `{it, en, es}`, la
   visibilità, la sezione e il posto: un campo `indispensabile` non si nasconde e non lascia «Principali» (`422` `campo_indispensabile`),
   «Principali» non si cambia (`409` `sezione_di_sistema`) e una sezione con campi non si elimina (`409` `sezione_non_vuota`).
-  I **valori** dei campi «tuoi» di un contatto (`crm.persone.mostra`, `crea` e `modifica`, dalla v0.12.36) sono in `campi`: `{}` senza
+  I **valori** dei campi «tuoi» di un contatto (`crm.persone.mostra`, `crea` e `modifica`, dalla v0.12.37) sono in `campi`: `{}` senza
   valori, ogni tipo con la sua forma, `null` toglie (Merge Patch), uno standard o una chiave che non c'è è `422` `campo_estraneo`,
   e la cronologia dice `campi.<chiave>` (dopo l'oblio il solo nome, senza `prima` e `dopo`); un membro di un altro workspace è
   `valore_non_ammesso`, una `scelta_multipla` vuota `422`; l'elenco e la ricerca non li hanno. Aziende e trattative con #2126 e #2127;
