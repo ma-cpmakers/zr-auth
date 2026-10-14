@@ -4,6 +4,7 @@ namespace Zeiras\Auth;
 
 use Illuminate\Session\CookieSessionHandler;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Zeiras\Auth\Errori\SessioneNelBrowser;
 
 /**
@@ -28,6 +29,9 @@ final class Sessione
 
     public const BLOCCO_ATTESA = 3;
 
+    /** Il prefisso dei segni di una sessione chiusa (nello store di cache del blocco): vedi segnaChiusa(). */
+    private const CHIUSA = 'zr-auth:sessione-chiusa:';
+
     /** Le lingue di Zeiras (config/lingue.php del backoffice): la lingua del profilo che la sessione prende è una di queste. */
     public const LINGUE = ['it', 'en', 'es'];
 
@@ -41,8 +45,10 @@ final class Sessione
     {
         self::controllaIlDriver();
         $gettone = $accesso['gettone'];
+        $vecchia = session()->getId();
 
         session()->regenerate(true);
+        self::segnaChiusa($vecchia);
         session()->put(self::CHIAVE, [
             'accesso' => $accesso['id'],
             'gettoni' => ['accesso' => $gettone['gettone']],
@@ -69,7 +75,10 @@ final class Sessione
             $stato = ['accesso' => null, 'gettoni' => []];
         }
 
+        $vecchia = session()->getId();
+
         session()->regenerate(true);
+        self::segnaChiusa($vecchia);
         session()->put(self::CHIAVE, [
             'accesso' => $stato['accesso'],
             'gettoni' => [...$stato['gettoni'], 'workspace' => $gettone['gettone']],
@@ -182,8 +191,29 @@ final class Sessione
      */
     public static function chiudi(): void
     {
+        $vecchia = session()->getId();
+
         session()->invalidate();
         session()->regenerateToken();
+        self::segnaChiusa($vecchia);
+    }
+
+    /**
+     * Segna chiusa la sessione con questo id, che un ingresso, un cambio di workspace o un'uscita hanno appena distrutto (#2044).
+     * Laravel riscrive la sessione, col suo cookie, a ogni risposta: una risposta lenta partita prima del cambio, finendo dopo,
+     * la ricreerebbe e rimanderebbe al browser il cookie di prima, mentre nel browser c'è ormai la sessione di un'altra persona.
+     * Il segno sta nello store di cache del blocco (`session.block_store`, quello del modulo se non lo cambi: lo vedono tutti i
+     * processi) e dura quanto la sessione; l'id non ci sta in chiaro. Lo legge SessioneChiusa.
+     */
+    private static function segnaChiusa(string $id): void
+    {
+        Cache::store(config('session.block_store'))->put(self::CHIUSA.hash('sha256', $id), true, (int) config('session.lifetime', 120) * 60);
+    }
+
+    /** Vero se la sessione con questo id è stata chiusa da un ingresso, un cambio di workspace o un'uscita (segnaChiusa). */
+    public static function eChiusa(string $id): bool
+    {
+        return Cache::store(config('session.block_store'))->has(self::CHIUSA.hash('sha256', $id));
     }
 
     /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string}|null */
