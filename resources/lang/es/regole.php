@@ -73,4 +73,5 @@ return [
     'campo_valuta' => 'Un valor de moneda es un objeto con su `importo`, un entero en unidades menores (céntimos para EUR); `valuta`, si está, es la del CRM.',
     'campo_data_ora' => 'La fecha y la hora están en ISO 8601 UTC con la Z final, por ejemplo 2026-10-14T09:30:00Z.',
     'campo_opzione' => 'Esta opción no es una de las del campo: los ids de las opciones los da crm.campi.elenca.',
+    'campo_scelte_doppie' => 'La misma opción aparece dos veces en la lista, sin contar mayúsculas: cada id va una sola vez.',
 ];
