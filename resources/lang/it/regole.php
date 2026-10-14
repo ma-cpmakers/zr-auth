@@ -37,6 +37,8 @@ return [
     'campo_di_un_altro_metodo' => 'Il campo :attribute non si cambia qui: lo cambia :metodo.',
     'campo_di_nessun_metodo' => 'Il campo :attribute non si cambia: lo dà il sistema.',
     'campo_del_workspace' => 'Il campo :attribute si cambia col gettone di un workspace: è un dato della persona in quel workspace.',
+    'versione_formato' => 'La versione è quella che board.schede.elenca ha dato nella risposta di una lettura della board (`versione`): solo cifre, da non modificare.',
+    'versione_futura' => 'La versione è dopo l\'ultima della board: usa quella che board.schede.elenca ha dato.',
     'numero_senza_archiviate' => 'Con numero la scheda arriva in qualunque stato, anche archiviata: il parametro archiviate non serve.',
     'password_attuale' => 'La password attuale non è giusta: la nuova password si dà solo con quella di adesso.',
     'contatto_vuoto' => 'Un contatto vuole almeno uno fra nome, cognome ed email.',

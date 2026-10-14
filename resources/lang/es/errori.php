@@ -201,6 +201,10 @@ return [
         'title' => 'Cursor caducado',
         'detail' => 'Los eventos después de este punto ya no se pueden leer: vuelve a leerlo todo y empieza de nuevo desde el último evento.',
     ],
+    'versione_scaduta' => [
+        'title' => 'Versión caducada',
+        'detail' => 'La versión es más antigua de 30 días: las tarjetas cambiadas desde entonces ya no se dan por partes. Vuelve a leer el tablero desde el principio y continúa desde la versión que te da.',
+    ],
     'corpo_troppo_grande' => [
         'title' => 'Cuerpo demasiado grande',
         'detail' => 'El cuerpo de la solicitud supera el tamaño máximo aceptado.',

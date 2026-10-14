@@ -375,8 +375,11 @@ final class BackofficeFinto
     /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, autore: ?string, risorsa_nome: ?string, board: ?array{id: string, nome: string}, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable, ultima_azione_il: CarbonImmutable, azioni: int}> le notifiche (notifica()), per id */
     private array $notifiche = [];
 
-    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le schede (scheda()), per id */
+    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable, versione?: int}> le schede (scheda()), per id */
     private array $schede = [];
+
+    /** @var array<string, int> il numero della versione di ogni board (#1941), che sale a ogni scrittura che cambia delle sue schede */
+    private array $versioni = [];
 
     /** @var array<string, array{id: string, workspace: string, nome: string, colore: string, stato: string, nel_cestino_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le cartelle (cartella()), per id */
     private array $cartelle = [];
@@ -522,6 +525,8 @@ final class BackofficeFinto
         $ora = now()->toImmutable()->startOfMillisecond();
         $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'scadenza' => $scadenza, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
+        $this->versione([$id]);
+
         return ['id' => $id, 'board_id' => $board, 'numero' => $numero, 'titolo' => $titolo];
     }
 
@@ -623,6 +628,7 @@ final class BackofficeFinto
         }
 
         $this->schede[$id][$stato.'_il'] = now()->toImmutable()->startOfMillisecond();
+        $this->versione([$id]);
 
         return $this;
     }
@@ -1156,6 +1162,39 @@ final class BackofficeFinto
         foreach ($schede as $scheda) {
             $this->schede[$scheda]['aggiornata_il'] = $ora;
         }
+
+        $this->versione($schede);
+    }
+
+    /**
+     * La versione di una board (#1941, Versioni del backoffice): ogni scrittura che cambia delle schede alza di uno il numero
+     * della loro board e lo scrive sulle schede cambiate; più board nella stessa scrittura, un numero ciascuna.
+     *
+     * @param  list<string>  $schede
+     */
+    private function versione(array $schede): void
+    {
+        $perBoard = [];
+
+        foreach ($schede as $id) {
+            $perBoard[$this->schede[$id]['board']][] = $id;
+        }
+
+        ksort($perBoard, SORT_STRING);
+
+        foreach ($perBoard as $board => $ids) {
+            $numero = $this->versioni[$board] = ($this->versioni[$board] ?? 0) + 1;
+
+            foreach ($ids as $id) {
+                $this->schede[$id]['versione'] = $numero;
+            }
+        }
+    }
+
+    /** La versione che il backoffice dà: dieci cifre dell'istante in secondi e il numero della board. */
+    private function testoDellaVersione(string $board): string
+    {
+        return sprintf('%010d', now()->getTimestamp()).($this->versioni[$board] ?? 0);
     }
 
     /**
@@ -1448,9 +1487,25 @@ final class BackofficeFinto
                 }
             }],
             'completate' => ['sometimes', 'string', 'in:true,false'],
+            'cambiate_dopo' => ['bail', 'sometimes', 'string', 'prohibits:assegnatario_id', function (string $attributo, mixed $valore, Closure $fail) use ($grezzo) {
+                $versione = preg_match('/^\d{10}\d{1,18}$/', $valore) === 1 ? [(int) substr($valore, 0, 10), (int) substr($valore, 10)] : null;
+
+                if ($versione === null) {
+                    $this->testi->dichiara($attributo, 'formato');
+                    $fail('regole.versione_formato')->translate();
+                } elseif (isset($grezzo['board_id']) && is_string($grezzo['board_id']) && $versione[1] > ($this->versioni[$grezzo['board_id']] ?? 0)) {
+                    $this->testi->dichiara($attributo, 'fuori_intervallo');
+                    $fail('regole.versione_futura')->translate();
+                }
+            }],
         ]);
         $persona = $query['assegnatario_id'] ?? null;
         $board = $query['board_id'] ?? null;
+
+        if (isset($query['cambiate_dopo'])) {
+            return $this->cambiateDopo($richiesta, $chi['workspace'], (string) $board, (string) $query['cambiate_dopo']);
+        }
+
         $completate = ($query['completate'] ?? 'false') === 'true';
         $breve = fn (array $scheda) => array_diff_key($this->voceScheda($scheda), ['descrizione' => true]);
         $giuste = array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $chi['workspace'] && $scheda['archiviata_il'] === null
@@ -1472,19 +1527,72 @@ final class BackofficeFinto
             $dalPiuRecente = false;
         }
 
+        // La lettura di una board porta la `versione` (#1941): quella della prima pagina, che il cursore tiene per le altre.
+        $versione = $persona === null
+            ? ($this->leggiPosizione($lista, ['id', 'versione'], $query['cursore'] ?? null)['versione'] ?? $this->testoDellaVersione((string) $board))
+            : null;
+
         [$stato, $pagina] = $this->pagina(
             $richiesta, $lista, 'id', array_map(fn (array $scheda) => ['id' => $scheda['id']] + $breve($scheda), array_values($giuste)),
             fn (array $voce) => $posizione($this->schede[$voce['id']]),
             fn (string $id) => isset($this->schede[$id]) ? $posizione($this->schede[$id]) : null,
             $dalPiuRecente,
             $persona === null ? self::LIMITE_MASSIMO_SCHEDE : self::LIMITE_MASSIMO,
+            $versione,
         );
 
         if ($persona !== null) {
             $pagina['totale'] = count($giuste);
+        } else {
+            $pagina['versione'] = $versione;
         }
 
         return [$stato, $pagina];
+    }
+
+    /**
+     * board.schede.elenca con `cambiate_dopo` (SchedeController::cambiate, #1941): le schede della board cambiate dopo la versione,
+     * `data` quelle che ci sono ancora e `uscite` le archiviate, per id, con la stessa `versione` su tutte le pagine. Una versione
+     * di più di 30 giorni è 410 `versione_scaduta`. Il finto non ha liste da archiviare né schede da eliminare.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function cambiateDopo(Request $richiesta, string $workspace, string $board, string $da): array
+    {
+        $lista = 'board.schede.elenca:'.$board;
+        $numero = (int) substr($da, 10);
+
+        if ((int) substr($da, 0, 10) < now()->getTimestamp() - 30 * 86400) {
+            throw new Problema('versione_scaduta');
+        }
+
+        $versione = $this->leggiPosizione($lista, ['id', 'versione'], self::query($richiesta)['cursore'] ?? null)['versione'] ?? $this->testoDellaVersione($board);
+        $voci = [];
+
+        foreach ($this->schede as $scheda) {
+            if ($scheda['workspace'] === $workspace && $scheda['board'] === $board && ($scheda['versione'] ?? 0) > $numero) {
+                $voci[] = $scheda['archiviata_il'] === null
+                    ? ['id' => $scheda['id']] + array_diff_key($this->voceScheda($scheda), ['descrizione' => true])
+                    : ['id' => $scheda['id'], 'uscita' => 'archiviata'];
+            }
+        }
+
+        [$stato, $pagina] = $this->pagina(
+            $richiesta, $lista, 'id', $voci,
+            fn (array $voce) => [$voce['id']],
+            fn (string $id) => isset($this->schede[$id]) ? [$id] : null,
+            false,
+            self::LIMITE_MASSIMO_SCHEDE,
+            $versione,
+        );
+        $uscite = array_values(array_filter($pagina['data'], fn (array $voce) => isset($voce['uscita'])));
+
+        return [$stato, [
+            'data' => array_values(array_filter($pagina['data'], fn (array $voce) => ! isset($voce['uscita']))),
+            'uscite' => array_map(fn (array $voce) => ['id' => $voce['id'], 'motivo' => $voce['uscita']], $uscite),
+            'successivo' => $pagina['successivo'],
+            'versione' => $versione,
+        ]];
     }
 
     /** Se `$board` è il nome di una scheda() senza board() (il «board-di-prova» di chi non modella le board) che il workspace ha. */
@@ -1527,6 +1635,8 @@ final class BackofficeFinto
             $ora = now()->toImmutable()->startOfMillisecond();
             $this->schede[$scheda]['completata_il'] = $completa ? $ora : null;
             $this->schede[$scheda]['aggiornata_il'] = $ora;
+            // Chi la aspetta mostra le sue attese aperte: cambiano anche loro (Versioni::scrivi).
+            $this->versione([$scheda, ...array_values(array_unique(array_column(array_filter($this->collegamenti, fn (array $collegamento) => $collegamento['aspettata'] === $scheda), 'scheda')))]);
 
             if ($completa) {
                 $sbloccate = $this->sbloccate($scheda);
@@ -3947,19 +4057,19 @@ final class BackofficeFinto
      * @param  int  $limiteMassimo  il tetto di `limite`, 100 salvo la lettura di una board con board.schede.elenca (#1940)
      * @return array{int, array<string, mixed>}
      */
-    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, int $limiteMassimo = self::LIMITE_MASSIMO): array
+    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, int $limiteMassimo = self::LIMITE_MASSIMO, ?string $versione = null): array
     {
         $query = $this->testi->validaQuery(self::query($richiesta), [
             'limite' => ['sometimes', 'integer', 'between:1,'.$limiteMassimo],
-            'cursore' => ['sometimes', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($lista, $chiave) {
-                if ($this->leggiCursore($lista, $chiave, $valore) === null) {
+            'cursore' => ['sometimes', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($lista, $chiave, $versione) {
+                if ($this->leggiPosizione($lista, $versione === null ? [$chiave] : [$chiave, 'versione'], $valore) === null) {
                     $this->testi->dichiara($attributo, 'formato');
                     $fail('regole.cursore')->translate();
                 }
             }],
         ]);
 
-        return $this->impagina($query, $lista, $chiave, $voci instanceof Closure ? $voci() : $voci, $posizione, $posizioneDelCursore, $dalPiuRecente);
+        return $this->impagina($query, $lista, $chiave, $voci instanceof Closure ? $voci() : $voci, $posizione, $posizioneDelCursore, $dalPiuRecente, $versione);
     }
 
     /**
@@ -3971,14 +4081,14 @@ final class BackofficeFinto
      * @param  Closure(string): (list<string>|null)  $posizioneDelCursore
      * @return array{int, array<string, mixed>}
      */
-    private function impagina(array $query, string $lista, string $chiave, array $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false): array
+    private function impagina(array $query, string $lista, string $chiave, array $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, ?string $versione = null): array
     {
         $limite = (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO);
         $verso = $dalPiuRecente ? -1 : 1;
         usort($voci, fn (array $una, array $altra) => $verso * self::confronta($posizione($una), $posizione($altra)));
 
         if (isset($query['cursore'])) {
-            $dopo = $posizioneDelCursore((string) $this->leggiCursore($lista, $chiave, $query['cursore']))
+            $dopo = $posizioneDelCursore((string) ($this->leggiPosizione($lista, $versione === null ? [$chiave] : [$chiave, 'versione'], $query['cursore'])[$chiave] ?? ''))
                 ?? throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.cursore', ['attribute' => 'cursore']), 'regola' => 'formato'] + ($this->parametriDelCorpo ? ['pointer' => '#/cursore'] : ['parameter' => 'cursore'])]);
             $voci = array_values(array_filter($voci, fn (array $voce) => $verso * self::confronta($posizione($voce), $dopo) > 0));
         }
@@ -3987,7 +4097,7 @@ final class BackofficeFinto
 
         return [200, [
             'data' => $pagina,
-            'successivo' => count($voci) > $limite ? $this->firmaCursore($lista, [$chiave => $pagina[$limite - 1][$chiave]]) : null,
+            'successivo' => count($voci) > $limite ? $this->firmaCursore($lista, [$chiave => $pagina[$limite - 1][$chiave]] + ($versione === null ? [] : ['versione' => $versione])) : null,
         ]];
     }
 
@@ -4004,8 +4114,14 @@ final class BackofficeFinto
         return $dati.'.'.$this->impronta($lista, $dati);
     }
 
-    /** Il valore della chiave in un cursore che questa lista ha dato (Cursori::leggi), o null: inventato, ritoccato, di un'altra lista. */
-    private function leggiCursore(string $lista, string $chiave, mixed $valore): ?string
+    /**
+     * La posizione di un cursore che questa lista ha dato (Cursori::leggi), con esattamente queste chiavi, o null: inventato,
+     * ritoccato, di un'altra lista.
+     *
+     * @param  list<string>  $chiavi
+     * @return array<string, string>|null
+     */
+    private function leggiPosizione(string $lista, array $chiavi, mixed $valore): ?array
     {
         if (! is_string($valore) || substr_count($valore, '.') !== 1) {
             return null;
@@ -4019,7 +4135,7 @@ final class BackofficeFinto
 
         $posizione = json_decode((string) base64_decode(strtr($dati, '-_', '+/'), true), true);
 
-        return is_array($posizione) && array_keys($posizione) === [$chiave] && is_string($posizione[$chiave]) ? $posizione[$chiave] : null;
+        return is_array($posizione) && array_keys($posizione) === $chiavi && array_filter($posizione, 'is_string') === $posizione ? $posizione : null;
     }
 
     private function impronta(string $lista, string $dati): string
