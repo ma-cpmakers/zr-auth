@@ -175,6 +175,28 @@ Route::get('report', ReportController::class)->bloccaSessione();               /
   cambi; deve poter fare i lock (Redis, database, file, array nei test). Il lock è perso se lo store lo butta: il rischio è la
   gara di prima, non un errore.
 
+### La sessione chiusa: da v0.12.31 vale per ogni pagina (#2044)
+
+`->bloccaSessione()` protegge solo le rotte che lo dichiarano; una pagina qualunque (la richiesta rimandata di Inertia) no.
+Da v0.12.31 zr-auth chiude anche quella strada, **senza nulla da fare nei moduli**: `Sessione::apri()`, `entra()` e `chiudi()`
+segnano la sessione di prima come chiusa, e una risposta tardiva che la riscrive non rimette nel browser né il suo cookie né
+quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrato dopo.
+
+- **Cosa cambia da fuori.** Una risposta tardiva di una sessione chiusa arriva senza `Set-Cookie` di sessione e senza
+  `XSRF-TOKEN`, e la sessione che ha riscritto è distrutta. Il browser tiene il cookie della persona entrata dopo.
+- **Dove sta il segno.** Nello store di `session.block_store` (quello del modulo se non lo cambi), per
+  `zr-auth.sessione_chiusa_secondi` (300): quanto la richiesta più lunga che può essere ancora in volo. L'id non ci sta in chiaro
+  (sha256). Una sessione anonima non lascia nessun segno.
+- **Cache giù.** Se lo store non risponde in **lettura**, la risposta è **503** con `Retry-After: 1` e senza cookie (il lato
+  prudente è rifiutare); se non risponde in **scrittura**, l'ingresso, il cambio di workspace o l'uscita **falliscono** e la
+  sessione resta com'era. Una cache svuotata perde i segni: per i secondi di una risposta in volo torna il comportamento di prima.
+- **Il log.** Una risposta scartata scrive un `Log::info` («zr-auth: scartata la risposta tardiva di una sessione chiusa») col
+  metodo e il disegno della rotta, mai l'id né i valori, nel log di default del modulo (`storage/logs/laravel-*.log`; non Slack).
+- **Dove sta il middleware.** `SessioneChiusa` è il primo del gruppo `web`, fuori da StartSession; `RicordaLIdDellaSessione`
+  viene dopo. Un modulo che riordina i middleware del gruppo `web` deve tenere il primo al suo posto.
+- **Cosa provare** in un modulo: una richiesta lenta della persona A in volo, entra B dallo stesso browser, la risposta di A
+  arriva → il browser resta B.
+
 ## L'accesso con un provider (Google, LinkedIn, Facebook)
 
 Tre metodi senza gettone, e nessun codice nuovo nel client: la pagina d'ingresso chiama `Api::senzaGettone()`.
