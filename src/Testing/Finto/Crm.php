@@ -1141,7 +1141,7 @@ trait Crm
         $riga = $this->rigaCrm($tipo, $chi['workspace'], $id);
 
         return [200, ['data' => match ($tipo) {
-            'organizzazioni' => $this->voceOrganizzazione($riga),
+            'organizzazioni' => $this->voceOrganizzazione($riga, true),
             'persone' => $this->vocePersona($riga, true),
             'trattative' => $this->voceTrattativa($riga),
             'pipeline' => $this->vocePipeline($riga),
@@ -1151,8 +1151,13 @@ trait Crm
 
     // ———————————————————————————————————————— Aziende
 
-    /** @return array<string, mixed> lo schema Organizzazione (Forme::organizzazione) */
-    private function voceOrganizzazione(array $riga): array
+    /**
+     * Lo schema Organizzazione (Forme::organizzazione). La scheda intera (`mostra`, `crea`, `modifica`) porta anche `campi`, i valori dei
+     * campi «tuoi» (#2126); l'elenco, la ricerca e l'esportazione hanno la forma breve, senza.
+     *
+     * @return array<string, mixed>
+     */
+    private function voceOrganizzazione(array $riga, bool $intera = false): array
     {
         return [
             'id' => $riga['id'],
@@ -1171,6 +1176,7 @@ trait Crm
             'creata_il' => self::iso($riga['creata_il']),
             'aggiornata_il' => self::iso($riga['aggiornata_il']),
             'creata_da' => $riga['creata_da'],
+            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'organizzazione', $riga['id'])] : []),
         ];
     }
 
@@ -1214,10 +1220,11 @@ trait Crm
         $chi = $this->conCrm($richiesta);
 
         return $this->conIdempotenza($richiesta, 'crm.organizzazioni.crea', $chi, $corpo, function () use ($chi, $corpo) {
-            $campi = $this->testi->validaCorpo($corpo, $this->regoleOrganizzazione($chi['workspace'], true));
+            $campi = $this->testi->validaCorpo($corpo, [...$this->regoleOrganizzazione($chi['workspace'], true), ...$this->regoleDeiValoriCrm($chi['workspace'], 'organizzazione', true)]);
             $id = $this->nasceOrganizzazione($chi, $campi);
+            $this->scriviIValoriCrm('organizzazione', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'organizzazione', $id, $campi['campi'] ?? []));
 
-            return [201, ['data' => $this->voceOrganizzazione($this->crm['organizzazioni'][$id])], ['Location' => "/v1/crm/organizzazioni/{$id}"]];
+            return [201, ['data' => $this->voceOrganizzazione($this->crm['organizzazioni'][$id], true)], ['Location' => "/v1/crm/organizzazioni/{$id}"]];
         });
     }
 
@@ -1244,7 +1251,7 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('organizzazioni', $chi['workspace'], $id);
-        $campi = $this->modificaCrm($corpo, [...$this->regoleOrganizzazione($chi['workspace'], false), 'archiviata' => ['filled', 'boolean:strict']]);
+        $campi = $this->modificaCrm($corpo, [...$this->regoleOrganizzazione($chi['workspace'], false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'organizzazione', false), 'archiviata' => ['filled', 'boolean:strict']]);
 
         if (array_key_exists('indirizzo', $campi)) {
             $campi['indirizzo'] = self::indirizzoCrm($campi['indirizzo']);
@@ -1252,7 +1259,7 @@ trait Crm
 
         $this->applicaOrganizzazione($riga['id'], $campi, $chi['persona']);
 
-        return [200, ['data' => $this->voceOrganizzazione($this->crm['organizzazioni'][$riga['id']])]];
+        return [200, ['data' => $this->voceOrganizzazione($this->crm['organizzazioni'][$riga['id']], true)]];
     }
 
     /** OrganizzazioniModifica::applica: i campi che cambiano davvero, l'archivio, la cronologia. */
@@ -1282,11 +1289,21 @@ trait Crm
             $tipi[] = $campi['archiviata'] ? 'archiviata' : 'ripristinata';
         }
 
-        if ($cambi === []) {
+        // I valori dei campi «tuoi» (#2126): una riga per valore, nella stessa scrittura.
+        $piano = $this->pianoDeiValoriCrm($riga['workspace'], 'organizzazione', $id, $campi['campi'] ?? []);
+
+        if ($cambi === [] && $piano === []) {
             return;
         }
 
-        $this->salvaCrm('organizzazioni', $id, $nuovi);
+        $this->scriviIValoriCrm('organizzazione', $id, $piano);
+
+        // Cambiano solo i valori: l'azienda si tocca comunque (Registro::segnala), e `touch` scrive l'ora, senza il millisecondo in più
+        // che un salvataggio con cambi dà.
+        if (! $this->salvaCrm('organizzazioni', $id, $nuovi)) {
+            $this->crm['organizzazioni'][$id]['aggiornata_il'] = self::adessoCrm();
+        }
+
         $voci = [];
 
         foreach (['nome', 'sito', 'telefono', 'indirizzo', 'stato', 'responsabile_id'] as $campo) {
@@ -1294,6 +1311,8 @@ trait Crm
                 $voci[] = in_array($campo, ['stato', 'responsabile_id'], true) ? ['campo' => $campo, ...$cambi[$campo]] : ['campo' => $campo];
             }
         }
+
+        $voci = [...$voci, ...self::vociDeiValoriCrm($piano)];
 
         if ($voci !== []) {
             $this->cambioCrm('organizzazioni', $id, $autore, 'modificata', $voci);
