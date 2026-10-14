@@ -5,16 +5,17 @@ namespace Zeiras\Auth\Testing\Finto;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
  * Le sezioni e i campi del CRM del backoffice finto (#2024, G67): `crm.sezioni.elenca`, `crea`, `modifica` ed `elimina`, e
- * `crm.campi.elenca` e `modifica`, in memoria e per workspace, con le forme, i codici e le regole del backoffice
+ * `crm.campi.elenca`, `crea` (#2111: i campi «tuoi») e `modifica`, in memoria e per workspace, con le forme, i codici e le regole del backoffice
  * (`SezioniController` e `CampiController`). Il catalogo degli standard è la copia di `App\Crm\Catalogo` (persona 24 campi e 6
  * sezioni, organizzazione 16 e 4, trattativa 11 e 2): il workspace lo prende al primo metodo, e una modifica scrive sulla copia del
  * workspace, mai sul catalogo. Come nel backoffice, un metodo vuole l'app `crm` (prima il ruolo, poi l'app), il corpo si valida
  * prima di cercare la risorsa, e una scrittura che non cambia niente non porta avanti `aggiornato_il`. Il finto non emette gli
- * eventi (`com.zeiras.crm.campo.modificato`) né tiene lo storico: lo dice il README.
+ * eventi (`com.zeiras.crm.campo.modificato` e `creato`) né tiene lo storico: lo dice il README.
  */
 trait CrmCampi
 {
@@ -26,6 +27,15 @@ trait CrmCampi
 
     /** I caratteri del nome di una sezione o di un campo, per lingua (Sezioni::NOME). */
     private const CRM_NOME_DI_UNA_SEZIONE = 60;
+
+    /** I campi di un oggetto per tetto, standard e «tuoi» (Catalogo::TETTO_CAMPI). */
+    private const CRM_TETTO_DEI_CAMPI = 300;
+
+    /** I tipi di un campo «tuo» in V1 (Catalogo::TIPI_V1); `email` e `telefono` no. */
+    private const CRM_TIPI_DEI_CAMPI_TUOI = ['testo', 'testo_lungo', 'numero', 'valuta', 'percentuale', 'data', 'data_ora', 'si_no', 'elenco', 'scelta_multipla', 'url', 'membro'];
+
+    /** Le opzioni di un elenco o di una scelta multipla, al più (Catalogo::OPZIONI_MASSIME). */
+    private const CRM_OPZIONI_MASSIME = 100;
 
     /** Il tetto di `limite` degli elenchi di sezioni e di campi, ed è anche il valore se manca (SezioniElencaRequest, CampiElencaRequest). */
     private const CRM_LIMITE_DEI_CAMPI = 300;
@@ -300,6 +310,139 @@ trait CrmCampi
     }
 
     /**
+     * crm.campi.crea (CampiController::crea): un campo «tuo» in fondo alla sezione chiesta (o a «Principali»); il corpo, poi il tetto
+     * di 300 per oggetto (409 `limite_raggiunto`), il nome `it` unico senza maiuscole né accenti (422 `duplicato` su `#/nome/it`) e la
+     * sezione. La chiave nasce dal nome (minuscole, senza accenti, `_`, al più 40; `_2`, `_3` se è presa) e non cambia. Elenco e
+     * scelta multipla vogliono da 1 a 100 opzioni, ognuna con un `id`; gli altri tipi nessuna.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaCampoCrm(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+
+        return $this->conIdempotenza($richiesta, 'crm.campi.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $campi = $this->testi->validaCorpo($corpo, [
+                'oggetto' => ['required', 'string', Rule::in(self::CRM_OGGETTI_DEI_CAMPI)],
+                'nome' => ['required', 'array'],
+                'nome.it' => ['bail', 'required', 'string', 'max:'.self::CRM_NOME_DI_UNA_SEZIONE, new NomeScritto],
+                'nome.en' => $this->regoleDiUnNomeCrm(),
+                'nome.es' => $this->regoleDiUnNomeCrm(),
+                'tipo' => ['required', 'string', Rule::in(self::CRM_TIPI_DEI_CAMPI_TUOI)],
+                'sezione_id' => ['filled', 'string', 'max:40'],
+                'visibilita' => ['filled', 'string', Rule::in(['visibile', 'nascosto'])],
+                'obbligatorio' => ['filled', 'boolean:strict'],
+                'opzioni' => ['sometimes', 'array', 'max:'.self::CRM_OPZIONI_MASSIME],
+                'opzioni.*' => ['array'],
+                'opzioni.*.nome' => ['required', 'array'],
+                'opzioni.*.nome.it' => ['bail', 'required', 'string', 'max:'.self::CRM_NOME_DI_UNA_SEZIONE, new NomeScritto],
+                'opzioni.*.nome.en' => $this->regoleDiUnNomeCrm(),
+                'opzioni.*.nome.es' => $this->regoleDiUnNomeCrm(),
+                'opzioni.*.colore' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            ]);
+            $opzioni = $this->opzioniDelCampoCrm($campi);
+            $oggetto = $campi['oggetto'];
+            $this->campiDelWorkspaceCrm($chi['workspace']);
+            $lista = $this->campiDiUnOggettoCrm($chi['workspace'], $oggetto);
+
+            if (count($lista) >= self::CRM_TETTO_DEI_CAMPI) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_DEI_CAMPI]);
+            }
+
+            foreach ($lista as $altro) {
+                if (self::nomeSimileCrm($altro['nome']['it'], null) === self::nomeSimileCrm($campi['nome']['it'], null)) {
+                    throw $this->erroreCrm('nome.it', 'regole.campo_nome_duplicato', Regola::DUPLICATO);
+                }
+            }
+
+            $sezione = $campi['sezione_id'] ?? "{$oggetto}.principali";
+
+            if (! in_array($sezione, array_column($this->sezioniViveCrm($chi['workspace'], $oggetto), 'id'), true)) {
+                throw $this->erroreCrm('sezione_id', 'regole.sezione_non_esiste', Regola::NON_TROVATO);
+            }
+
+            $chiave = $this->chiaveDelCampoCrm($campi['nome']['it'], array_keys($this->campiCrm[$chi['workspace']][$oggetto]['campi']));
+            $ordini = array_column(array_filter($lista, fn (array $altro) => $altro['sezione_id'] === $sezione), 'ord');
+            $ora = self::adessoCrm();
+            $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$chiave] = [
+                'id' => "{$oggetto}.{$chiave}", 'oggetto' => $oggetto, 'codice' => $chiave, 'origine' => 'tuo', 'tipo' => $campi['tipo'], 'sistema' => null,
+                'opzioni' => $opzioni, 'obbligatorio' => $campi['obbligatorio'] ?? false,
+                'catalogo' => ['nome' => []], 'scritti' => array_filter($campi['nome'], fn ($nome) => is_string($nome) && $nome !== ''),
+                'visibilita' => $campi['visibilita'] ?? 'visibile', 'sezione_id' => $sezione,
+                'ord' => ($ordini === [] ? 0 : max($ordini)) + self::CRM_PASSO, 'indispensabile' => false, 'in_campi' => true,
+                'creato_il' => $ora, 'aggiornato_il' => $ora,
+            ];
+            [$nuovo] = $this->trovaCampoCrm($chi['workspace'], "{$oggetto}.{$chiave}");
+
+            return [201, ['data' => $this->voceCampoCrm($nuovo)], ['Location' => "/v1/crm/campi/{$oggetto}.{$chiave}"]];
+        });
+    }
+
+    /**
+     * Le opzioni di un elenco o di una scelta multipla come si scrivono: un `id` ciascuna, i nomi nelle tre lingue e il colore minuscolo.
+     * Un elenco senza opzioni, o un altro tipo con le opzioni, è 422; due opzioni con lo stesso nome sono 422 `duplicato` sulla seconda.
+     *
+     * @param  array<string, mixed>  $campi
+     * @return list<array<string, mixed>>|null
+     */
+    private function opzioniDelCampoCrm(array $campi): ?array
+    {
+        $date = $campi['opzioni'] ?? null;
+
+        if (! in_array($campi['tipo'], ['elenco', 'scelta_multipla'], true)) {
+            if ($date !== null) {
+                throw $this->erroreCrm('opzioni', 'regole.campo_opzioni_non_ammesse', Regola::CAMPO_VIETATO);
+            }
+
+            return null;
+        }
+
+        if (! is_array($date) || $date === []) {
+            throw $this->erroreCrm('opzioni', 'regole.campo_opzioni_obbligatorie', Regola::OBBLIGATORIO);
+        }
+
+        $viste = [];
+        $opzioni = [];
+
+        foreach (array_values($date) as $i => $opzione) {
+            $chiave = self::nomeSimileCrm($opzione['nome']['it'], null);
+
+            if (isset($viste[$chiave])) {
+                throw $this->erroreCrm("opzioni.{$i}.nome.it", 'regole.campo_opzione_duplicata', Regola::DUPLICATO);
+            }
+
+            $viste[$chiave] = true;
+            $opzioni[] = [
+                'id' => self::id(),
+                'nome' => ['it' => $opzione['nome']['it'], 'en' => $opzione['nome']['en'] ?? null, 'es' => $opzione['nome']['es'] ?? null],
+                'colore' => isset($opzione['colore']) ? strtolower($opzione['colore']) : null,
+            ];
+        }
+
+        return $opzioni;
+    }
+
+    /**
+     * La chiave di un campo nuovo dal nome `it`: minuscole, senza accenti, `_` al posto del resto, al più 40 caratteri (`campo` se non
+     * resta niente); `_2`, `_3`… se l'oggetto la ha già.
+     *
+     * @param  list<int|string>  $occupate
+     */
+    private function chiaveDelCampoCrm(string $nome, array $occupate): string
+    {
+        $base = trim((string) preg_replace('/[^a-z0-9]+/', '_', strtolower(Str::ascii($nome))), '_');
+        $base = $base === '' ? 'campo' : rtrim(substr($base, 0, 40), '_');
+        $occupate = array_map('strval', $occupate);
+
+        for ($n = 1, $chiave = $base; in_array($chiave, $occupate, true); $n++) {
+            $suffisso = '_'.($n + 1);
+            $chiave = rtrim(substr($base, 0, 40 - strlen($suffisso)), '_').$suffisso;
+        }
+
+        return $chiave;
+    }
+
+    /**
      * crm.campi.modifica (CampiController::modifica): JSON Merge Patch di `nome` (`null` torna al catalogo), `visibilita`,
      * `sezione_id` e `posizione` (da 1, nella sezione di arrivo; senza, un campo che cambia sezione va in fondo). Un campo
      * indispensabile non si nasconde e non lascia «Principali» (422 `campo_indispensabile`). Il corpo si valida prima di cercare il campo.
@@ -322,7 +465,7 @@ trait CrmCampi
         [$voce, $lista] = $this->trovaCampoCrm($chi['workspace'], $id);
         $oggetto = $voce['oggetto'];
         $cambiati = [];
-        $nome = $this->nomiNuoviCrm($voce['catalogo']['nome'], $voce['scritti'], $campi['nome'] ?? [], false);
+        $nome = $this->nomiNuoviCrm($voce['catalogo']['nome'], $voce['scritti'], $campi['nome'] ?? [], $voce['origine'] === 'tuo');
 
         if (! self::scrittiUgualiCrm($nome['riga'], $voce['scritti'])) {
             $cambiati[] = 'nome';
@@ -427,7 +570,8 @@ trait CrmCampi
                 $sezione = "{$oggetto}.{$campo['sezione']}";
                 $inSezione[$sezione] = ($inSezione[$sezione] ?? 0) + self::CRM_PASSO;
                 $this->campiCrm[$workspace][$oggetto]['campi'][$campo['codice']] = [
-                    'id' => "{$oggetto}.{$campo['codice']}", 'oggetto' => $oggetto, 'codice' => $campo['codice'], 'tipo' => $campo['tipo'], 'sistema' => $campo['sistema'],
+                    'id' => "{$oggetto}.{$campo['codice']}", 'oggetto' => $oggetto, 'codice' => $campo['codice'], 'origine' => 'standard', 'tipo' => $campo['tipo'], 'sistema' => $campo['sistema'],
+                    'opzioni' => null, 'obbligatorio' => false,
                     'catalogo' => ['nome' => $campo['nome']], 'scritti' => [], 'visibilita' => $campo['visibilita'], 'sezione_id' => $sezione,
                     'ord' => $inSezione[$sezione], 'indispensabile' => $campo['indispensabile'], 'in_campi' => $campo['in_campi'],
                     'creato_il' => $dal, 'aggiornato_il' => $dal,
@@ -501,7 +645,7 @@ trait CrmCampi
      */
     private function trovaCampoCrm(string $workspace, string $id): array
     {
-        if (preg_match('/^([a-z]+)\.[a-z_]+$/', $id, $trovato) === 1 && in_array($trovato[1], self::CRM_OGGETTI_DEI_CAMPI, true)) {
+        if (preg_match('/^([a-z]+)\.[a-z0-9_]+$/', $id, $trovato) === 1 && in_array($trovato[1], self::CRM_OGGETTI_DEI_CAMPI, true)) {
             $lista = $this->campiDiUnOggettoCrm($workspace, $trovato[1]);
 
             foreach ($lista as $campo) {
@@ -530,21 +674,22 @@ trait CrmCampi
         ];
     }
 
-    /** @return array<string, mixed> lo schema Campo (Forme::campo): `sistema` solo per i campi di tipo `sistema`, `obbligatorio` mai per uno standard */
+    /** @return array<string, mixed> lo schema Campo (Forme::campo): `sistema` solo per i campi di tipo `sistema`, `obbligatorio` e `opzioni` solo per uno «tuo» */
     private function voceCampoCrm(array $campo): array
     {
         return [
             'id' => $campo['id'],
             'oggetto' => $campo['oggetto'],
             'chiave' => $campo['codice'],
-            'origine' => 'standard',
+            'origine' => $campo['origine'],
             'tipo' => $campo['tipo'],
         ] + ($campo['tipo'] === 'sistema' ? ['sistema' => $campo['sistema']] : []) + [
+            'opzioni' => $campo['opzioni'],
             'nome' => $campo['nome'],
             'visibilita' => $campo['visibilita'],
             'sezione_id' => $campo['sezione_id'],
             'posizione' => $campo['posto'],
-            'obbligatorio' => false,
+            'obbligatorio' => $campo['obbligatorio'],
             'indispensabile' => $campo['indispensabile'],
             'in_campi' => $campo['in_campi'],
             'creato_il' => self::iso($campo['creato_il']),
