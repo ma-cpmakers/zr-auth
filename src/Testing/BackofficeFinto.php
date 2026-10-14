@@ -4138,6 +4138,12 @@ final class BackofficeFinto
         return is_array($posizione) && array_keys($posizione) === $chiavi && array_filter($posizione, 'is_string') === $posizione ? $posizione : null;
     }
 
+    /** Il valore della chiave in un cursore che questa lista ha dato (Cursori::leggi), o null: inventato, ritoccato, di un'altra lista. */
+    private function leggiCursore(string $lista, string $chiave, mixed $valore): ?string
+    {
+        return $this->leggiPosizione($lista, [$chiave], $valore)[$chiave] ?? null;
+    }
+
     private function impronta(string $lista, string $dati): string
     {
         return self::base64url(hash_hmac('sha256', "{$lista}\n{$dati}", $this->chiaveDeiCursori, true));
