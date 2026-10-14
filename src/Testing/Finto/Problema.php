@@ -42,6 +42,7 @@ final class Problema extends RuntimeException
         'annullamento_scaduto' => 409,
         'sezione_di_sistema' => 409,
         'sezione_non_vuota' => 409,
+        'versione_scaduta' => 410,
         'dati_non_validi' => 422,
         'collegamento_circolare' => 422,
         'catena_troppo_lunga' => 422,

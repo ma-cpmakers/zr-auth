@@ -201,6 +201,10 @@ return [
         'title' => 'Cursore scaduto',
         'detail' => "Gli eventi dopo questo punto non si leggono più: rileggi tutto e riparti dall'ultimo evento.",
     ],
+    'versione_scaduta' => [
+        'title' => 'Versione scaduta',
+        'detail' => 'La versione è più vecchia di 30 giorni: le schede cambiate da allora non si danno più a pezzi. Rileggi la board da capo e riparti dalla versione che ti dà.',
+    ],
     'corpo_troppo_grande' => [
         'title' => 'Corpo troppo grande',
         'detail' => 'Il corpo della richiesta supera la dimensione massima accettata.',

@@ -36,6 +36,8 @@ return [
     'campo_di_un_altro_metodo' => 'El campo :attribute no se cambia aquí: lo cambia :metodo.',
     'campo_di_nessun_metodo' => 'El campo :attribute no se cambia: lo da el sistema.',
     'campo_del_workspace' => 'El campo :attribute se cambia con el token de un workspace: es un dato de la persona en ese workspace.',
+    'versione_formato' => 'La versión es la que board.schede.elenca dio en la respuesta de una lectura del tablero (`versione`): solo cifras, sin modificar.',
+    'versione_futura' => 'La versión es posterior a la última del tablero: usa la que board.schede.elenca dio.',
     'numero_senza_archiviate' => 'Con numero la tarjeta llega en cualquier estado, también archivada: el parámetro archiviate no hace falta.',
     'password_attuale' => 'La contraseña actual no es correcta: la contraseña nueva solo se da con la de ahora.',
     'contatto_vuoto' => 'Un contacto necesita al menos uno de nome, cognome y email.',

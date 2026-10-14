@@ -201,6 +201,10 @@ return [
         'title' => 'Cursor expired',
         'detail' => 'The events after this point can no longer be read: read everything again and start over from the last event.',
     ],
+    'versione_scaduta' => [
+        'title' => 'Version expired',
+        'detail' => 'The version is older than 30 days: the cards changed since then are no longer given in pieces. Read the board again from the start and continue from the version it gives you.',
+    ],
     'corpo_troppo_grande' => [
         'title' => 'Request body too large',
         'detail' => 'The request body exceeds the maximum accepted size.',
