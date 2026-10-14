@@ -17,6 +17,7 @@ use Throwable;
 use Zeiras\Auth\Http\Controllers\EventiController;
 use Zeiras\Auth\Http\Controllers\RicevitoreController;
 use Zeiras\Auth\Http\Middleware\ConGettone;
+use Zeiras\Auth\Http\Middleware\RicordaLIdDellaSessione;
 use Zeiras\Auth\Http\Middleware\SessioneChiusa;
 
 final class ZrAuthServiceProvider extends ServiceProvider
@@ -66,6 +67,8 @@ final class ZrAuthServiceProvider extends ServiceProvider
             // Per primo nel gruppo `web`, fuori da StartSession: vede la risposta con la sessione già riscritta (#2044).
             if (array_key_exists('web', $kernel->getMiddlewareGroups())) {
                 $kernel->prependMiddlewareToGroup('web', SessioneChiusa::class);
+                // Dopo StartSession (e prima delle rotte): ricorda l'id con cui la sessione è partita.
+                $kernel->appendMiddlewareToGroup('web', RicordaLIdDellaSessione::class);
             }
             $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, ConGettone::class);
         });

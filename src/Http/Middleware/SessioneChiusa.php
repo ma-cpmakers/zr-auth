@@ -28,8 +28,16 @@ final class SessioneChiusa
             return $risposta;
         }
 
+        // L'id con cui la richiesta è partita e quello che ha a fine corsa (diverso se la richiesta ha cambiato sessione da sé).
+        $iniziale = $richiesta->attributes->get(RicordaLIdDellaSessione::ATTRIBUTO);
+        $ids = array_values(array_unique([is_string($iniziale) ? $iniziale : $richiesta->session()->getId(), $richiesta->session()->getId()]));
+
         try {
-            $chiusa = Sessione::eChiusa($richiesta->session()->getId());
+            // Tardiva: lo dice la richiesta stessa (ha trovato la sua sessione già chiusa quando ha provato a cambiarla), o uno degli id
+            // è chiuso da un'altra richiesta. Un id che ha chiuso lei, con un ingresso suo, non conta.
+            $mie = (array) $richiesta->attributes->get(Sessione::MIE, []);
+            $chiusa = $richiesta->attributes->get(Sessione::TARDIVA) === true
+                || array_filter($ids, fn (string $id) => ! in_array($id, $mie, true) && Sessione::eChiusa($id)) !== [];
         } catch (Throwable $errore) {
             // La cache non risponde: non si sa se la sessione è chiusa, e il lato prudente è rifiutare. Nessun cookie esce (al browser
             // resta quello che ha), la risposta è 503 e chi chiama riprova tra un istante. La sessione non si distrugge: un guasto
@@ -43,7 +51,10 @@ final class SessioneChiusa
             return $risposta;
         }
 
-        $richiesta->session()->getHandler()->destroy($richiesta->session()->getId());
+        // Anche la sessione nuova di una richiesta tardiva che ha cambiato id da sé: nessun cookie la porta al browser.
+        foreach ($ids as $id) {
+            $richiesta->session()->getHandler()->destroy($id);
+        }
 
         self::senzaCookie($risposta);
 
@@ -59,11 +70,11 @@ final class SessioneChiusa
     /** Toglie dalla risposta il cookie di sessione e quello del gettone CSRF: al browser resta quello che ha. */
     private static function senzaCookie(Response $risposta): Response
     {
-        $percorso = (string) config('session.path', '/');
+        $percorso = config('session.path') ?: '/';
         $dominio = config('session.domain');
 
         foreach ([config('session.cookie'), 'XSRF-TOKEN'] as $nome) {
-            $risposta->headers->removeCookie((string) $nome, $percorso, is_string($dominio) ? $dominio : null);
+            $risposta->headers->removeCookie((string) $nome, (string) $percorso, is_string($dominio) ? $dominio : null);
         }
 
         return $risposta;

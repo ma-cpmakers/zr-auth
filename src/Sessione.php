@@ -5,6 +5,7 @@ namespace Zeiras\Auth;
 use Illuminate\Session\CookieSessionHandler;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use RuntimeException;
 use Zeiras\Auth\Errori\SessioneNelBrowser;
 
 /**
@@ -29,8 +30,13 @@ final class Sessione
 
     public const BLOCCO_ATTESA = 3;
 
-    /** Il prefisso dei segni di una sessione chiusa (nello store di cache del blocco): vedi segnaChiusa(). */
+    /** Il prefisso dei segni di una sessione chiusa (nello store di cache del blocco): vedi segnaLaVecchia(). */
     private const CHIUSA = 'zr-auth:sessione-chiusa:';
+
+    /** Gli attributi della richiesta: è tardiva (la sua sessione era già chiusa), e gli id che ha chiuso lei (SessioneChiusa li legge). */
+    public const TARDIVA = 'zr-auth.tardiva';
+
+    public const MIE = 'zr-auth.chiuse-da-me';
 
     /** Le lingue di Zeiras (config/lingue.php del backoffice): la lingua del profilo che la sessione prende è una di queste. */
     public const LINGUE = ['it', 'en', 'es'];
@@ -46,7 +52,7 @@ final class Sessione
         self::controllaIlDriver();
         $gettone = $accesso['gettone'];
         // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
-        self::segnaChiusa(session()->getId());
+        self::segnaLaVecchia();
 
         session()->regenerate(true);
         session()->put(self::CHIAVE, [
@@ -76,7 +82,7 @@ final class Sessione
         }
 
         // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
-        self::segnaChiusa(session()->getId());
+        self::segnaLaVecchia();
 
         session()->regenerate(true);
         session()->put(self::CHIAVE, [
@@ -191,30 +197,57 @@ final class Sessione
      */
     public static function chiudi(): void
     {
-        self::segnaChiusa(session()->getId());
+        self::segnaLaVecchia();
 
         session()->invalidate();
         session()->regenerateToken();
     }
 
     /**
-     * Segna chiusa la sessione con questo id, che un ingresso, un cambio di workspace o un'uscita hanno appena distrutto (#2044).
+     * Segna chiusa la sessione di questa richiesta, che un ingresso, un cambio di workspace o un'uscita stanno per distruggere
+     * (#2044), se è la sessione di una persona: una sessione anonima non ha niente da far rivivere.
      * Laravel riscrive la sessione, col suo cookie, a ogni risposta: una risposta lenta partita prima del cambio, finendo dopo,
      * la ricreerebbe e rimanderebbe al browser il cookie di prima, mentre nel browser c'è ormai la sessione di un'altra persona.
      * Il segno sta nello store di cache del blocco (`session.block_store`, quello del modulo se non lo cambi: lo vedono tutti i
-     * processi) e dura quanto la sessione; l'id non ci sta in chiaro. Lo legge SessioneChiusa. Se la cache non risponde la scrittura
-     * lancia, e il cambio non avviene. Una cache svuotata perde i segni: per i secondi di una risposta ancora in volo torna il
-     * comportamento di prima.
+     * processi), dura `zr-auth.sessione_chiusa_secondi` e l'id non ci sta in chiaro. Lo legge SessioneChiusa. Se la cache non
+     * risponde, o rifiuta la scrittura, lancia: il cambio non avviene. Una cache svuotata perde i segni: per i secondi di una
+     * risposta ancora in volo torna il comportamento di prima.
      */
-    private static function segnaChiusa(string $id): void
+    private static function segnaLaVecchia(): void
     {
-        Cache::store(config('session.block_store'))->put(self::CHIUSA.hash('sha256', $id), true, (int) config('session.lifetime', 120) * 60);
+        if (! session()->has(self::CHIAVE)) {
+            return;
+        }
+
+        $id = session()->getId();
+        $chiave = self::chiave($id);
+        $cache = Cache::store(config('session.block_store'));
+        $richiesta = request();
+
+        if (! $cache->add($chiave, true, max(1, (int) config('zr-auth.sessione_chiusa_secondi', 300)))) {
+            // `add` non scrive se il segno c'è già (chiusa da un'altra richiesta: questa è tardiva, e SessioneChiusa non lascerà
+            // uscire il suo cookie, qualunque cosa faccia) e torna falso anche se la cache rifiuta la scrittura (il cambio non avviene).
+            if (! $cache->has($chiave)) {
+                throw new RuntimeException('La cache non ha scritto il segno della sessione chiusa: il cambio non avviene.');
+            }
+
+            $richiesta->attributes->set(self::TARDIVA, true);
+
+            return;
+        }
+
+        $richiesta->attributes->set(self::MIE, [...(array) $richiesta->attributes->get(self::MIE, []), $id]);
     }
 
-    /** Vero se la sessione con questo id è stata chiusa da un ingresso, un cambio di workspace o un'uscita (segnaChiusa). */
+    private static function chiave(string $id): string
+    {
+        return self::CHIUSA.hash('sha256', $id);
+    }
+
+    /** Vero se la sessione con questo id è stata chiusa da un ingresso, un cambio di workspace o un'uscita (segnaLaVecchia). */
     public static function eChiusa(string $id): bool
     {
-        return Cache::store(config('session.block_store'))->has(self::CHIUSA.hash('sha256', $id));
+        return Cache::store(config('session.block_store'))->has(self::chiave($id));
     }
 
     /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string}|null */

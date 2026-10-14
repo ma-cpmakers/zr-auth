@@ -57,4 +57,10 @@ return [
         'doppioni' => 300,
     ],
 
+    // La sessione chiusa (SessioneChiusa, #2044): per quanti secondi, dopo un ingresso, un cambio di workspace o un'uscita, la sessione
+    // di prima si ricorda come chiusa. Quanto la richiesta più lunga che può essere ancora in volo (il timeout di PHP-FPM, quello
+    // di Cloudflare): oltre, una risposta tardiva non è più un rischio. Più lungo non serve: un browser che non ha ricevuto la
+    // risposta dell'ingresso resta con l'id chiuso, perde il cookie a ogni risposta e non può entrare finché il segno vale.
+    'sessione_chiusa_secondi' => 300,
+
 ];
