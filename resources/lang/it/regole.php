@@ -70,7 +70,7 @@ return [
     'motivo_archiviato_senza_posto' => "Un motivo archiviato non ha un posto nell'elenco: ripristinalo con archiviato false, insieme alla posizione.",
     'motivo_non_esiste' => "Nel workspace non c'è un motivo di perdita con questo id: gli id dei motivi li dà crm.motivi.elenca.",
     'campi_estranei_della_riga' => 'La riga ha campi che il metodo non conosce: i campi di una riga sono quelli della creazione singola.',
-    'campo_numero' => 'Il valore dev\'essere un numero JSON (non una stringa), al più 10.000.000.000 in valore assoluto e con al più 4 decimali.',
+    'campo_numero' => 'Il valore dev\'essere un numero JSON (non una stringa), al più 10^10 in valore assoluto e con al più 4 decimali.',
     'campo_valuta' => 'Una valuta è un oggetto con il suo `importo`, un intero in unità minori (centesimi per l\'EUR); `valuta`, se c\'è, è quella del CRM.',
     'campo_data_ora' => 'La data e l\'ora sono in ISO 8601 UTC con la Z finale, per esempio 2026-10-14T09:30:00Z.',
     'campo_opzione' => 'Questa opzione non è fra quelle del campo: gli id delle opzioni li dà crm.campi.elenca.',

@@ -69,7 +69,7 @@ return [
     'motivo_archiviato_senza_posto' => 'Un motivo archivado no tiene un lugar en la lista: restáuralo con archiviato false, junto con la posición.',
     'motivo_non_esiste' => 'El espacio de trabajo no tiene un motivo de pérdida con este id: los ids de los motivos los da crm.motivi.elenca.',
     'campi_estranei_della_riga' => 'La fila tiene campos que el método no conoce: los campos de una fila son los de la creación individual.',
-    'campo_numero' => 'El valor debe ser un número JSON (no una cadena), como máximo 10.000.000.000 en valor absoluto y con como máximo 4 decimales.',
+    'campo_numero' => 'El valor debe ser un número JSON (no una cadena), como máximo 10^10 en valor absoluto y con como máximo 4 decimales.',
     'campo_valuta' => 'Un valor de moneda es un objeto con su `importo`, un entero en unidades menores (céntimos para EUR); `valuta`, si está, es la del CRM.',
     'campo_data_ora' => 'La fecha y la hora están en ISO 8601 UTC con la Z final, por ejemplo 2026-10-14T09:30:00Z.',
     'campo_opzione' => 'Esta opción no es una de las del campo: los ids de las opciones los da crm.campi.elenca.',
