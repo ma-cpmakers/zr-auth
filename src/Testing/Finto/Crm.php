@@ -180,9 +180,9 @@ trait Crm
      * Lo stato del CRM, per tipo e per id: ogni riga porta il suo `workspace`. Le righe eliminate (fasi, attività, note) restano con
      * `eliminata`, come nell'archivio di sistema; le `cambi` sono le righe delle cronologie di contatti, aziende e trattative.
      *
-     * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>}
+     * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -1142,7 +1142,7 @@ trait Crm
 
         return [200, ['data' => match ($tipo) {
             'organizzazioni' => $this->voceOrganizzazione($riga),
-            'persone' => $this->vocePersona($riga),
+            'persone' => $this->vocePersona($riga, true),
             'trattative' => $this->voceTrattativa($riga),
             'pipeline' => $this->vocePipeline($riga),
             default => $this->voceAttivita($riga),
@@ -1324,8 +1324,13 @@ trait Crm
 
     // ———————————————————————————————————————— Contatti
 
-    /** @return array<string, mixed> lo schema Persona (Forme::persona) */
-    private function vocePersona(array $riga): array
+    /**
+     * Lo schema Persona (Forme::persona). La scheda intera (`mostra`, `crea`, `modifica`) porta anche `campi`, i valori dei campi
+     * «tuoi»; l'elenco, la ricerca e l'esportazione hanno la forma breve, senza.
+     *
+     * @return array<string, mixed>
+     */
+    private function vocePersona(array $riga, bool $intera = false): array
     {
         $azienda = $riga['organizzazione_id'] === null ? null : ($this->crm['organizzazioni'][$riga['organizzazione_id']] ?? null);
 
@@ -1353,6 +1358,7 @@ trait Crm
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
             'creato_da' => $riga['creato_da'],
+            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'persona', $riga['id'])] : []),
         ];
     }
 
@@ -1421,7 +1427,8 @@ trait Crm
         $chi = $this->conCrm($richiesta);
 
         return $this->conIdempotenza($richiesta, 'crm.persone.crea', $chi, $corpo, function () use ($chi, $corpo) {
-            $campi = $this->nuovaPersonaCrm($this->testi->validaCorpo($corpo, $this->regolePersona($chi['workspace'])), $chi['persona']);
+            $validati = $this->testi->validaCorpo($corpo, [...$this->regolePersona($chi['workspace']), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', true)]);
+            $campi = $this->nuovaPersonaCrm($validati, $chi['persona']);
 
             foreach ($campi['email'] as $voce) {
                 $presente = $this->personaConEmailCrm($chi['workspace'], $voce['indirizzo']);
@@ -1432,8 +1439,9 @@ trait Crm
             }
 
             $id = $this->nascePersonaCrm($chi, $campi);
+            $this->scriviIValoriCrm('persona', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $id, $validati['campi'] ?? []));
 
-            return [201, ['data' => $this->vocePersona($this->crm['persone'][$id])], ['Location' => "/v1/crm/persone/{$id}"]];
+            return [201, ['data' => $this->vocePersona($this->crm['persone'][$id], true)], ['Location' => "/v1/crm/persone/{$id}"]];
         });
     }
 
@@ -1483,7 +1491,7 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('persone', $chi['workspace'], $id);
-        $campi = $this->modificaCrm($corpo, [...$this->regolePersona($chi['workspace']), 'archiviato' => ['filled', 'boolean:strict']]);
+        $campi = $this->modificaCrm($corpo, [...$this->regolePersona($chi['workspace']), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', false), 'archiviato' => ['filled', 'boolean:strict']]);
 
         if ($riga['anonimizzata_il'] !== null) {
             throw new Problema('persona_anonimizzata');
@@ -1491,7 +1499,7 @@ trait Crm
 
         $this->applicaPersona($riga['id'], $campi, $chi['persona']);
 
-        return [200, ['data' => $this->vocePersona($this->crm['persone'][$riga['id']])]];
+        return [200, ['data' => $this->vocePersona($this->crm['persone'][$riga['id']], true)]];
     }
 
     /** PersoneModifica::applica: i campi che cambiano davvero, le liste sostituite, il conto dei contatti, la cronologia. */
@@ -1541,7 +1549,10 @@ trait Crm
             $cambi['telefoni'] = [];
         }
 
-        if ($cambi === []) {
+        // I valori dei campi «tuoi» (#2125): il piano si fa adesso, si scrive dopo i controlli che possono rifiutare la modifica.
+        $piano = $this->pianoDeiValoriCrm($riga['workspace'], 'persona', $id, $campi['campi'] ?? []);
+
+        if ($cambi === [] && $piano === []) {
             return;
         }
 
@@ -1568,9 +1579,12 @@ trait Crm
             $nuovi['telefoni'] = $telefoni;
         }
 
-        // Cambiano solo le liste: il contatto si tocca comunque (Registro::segnala).
+        $this->scriviIValoriCrm('persona', $id, $piano);
+
+        // Cambiano solo le liste o i valori: il contatto si tocca comunque (Registro::segnala), e `touch` scrive l'ora, senza il
+        // millisecondo in più che AP6 dà a un salvataggio con cambi.
         if (! $this->salvaCrm('persone', $id, $nuovi)) {
-            $this->crm['persone'][$id]['aggiornato_il'] = self::dopoCrm($this->crm['persone'][$id]['aggiornato_il']);
+            $this->crm['persone'][$id]['aggiornato_il'] = self::adessoCrm();
         }
 
         $dopo = $this->crm['persone'][$id];
@@ -1584,6 +1598,8 @@ trait Crm
                 $voci[] = isset($valori[$campo]) ? ['campo' => $valori[$campo], ...$cambi[$campo]] : ['campo' => $campo];
             }
         }
+
+        $voci = [...$voci, ...self::vociDeiValoriCrm($piano)];
 
         if ($voci !== []) {
             $this->cambioCrm('persone', $id, $autore, 'modificata', $voci);
@@ -1981,6 +1997,8 @@ trait Crm
             ...$persona, 'nome' => null, 'cognome' => null, 'ruolo' => null, 'fonte' => null, 'email' => [], 'telefoni' => [],
             'anonimizzata_il' => $ora, 'aggiornato_il' => $ora,
         ];
+        // L'oblio svuota anche i valori dei campi «tuoi» (Anonimizzazione::valori).
+        unset($this->crm['valori']['persona'][$persona['id']]);
 
         foreach ($this->crm['note'] as $nota => $riga) {
             if ($riga['persona_id'] === $persona['id']) {

@@ -1,0 +1,250 @@
+<?php
+
+namespace Zeiras\Auth\Testing\Finto;
+
+use Carbon\CarbonImmutable;
+use Closure;
+use stdClass;
+
+/**
+ * I valori dei campi «tuoi» sui contatti del CRM del backoffice finto (sprint 37, #2125, CRM-12 B): il campo `campi` di
+ * `crm.persone.crea` e `crm.persone.modifica`, e `campi` nella scheda intera (`mostra`, `crea`, `modifica`; mai nell'elenco e nella
+ * ricerca). Le regole, la normalizzazione e l'ordine sono quelli di `App\Crm\ValoriDeiCampi`: i campi che valgono sono i «tuoi» del
+ * workspace (uno standard, o una chiave che non c'è, è `campo_estraneo` sul suo pointer); un valore `null` lo toglie; uno uguale non
+ * scrive niente; la cronologia nomina `campi.<chiave>`, col valore di prima e di dopo solo per i tipi che lo ammettono. Il finto non
+ * emette l'evento e non tiene lo storico: lo dice il README. Le aziende e le trattative arrivano con #2126 e #2127.
+ */
+trait CrmValori
+{
+    /** Le lunghezze e i tetti dei valori (ValoriDeiCampi). */
+    private const CRM_VALORE_TESTO = 255;
+
+    private const CRM_VALORE_TESTO_LUNGO = 10000;
+
+    private const CRM_VALORE_URL = 2000;
+
+    private const CRM_VALORE_MASSIMO = 10000000000;
+
+    private const CRM_VALORE_DECIMALI = 4;
+
+    private const CRM_VALORE_SCELTE = 50;
+
+    private const CRM_VALORE_IMPORTO = 1000000000000;
+
+    /** I tipi i cui valori la cronologia dice anche di prima e di dopo (ValoriDeiCampi::CON_VALORI). */
+    private const CRM_VALORI_NELLA_CRONOLOGIA = ['numero', 'valuta', 'percentuale', 'data', 'data_ora', 'si_no', 'elenco', 'scelta_multipla', 'membro'];
+
+    /**
+     * I campi «tuoi» di un oggetto, per chiave, nel loro ordine (posto, poi nascita).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function campiTuoiCrm(string $workspace, string $oggetto): array
+    {
+        $this->campiDelWorkspaceCrm($workspace);
+        $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo');
+        uasort($campi, fn (array $a, array $b) => $a['ord'] <=> $b['ord']);
+
+        return $campi;
+    }
+
+    /**
+     * Le regole di `campi` per il corpo di una creazione (un campo obbligatorio vuole il suo valore) o di una modifica (non si toglie
+     * con `null`), da unire a quelle del record. La chiave `-` dà a `campi` un figlio anche senza campi «tuoi»: senza, una chiave
+     * qualunque passerebbe.
+     *
+     * @return array<string, mixed>
+     */
+    private function regoleDeiValoriCrm(string $workspace, string $oggetto, bool $creazione): array
+    {
+        $regole = ['campi' => ['sometimes', 'array'], 'campi.-' => ['prohibited']];
+
+        foreach ($this->campiTuoiCrm($workspace, $oggetto) as $chiave => $campo) {
+            $attributo = "campi.{$chiave}";
+            $apertura = $campo['obbligatorio'] ? ['bail', $creazione ? 'required' : 'filled'] : ['bail', 'nullable'];
+            $regole[$attributo] = [...$apertura, ...$this->regoleDelTipoCrm($workspace, (string) $campo['tipo'], $campo)];
+
+            if ($campo['tipo'] === 'valuta') {
+                $regole["{$attributo}.importo"] = ['bail', 'integer:strict', 'between:0,'.self::CRM_VALORE_IMPORTO];
+                $regole["{$attributo}.valuta"] = ['bail', 'string', function (string $nome, mixed $valore, Closure $fail) use ($workspace) {
+                    if ($valore !== $this->valutaCrm($workspace)) {
+                        $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.valuta_del_workspace', ['valuta' => $this->valutaCrm($workspace)]);
+                    }
+                }];
+            } elseif ($campo['tipo'] === 'scelta_multipla') {
+                $regole["{$attributo}.*"] = ['bail', 'string', 'distinct', $this->unaOpzioneCrm($campo)];
+            }
+        }
+
+        return $regole;
+    }
+
+    /**
+     * Le regole del tipo del campo, sul valore intero.
+     *
+     * @param  array<string, mixed>  $campo
+     * @return list<mixed>
+     */
+    private function regoleDelTipoCrm(string $workspace, string $tipo, array $campo): array
+    {
+        return match ($tipo) {
+            'testo' => ['string', 'max:'.self::CRM_VALORE_TESTO],
+            'testo_lungo' => ['string', 'max:'.self::CRM_VALORE_TESTO_LUNGO],
+            'url' => ['string', 'max:'.self::CRM_VALORE_URL, 'url:http,https'],
+            'numero', 'percentuale' => [function (string $nome, mixed $valore, Closure $fail) {
+                if (! (is_int($valore) || is_float($valore)) || ! is_finite((float) $valore) || abs($valore) > self::CRM_VALORE_MASSIMO
+                    || round((float) $valore, self::CRM_VALORE_DECIMALI) !== (float) $valore) {
+                    $this->rifiutaCrm($fail, $nome, Regola::NON_VALIDA, 'regole.campo_numero');
+                }
+            }],
+            'valuta' => ['array', function (string $nome, mixed $valore, Closure $fail) {
+                if (! is_array($valore) || ! array_key_exists('importo', $valore)) {
+                    $this->rifiutaCrm($fail, $nome, Regola::OBBLIGATORIO, 'regole.campo_valuta');
+                }
+            }],
+            'data' => ['string', 'date_format:Y-m-d'],
+            'data_ora' => ['string', function (string $nome, mixed $valore, Closure $fail) {
+                $parti = [];
+                $istante = is_string($valore) && preg_match('/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d{1,6})?Z$/', $valore, $parti) === 1
+                    ? CarbonImmutable::createFromFormat('!Y-m-d H:i:s', "{$parti[1]} {$parti[2]}", 'UTC')
+                    : false;
+
+                if ($istante === false || $istante->format('Y-m-d H:i:s') !== "{$parti[1]} {$parti[2]}") {
+                    $this->rifiutaCrm($fail, $nome, Regola::FORMATO, 'regole.campo_data_ora');
+                }
+            }],
+            'si_no' => ['boolean:strict'],
+            'elenco' => ['string', $this->unaOpzioneCrm($campo)],
+            'scelta_multipla' => ['array', 'list', 'max:'.self::CRM_VALORE_SCELTE],
+            'membro' => array_slice($this->regolaDelResponsabile($workspace), 2),
+            default => [],
+        };
+    }
+
+    /**
+     * L'id di un'opzione viva del campo (senza distinguere maiuscole e minuscole).
+     *
+     * @param  array<string, mixed>  $campo
+     */
+    private function unaOpzioneCrm(array $campo): Closure
+    {
+        return function (string $nome, mixed $valore, Closure $fail) use ($campo) {
+            $vive = array_filter($campo['opzioni'] ?? [], fn (array $opzione) => ($opzione['archiviato_il'] ?? null) === null);
+            $ids = array_map(fn (mixed $id) => strtolower((string) $id), array_column($vive, 'id'));
+
+            if (! is_string($valore) || ! in_array(strtolower($valore), $ids, true)) {
+                $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.campo_opzione');
+            }
+        };
+    }
+
+    /** Il valore com'è nella riga, dal valore validato: un intero resta intero, un id sta in minuscolo, un istante in UTC coi millisecondi. */
+    private static function valorePerLaRigaCrm(string $tipo, mixed $valore): mixed
+    {
+        return match ($tipo) {
+            'numero', 'percentuale' => is_float($valore) && floor($valore) === $valore && abs($valore) < 1e15 ? (int) $valore : $valore,
+            'valuta' => $valore['importo'],
+            'data_ora' => self::iso(CarbonImmutable::parse((string) $valore, 'UTC')),
+            'elenco', 'membro' => strtolower((string) $valore),
+            'scelta_multipla' => array_map(fn (mixed $id) => strtolower((string) $id), array_values((array) $valore)),
+            default => $valore,
+        };
+    }
+
+    /** Il valore come lo dà l'API: una valuta è `{importo, valuta}`, gli altri sono quelli della riga. */
+    private function valoreInUscitaCrm(string $workspace, string $tipo, mixed $valore): mixed
+    {
+        return $tipo === 'valuta' ? ['importo' => $valore, 'valuta' => $this->valutaCrm($workspace)] : $valore;
+    }
+
+    /**
+     * I valori vivi di un contatto: `{<chiave>: valore}` dei soli campi «tuoi», nell'ordine dei campi. Senza valori è un oggetto vuoto
+     * (`{}` in JSON, mai `[]`).
+     *
+     * @return array<string, mixed>|stdClass
+     */
+    private function valoriDiCrm(string $workspace, string $oggetto, string $id): array|stdClass
+    {
+        $valori = [];
+
+        foreach ($this->campiTuoiCrm($workspace, $oggetto) as $chiave => $campo) {
+            if (array_key_exists($chiave, $this->crm['valori'][$oggetto][$id] ?? [])) {
+                $valori[$chiave] = $this->valoreInUscitaCrm($workspace, (string) $campo['tipo'], $this->crm['valori'][$oggetto][$id][$chiave]);
+            }
+        }
+
+        return $valori === [] ? new stdClass : $valori;
+    }
+
+    /**
+     * Ciò che una scrittura di `campi` cambierebbe, senza scrivere: per chiave, nell'ordine dei campi, il tipo, il valore di prima e di
+     * dopo come li dà l'API e il valore della riga (`null` toglie). Un valore uguale, o una rimozione di ciò che non c'è, non cambia.
+     *
+     * @param  array<string, mixed>  $valori
+     * @return array<string, array{tipo: string, prima: mixed, dopo: mixed, riga: mixed}>
+     */
+    private function pianoDeiValoriCrm(string $workspace, string $oggetto, string $id, array $valori): array
+    {
+        $piano = [];
+
+        foreach ($this->campiTuoiCrm($workspace, $oggetto) as $chiave => $campo) {
+            if (! array_key_exists($chiave, $valori)) {
+                continue;
+            }
+
+            $tipo = (string) $campo['tipo'];
+            $presente = array_key_exists($chiave, $this->crm['valori'][$oggetto][$id] ?? []);
+            $prima = $presente ? $this->crm['valori'][$oggetto][$id][$chiave] : null;
+            $riga = $valori[$chiave] === null ? null : self::valorePerLaRigaCrm($tipo, $valori[$chiave]);
+
+            if ($riga === null && ! $presente || $presente && $prima === $riga) {
+                continue;
+            }
+
+            $piano[$chiave] = [
+                'tipo' => $tipo,
+                'prima' => $presente ? $this->valoreInUscitaCrm($workspace, $tipo, $prima) : null,
+                'dopo' => $riga === null ? null : $this->valoreInUscitaCrm($workspace, $tipo, $riga),
+                'riga' => $riga,
+            ];
+        }
+
+        return $piano;
+    }
+
+    /**
+     * Scrive un piano: un valore nuovo nasce, uno diverso si riscrive, `null` toglie la riga.
+     *
+     * @param  array<string, array{tipo: string, prima: mixed, dopo: mixed, riga: mixed}>  $piano
+     */
+    private function scriviIValoriCrm(string $oggetto, string $id, array $piano): void
+    {
+        foreach ($piano as $chiave => $voce) {
+            if ($voce['riga'] === null) {
+                unset($this->crm['valori'][$oggetto][$id][$chiave]);
+            } else {
+                $this->crm['valori'][$oggetto][$id][$chiave] = $voce['riga'];
+            }
+        }
+    }
+
+    /**
+     * Le voci della cronologia di un piano, nell'ordine dei campi: `campi.<chiave>`, col valore di prima e di dopo solo per i tipi che
+     * lo ammettono (Q2, zr-pm 13/10) e il solo nome per gli altri.
+     *
+     * @param  array<string, array{tipo: string, prima: mixed, dopo: mixed, riga: mixed}>  $piano
+     * @return list<array<string, mixed>>
+     */
+    private static function vociDeiValoriCrm(array $piano): array
+    {
+        $voci = [];
+
+        foreach ($piano as $chiave => $voce) {
+            $voci[] = in_array($voce['tipo'], self::CRM_VALORI_NELLA_CRONOLOGIA, true)
+                ? ['campo' => "campi.{$chiave}", 'prima' => $voce['prima'], 'dopo' => $voce['dopo']]
+                : ['campo' => "campi.{$chiave}"];
+        }
+
+        return $voci;
+    }
+}
