@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Orchestra\Testbench\TestCase as Testbench;
 use Zeiras\Auth\Api;
 use Zeiras\Auth\Http\Middleware\ConGettone;
+use Zeiras\Auth\Http\Middleware\SoloDallaPersona;
 use Zeiras\Auth\Sessione;
 use Zeiras\Auth\ZrAuthServiceProvider;
 
@@ -61,6 +62,20 @@ abstract class TestCase extends Testbench
         $router->get('legale/accetta', fn () => Api::workspace()->get('/v1/io'));
         $router->get('{lingua}/legale/accetta', fn () => Api::workspace()->get('/v1/io'))->where('lingua', '[a-z]{2}');
         $router->get('pubblica', fn () => 'pubblica')->withoutMiddleware(ConGettone::class);
+        // Le scritture del controllo della persona (#2136): la prima conta quante volte gira, «Esci» se lo toglie.
+        $router->match(['POST', 'PUT', 'PATCH', 'DELETE'], 'persona/scrive', function () {
+            app()->instance('persona.scritture', (app()->bound('persona.scritture') ? app('persona.scritture') : 0) + 1);
+
+            return ['ok' => true];
+        });
+        $router->post('persona/esci', fn () => ['ok' => true])->withoutMiddleware(SoloDallaPersona::class);
+        $router->get('persona/legge', fn () => ['ok' => true]);
+        $router->options('persona/opzioni', fn () => ['ok' => true]);
+        // Una rotta che scrive e risponde anche a OPTIONS: un POST con `_method=OPTIONS` non deve passare per un OPTIONS.
+        $router->match(['POST', 'OPTIONS'], 'persona/mista', fn () => ['ok' => true]);
+        // Una pagina pubblica (l'accesso) e una fuori dalla guardia che è un'azione della persona nella sessione (il consenso).
+        $router->post('persona/pubblica', fn () => ['ok' => true])->withoutMiddleware(ConGettone::class);
+        $router->post('persona/azione', fn () => ['ok' => true])->withoutMiddleware(ConGettone::class)->middleware(SoloDallaPersona::class.':sempre');
     }
 
     /** Rotte fuori dai gruppi: il controllo di salute (un'eccezione per tutti) e una rotta scoperta. */
