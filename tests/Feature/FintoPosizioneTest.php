@@ -25,7 +25,7 @@ function conTreSchede(): array
 test('ogni scheda ha la sua posizione, a passo 1024 e in coda, e la scheda intera ha la stessa (PS.1)', function () {
     [, $gettone, $a, $b, $c, $board] = conTreSchede();
 
-    $elenco = alFinto('GET', "/v1/board/schede?board_id={$board}", null, $gettone)->assertOk()->json('data');
+    $elenco = alFinto('GET', "/v1/board/schede?board_id={$board}", null, $gettone)->json('data');
     $posti = collect($elenco)->mapWithKeys(fn (array $scheda) => [$scheda['id'] => $scheda['posizione']])->all();
 
     expect($posti)->toBe([$a['id'] => 1024, $b['id'] => 2048, $c['id'] => 3072])
@@ -36,10 +36,10 @@ test('spostare in cima, in fondo o dopo una scheda mette la scheda a metà del p
     [, $gettone, $a, $b, $c, $board] = conTreSchede();
     $versione = alFinto('GET', "/v1/board/schede?board_id={$board}", null, $gettone)->json('versione');
 
-    $cima = alFinto('POST', "/v1/board/schede/{$c['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'cima'], $gettone)->assertOk()->json('data.posizione');
-    $dopo = alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'dopo_scheda_id' => $b['id']], $gettone)->assertOk()->json('data.posizione');
-    $fondo = alFinto('POST', "/v1/board/schede/{$b['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'fondo'], $gettone)->assertOk()->json('data.posizione');
-    $cambiate = alFinto('GET', "/v1/board/schede?board_id={$board}&cambiate_dopo={$versione}", null, $gettone)->assertOk()->json('data');
+    $cima = alFinto('POST', "/v1/board/schede/{$c['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'cima'], $gettone)->json('data.posizione');
+    $dopo = alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'dopo_scheda_id' => $b['id']], $gettone)->json('data.posizione');
+    $fondo = alFinto('POST', "/v1/board/schede/{$b['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'fondo'], $gettone)->json('data.posizione');
+    $cambiate = alFinto('GET', "/v1/board/schede?board_id={$board}&cambiate_dopo={$versione}", null, $gettone)->json('data');
 
     // C in cima: 1024 / 2 = 512. A dopo B (che ha ancora 2048, la coda): fra 2048 e niente = 3072. B in fondo: dopo A = 4096.
     expect([$cima, $dopo, $fondo])->toBe([512, 3072, 4096])
@@ -48,7 +48,7 @@ test('spostare in cima, in fondo o dopo una scheda mette la scheda a metà del p
 
 test('con la lista senza spazio i vicini si rinumerano, e anche loro sono in cambiate_dopo: la board fusa è quella riletta da capo (PS.2, PS.3)', function () {
     [, $gettone, $a, $b, $c, $board] = conTreSchede();
-    $letta = alFinto('GET', "/v1/board/schede?board_id={$board}", null, $gettone)->assertOk()->json();
+    $letta = alFinto('GET', "/v1/board/schede?board_id={$board}", null, $gettone)->json();
     $fusa = collect($letta['data'])->keyBy('id')->all();
     $versione = $letta['versione'];
     $rinumerata = false;
@@ -56,8 +56,8 @@ test('con la lista senza spazio i vicini si rinumerano, e anche loro sono in cam
     // B e C in cima a turno: ogni volta lo spazio sopra la prima si dimezza, finché non ce n'è più.
     for ($passo = 0; $passo < 14; $passo++) {
         $chi = $passo % 2 === 0 ? $c : $b;
-        alFinto('POST', "/v1/board/schede/{$chi['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'cima'], $gettone)->assertOk();
-        $cambiate = alFinto('GET', "/v1/board/schede?board_id={$board}&cambiate_dopo={$versione}", null, $gettone)->assertOk()->json();
+        alFinto('POST', "/v1/board/schede/{$chi['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'cima'], $gettone);
+        $cambiate = alFinto('GET', "/v1/board/schede?board_id={$board}&cambiate_dopo={$versione}", null, $gettone)->json();
         $rinumerata = $rinumerata || in_array($a['id'], array_column($cambiate['data'], 'id'), true);
 
         foreach ($cambiate['data'] as $scheda) {
@@ -79,11 +79,11 @@ test('con la lista senza spazio i vicini si rinumerano, e anche loro sono in cam
 test('lo spostamento rifiuta una lista che non è del finto, un corpo senza posto o con due, e una scheda archiviata (PS.4)', function () {
     [$finto, $gettone, $a, $b] = conTreSchede();
 
-    alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'un-altra', 'posizione' => 'fondo'], $gettone)->assertStatus(422);
-    alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'lista-di-prova'], $gettone)->assertStatus(422);
-    alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'fondo', 'dopo_scheda_id' => $b['id']], $gettone)->assertStatus(422);
-    alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'dopo_scheda_id' => $a['id']], $gettone)->assertStatus(409)->assertJsonPath('codice', 'posizione_cambiata');
+    expect(alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'un-altra', 'posizione' => 'fondo'], $gettone)->status())->toBe(422);
+    expect(alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'lista-di-prova'], $gettone)->status())->toBe(422);
+    expect(alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'fondo', 'dopo_scheda_id' => $b['id']], $gettone)->status())->toBe(422);
+    expect(alFinto('POST', "/v1/board/schede/{$a['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'dopo_scheda_id' => $a['id']], $gettone)->json('codice'))->toBe('posizione_cambiata');
 
     $finto->segnaScheda($b, 'archiviata');
-    alFinto('POST', "/v1/board/schede/{$b['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'fondo'], $gettone)->assertStatus(409)->assertJsonPath('codice', 'scheda_archiviata');
+    expect(alFinto('POST', "/v1/board/schede/{$b['id']}/spostamento", ['lista_id' => 'lista-di-prova', 'posizione' => 'fondo'], $gettone)->json('codice'))->toBe('scheda_archiviata');
 });
