@@ -153,11 +153,15 @@ it('l\'ingresso di una persona nel workspace tiene il suo cookie e la sua sessio
 });
 
 it('anche l\'uscita chiude l\'id di prima; una sessione anonima non lascia nessun segno (CS.7)', function () {
+    // Ogni richiesta col suo store, come processi diversi: lo store in memoria di una richiesta non porta i dati di Ada nella sessione anonima.
     [$idAda, $cookieAda] = adaEntra();
+    app('session')->forgetDrivers();
     $anonima = $this->get('/apri-sessione');
     $idAnonimo = $anonima->json('id');
 
+    app('session')->forgetDrivers();
     $this->withUnencryptedCookie(config('session.cookie'), $cookieAda)->post('/esci-persona')->assertOk();
+    app('session')->forgetDrivers();
     $this->withUnencryptedCookie(config('session.cookie'), cookieDellaSessione($anonima))->post('/entra-persona', ['chi' => 'accesso-di-bruno']);
 
     expect(Sessione::eChiusa($idAda))->toBeTrue()
