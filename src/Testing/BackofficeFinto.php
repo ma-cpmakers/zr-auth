@@ -1484,7 +1484,7 @@ final class BackofficeFinto
         $chi = $this->conPm($richiesta);
         $grezzo = self::query($richiesta);
 
-        if (isset($grezzo['archiviate']) || isset($grezzo['numero'])) {
+        if ((isset($grezzo['archiviate']) || isset($grezzo['numero'])) && ! isset($grezzo['per_lista'])) {
             throw new LogicException('Il finto non fa board.schede.elenca con archiviate né con numero: sono la lista delle archiviate e la ricerca per numero del backoffice.');
         }
 
@@ -1504,6 +1504,8 @@ final class BackofficeFinto
                 }
             }],
             'completate' => ['sometimes', 'string', 'in:true,false'],
+            // Le prime N schede di ogni lista (#1942): una lettura a sé, senza pagine e senza altri filtri.
+            'per_lista' => ['sometimes', 'integer', 'between:1,100', 'prohibits:cursore,limite,archiviate,numero,assegnatario_id,cambiate_dopo'],
             'cambiate_dopo' => ['bail', 'sometimes', 'string', 'prohibits:assegnatario_id', function (string $attributo, mixed $valore, Closure $fail) use ($grezzo, $chi) {
                 $versione = preg_match('/^\d{10}\d{1,18}$/D', $valore) === 1 ? [(int) substr($valore, 0, 10), (int) substr($valore, 10)] : null;
 
@@ -1529,6 +1531,19 @@ final class BackofficeFinto
             && ($board === null || $scheda['board'] === $board)
             && ($persona === null || (in_array($persona, $scheda['assegnatari'], true) && ($board !== null || ($this->boards[$scheda['board']]['stato'] ?? 'attiva') === 'attiva')))
             && ($persona === null || $completate === ($scheda['completata_il'] !== null)));
+
+        // Le prime N schede di ogni lista (#1942): il finto ha una lista sola, quindi le prime N della board, senza pagine e con la
+        // `versione` della lettura intera (SchedeController::perLista).
+        if (isset($query['per_lista'])) {
+            $prime = array_values($giuste);
+            usort($prime, fn (array $a, array $b) => [$a['posizione'], $a['id']] <=> [$b['posizione'], $b['id']]);
+
+            return [200, [
+                'data' => array_map(fn (array $scheda) => ['id' => $scheda['id']] + $breve($scheda), array_slice($prime, 0, (int) $query['per_lista'])),
+                'successivo' => null,
+                'versione' => $this->testoDellaVersione((string) $board),
+            ]];
+        }
 
         if ($persona === null) {
             // La lettura di una board va per lista e, dentro la lista, per `posizione` (SchedeController::attive); il finto ha una lista sola.
