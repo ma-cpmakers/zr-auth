@@ -45,7 +45,7 @@ it('l\'impronta dipende dalla chiave dell\'app: chi conosce l\'id non la rifà',
     apriSessione();
     $prima = Persona::impronta();
 
-    config(['app.key' => 'base64:'.base64_encode(random_bytes(32))]);
+    config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
 
     expect(Persona::impronta())->not->toBe($prima);
 });
