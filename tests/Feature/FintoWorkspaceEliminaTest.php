@@ -19,8 +19,8 @@ function conDueWorkspace(): array
 }
 
 it('il proprietario programma l\'eliminazione fra 30 giorni, l\'elenco la mostra e il workspace lavora come prima (#2014)', function () {
-    [$studio, $altro, $anna, $bruno] = conDueWorkspace();
     $this->travelTo('2026-10-15 12:00:00');
+    [$studio, $altro, $anna, $bruno] = conDueWorkspace();
 
     $risposta = alFinto('DELETE', '/v1/workspace', gettone: $anna);
 
