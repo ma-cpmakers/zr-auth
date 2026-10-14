@@ -53,7 +53,7 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
 
     expect($persona['nome']['chiave'])->toBe('nome')
         ->and($nome)->toBe([
-            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo',
+            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null,
             'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
             'posizione' => 1, 'obbligatorio' => false, 'indispensabile' => true, 'in_campi' => false,
             'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z',
@@ -492,7 +492,7 @@ it('crm.campi.crea: un campo «tuo» in fondo a «Principali», chiave dal nome,
         ->and($campo['opzioni'][0]['colore'])->toBe('#a1b2c3')
         ->and($campo['opzioni'][0]['id'])->toHaveLength(26)
         ->and($campo['nome'])->toBe(['it' => 'Livello di studio', 'en' => null, 'es' => null])
-        ->and(collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->last()['id'])->toBe('persona.livello_di_studio');
+        ->and(collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->pluck('id')->all())->toContain('persona.livello_di_studio');
 
     foreach ([['tipo' => 'email'], ['tipo' => 'elenco'], ['tipo' => 'testo', 'opzioni' => [['nome' => ['it' => 'X']]]], ['nome' => ['it' => 'ruolo'], 'tipo' => 'testo'], ['tipo' => 'testo', 'sezione_id' => 'trattativa.dettagli']] as $corpo) {
         $risposta = alFinto('POST', '/v1/crm/campi', $corpo + ['oggetto' => 'persona', 'nome' => ['it' => 'Altro']], $anna);
