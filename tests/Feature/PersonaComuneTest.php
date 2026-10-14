@@ -34,11 +34,20 @@ it('l\'impronta è la stessa per la stessa persona a ogni ingresso, diversa per 
 
     expect($anna)->toMatch('/\A[0-9a-f]{32}\z/')
         ->and(Persona::impronta())->toBe($anna)
-        ->and($anna)->not->toContain(utente()['id'])->not->toContain('anna');
+        ->and($anna)->not->toBe(substr(hash('sha256', utente()['id']), 0, 32));
 
     entraAltraPersona();
 
     expect(Persona::impronta())->toMatch('/\A[0-9a-f]{32}\z/')->not->toBe($anna);
+});
+
+it('l\'impronta dipende dalla chiave dell\'app: chi conosce l\'id non la rifà', function () {
+    apriSessione();
+    $prima = Persona::impronta();
+
+    config(['app.key' => 'base64:'.base64_encode(random_bytes(32))]);
+
+    expect(Persona::impronta())->not->toBe($prima);
 });
 
 it('senza sessione l\'impronta è null', function () {
@@ -56,17 +65,28 @@ it('una scrittura con l\'impronta della sessione arriva alla rotta, con ogni ver
 
 // T1.3
 it('«Resta poi Salva»: la scheda di A scrive dopo l\'ingresso di B, 409 e la rotta non gira, nessuna chiamata al backoffice', function () {
-    Http::fake();
+    Http::fake(['*' => Http::response(['data' => []])]);
     apriSessione();
     $diAnna = Persona::impronta();
     entraAltraPersona();
 
-    $this->postJson('/persona/scrive', [], ['X-Zr-Persona' => $diAnna])
+    // `/scrive` chiama davvero il backoffice col gettone del workspace (TestCase): se girasse, la chiamata partirebbe.
+    $this->postJson('/scrive', [], ['X-Zr-Persona' => $diAnna])
         ->assertStatus(409)
         ->assertExactJson(['errore' => 'persona_diversa']);
+    $this->postJson('/persona/scrive', [], ['X-Zr-Persona' => $diAnna])->assertStatus(409);
 
     expect(scritture())->toBe(0);
     Http::assertNothingSent();
+});
+
+it('la scheda della persona della sessione scrive, e la chiamata al backoffice parte', function () {
+    Http::fake(['*' => Http::response(['data' => []])]);
+    apriSessione();
+
+    $this->postJson('/scrive', [], ['X-Zr-Persona' => Persona::impronta()])->assertOk();
+
+    Http::assertSentCount(1);
 });
 
 // T1.4
@@ -88,6 +108,10 @@ it('un\'intestazione ripetuta vale per tutte: una sbagliata dopo la giusta è 40
     $this->call('POST', '/persona/scrive', [], [], [], ['HTTP_X_ZR_PERSONA' => str_repeat('0', 32).', '.Persona::impronta()])->assertStatus(409);
 
     expect(scritture())->toBe(0);
+
+    $this->call('POST', '/persona/scrive', [], [], [], ['HTTP_X_ZR_PERSONA' => Persona::impronta().', '.Persona::impronta()])->assertOk();
+
+    expect(scritture())->toBe(1);
 });
 
 // T1.6
@@ -111,10 +135,17 @@ it('GET, HEAD e OPTIONS passano senza l\'intestazione', function (string $verbo)
     $this->call($verbo, '/persona/legge')->assertOk();
 })->with(['GET', 'HEAD']);
 
-it('OPTIONS non è controllato', function () {
+it('OPTIONS passa senza l\'intestazione, su una rotta OPTIONS dichiarata (il middleware gira davvero)', function () {
     apriSessione();
 
-    expect($this->call('OPTIONS', '/persona/scrive')->getStatusCode())->not->toBe(409);
+    $this->call('OPTIONS', '/persona/opzioni')->assertOk();
+});
+
+it('un POST che si dichiara OPTIONS con _method resta una scrittura', function () {
+    apriSessione();
+
+    $this->call('POST', '/persona/mista', ['_method' => 'OPTIONS'])->assertStatus(409);
+    $this->call('OPTIONS', '/persona/mista')->assertOk();
 });
 
 // T1.8
@@ -141,6 +172,29 @@ it('senza sessione la strada è quella della guardia, non il 409', function () {
     $this->postJson('/persona/scrive', [], ['X-Zr-Persona' => str_repeat('0', 32)])->assertStatus(401);
     $this->post('/persona/scrive')->assertRedirect(INGRESSO);
 });
+
+it('una pagina pubblica (fuori dalla guardia) passa: un\'altra persona deve poter entrare', function () {
+    apriSessione();
+
+    $this->postJson('/persona/pubblica')->assertOk();
+});
+
+it('una rotta fuori dalla guardia che è un\'azione della persona vuole il controllo con :sempre', function () {
+    apriSessione();
+    $diAnna = Persona::impronta();
+
+    $this->postJson('/persona/azione')->assertStatus(409);
+    $this->postJson('/persona/azione', [], ['X-Zr-Persona' => $diAnna])->assertOk();
+    entraAltraPersona();
+    $this->postJson('/persona/azione', [], ['X-Zr-Persona' => $diAnna])->assertStatus(409);
+});
+
+it('il controllo si accende anche con 1, on e yes (un valore che non si legge non lo lascia spento)', function (mixed $valore) {
+    config(['zr-auth.persona.controllo' => $valore]);
+    apriSessione();
+
+    $this->postJson('/persona/scrive')->assertStatus(409);
+})->with(['1', 'on', 'yes', 1, true]);
 
 it('col controllo spento (il default) una scrittura senza intestazione passa come prima', function () {
     config(['zr-auth.persona.controllo' => false]);

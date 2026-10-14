@@ -70,6 +70,12 @@ abstract class TestCase extends Testbench
         });
         $router->post('persona/esci', fn () => ['ok' => true])->withoutMiddleware(SoloDallaPersona::class);
         $router->get('persona/legge', fn () => ['ok' => true]);
+        $router->options('persona/opzioni', fn () => ['ok' => true]);
+        // Una rotta che scrive e risponde anche a OPTIONS: un POST con `_method=OPTIONS` non deve passare per un OPTIONS.
+        $router->match(['POST', 'OPTIONS'], 'persona/mista', fn () => ['ok' => true]);
+        // Una pagina pubblica (l'accesso) e una fuori dalla guardia che è un'azione della persona nella sessione (il consenso).
+        $router->post('persona/pubblica', fn () => ['ok' => true])->withoutMiddleware(ConGettone::class);
+        $router->post('persona/azione', fn () => ['ok' => true])->withoutMiddleware(ConGettone::class)->middleware(SoloDallaPersona::class.':sempre');
     }
 
     /** Rotte fuori dai gruppi: il controllo di salute (un'eccezione per tutti) e una rotta scoperta. */

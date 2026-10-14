@@ -67,7 +67,7 @@ return [
     // `X-Zr-Persona` l'impronta della persona della sessione (Persona::impronta()), o è 409 `persona_diversa`. Spento di default: un
     // modulo che ha già la sua copia la tiene finché non passa a questa.
     'persona' => [
-        'controllo' => env('ZR_AUTH_PERSONA_CONTROLLO', false),
+        'controllo' => filter_var(env('ZR_AUTH_PERSONA_CONTROLLO', false), FILTER_VALIDATE_BOOL),
     ],
 
 ];

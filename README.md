@@ -220,8 +220,19 @@ la manda, e il server lo confronta con la persona della sessione prima della rot
 - **«Esci» è esente**: chiudere la sessione è il lato sicuro, anche da una scheda rimasta su un'altra persona.
   `Route::post('esci', …)->withoutMiddleware(SoloDallaPersona::class)`.
 
-Cosa fare della risposta lo decide il frontend: il 409 non porta una destinazione (la pagina da cui parte la scrittura è cosa sua).
-Una visita di Inertia ricarica la pagina da cui parte, che si apre come chi è nella sessione; una richiesta JSON ricarica da sé.
+Cosa fare della risposta lo decide il frontend: il 409 è JSON e non porta una destinazione (la pagina da cui parte la scrittura è
+cosa sua), quindi **non è** il 409 di Inertia con `X-Inertia-Location` che manda all'ingresso: una visita di Inertia lo riceve come
+risposta non valida (evento `invalid`), e il frontend ricarica la pagina, che si apre come chi è nella sessione; il client HTTP lo
+riconosce da `errore === 'persona_diversa'`. Un modulo HTML intero non può portare l'intestazione: col controllo acceso quella
+scrittura è sempre 409, e va fatta con una visita di Inertia o col client HTTP. Cambiare `APP_KEY` cambia tutte le impronte: le
+schede aperte prendono il 409 una volta, e si ricaricano.
+
+Il controllo riguarda le **rotte con la guardia**. Una pagina pubblica (`withoutMiddleware(ConGettone::class)`: l'accesso, la
+registrazione) è la strada di chi entra, e un'altra persona deve poter entrare anche con una sessione aperta: non ha il 409. Una
+rotta fuori dalla guardia che è un'azione della persona della sessione (il consenso ai documenti legali, l'ingresso da un link,
+«Accetta l'invito») lo vuole con `->middleware(SoloDallaPersona::class.':sempre')`. Il metodo è quello vero della richiesta: un
+POST con `_method=OPTIONS` non passa per un OPTIONS. Non è una difesa dal cambio di workspace: l'impronta è della persona, e la
+scheda rimasta su un altro workspace della stessa persona la ferma il modulo con l'indirizzo (`w/{workspace}`), come oggi.
 
 ### Come passa ciascun modulo alla comune
 
@@ -231,10 +242,11 @@ scheda di A scrive: 409 e niente scritto):
 - **zr-home** (#2047, `PersonaDellaPagina`): la pagina smette di portare l'email (`Persona`, `encodeURIComponent`) e porta
   `Persona::impronta()` in `X-Zr-Persona`; si toglie il middleware e il confronto con l'email della sessione. Il rimando alla
   pagina e il dato flash `altra_persona` restano suoi, e le rotte di `ANCHE_FUORI_DALLA_GUARDIA` (consenso legale, link, invito)
-  tengono il controllo di zr-home finché non ne hanno uno loro. Le rotte della cornice di zr-core hanno il loro (`Persona`, email):
+  passano a `->middleware(SoloDallaPersona::class.':sempre')`. Le rotte della cornice di zr-core hanno il loro (`Persona`, email):
   è un altro lavoro di zr-core.
 - **zr-board** (#2049, `StessaSessione`, `X-Board-Sessione`): il segno dei gettoni, che cambia a ogni ingresso, diventa l'impronta
-  della persona, che cambia solo con un'altra persona. Si toglie `StessaSessione::INTESTAZIONE` e il confronto; `CAMBIATA`
+  della persona, che cambia solo con un'altra persona (non più a ogni ingresso: il cambio di workspace lo ferma `NelWorkspace`, con
+  l'indirizzo). Si toglie `StessaSessione::INTESTAZIONE` e il confronto; `CAMBIATA`
   (l'intestazione del rifiuto) e il ritorno alla pagina di prima restano suoi.
 - **zr-crm** (#2048, `StessaPersona`, l'impronta dentro la versione di Inertia): l'impronta esce dalla versione e va in
   `X-Zr-Persona` su ogni richiesta che non legge (visite di Inertia e client HTTP, `app.tsx`); si toglie `StessaPersona::handle`
