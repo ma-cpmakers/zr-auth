@@ -69,7 +69,7 @@ it('una risposta lenta di Ada, finita dopo l\'ingresso di Grace, non ricrea la s
         $drivers->setValue($gestore, $salvati);
 
         return ['lenta' => true];
-    });
+    })->withoutMiddleware(ConGettone::class);
 
     $tardiva = $this->call('GET', '/lenta', [], [$nome => $cookieAda]);
 
