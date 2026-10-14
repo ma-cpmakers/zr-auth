@@ -74,4 +74,5 @@ return [
     'campo_valuta' => 'Una valuta è un oggetto con il suo `importo`, un intero in unità minori (centesimi per l\'EUR); `valuta`, se c\'è, è quella del CRM.',
     'campo_data_ora' => 'La data e l\'ora sono in ISO 8601 UTC con la Z finale, per esempio 2026-10-14T09:30:00Z.',
     'campo_opzione' => 'Questa opzione non è fra quelle del campo: gli id delle opzioni li dà crm.campi.elenca.',
+    'campo_scelte_doppie' => 'Una stessa opzione compare due volte nella lista, senza contare maiuscole e minuscole: ogni id va una volta sola.',
 ];
