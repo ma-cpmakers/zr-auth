@@ -1524,7 +1524,8 @@ final class BackofficeFinto
             && ($persona === null || $completate === ($scheda['completata_il'] !== null)));
 
         if ($persona === null) {
-            $posizione = fn (array $scheda) => [sprintf('%010d', $scheda['numero']), $scheda['id']];
+            // La lettura di una board va per lista e, dentro la lista, per `posizione` (SchedeController::attive); il finto ha una lista sola.
+            $posizione = fn (array $scheda) => [sprintf('%010d', $scheda['posizione']), $scheda['id']];
             $lista = 'board.schede.elenca:'.$board;
             $dalPiuRecente = false;
         } elseif ($completate) {
