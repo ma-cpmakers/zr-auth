@@ -1581,9 +1581,10 @@ trait Crm
 
         $this->scriviIValoriCrm('persona', $id, $piano);
 
-        // Cambiano solo le liste o i valori: il contatto si tocca comunque (Registro::segnala).
+        // Cambiano solo le liste o i valori: il contatto si tocca comunque (Registro::segnala), e `touch` scrive l'ora, senza il
+        // millisecondo in più che AP6 dà a un salvataggio con cambi.
         if (! $this->salvaCrm('persone', $id, $nuovi)) {
-            $this->crm['persone'][$id]['aggiornato_il'] = self::dopoCrm($this->crm['persone'][$id]['aggiornato_il']);
+            $this->crm['persone'][$id]['aggiornato_il'] = self::adessoCrm();
         }
 
         $dopo = $this->crm['persone'][$id];
