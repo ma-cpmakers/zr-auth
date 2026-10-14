@@ -2000,6 +2000,16 @@ trait Crm
         // L'oblio svuota anche i valori dei campi «tuoi» (Anonimizzazione::valori).
         unset($this->crm['valori']['persona'][$persona['id']]);
 
+        // E dalla cronologia toglie `prima` e `dopo` delle voci `campi.<chiave>`: resta il nome del campo (Anonimizzazione::cronologia).
+        foreach ($this->crm['cambi'] as $cambio => $riga) {
+            if ($riga['tipo_risorsa'] === 'persone' && $riga['risorsa'] === $persona['id']) {
+                $this->crm['cambi'][$cambio]['campi'] = array_map(
+                    fn (array $voce) => str_starts_with((string) ($voce['campo'] ?? ''), 'campi.') ? ['campo' => $voce['campo']] : $voce,
+                    $riga['campi'],
+                );
+            }
+        }
+
         foreach ($this->crm['note'] as $nota => $riga) {
             if ($riga['persona_id'] === $persona['id']) {
                 $this->crm['note'][$nota]['testo'] = '';

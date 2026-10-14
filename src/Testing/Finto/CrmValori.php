@@ -72,7 +72,7 @@ trait CrmValori
                     }
                 }];
             } elseif ($campo['tipo'] === 'scelta_multipla') {
-                $regole["{$attributo}.*"] = ['bail', 'string', 'distinct', $this->unaOpzioneCrm($campo)];
+                $regole["{$attributo}.*"] = ['bail', 'string', 'distinct:ignore_case', $this->unaOpzioneCrm($campo)];
             }
         }
 
@@ -115,8 +115,12 @@ trait CrmValori
             }],
             'si_no' => ['boolean:strict'],
             'elenco' => ['string', $this->unaOpzioneCrm($campo)],
-            'scelta_multipla' => ['array', 'list', 'max:'.self::CRM_VALORE_SCELTE],
-            'membro' => array_slice($this->regolaDelResponsabile($workspace), 2),
+            'scelta_multipla' => ['array', 'list', 'min:1', 'max:'.self::CRM_VALORE_SCELTE],
+            'membro' => ['filled', 'string', function (string $nome, mixed $valore, Closure $fail) use ($workspace) {
+                if (! isset($this->membri[$workspace][strtolower((string) $valore)])) {
+                    $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.responsabile_del_workspace');
+                }
+            }],
             default => [],
         };
     }
@@ -158,12 +162,10 @@ trait CrmValori
     }
 
     /**
-     * I valori vivi di un contatto: `{<chiave>: valore}` dei soli campi «tuoi», nell'ordine dei campi. Senza valori è un oggetto vuoto
-     * (`{}` in JSON, mai `[]`).
-     *
-     * @return array<string, mixed>|stdClass
+     * I valori vivi di un contatto: `{<chiave>: valore}` dei soli campi «tuoi», nell'ordine dei campi. Sempre un oggetto: senza valori
+     * `{}` in JSON, mai `[]`, e una chiave fatta di cifre non lo fa diventare una lista.
      */
-    private function valoriDiCrm(string $workspace, string $oggetto, string $id): array|stdClass
+    private function valoriDiCrm(string $workspace, string $oggetto, string $id): stdClass
     {
         $valori = [];
 
@@ -173,7 +175,7 @@ trait CrmValori
             }
         }
 
-        return $valori === [] ? new stdClass : $valori;
+        return (object) $valori;
     }
 
     /**
