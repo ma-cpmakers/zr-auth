@@ -39,6 +39,7 @@ trait Crm
         ['GET', '#^/v1/crm/organizzazioni/([^/]+)$#', 'crm.organizzazioni.mostra'],
         ['PATCH', '#^/v1/crm/organizzazioni/([^/]+)$#', 'crm.organizzazioni.modifica'],
         ['GET', '#^/v1/crm/organizzazioni/([^/]+)/cronologia$#', 'crm.organizzazioni.cronologia.elenca'],
+        ['GET', '#^/v1/crm/importazioni$#', 'crm.importazioni.elenca'],
         ['GET', '#^/v1/crm/importazioni/([^/]+)$#', 'crm.importazioni.mostra'],
         ['POST', '#^/v1/crm/importazioni/([^/]+)/annullamento$#', 'crm.importazioni.annullamento.crea'],
         ['GET', '#^/v1/crm/motivi$#', 'crm.motivi.elenca'],
@@ -213,6 +214,7 @@ trait Crm
             'crm.persone.importazioni.crea' => $this->importaCrm($richiesta, $corpo, 'persone', $operazione),
             'crm.persone.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'persone', $parametri[0], $operazione),
             'crm.persone.anonimizzazione.crea' => $this->anonimizzaCrm($richiesta, $parametri[0]),
+            'crm.importazioni.elenca' => $this->elencaImportazioniCrm($richiesta),
             'crm.importazioni.mostra' => [200, ['data' => $this->voceImportazioneCrm($this->importazioneCrm($this->conCrm($richiesta, ['proprietario', 'amministratore'])['workspace'], $parametri[0]))]],
             'crm.importazioni.annullamento.crea' => $this->annullaImportazioneCrm($richiesta, $corpo, $parametri[0]),
             'crm.motivi.elenca' => $this->elencaMotiviCrm($richiesta),
@@ -1861,6 +1863,42 @@ trait Crm
         sort($id);
 
         return $id[0] ?? null;
+    }
+
+    /**
+     * crm.importazioni.elenca (ImportazioniController::elenca, #1952): le importazioni del workspace dalla più recente (`creata_il`, a
+     * pari istante l'id più grande), nella forma di `mostra`. `annullabile` (`true`: non annullate e con `annullabile_fino` nel futuro) e
+     * `tipo` filtrano; ogni altro parametro, fuori da `limite` e `cursore`, è 422 `campo_estraneo`. Il cursore è legato ai due filtri.
+     * Proprietario e amministratore.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaImportazioniCrm(Request $richiesta): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+        $query = self::query($richiesta);
+        $regole = [
+            'annullabile' => ['sometimes', 'string', Rule::in(['true', 'false'])],
+            'tipo' => ['sometimes', 'string', Rule::in(['organizzazioni', 'persone'])],
+        ];
+        $estranei = array_diff(array_map('strval', array_keys($query)), [...array_keys($regole), 'limite', 'cursore']);
+        $this->testi->validaQuery($query, $regole + array_fill_keys($estranei, [function (string $campo, mixed $valore, Closure $fail) {
+            $this->rifiutaCrm($fail, $campo, Regola::CAMPO_ESTRANEO, 'validation.prohibited', ['attribute' => $campo]);
+        }]));
+
+        $annullabile = isset($query['annullabile']) ? $query['annullabile'] === 'true' : null;
+        $tipo = $query['tipo'] ?? null;
+        $adesso = self::adessoCrm();
+        $righe = array_values(array_filter($this->righeCrm('importazioni', $chi['workspace']), fn (array $riga) => ($tipo === null || $riga['tipo'] === $tipo)
+            && ($annullabile === null || $annullabile === ($riga['annullata_il'] === null && $riga['creata_il']->addHours(self::CRM_ORE_PER_ANNULLARE)->greaterThan($adesso)))));
+
+        return $this->paginaCrm(
+            $richiesta,
+            'crm.importazioni.elenca:'.($query['annullabile'] ?? '').':'.($query['tipo'] ?? ''),
+            $righe,
+            fn (array $una, array $altra) => [$altra['creata_il']->format('Y-m-d H:i:s.v'), $altra['id']] <=> [$una['creata_il']->format('Y-m-d H:i:s.v'), $una['id']],
+            fn (array $riga) => $this->voceImportazioneCrm($riga),
+        );
     }
 
     /** Un'importazione del workspace (404 non_trovato per una di un altro workspace o che non c'è). @return array<string, mixed> */
