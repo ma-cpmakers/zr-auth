@@ -165,6 +165,10 @@ return [
         'title' => 'Section not empty',
         'detail' => 'This section still has fields and can only be deleted without them. Move its fields to another section with crm.campi.modifica, then try again.',
     ],
+    'ultimo_workspace' => [
+        'title' => 'Last workspace',
+        'detail' => 'This is the last live workspace of the person calling, and it cannot be deleted: a person always has at least one workspace. Create another with io.workspace.crea, or cancel the deletion of the other one with workspace.eliminazione.elimina. The method wrote nothing.',
+    ],
     'ultima_fase' => [
         'title' => 'Last stage',
         'detail' => 'This is the last stage of the pipeline and cannot be deleted: a pipeline always has at least one stage. Add another with crm.fasi.crea, or archive the pipeline with crm.pipeline.modifica.',

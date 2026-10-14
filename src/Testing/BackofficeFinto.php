@@ -150,6 +150,8 @@ final class BackofficeFinto
         ['POST', '#^/v1/password/reimpostazione$#', 'password.reimpostazione.crea'],
         ['POST', '#^/v1/utenti$#', 'utenti.crea'],
         ['PATCH', '#^/v1/workspace$#', 'workspace.modifica'],
+        ['DELETE', '#^/v1/workspace$#', 'workspace.elimina'],
+        ['DELETE', '#^/v1/workspace/eliminazione$#', 'workspace.eliminazione.elimina'],
         ['GET', '#^/v1/legale/documenti$#', 'legale.documenti.elenca'],
         ['POST', '#^/v1/legale/accettazioni$#', 'legale.accettazioni.crea'],
         ['GET', '#^/v1/workspace/link$#', 'workspace.link.mostra'],
@@ -320,6 +322,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{id: string, nome: string, slug: string, azienda_id: string, settore: ?string, lingua_contenuti: ?string}> per id */
     private array $workspace = [];
+
+    /** @var array<string, CarbonImmutable> quando si archivia ogni workspace di cui il proprietario ha chiesto l'eliminazione, per id: il finto non archivia alla scadenza */
+    private array $eliminazioni = [];
 
     /** @var array<string, string> il nome di ogni azienda, per id: quello del primo workspace che l'ha fatta nascere, mai aggiornato */
     private array $aziende = [];
@@ -1109,6 +1114,8 @@ final class BackofficeFinto
                 'password.reimpostazione.crea' => $this->reimposta($corpo),
                 'utenti.crea' => $this->creaUtente($corpo),
                 'workspace.modifica' => $this->modificaWorkspace($richiesta, $corpo),
+                'workspace.elimina' => $this->programmaEliminazione($richiesta),
+                'workspace.eliminazione.elimina' => $this->annullaEliminazione($richiesta),
                 'workspace.link.mostra' => $this->mostraLink($richiesta),
                 'workspace.link.crea' => $this->creaLink($richiesta, $corpo),
                 'workspace.link.elimina' => $this->eliminaLink($richiesta),
@@ -3265,7 +3272,7 @@ final class BackofficeFinto
 
         foreach ($this->membri as $workspace => $ruoli) {
             if (isset($ruoli[$persona])) {
-                $voci[] = [...$this->workspace[$workspace], 'ruolo' => $ruoli[$persona]];
+                $voci[] = $this->conRuolo($workspace, $ruoli[$persona]);
             }
         }
 
@@ -3380,7 +3387,7 @@ final class BackofficeFinto
         $voci = function () use ($persona, $azienda) {
             $ruoli = $this->ruoliNellAzienda($persona, $azienda);
 
-            return array_values(array_map(fn (string $id) => [...$this->workspace[$id], 'ruolo' => $ruoli[$id]], array_keys($ruoli)));
+            return array_values(array_map(fn (string $id) => $this->conRuolo($id, $ruoli[$id]), array_keys($ruoli)));
         };
 
         return $this->pagina($richiesta, 'aziende.workspace.elenca', 'id', $voci, self::perNomeEId(...),
@@ -3516,7 +3523,7 @@ final class BackofficeFinto
             // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
             $this->attive[$id]['pm'] = true;
 
-            return [201, ['data' => [...$this->workspace[$id], 'ruolo' => 'proprietario']], []];
+            return [201, ['data' => $this->conRuolo($id, 'proprietario')], []];
         });
     }
 
@@ -3837,7 +3844,58 @@ final class BackofficeFinto
         $workspace = $chi['workspace'];
         $this->workspace[$workspace]['nome'] = (string) $this->testi->validaStretta($corpo, ['nome' => ['required', 'string', 'max:255', new NomeScritto]])['nome'];
 
-        return [200, ['data' => [...$this->workspace[$workspace], 'ruolo' => $this->membri[$workspace][$chi['persona']]]]];
+        return [200, ['data' => $this->conRuolo($workspace, $this->membri[$workspace][$chi['persona']])]];
+    }
+
+    /** Un workspace con il ruolo di chi chiama e la data in cui si archivia, se il proprietario ne ha chiesto l'eliminazione (Forme::workspaceConRuolo). */
+    private function conRuolo(string $workspace, string $ruolo): array
+    {
+        return [...$this->workspace[$workspace], 'ruolo' => $ruolo, 'eliminazione_il' => isset($this->eliminazioni[$workspace]) ? self::iso($this->eliminazioni[$workspace]) : null];
+    }
+
+    /**
+     * workspace.elimina (WorkspaceEliminazioneController::programma): il proprietario programma l'eliminazione del workspace del
+     * gettone fra 30 giorni e riceve 202 con la data; se è già programmata risponde con la stessa. L'ultimo workspace della persona
+     * (contando solo quelli senza un'eliminazione programmata) è 409 ultimo_workspace. Nella finestra il workspace lavora come
+     * prima; il finto non lo archivia alla scadenza.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function programmaEliminazione(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario']);
+        $workspace = $chi['workspace'];
+
+        if (! isset($this->eliminazioni[$workspace])) {
+            $altri = array_filter(array_keys($this->membri), fn (string $id) => $id !== $workspace && isset($this->membri[$id][$chi['persona']]) && ! isset($this->eliminazioni[$id]));
+
+            if ($altri === []) {
+                throw new Problema('ultimo_workspace');
+            }
+
+            $this->eliminazioni[$workspace] = now()->toImmutable()->startOfMillisecond()->addDays(30);
+        }
+
+        return [202, ['data' => ['id' => $workspace, 'eliminazione_il' => self::iso($this->eliminazioni[$workspace])]], []];
+    }
+
+    /**
+     * workspace.eliminazione.elimina (WorkspaceEliminazioneController::annulla): il proprietario annulla l'eliminazione
+     * programmata (204); senza una programmata è 404 non_trovato.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function annullaEliminazione(Request $richiesta): array
+    {
+        $workspace = $this->conWorkspace($richiesta, ['proprietario'])['workspace'];
+
+        if (! isset($this->eliminazioni[$workspace])) {
+            throw new Problema('non_trovato');
+        }
+
+        unset($this->eliminazioni[$workspace]);
+
+        return [204, [], []];
     }
 
     /**
