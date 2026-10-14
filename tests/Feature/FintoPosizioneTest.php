@@ -72,7 +72,7 @@ test('con la lista senza spazio i vicini si rinumerano, e anche loro sono in cam
 
     expect($rinumerata)->toBeTrue()
         ->and($ordine($fusa))->toBe($ordine($daCapo))
-        ->and(collect($fusa)->pluck('posizione', 'id')->all())->toBe(collect($daCapo)->pluck('posizione', 'id')->all())
+        ->and(collect($fusa)->pluck('posizione', 'id')->all())->toEqual(collect($daCapo)->pluck('posizione', 'id')->all())
         ->and(collect($daCapo)->pluck('posizione')->unique())->toHaveCount(3);
 });
 
