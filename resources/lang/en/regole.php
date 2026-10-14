@@ -64,6 +64,7 @@ return [
     'campo_colore_non_valido' => 'The color is a six-digit hexadecimal value preceded by #, for example #1a73e8.',
     'campo_indispensabile_nascosto' => 'This field is indispensable and cannot be hidden: leave `visibilita` as `visibile`.',
     'campo_indispensabile_sezione' => 'This field is indispensable and stays in “Principali” (Main): you can change its position, not its section.',
+    'campo_obbligatorio_standard' => 'This is a standard field: its requirement cannot be changed (`obbligatorio` only applies to fields you created).',
     'sezione_non_esiste' => 'This object has no section with this id: section ids come from crm.sezioni.elenca.',
     'motivo_duplicato' => 'A loss reason with this name already exists, ignoring case and accents: choose another name.',
     'motivo_archiviato_senza_posto' => 'An archived reason has no place in the list: restore it with archiviato false, together with the position.',
