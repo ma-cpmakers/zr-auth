@@ -1487,13 +1487,13 @@ final class BackofficeFinto
                 }
             }],
             'completate' => ['sometimes', 'string', 'in:true,false'],
-            'cambiate_dopo' => ['bail', 'sometimes', 'string', 'prohibits:assegnatario_id', function (string $attributo, mixed $valore, Closure $fail) use ($grezzo) {
-                $versione = preg_match('/^\d{10}\d{1,18}$/', $valore) === 1 ? [(int) substr($valore, 0, 10), (int) substr($valore, 10)] : null;
+            'cambiate_dopo' => ['bail', 'sometimes', 'string', 'prohibits:assegnatario_id', function (string $attributo, mixed $valore, Closure $fail) use ($grezzo, $chi) {
+                $versione = preg_match('/^\d{10}\d{1,18}$/D', $valore) === 1 ? [(int) substr($valore, 0, 10), (int) substr($valore, 10)] : null;
 
                 if ($versione === null) {
                     $this->testi->dichiara($attributo, 'formato');
                     $fail('regole.versione_formato')->translate();
-                } elseif (isset($grezzo['board_id']) && is_string($grezzo['board_id']) && $versione[1] > ($this->versioni[$grezzo['board_id']] ?? 0)) {
+                } elseif (isset($grezzo['board_id']) && is_string($grezzo['board_id']) && (($this->boards[$grezzo['board_id']]['workspace'] ?? null) === $chi['workspace'] || $this->laBoardDiProva($chi['workspace'], $grezzo['board_id'])) && $versione[1] > ($this->versioni[$grezzo['board_id']] ?? 0)) {
                     $this->testi->dichiara($attributo, 'fuori_intervallo');
                     $fail('regole.versione_futura')->translate();
                 }
