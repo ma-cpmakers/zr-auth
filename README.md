@@ -561,7 +561,10 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   errori in un'ora `429`.
 - **Il workspace.** `workspace.modifica` (`{"nome"}`, 1-255 caratteri senza spazi ai bordi) è del proprietario e
   dell'amministratore, `403` `permesso_negato` a un membro prima del corpo; lo slug non cambia, e la risposta è un elemento
-  di `io.workspace.elenca`. `workspace.membri.modifica` (`{"ruolo"}`, `amministratore` o `membro`) e
+  di `io.workspace.elenca`, che da `eliminazione_il` (la data in cui il workspace si archivia, `null` senza un'eliminazione
+  programmata). `workspace.elimina` (del solo proprietario) la programma fra 30 giorni (`202`, stessa data se già programmata, `409`
+  `ultimo_workspace` se è l'ultimo workspace vivo della persona), `workspace.eliminazione.elimina` la annulla (`204`, `404` senza
+  una programmata): il finto non archivia alla scadenza. `workspace.membri.modifica` (`{"ruolo"}`, `amministratore` o `membro`) e
   `workspace.membri.elimina` rispondono nell'ordine del backoffice: il ruolo di chi chiama `403`, il membro `404`, il corpo
   `422`, il proprietario `409` `proprietario_intoccabile`, e un amministratore che tocca un amministratore, o ne fa uno, `403`.
   Togliere un membro toglie i suoi gettoni **di quel workspace** (`401`, anche se rientra); quello dell'accesso e gli altri

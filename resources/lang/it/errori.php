@@ -165,6 +165,10 @@ return [
         'title' => 'Sezione non vuota',
         'detail' => "Questa sezione ha ancora campi: si elimina solo senza. Sposta i suoi campi in un'altra sezione con crm.campi.modifica, poi ripeti.",
     ],
+    'ultimo_workspace' => [
+        'title' => 'Ultimo workspace',
+        'detail' => "Questo è l'ultimo workspace vivo della persona che chiama, e non si elimina: una persona ha sempre almeno un workspace. Creane un altro con io.workspace.crea, o annulla l'eliminazione dell'altro con workspace.eliminazione.elimina. Il metodo non ha scritto niente.",
+    ],
     'ultima_fase' => [
         'title' => 'Ultima fase',
         'detail' => 'Questa è l\'ultima fase della pipeline e non si elimina: una pipeline ha sempre almeno una fase. Aggiungine un\'altra con crm.fasi.crea, o archivia la pipeline con crm.pipeline.modifica.',
