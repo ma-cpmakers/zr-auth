@@ -1507,7 +1507,7 @@ final class BackofficeFinto
             }],
             'completate' => ['sometimes', 'string', 'in:true,false'],
             // Le prime N schede di ogni lista (#1942): una lettura a sé, senza pagine e senza altri filtri.
-            'per_lista' => ['sometimes', 'integer', 'between:1,100', 'prohibits:cursore,limite,archiviate,numero,assegnatario_id,cambiate_dopo'],
+            'per_lista' => ['sometimes', 'integer', 'between:1,30', 'prohibits:cursore,limite,archiviate,numero,assegnatario_id,cambiate_dopo'],
             'cambiate_dopo' => ['bail', 'sometimes', 'string', 'prohibits:assegnatario_id', function (string $attributo, mixed $valore, Closure $fail) use ($grezzo, $chi) {
                 $versione = preg_match('/^\d{10}\d{1,18}$/D', $valore) === 1 ? [(int) substr($valore, 0, 10), (int) substr($valore, 10)] : null;
 

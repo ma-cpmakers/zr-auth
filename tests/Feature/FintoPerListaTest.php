@@ -35,10 +35,10 @@ test('per_lista dà le prime N schede nell\'ordine, successivo null e la version
         ->and($prime->json('data.0'))->not->toHaveKey('descrizione');
 });
 
-test('per_lista fuori da 1-100 o non intero è 422 dati_non_validi, con un altro parametro campo_vietato (T1.4)', function () {
+test('per_lista fuori da 1-30 o non intero è 422 dati_non_validi, con un altro parametro campo_vietato (T1.4)', function () {
     [$gettone, , , , $board] = conTreSchedePerLista();
 
-    foreach (['0', '101', 'abc', '2.5'] as $valore) {
+    foreach (['0', '31', '100', '101', 'abc', '2.5'] as $valore) {
         $risposta = alFinto('GET', "/v1/board/schede?board_id={$board}&per_lista={$valore}", null, $gettone);
 
         expect($risposta->status())->toBe(422)
