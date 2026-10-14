@@ -64,6 +64,7 @@ return [
     'campo_colore_non_valido' => 'El color es un valor hexadecimal de seis cifras precedido por #, por ejemplo #1a73e8.',
     'campo_indispensabile_nascosto' => 'Este campo es indispensable y no se oculta: deja `visibilita` en `visibile`.',
     'campo_indispensabile_sezione' => 'Este campo es indispensable y se queda en «Principali» (Principales): puedes cambiar su posición, no su sección.',
+    'campo_obbligatorio_standard' => 'Este es un campo estándar: no tiene una obligatoriedad que se cambie (`obbligatorio` vale solo para los campos que has creado).',
     'sezione_non_esiste' => 'Este objeto no tiene una sección con este id: los ids de las secciones los da crm.sezioni.elenca.',
     'motivo_duplicato' => 'Ya existe un motivo de pérdida con este nombre, sin contar mayúsculas ni acentos: elige otro nombre.',
     'motivo_archiviato_senza_posto' => 'Un motivo archivado no tiene un lugar en la lista: restáuralo con archiviato false, junto con la posición.',

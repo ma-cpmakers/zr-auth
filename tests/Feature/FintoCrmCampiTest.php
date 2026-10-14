@@ -579,3 +579,37 @@ it('un valore che non va, uno standard o una chiave che non c\'è è 422 sul poi
     riuscita(alFinto('POST', "/v1/crm/persone/{$id}/anonimizzazione", null, $anna));
     expect(alFinto('GET', "/v1/crm/persone/{$id}", null, $anna)->body())->toContain('"campi":{}');
 });
+
+// #2133 (CRM-12 B): crm.campi.modifica cambia anche `obbligatorio`, dei soli campi «tuoi». Che le risposte siano quelle del backoffice lo
+// prova il suo FintoTest.
+it('crm.campi.modifica: obbligatorio si cambia su un campo «tuo» e vale per le scritture nuove; su uno standard è 422 campo_estraneo (OB.1-OB.3)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    $campo = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Codice'], 'tipo' => 'testo'], $anna))->json('data');
+    $vecchia = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Vecchia'], $anna))->json('data.id');
+
+    $reso = riuscita(alFinto('PATCH', '/v1/crm/campi/persona.codice', ['obbligatorio' => true], $anna));
+    $uguale = riuscita(alFinto('PATCH', '/v1/crm/campi/persona.codice', ['obbligatorio' => true], $anna));
+
+    expect($reso->json('data.obbligatorio'))->toBeTrue()
+        ->and($reso->json('data.aggiornato_il'))->toBeGreaterThan($campo['aggiornato_il'])
+        ->and($uguale->json('data.aggiornato_il'))->toBe($reso->json('data.aggiornato_il'))
+        ->and(alFinto('POST', '/v1/crm/persone', ['nome' => 'Nuova'], $anna)->status())->toBe(422);
+
+    // Il contatto di prima senza il valore resta modificabile.
+    riuscita(alFinto('PATCH', "/v1/crm/persone/{$vecchia}", ['ruolo' => 'Cliente'], $anna));
+
+    expect(riuscita(alFinto('PATCH', '/v1/crm/campi/persona.codice', ['obbligatorio' => false], $anna))->json('data.obbligatorio'))->toBeFalse()
+        ->and(alFinto('POST', '/v1/crm/persone', ['nome' => 'Nuova'], $anna)->status())->toBe(201);
+
+    foreach (['si', 1, null] as $valore) {
+        $risposta = alFinto('PATCH', '/v1/crm/campi/persona.codice', ['obbligatorio' => $valore], $anna);
+        expect($risposta->status())->toBe(422, $risposta->body())->and($risposta->json('errors.0.pointer'))->toBe('#/obbligatorio');
+    }
+
+    $standard = alFinto('PATCH', '/v1/crm/campi/persona.ruolo', ['obbligatorio' => true], $anna);
+    expect($standard->status())->toBe(422, $standard->body())
+        ->and($standard->json('errors.0.pointer'))->toBe('#/obbligatorio')
+        ->and($standard->json('errors.0.regola'))->toBe('campo_estraneo');
+});

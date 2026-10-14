@@ -444,8 +444,9 @@ trait CrmCampi
 
     /**
      * crm.campi.modifica (CampiController::modifica): JSON Merge Patch di `nome` (`null` torna al catalogo), `visibilita`,
-     * `sezione_id` e `posizione` (da 1, nella sezione di arrivo; senza, un campo che cambia sezione va in fondo). Un campo
-     * indispensabile non si nasconde e non lascia «Principali» (422 `campo_indispensabile`). Il corpo si valida prima di cercare il campo.
+     * `sezione_id`, `posizione` (da 1, nella sezione di arrivo; senza, un campo che cambia sezione va in fondo) e `obbligatorio`
+     * (#2133: booleano, dei soli campi «tuoi»; su uno standard 422 `campo_estraneo`). Un campo indispensabile non si nasconde e non
+     * lascia «Principali» (422 `campo_indispensabile`). Il corpo si valida prima di cercare il campo.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -460,11 +461,16 @@ trait CrmCampi
             'visibilita' => ['filled', 'string', Rule::in(['visibile', 'nascosto'])],
             'sezione_id' => ['filled', 'string', 'max:40'],
             'posizione' => ['filled', 'integer:strict', 'min:1'],
+            'obbligatorio' => ['filled', 'boolean:strict'],
         ]);
         $this->campiDelWorkspaceCrm($chi['workspace']);
         [$voce, $lista] = $this->trovaCampoCrm($chi['workspace'], $id);
         $oggetto = $voce['oggetto'];
         $cambiati = [];
+
+        if (array_key_exists('obbligatorio', $campi) && $voce['origine'] !== 'tuo') {
+            throw $this->erroreCrm('obbligatorio', 'regole.campo_obbligatorio_standard', Regola::CAMPO_ESTRANEO);
+        }
         $nome = $this->nomiNuoviCrm($voce['catalogo']['nome'], $voce['scritti'], $campi['nome'] ?? [], $voce['origine'] === 'tuo');
 
         if (! self::scrittiUgualiCrm($nome['riga'], $voce['scritti'])) {
@@ -501,6 +507,12 @@ trait CrmCampi
             }
         }
 
+        $obbligatorio = $campi['obbligatorio'] ?? $voce['obbligatorio'];
+
+        if ($obbligatorio !== $voce['obbligatorio']) {
+            $cambiati[] = 'obbligatorio';
+        }
+
         $cambiaSezione = $sezione !== $voce['sezione_id'];
         $altri = array_values(array_filter($lista, fn (array $altro) => $altro['sezione_id'] === $sezione && $altro['id'] !== $voce['id']));
         $posto = array_key_exists('posizione', $campi) ? min($campi['posizione'], count($altri) + 1) : ($cambiaSezione ? count($altri) + 1 : $voce['posto']);
@@ -524,6 +536,7 @@ trait CrmCampi
         $riga['scritti'] = $nome['riga'];
         $riga['visibilita'] = $visibilita;
         $riga['sezione_id'] = $sezione;
+        $riga['obbligatorio'] = $obbligatorio;
         $riga['aggiornato_il'] = self::dopoCrm($riga['aggiornato_il']);
 
         if ($siSposta) {
