@@ -529,8 +529,11 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   vuole `termini_accettati`; con Google e LinkedIn nasce anche a registrazione chiusa (dal backoffice del 10/10, #1554), con
   Facebook solo se la registrazione la ammette (`consenti()`).
 - **Le schede.** Il finto non modella board né liste: `scheda($workspace, $titolo, $board)` fa nascere una scheda con il minimo che
-  le attese guardano, e `segnaScheda($scheda, 'completata'|'archiviata')` la completa o la archivia. Con quelle rispondono
-  `board.schede.mostra`, `board.schede.completamento.crea`, `board.schede.completamento.elimina`,
+  le attese guardano, e `segnaScheda($scheda, 'completata'|'archiviata')` la completa o la archivia. Ogni board ha una lista sola
+  (`lista_id` `lista-di-prova`): la scheda nasce in fondo con la sua `posizione` (1024, 2048, …), e `board.schede.spostamento.crea`
+  la mette in `cima`, in `fondo` o dopo `dopo_scheda_id`, a metà fra i vicini; quando fra due non c'è più spazio i vicini si
+  rinumerano come nel backoffice, e la scheda spostata e quelle rinumerate sono in `board.schede.elenca` con `cambiate_dopo`. Con
+  quelle rispondono `board.schede.mostra`, `board.schede.completamento.crea`, `board.schede.completamento.elimina`,
   `board.schede.collegamenti.elenca`, `board.schede.collegamenti.crea` e `board.schede.collegamenti.elimina` (col gettone di un
   workspace con l'app `pm`). `collegamenti.elimina` toglie l'attesa anche verso una scheda archiviata; è `409` `scheda_archiviata` solo
   se è archiviata la scheda del percorso.

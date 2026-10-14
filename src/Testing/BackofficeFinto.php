@@ -93,6 +93,11 @@ final class BackofficeFinto
     /** L'id della lista di ogni scheda del finto, che non modella le liste. */
     private const LISTA_DI_PROVA = 'lista-di-prova';
 
+    /** Il passo fra le posizioni delle schede e la soglia oltre cui si rinumera (Posizioni del backoffice, #1418). */
+    private const PASSO_DELLE_POSIZIONI = 1024;
+
+    private const SOGLIA_DELLE_POSIZIONI = 1_000_000_000;
+
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
@@ -104,6 +109,7 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/board$#', 'board.board.elenca'],
         ['GET', '#^/v1/board/schede$#', 'board.schede.elenca'],
         ['GET', '#^/v1/board/schede/([^/]+)$#', 'board.schede.mostra'],
+        ['POST', '#^/v1/board/schede/([^/]+)/spostamento$#', 'board.schede.spostamento.crea'],
         ['POST', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.elimina'],
         ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
@@ -523,9 +529,11 @@ final class BackofficeFinto
         $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
-        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'scadenza' => $scadenza, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $cambiate = [];
+        $posizione = $this->inCoda($idWorkspace, $board, $cambiate);
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
-        $this->versione([$id]);
+        $this->versione([$id, ...$cambiate]);
 
         return ['id' => $id, 'board_id' => $board, 'numero' => $numero, 'titolo' => $titolo];
     }
@@ -1061,6 +1069,7 @@ final class BackofficeFinto
                 'board.board.elenca' => $this->elencaBoard($richiesta),
                 'board.schede.elenca' => $this->elencaSchede($richiesta),
                 'board.schede.mostra' => $this->mostraScheda($richiesta, $parametri[0]),
+                'board.schede.spostamento.crea' => $this->spostaScheda($richiesta, $corpo, $parametri[0]),
                 'board.schede.completamento.crea' => $this->completaScheda($richiesta, $parametri[0], true),
                 'board.schede.completamento.elimina' => $this->completaScheda($richiesta, $parametri[0], false),
                 'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
@@ -1241,6 +1250,7 @@ final class BackofficeFinto
             'numero' => $scheda['numero'],
             'titolo' => $scheda['titolo'],
             'descrizione' => '',
+            'posizione' => $scheda['posizione'],
             'inizio' => null,
             'scadenza' => $scheda['scadenza'],
             'copertina' => null,
@@ -1611,6 +1621,132 @@ final class BackofficeFinto
         $chi = $this->conPm($richiesta);
 
         return [200, ['data' => $this->voceScheda($this->schedaDelPercorso($chi['workspace'], $scheda))]];
+    }
+
+    /** Le schede della «lista» di una board del finto (una per board), non archiviate, nell'ordine di `posizione`. @return list<array<string, mixed>> */
+    private function schedeDellaLista(string $workspace, string $board, ?string $escludi = null): array
+    {
+        $viste = array_values(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $workspace && $scheda['board'] === $board && $scheda['archiviata_il'] === null && $scheda['id'] !== $escludi));
+        usort($viste, fn (array $una, array $altra) => $una['posizione'] <=> $altra['posizione']);
+
+        return $viste;
+    }
+
+    /**
+     * La posizione di una scheda che nasce in fondo alla lista della board (Posizioni::inCoda): se in coda non c'è più spazio la
+     * lista si rinumera, e le schede che cambiano posto sono in `$cambiate`.
+     *
+     * @param  list<string>  $cambiate
+     */
+    private function inCoda(string $workspace, string $board, array &$cambiate): int
+    {
+        return $this->postoCercato($workspace, $board, null, 'fondo', null) ?? $this->rinumera($workspace, $board, null, 'fondo', null, $cambiate);
+    }
+
+    /** Il punto a metà fra due posizioni, o null se non c'è spazio (Posizioni::meta). */
+    private function tra(?int $prima, ?int $dopo): ?int
+    {
+        return match (true) {
+            $prima === null && $dopo === null => self::PASSO_DELLE_POSIZIONI,
+            $prima === null => $dopo > 1 ? intdiv($dopo, 2) : null,
+            $dopo === null => $prima + self::PASSO_DELLE_POSIZIONI <= self::SOGLIA_DELLE_POSIZIONI ? $prima + self::PASSO_DELLE_POSIZIONI : null,
+            default => $dopo - $prima > 1 ? intdiv($prima + $dopo, 2) : null,
+        };
+    }
+
+    /** La posizione fra i vicini: in `cima`, in `fondo` o dopo l'ancora; null se non c'è spazio (Posizioni::collocare). */
+    private function postoCercato(string $workspace, string $board, ?string $escludi, string $posizione, ?string $ancora): ?int
+    {
+        $valori = array_map(fn (array $scheda) => $scheda['posizione'], $this->schedeDellaLista($workspace, $board, $escludi));
+
+        if ($ancora !== null) {
+            $prima = $this->schede[$ancora]['posizione'];
+            $indice = array_search($prima, $valori, true);
+
+            return $this->tra($prima, $indice === false ? null : ($valori[$indice + 1] ?? null));
+        }
+
+        return $posizione === 'cima' ? $this->tra(null, $valori[0] ?? null) : $this->tra($valori === [] ? null : end($valori), null);
+    }
+
+    /**
+     * Rinumera la lista di PASSO in PASSO, escludendo la scheda che si sposta, e dà il posto cercato. Le schede che cambiano
+     * posto sono «cambiate» per chi legge con `cambiate_dopo`, come nel backoffice (Posizioni::rilancia, Registro::rinumerate):
+     * le dà `$cambiate`, e il chiamante alza la versione.
+     *
+     * @param  list<string>  $cambiate
+     */
+    private function rinumera(string $workspace, string $board, ?string $escludi, string $posizione, ?string $ancora, array &$cambiate): int
+    {
+        foreach ($this->schedeDellaLista($workspace, $board, $escludi) as $indice => $scheda) {
+            $nuova = self::PASSO_DELLE_POSIZIONI * ($indice + 1);
+
+            if ($scheda['posizione'] !== $nuova) {
+                $this->schede[$scheda['id']]['posizione'] = $nuova;
+                $cambiate[] = $scheda['id'];
+            }
+        }
+
+        return $this->postoCercato($workspace, $board, $escludi, $posizione, $ancora) ?? throw new LogicException('Il finto non trova spazio nemmeno dopo la rinumerazione.');
+    }
+
+    /**
+     * board.schede.spostamento.crea (SchedeController::spostamentoCrea), nella lista sola che il finto ha per board: la scheda va
+     * in `cima`, in `fondo` o dopo `dopo_scheda_id`, con lo stesso passo (1024) e la stessa rinumerazione dei vicini quando fra
+     * due posizioni non c'è più spazio. La scheda spostata e quelle rinumerate hanno una versione nuova (board.schede.elenca con
+     * `cambiate_dopo`). Una scheda archiviata è 409, l'ancora che non è più una scheda aperta della lista 409 `posizione_cambiata`.
+     * Le regole di passaggio, i limiti e il completamento all'arrivo delle liste non ci sono: il finto non modella le liste.
+     *
+     * @param  array<string, mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function spostaScheda(Request $richiesta, array $corpo, string $scheda): array
+    {
+        $chi = $this->conPm($richiesta);
+        $mia = $this->schedaDelPercorso($chi['workspace'], $scheda);
+
+        if ($mia['archiviata_il'] !== null) {
+            throw new Problema('scheda_archiviata');
+        }
+
+        $campi = $this->testi->validaStretta($corpo, [
+            'lista_id' => ['required', 'string'],
+            'posizione' => ['sometimes', 'string', Rule::in(['cima', 'fondo'])],
+            'dopo_scheda_id' => ['sometimes', 'string'],
+        ]);
+
+        if (array_key_exists('posizione', $campi) === array_key_exists('dopo_scheda_id', $campi)) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.una_posizione_o_un_ancora'), 'regola' => 'non_valida', 'pointer' => '#']]);
+        }
+
+        if ($campi['lista_id'] !== self::LISTA_DI_PROVA) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.lista_della_board'), 'regola' => 'non_trovato', 'pointer' => '#/lista_id']]);
+        }
+
+        $ancora = null;
+
+        if (isset($campi['dopo_scheda_id'])) {
+            $ancora = $this->schede[strtolower($campi['dopo_scheda_id'])] ?? null;
+
+            if ($ancora === null || $ancora['workspace'] !== $mia['workspace'] || $ancora['board'] !== $mia['board']) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.scheda_della_board'), 'regola' => 'non_trovato', 'pointer' => '#/dopo_scheda_id']]);
+            }
+
+            if ($ancora['archiviata_il'] !== null || $ancora['id'] === $mia['id']) {
+                throw new Problema('posizione_cambiata');
+            }
+        }
+
+        $cambiate = [];
+        $nuova = $this->postoCercato($mia['workspace'], $mia['board'], $mia['id'], $campi['posizione'] ?? '', $ancora['id'] ?? null)
+            ?? $this->rinumera($mia['workspace'], $mia['board'], $mia['id'], $campi['posizione'] ?? '', $ancora['id'] ?? null, $cambiate);
+
+        $ora = now()->toImmutable()->startOfMillisecond();
+        $this->schede[$scheda]['posizione'] = $nuova;
+        $this->schede[$scheda]['aggiornata_il'] = $ora;
+        $this->versione([$scheda, ...$cambiate]);
+
+        return [200, ['data' => $this->voceScheda($this->schede[$scheda]), 'sbloccate' => []]];
     }
 
     /**
