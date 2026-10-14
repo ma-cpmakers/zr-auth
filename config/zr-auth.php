@@ -63,4 +63,11 @@ return [
     // risposta dell'ingresso resta con l'id chiuso, perde il cookie a ogni risposta e non può entrare finché il segno vale.
     'sessione_chiusa_secondi' => 300,
 
+    // «Resta poi Salva» (SoloDallaPersona, #2136): con `controllo` acceso ogni scrittura (non GET, HEAD, OPTIONS) deve portare in
+    // `X-Zr-Persona` l'impronta della persona della sessione (Persona::impronta()), o è 409 `persona_diversa`. Spento di default: un
+    // modulo che ha già la sua copia la tiene finché non passa a questa.
+    'persona' => [
+        'controllo' => env('ZR_AUTH_PERSONA_CONTROLLO', false),
+    ],
+
 ];

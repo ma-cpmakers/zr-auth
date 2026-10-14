@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Orchestra\Testbench\TestCase as Testbench;
 use Zeiras\Auth\Api;
 use Zeiras\Auth\Http\Middleware\ConGettone;
+use Zeiras\Auth\Http\Middleware\SoloDallaPersona;
 use Zeiras\Auth\Sessione;
 use Zeiras\Auth\ZrAuthServiceProvider;
 
@@ -61,6 +62,14 @@ abstract class TestCase extends Testbench
         $router->get('legale/accetta', fn () => Api::workspace()->get('/v1/io'));
         $router->get('{lingua}/legale/accetta', fn () => Api::workspace()->get('/v1/io'))->where('lingua', '[a-z]{2}');
         $router->get('pubblica', fn () => 'pubblica')->withoutMiddleware(ConGettone::class);
+        // Le scritture del controllo della persona (#2136): la prima conta quante volte gira, «Esci» se lo toglie.
+        $router->match(['POST', 'PUT', 'PATCH', 'DELETE'], 'persona/scrive', function () {
+            app()->instance('persona.scritture', (app()->bound('persona.scritture') ? app('persona.scritture') : 0) + 1);
+
+            return ['ok' => true];
+        });
+        $router->post('persona/esci', fn () => ['ok' => true])->withoutMiddleware(SoloDallaPersona::class);
+        $router->get('persona/legge', fn () => ['ok' => true]);
     }
 
     /** Rotte fuori dai gruppi: il controllo di salute (un'eccezione per tutti) e una rotta scoperta. */

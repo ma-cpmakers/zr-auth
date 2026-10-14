@@ -19,6 +19,7 @@ use Zeiras\Auth\Http\Controllers\RicevitoreController;
 use Zeiras\Auth\Http\Middleware\ConGettone;
 use Zeiras\Auth\Http\Middleware\RicordaLIdDellaSessione;
 use Zeiras\Auth\Http\Middleware\SessioneChiusa;
+use Zeiras\Auth\Http\Middleware\SoloDallaPersona;
 
 final class ZrAuthServiceProvider extends ServiceProvider
 {
@@ -62,6 +63,8 @@ final class ZrAuthServiceProvider extends ServiceProvider
             foreach (['web', 'api'] as $gruppo) {
                 if (array_key_exists($gruppo, $kernel->getMiddlewareGroups())) {
                     $kernel->appendMiddlewareToGroup($gruppo, ConGettone::class);
+                    // Subito dopo la guardia, e acceso solo da `zr-auth.persona.controllo` (#2136).
+                    $kernel->appendMiddlewareToGroup($gruppo, SoloDallaPersona::class);
                 }
             }
             // Per primo nel gruppo `web`, fuori da StartSession: vede la risposta con la sessione già riscritta (#2044).
@@ -71,6 +74,7 @@ final class ZrAuthServiceProvider extends ServiceProvider
                 $kernel->appendMiddlewareToGroup('web', RicordaLIdDellaSessione::class);
             }
             $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, ConGettone::class);
+            $kernel->addToMiddlewarePriorityAfter(ConGettone::class, SoloDallaPersona::class);
         });
     }
 

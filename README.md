@@ -201,6 +201,55 @@ quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrat
 - **Cosa provare** in un modulo: una richiesta lenta della persona A in volo, entra B dallo stesso browser, la risposta di A
   arriva → il browser resta B.
 
+## La stessa persona: «Resta poi Salva» (da v0.12.41, #2136)
+
+Il cookie di sessione è uno per browser. Se A lascia una scheda aperta e B entra da un'altra, una scrittura dalla scheda di A parte
+col gettone di B, e i dati di A finiscono sotto il nome di B. La difesa è una sola, qui: ogni scrittura dice di chi è la pagina che
+la manda, e il server lo confronta con la persona della sessione prima della rotta, senza chiamare il backoffice.
+
+- `Persona::impronta()` è l'impronta della persona della sessione: 32 cifre esadecimali, un HMAC dell'id con la chiave dell'app. Né
+  l'id né l'email escono; la stessa persona ha sempre la stessa impronta, quindi rientrare non fa perdere il lavoro di una scheda
+  aperta. `null` senza sessione. La pagina la riceve nelle props e la manda in `X-Zr-Persona` (`Persona::INTESTAZIONE`) su ogni
+  richiesta che non legge.
+- `SoloDallaPersona` entra da sé nei gruppi `web` e `api`, subito dopo la guardia, ma **gira solo con `zr-auth.persona.controllo`
+  acceso** (`ZR_AUTH_PERSONA_CONTROLLO=true`; spento di default: un modulo che ha la sua copia non cambia comportamento finché non
+  passa a questa). Acceso, una scrittura (non GET, HEAD, OPTIONS) con l'impronta diversa, vuota o assente è **409
+  `{"errore":"persona_diversa"}`**: la rotta non gira, nessuna chiamata al backoffice, e il corpo non porta né l'impronta, né
+  l'email, né l'id di nessuno. Un'intestazione ripetuta vale per tutte; il confronto è a tempo costante. Senza sessione passa: la
+  strada è quella della guardia.
+- **«Esci» è esente**: chiudere la sessione è il lato sicuro, anche da una scheda rimasta su un'altra persona.
+  `Route::post('esci', …)->withoutMiddleware(SoloDallaPersona::class)`.
+
+Cosa fare della risposta lo decide il frontend: il 409 non porta una destinazione (la pagina da cui parte la scrittura è cosa sua).
+Una visita di Inertia ricarica la pagina da cui parte, che si apre come chi è nella sessione; una richiesta JSON ricarica da sé.
+
+### Come passa ciascun modulo alla comune
+
+Ognuno tiene la sua copia finché non passa, in una PR a sé, **col test delle due persone rifatto** (A apre la scheda, B entra, la
+scheda di A scrive: 409 e niente scritto):
+
+- **zr-home** (#2047, `PersonaDellaPagina`): la pagina smette di portare l'email (`Persona`, `encodeURIComponent`) e porta
+  `Persona::impronta()` in `X-Zr-Persona`; si toglie il middleware e il confronto con l'email della sessione. Il rimando alla
+  pagina e il dato flash `altra_persona` restano suoi, e le rotte di `ANCHE_FUORI_DALLA_GUARDIA` (consenso legale, link, invito)
+  tengono il controllo di zr-home finché non ne hanno uno loro. Le rotte della cornice di zr-core hanno il loro (`Persona`, email):
+  è un altro lavoro di zr-core.
+- **zr-board** (#2049, `StessaSessione`, `X-Board-Sessione`): il segno dei gettoni, che cambia a ogni ingresso, diventa l'impronta
+  della persona, che cambia solo con un'altra persona. Si toglie `StessaSessione::INTESTAZIONE` e il confronto; `CAMBIATA`
+  (l'intestazione del rifiuto) e il ritorno alla pagina di prima restano suoi.
+- **zr-crm** (#2048, `StessaPersona`, l'impronta dentro la versione di Inertia): l'impronta esce dalla versione e va in
+  `X-Zr-Persona` su ogni richiesta che non legge (visite di Inertia e client HTTP, `app.tsx`); si toglie `StessaPersona::handle`
+  e l'impronta di `HandleInertiaRequests::version`. L'export, un GET, non è coperto dalla comune: resta suo.
+
+Il test del frontend, con le due persone:
+
+```php
+config(['zr-auth.persona.controllo' => true]);
+apriSessione();                    // A
+$diA = Persona::impronta();
+// B entra nello stesso browser: Sessione::apri() con un'altra persona
+$this->postJson('/scheda', [], [Persona::INTESTAZIONE => $diA])->assertStatus(409)->assertExactJson(['errore' => 'persona_diversa']);
+```
+
 ## L'accesso con un provider (Google, LinkedIn, Facebook)
 
 Tre metodi senza gettone, e nessun codice nuovo nel client: la pagina d'ingresso chiama `Api::senzaGettone()`.
