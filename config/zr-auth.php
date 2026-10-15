@@ -63,6 +63,12 @@ return [
     // risposta dell'ingresso resta con l'id chiuso, perde il cookie a ogni risposta e non può entrare finché il segno vale.
     'sessione_chiusa_secondi' => 300,
 
+    // Il ritorno dopo una scrittura a sessione scaduta (Ritorno::dalReferer, #2043): i parametri della query del Referer che non entrano
+    // nell'indirizzo di ritorno, perché sono testo cercato e finirebbero nella sessione e nel Location.
+    'ritorno' => [
+        'senza_query' => ['q', 'scelta'],
+    ],
+
     // «Resta poi Salva» (SoloDallaPersona, #2136): con `controllo` acceso ogni scrittura (non GET, HEAD, OPTIONS) deve portare in
     // `X-Zr-Persona` l'impronta della persona della sessione (Persona::impronta()), o è 409 `persona_diversa`. Spento di default: un
     // modulo che ha già la sua copia la tiene finché non passa a questa.

@@ -482,6 +482,22 @@ expect(Rotte::senzaGuardia(['GET accedi', 'POST accedi']))->toBe([]);
 
 `GET up` è già un'eccezione. E per la prova 8: `Zeiras\Auth\Testing\Gettone::assenteDa($this->get('/dashboard'))`.
 
+
+### Il ritorno dopo una scrittura (da v0.12.42, #2043)
+
+Una scrittura (POST, PUT, PATCH, DELETE) che trova la sessione scaduta non perde la pagina da cui è partita: la guardia ricorda,
+al posto dell'indirizzo della richiesta, la pagina dal `Referer`, a condizioni strette (`Ritorno::dalReferer`). Si tiene il solo
+percorso con la query, rimesso sull'origine della richiesta, e solo se il `Referer` ha **la stessa origine** (schema, host e porta,
+senza utente) e il percorso sta sotto `/w/<slug>/` del workspace della richiesta (il parametro di rotta `{workspace}`). Ogni altro
+`Referer` — un altro sito, un altro workspace, `//`, una barra rovesciata, un percorso che risale (`..`, anche codificato), un
+carattere di controllo, più di 2000 caratteri — non ricorda niente, e dopo l'accesso si va alla pagina predefinita; un ritorno
+ricordato prima non vale per questa scrittura. I parametri di `zr-auth.ritorno.senza_query` (`q`, `scelta`: testo cercato) non
+entrano nel ritorno. HEAD non ricorda niente; una richiesta JSON senza Inertia resta 401.
+
+Si torna con un GET, con `Sessione::ritorno()`: la scrittura **non si ripete** e ciò che la persona aveva scritto non si tiene. Il
+modulo che aveva una copia di questa regola (zr-crm, `NelWorkspace::dovEri`) la toglie, in una PR a sé; per un GET la guardia
+ricorda ancora l'indirizzo com'è (la query compresa).
+
 ## Gli eventi del backoffice: il ricevitore
 
 Il backoffice consegna ogni evento di un workspace al modulo che ha l'app attiva: un `POST` firmato con Standard Webhooks,

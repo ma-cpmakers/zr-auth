@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Zeiras\Auth\Ritorno;
 use Zeiras\Auth\Sessione;
 
 /**
@@ -40,11 +41,18 @@ final class ConGettone
             return new JsonResponse(['message' => 'Unauthenticated.'], 401);
         }
 
-        // La pagina chiesta si ricorda solo da un GET, ed è l'indirizzo della richiesta. Mai redirect()->guest(): per ogni
-        // altro metodo, HEAD compreso, ricorderebbe il Referer, la pagina di un altro sito, dove la persona tornerebbe dopo
-        // l'accesso. Il ritorno lo legge Sessione::ritorno().
-        if ($richiesta->hasSession() && $richiesta->isMethod('GET')) {
-            $richiesta->session()->put('url.intended', $richiesta->fullUrl());
+        // La pagina chiesta si ricorda da un GET (l'indirizzo della richiesta) e da una scrittura (POST, PUT, PATCH, DELETE) solo dal
+        // Referer, a condizioni strette (Ritorno::dalReferer, #2043). Mai redirect()->guest(): ricorderebbe il Referer di
+        // qualunque metodo, la pagina di un altro sito, dove la persona tornerebbe dopo l'accesso. HEAD non ricorda niente. Il
+        // ritorno lo legge Sessione::ritorno(), con un GET: la scrittura non si ripete.
+        if ($richiesta->hasSession()) {
+            if ($richiesta->isMethod('GET')) {
+                $richiesta->session()->put('url.intended', $richiesta->fullUrl());
+            } elseif (in_array($richiesta->getRealMethod(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+                $dovEri = Ritorno::dalReferer($richiesta, $richiesta->route('workspace'));
+                // Un ritorno ricordato prima non vale per questa scrittura.
+                $dovEri !== null ? $richiesta->session()->put('url.intended', $dovEri) : $richiesta->session()->forget('url.intended');
+            }
         }
 
         return $inertia ? new Response('', 409, ['X-Inertia-Location' => $ingresso]) : redirect()->to($ingresso);
