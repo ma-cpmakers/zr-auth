@@ -913,3 +913,24 @@ it('Campo.opzioni_archiviate: id, nome e archiviato_il delle opzioni tolte, dall
         ->and(array_column($campi()['persona.livello']['opzioni'], 'id'))->toBe([$beta['id']])
         ->and(json_encode($tolte))->not->toContain('colore')->not->toContain('posizione');
 });
+
+// Il corpo come lo legge il backoffice: il JSON sul filo, non i dati PHP di Http::fake (zr-crm sprint 41, #2171).
+it('un `campi` mandato come oggetto è la mappa del JSON: valori scritti, mappa vuota senza valori, chiave «0» sconosciuta', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    $campo = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Nota'], 'tipo' => 'testo'], $anna))->json('data.chiave');
+
+    // Un `(object) […]` è `{"nota":"Nuova"}` sul filo: non un array PHP da rifiutare.
+    $id = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => (object) [$campo => 'Nuova']], $anna))->json('data.id');
+    expect(alFinto('GET', "/v1/crm/persone/{$id}", null, $anna)->json('data.campi.'.$campo))->toBe('Nuova');
+
+    // Una mappa vuota è `{}`: nessun valore, e il contatto non cambia.
+    $vuota = riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => (object) []], $anna));
+    expect($vuota->json('data.campi.'.$campo))->toBe('Nuova');
+
+    // La chiave «0» è una chiave come un'altra: non c'è nessun campo che si chiami così.
+    $zero = alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => (object) ['0' => 'x']], $anna);
+    expect($zero->status())->toBe(422)
+        ->and(collect($zero->json('errors'))->pluck('pointer')->all())->not->toContain('#/campi');
+});

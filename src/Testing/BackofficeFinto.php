@@ -1069,7 +1069,8 @@ final class BackofficeFinto
     private function esegue(string $operazione, Request $richiesta, array $parametri): PromiseInterface
     {
         $this->testi->usa(Testi::dellaRichiesta(self::header($richiesta, 'Accept-Language')));
-        $corpo = $richiesta->data();
+        // Il corpo come lo legge il backoffice: il JSON sul filo, non i dati PHP di Http::fake (un `(object) [...]` è una mappa, `{"0": …}` una chiave «0»).
+        $corpo = $richiesta->isJson() ? json_decode($richiesta->body(), true) : $richiesta->data();
         $corpo = is_array($corpo) ? $corpo : [];
 
         $this->ipFirmato = null;
