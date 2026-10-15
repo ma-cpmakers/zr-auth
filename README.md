@@ -495,8 +495,8 @@ carattere di controllo, più di 2000 caratteri — non ricorda niente, e dopo l'
 ricordato prima non vale per questa scrittura. I parametri di `zr-auth.ritorno.senza_query` (`q`, `scelta`: testo cercato) non
 entrano nel ritorno. HEAD non ricorda niente; una richiesta JSON senza Inertia resta 401.
 
-Si torna con un GET, con `Sessione::ritorno()` (un 302: mai un 307 o 308, che rimanderebbero il corpo): la scrittura **non si
-ripete** e ciò che la persona aveva scritto non si tiene. Della query si tolgono le coppie dei parametri di `senza_query` e il resto
+Si torna con un GET, con `Sessione::ritorno()` (un 302: mai un 307 o 308, che rimanderebbero il corpo): la scrittura
+**non si ripete** e ciò che la persona aveva scritto non si tiene. Della query si tolgono le coppie dei parametri di `senza_query` e il resto
 resta com'era (chiavi, ordine, doppioni, parentesi), con i byte fuori dall'alfabeto di una query percent-codificati.
 
 Chi risponde prima della guardia non ne riceve niente da sé: in zr-crm `NelWorkspace` risponde a sessione assente prima di
