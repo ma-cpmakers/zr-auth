@@ -396,6 +396,8 @@ Le risposte di `/v1` sono JSON, salvo l'esportazione CSV del CRM (`crm.persone.e
 return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'lead'])->comeRisposta();
 ```
 
+- Il backoffice tiene un tetto alle esportazioni che scorrono nello stesso momento (1 per persona, 2 per workspace, 2 su tutta l'istanza): oltre,
+  `429` `troppe_richieste` con `riprovaFra`. Nei test `BackofficeFinto::attiva()->occupaEsportazioni()` lo simula; ruolo, app e filtri vengono prima.
 - Il percorso sta dentro `/v1` (`/v1/…`, mai un segmento `..`), senza query (la query è il secondo argomento) e un redirect non si segue.
 - Il corpo non sta mai tutto in memoria: `blocchi()` lo legge a pezzi, `comeRisposta()` lo passa al browser a pezzi. Il tempo massimo è
   `zr-auth.scarico` (60 secondi) e ogni lettura non aspetta più di `zr-auth.letture` (10 secondi): oltre, o se la connessione cade a
