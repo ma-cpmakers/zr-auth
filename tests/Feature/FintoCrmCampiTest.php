@@ -703,3 +703,26 @@ it('crm.campi.modifica {archiviato: false} ripristina in fondo alla sezione coi 
     expect(alFinto('PATCH', '/v1/crm/campi/persona.vecchio', ['archiviato' => false], $anna)->status())->toBe(404)
         ->and(array_column(alFinto('GET', '/v1/crm/campi?oggetto=persona&archiviati=true', null, $anna)->json('data'), 'id'))->toBe(['persona.livello']);
 });
+
+it('la cronologia non porta le voci di un campo eliminato, e una riga che diceva solo di quelle esce; col ripristino tornano (CE.10)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'testo'], $anna));
+    $persona = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia'], $anna))->json('data.id');
+    riuscita(alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['livello' => 'alto']], $anna));
+    $righe = fn () => alFinto('GET', "/v1/crm/persone/{$persona}/cronologia", null, $anna)->json('data');
+    $voci = fn () => collect($righe())->pluck('campi')->flatten(1)->pluck('campo')->all();
+    $prima = count($righe());
+
+    expect($voci())->toContain('campi.livello');
+
+    alFinto('DELETE', '/v1/crm/campi/persona.livello', null, $anna);
+
+    expect($voci())->not->toContain('campi.livello')
+        ->and(count($righe()))->toBeLessThan($prima);
+
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false], $anna));
+
+    expect($voci())->toContain('campi.livello')->and(count($righe()))->toBe($prima);
+});
