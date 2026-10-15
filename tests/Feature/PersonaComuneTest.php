@@ -172,9 +172,11 @@ it('le impronte si confrontano a tempo costante', function () {
 it('con la sessione aperta e l\'impronta null (utente.id assente, vuoto o non stringa) la scrittura è 409 e non arriva al backoffice', function (mixed $id) {
     Http::fake(['*' => Http::response(['data' => []])]);
     $accesso = accesso();
-    $accesso['gettone']['utente'] = array_diff_key(utente(), ['id' => 1]) + ($id === 'assente' ? [] : ['id' => $id]);
+    $senzaId = array_diff_key(utente(), ['id' => 1]) + ($id === 'assente' ? [] : ['id' => $id]);
+    $accesso['gettone']['utente'] = $senzaId;
     Sessione::apri($accesso);
-    Sessione::entra(gettoneDelWorkspace()); // col gettone del workspace la rotta chiamerebbe davvero il backoffice
+    // Col gettone del workspace (entra() riscrive la persona dal suo `utente`) la rotta chiamerebbe davvero il backoffice.
+    Sessione::entra([...gettoneDelWorkspace(), 'utente' => $senzaId]);
 
     expect(Sessione::aperta())->toBeTrue()->and(Persona::impronta())->toBeNull();
 
