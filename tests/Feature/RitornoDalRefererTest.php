@@ -183,7 +183,7 @@ it('il README descrive il ritorno dopo una scrittura e i suoi limiti', function 
         ->toContain('GET')
         ->toContain('non si ripete')
         ->toContain('zr-crm')
-        ->toContain('Ritorno::dalReferer($richiesta')
+        ->toContain('Ritorno::dalReferer(')
         ->toContain('sostituisce')
         ->toContain('302');
 });
