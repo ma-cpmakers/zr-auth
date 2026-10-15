@@ -40,6 +40,7 @@ final class Problema extends RuntimeException
         'valuta_in_uso' => 409,
         'persona_anonimizzata' => 409,
         'annullamento_scaduto' => 409,
+        'campo_di_sistema' => 409,
         'sezione_di_sistema' => 409,
         'sezione_non_vuota' => 409,
         'ultimo_workspace' => 409,

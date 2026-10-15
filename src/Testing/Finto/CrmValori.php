@@ -42,7 +42,7 @@ trait CrmValori
     private function campiTuoiCrm(string $workspace, string $oggetto): array
     {
         $this->campiDelWorkspaceCrm($workspace);
-        $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo');
+        $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo' && ($campo['eliminato_il'] ?? null) === null);
         uasort($campi, fn (array $a, array $b) => $a['ord'] <=> $b['ord']);
 
         return $campi;
@@ -72,6 +72,13 @@ trait CrmValori
                     }
                 }];
             }
+        }
+
+        // Un campo eliminato (ripristinabile per 30 giorni) non si scrive più: la sua chiave è 422 `non_trovato`, non `campo_estraneo`.
+        foreach ($this->campiEliminatiCrm($workspace, $oggetto) as $campo) {
+            $regole["campi.{$campo['codice']}"] = [function (string $nome, mixed $valore, Closure $fail) {
+                $this->rifiutaCrm($fail, $nome, Regola::NON_TROVATO, 'regole.campo_eliminato');
+            }];
         }
 
         return $regole;

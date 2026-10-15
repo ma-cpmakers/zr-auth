@@ -702,6 +702,10 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   (persona 24 campi in 6 sezioni, organizzazione 16 in 4, trattativa 11 in 2; «Principali» è fissa), con un nome `{it, en, es}`, la
   visibilità, la sezione e il posto: un campo `indispensabile` non si nasconde e non lascia «Principali» (`422` `campo_indispensabile`),
   «Principali» non si cambia (`409` `sezione_di_sistema`) e una sezione con campi non si elimina (`409` `sezione_non_vuota`).
+  Un campo «tuo» si elimina con `crm.campi.elimina` (`204`; uno standard o di `sistema` è `409` `campo_di_sistema`): esce dall'elenco e
+  dai suoi valori (scriverlo è `422` `non_trovato`), `crm.campi.elenca?archiviati=true` lo dà per 30 giorni, con `archiviato_il` e
+  `ripristinabile_fino`, e `crm.campi.modifica {archiviato: false}` lo ripristina in fondo alla sua sezione, coi suoi valori; dopo i 30
+  giorni è `404`. `Campo` porta sempre `archiviato_il` e `ripristinabile_fino` (`null` per un campo vivo).
   I **valori** dei campi «tuoi» di un contatto (`crm.persone.mostra`, `crea` e `modifica`, dalla v0.12.37) sono in `campi`: `{}` senza
   valori, ogni tipo con la sua forma, `null` toglie (Merge Patch), uno standard o una chiave che non c'è è `422` `campo_estraneo`,
   e la cronologia dice `campi.<chiave>` (dopo l'oblio il solo nome, senza `prima` e `dopo`); un membro di un altro workspace è
