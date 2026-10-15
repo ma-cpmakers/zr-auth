@@ -55,11 +55,18 @@ trait CrmValori
      *
      * @return array<string, mixed>
      */
-    private function regoleDeiValoriCrm(string $workspace, string $oggetto, bool $creazione): array
+    private function regoleDeiValoriCrm(string $workspace, string $oggetto, bool $creazione, ?string $id = null, mixed $inviati = null): array
     {
         $regole = ['campi' => ['sometimes', 'array'], 'campi.-' => ['prohibited']];
+        $campi = $this->campiTuoiCrm($workspace, $oggetto);
+        $invariati = $id === null || ! is_array($inviati) ? [] : $this->valoriInvariatiCrm($oggetto, $id, $campi, $inviati);
 
-        foreach ($this->campiTuoiCrm($workspace, $oggetto) as $chiave => $campo) {
+        foreach ($campi as $chiave => $campo) {
+            // Un valore rimandato uguale a quello salvato non si rigiudica coi limiti del campo (il tipo sì): solo uno nuovo o cambiato.
+            if (isset($invariati[$chiave])) {
+                $campo['limiti'] = null;
+            }
+
             $apertura = $campo['obbligatorio'] ? ['bail', $creazione ? 'required' : 'filled'] : ['bail', 'nullable'];
 
             foreach ($this->regoleDiUnValoreCrm($workspace, "campi.{$chiave}", $campo) as $attributo => $regoleDelValore) {
@@ -75,6 +82,40 @@ trait CrmValori
         }
 
         return $regole;
+    }
+
+    /**
+     * Le chiavi dei campi con limiti il cui valore nel corpo è lo stesso che il record ha salvato (ValoriDeiCampi::invariati).
+     *
+     * @param  array<string, array<string, mixed>>  $campi
+     * @param  array<string, mixed>  $inviati
+     * @return array<string, true>
+     */
+    private function valoriInvariatiCrm(string $oggetto, string $id, array $campi, array $inviati): array
+    {
+        $invariati = [];
+
+        foreach ($campi as $chiave => $campo) {
+            if (($campo['limiti'] ?? null) === null || ! array_key_exists($chiave, $inviati) || ! array_key_exists($chiave, $this->crm['valori'][$oggetto][$id] ?? [])) {
+                continue;
+            }
+
+            $inviato = $inviati[$chiave];
+            $salvato = $this->crm['valori'][$oggetto][$id][$chiave];
+
+            $uguale = match ($campo['tipo']) {
+                'testo', 'testo_lungo', 'data' => is_string($inviato) && $inviato === $salvato,
+                'numero', 'percentuale' => (is_int($inviato) || is_float($inviato)) && (is_int($salvato) || is_float($salvato)) && (float) $inviato === (float) $salvato,
+                'valuta' => is_array($inviato) && is_int($inviato['importo'] ?? null) && $inviato['importo'] === $salvato,
+                default => false,
+            };
+
+            if ($uguale) {
+                $invariati[$chiave] = true;
+            }
+        }
+
+        return $invariati;
     }
 
     /**

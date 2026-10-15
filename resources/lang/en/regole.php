@@ -82,6 +82,7 @@ return [
     'campo_avanzata_standard' => 'This is a standard field: `aiuto`, `predefinito`, `limiti`, `in_elenco` and `nel_crea` only apply to fields you created.',
     'campo_limiti_non_ammessi' => 'Only a text, number, currency, percentage or date field has limits.',
     'campo_limiti_invertiti' => 'The minimum cannot be above the maximum.',
+    'campo_limiti_predefinito' => 'The field default is outside the new limits: change it in the same request (`predefinito`) or remove it.',
     'campo_aiuto_it_obbligatorio' => 'The Italian help is required when there is a help text, and it cannot be removed on its own.',
     'campo_predefinito_membro' => 'A member field has no default value.',
     'campo_predefinito_dopo_le_opzioni' => 'The options are born with this request and have no id yet: set the default afterwards, with crm.campi.modifica.',

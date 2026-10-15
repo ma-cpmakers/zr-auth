@@ -16,6 +16,9 @@ trait CrmAvanzate
 
     private const CRM_AIUTO_MASSIMO = 200;
 
+    /** I caratteri del predefinito di un testo (un valore di `campi` arriva al tetto del suo tipo). */
+    private const CRM_PREDEFINITO_TESTO = 1000;
+
     /** @var array<string, list<string>> */
     private const CRM_CHIAVI_DEI_LIMITI = [
         'testo' => ['lunghezza_max'],
@@ -43,9 +46,6 @@ trait CrmAvanzate
             'limiti.minimo' => ['sometimes', 'nullable'],
             'limiti.massimo' => ['sometimes', 'nullable'],
             'predefinito' => ['sometimes', 'nullable'],
-            'predefinito.importo' => ['sometimes', 'nullable'],
-            'predefinito.valuta' => ['sometimes', 'nullable'],
-            'predefinito.*' => ['sometimes', 'nullable'],
             'in_elenco' => ['filled', 'boolean:strict'],
             'nel_crea' => ['filled', 'boolean:strict'],
         ];
@@ -74,6 +74,13 @@ trait CrmAvanzate
 
         if (array_key_exists('predefinito', $campi)) {
             $nuove['predefinito'] = $this->predefinitoNuovoCrm($workspace, $tipo, $campi['predefinito'], $limiti, $opzioni, $riga === null);
+        } elseif ($riga !== null && ($riga['predefinito'] ?? null) !== null && array_key_exists('limiti', $campi)) {
+            // Cambiano i limiti e il predefinito che c'è resta: deve rientrare nei limiti nuovi (un PATCH solo li cambia insieme).
+            try {
+                $this->predefinitoNuovoCrm($workspace, $tipo, $this->valoreInUscitaCrm($workspace, $tipo, $riga['predefinito']), $limiti, $opzioni, false);
+            } catch (Problema $problema) {
+                throw $this->erroreCrm('limiti', 'regole.campo_limiti_predefinito', (string) ($problema->errori[0]['regola'] ?? Regola::FUORI_INTERVALLO));
+            }
         }
 
         foreach (['in_elenco', 'nel_crea'] as $chiave) {
@@ -174,7 +181,8 @@ trait CrmAvanzate
 
         $campo = ['tipo' => $tipo, 'limiti' => $limiti, 'opzioni' => $opzioni];
         $regole = $this->regoleDiUnValoreCrm($workspace, 'predefinito', $campo);
-        $regole['predefinito'] = ['bail', ...$regole['predefinito']];
+        $tetto = in_array($tipo, ['testo', 'testo_lungo', 'url'], true) ? ['max:'.self::CRM_PREDEFINITO_TESTO] : [];
+        $regole['predefinito'] = ['bail', ...$regole['predefinito'], ...$tetto];
         $validato = $this->testi->validaCorpo(['predefinito' => $valore], $regole)['predefinito'];
 
         return match ($tipo) {

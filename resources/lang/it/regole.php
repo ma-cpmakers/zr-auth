@@ -83,6 +83,7 @@ return [
     'campo_avanzata_standard' => 'Questo è un campo standard: `aiuto`, `predefinito`, `limiti`, `in_elenco` e `nel_crea` valgono solo per i campi che hai creato.',
     'campo_limiti_non_ammessi' => 'Solo un campo di testo, numero, valuta, percentuale o data ha dei limiti.',
     'campo_limiti_invertiti' => 'Il minimo non può essere sopra il massimo.',
+    'campo_limiti_predefinito' => 'Il predefinito del campo non rientra nei limiti nuovi: cambialo nella stessa richiesta (`predefinito`) o toglilo.',
     'campo_aiuto_it_obbligatorio' => "L'aiuto in italiano è obbligatorio se c'è un aiuto, e non si toglie da solo.",
     'campo_predefinito_membro' => 'Un campo membro non ha un valore predefinito.',
     'campo_predefinito_dopo_le_opzioni' => 'Le opzioni nascono con questa richiesta e non hanno ancora un id: il predefinito si dice dopo, con crm.campi.modifica.',

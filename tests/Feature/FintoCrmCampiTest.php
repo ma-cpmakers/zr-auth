@@ -781,3 +781,41 @@ it('i limiti valgono per le scritture nuove di campi: fuori è 422 troppo_lungo 
 
     expect(alFinto('GET', "/v1/crm/persone/{$persona}", null, $anna)->json('data.campi.voto'))->toBe(10);
 });
+
+it('un valore rimandato uguale a quello salvato non si rigiudica coi limiti, e il predefinito salvato deve rientrare nei limiti nuovi (rilievi 2 e 3 di C2)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Voto'], 'tipo' => 'numero', 'limiti' => ['minimo' => 1, 'massimo' => 10], 'predefinito' => 5], $anna));
+    $persona = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => ['voto' => 10]], $anna))->json('data.id');
+
+    $fuori = alFinto('PATCH', '/v1/crm/campi/persona.voto', ['limiti' => ['minimo' => 20, 'massimo' => 30]], $anna);
+
+    expect([$fuori->status(), $fuori->json('errors.0.pointer'), $fuori->json('errors.0.regola')])->toBe([422, '#/limiti', 'fuori_intervallo']);
+
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.voto', ['limiti' => ['minimo' => 20, 'massimo' => 30], 'predefinito' => 25], $anna));
+    riuscita(alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['voto' => 10]], $anna));
+    $cambiato = alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['voto' => 11]], $anna);
+
+    expect([$cambiato->status(), $cambiato->json('errors.0.pointer'), $cambiato->json('errors.0.regola')])->toBe([422, '#/campi/voto', 'fuori_intervallo']);
+});
+
+it('un campo standard con due avanzate dà un errore per ognuna; il predefinito di un testo è al più 1.000 caratteri e una lista enorme è un errore solo (rilievi 1, 4 e 7 di C2)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    $standard = alFinto('PATCH', '/v1/crm/campi/persona.ruolo', ['aiuto' => ['it' => 'Ciao'], 'limiti' => ['lunghezza_max' => 10]], $anna);
+
+    expect($standard->status())->toBe(422)
+        ->and(array_column($standard->json('errors'), 'pointer'))->toBe(['#/aiuto', '#/limiti']);
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Libero'], 'tipo' => 'testo_lungo'], $anna));
+    $lungo = alFinto('PATCH', '/v1/crm/campi/persona.libero', ['predefinito' => str_repeat('x', 1001)], $anna);
+    $lista = alFinto('PATCH', '/v1/crm/campi/persona.libero', ['predefinito' => array_fill(0, 10000, 1)], $anna);
+
+    expect([$lungo->status(), $lungo->json('errors.0.pointer'), $lungo->json('errors.0.regola')])->toBe([422, '#/predefinito', 'troppo_lungo'])
+        ->and($lista->status())->toBe(422)
+        ->and($lista->json('errors'))->toHaveCount(1);
+
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.libero', ['predefinito' => str_repeat('x', 1000)], $anna));
+});

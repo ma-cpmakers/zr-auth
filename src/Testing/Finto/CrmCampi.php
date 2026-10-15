@@ -491,10 +491,11 @@ trait CrmCampi
         }
         $avanzate = [];
 
-        foreach (array_intersect(self::CRM_AVANZATE, array_keys($campi)) as $chiave) {
-            if ($voce['origine'] !== 'tuo') {
-                throw $this->erroreCrm($chiave, 'regole.campo_avanzata_standard', Regola::CAMPO_ESTRANEO);
-            }
+        if ($voce['origine'] !== 'tuo' && ($estranee = array_values(array_intersect(self::CRM_AVANZATE, array_keys($campi)))) !== []) {
+            throw new Problema('dati_non_validi', array_map(
+                fn (string $chiave) => ['detail' => $this->testi->testo('regole.campo_avanzata_standard'), 'regola' => Regola::CAMPO_ESTRANEO, 'pointer' => '#/'.$chiave],
+                $estranee,
+            ));
         }
 
         if ($voce['origine'] === 'tuo') {
