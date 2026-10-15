@@ -34,6 +34,9 @@ abstract class TestCase extends Testbench
         $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         $app['config']->set('app.url', FRONTEND);
         $app['config']->set('session.driver', 'array');
+        // I test del pacchetto non dipendono dal default: quelli che provano il controllo lo accendono o ne leggono la config vera
+        // (PersonaComuneTest); gli altri scrivono con la sessione senza portare l'impronta.
+        $app['config']->set('zr-auth.persona.controllo', false);
     }
 
     /** Le pagine del frontend, nel gruppo `web`: zr-auth ci mette la guardia da sé. */

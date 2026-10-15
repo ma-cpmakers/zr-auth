@@ -69,11 +69,12 @@ return [
         'senza_query' => ['q', 'scelta'],
     ],
 
-    // «Resta poi Salva» (SoloDallaPersona, #2136): con `controllo` acceso ogni scrittura (non GET, HEAD, OPTIONS) deve portare in
-    // `X-Zr-Persona` l'impronta della persona della sessione (Persona::impronta()), o è 409 `persona_diversa`. Spento di default: un
-    // modulo che ha già la sua copia la tiene finché non passa a questa.
+    // «Resta poi Salva» (SoloDallaPersona, #2136, #2146): `zr-auth.persona.controllo` è acceso di default. Ogni scrittura (non GET, HEAD, OPTIONS) deve
+    // portare in `X-Zr-Persona` l'impronta della persona della sessione (Persona::impronta()), o è 409 `persona_diversa`. L'`.env` serve
+    // solo a spegnerlo, con ZR_AUTH_PERSONA_CONTROLLO=false (anche 0 e off): un modulo che ha ancora la sua copia lo spegne PRIMA di
+    // aggiornare, finché non passa a questa. Spento, il pacchetto lo scrive nel log (un avviso, al più uno all'ora per cache).
     'persona' => [
-        'controllo' => filter_var(env('ZR_AUTH_PERSONA_CONTROLLO', false), FILTER_VALIDATE_BOOL),
+        'controllo' => filter_var(env('ZR_AUTH_PERSONA_CONTROLLO', true), FILTER_VALIDATE_BOOL),
     ],
 
 ];

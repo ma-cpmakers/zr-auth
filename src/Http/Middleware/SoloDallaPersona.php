@@ -17,8 +17,8 @@ use Zeiras\Auth\Persona;
  * aperta prima del deploy è una scheda ferma anche lei) → 409 `persona_diversa`, e nient'altro: la scheda ferma non legge né chi
  * è entrato né la sua impronta. Se l'intestazione è ripetuta valgono tutte.
  *
- * Gira dopo ConGettone, e solo con `zr-auth.persona.controllo` acceso: un modulo che ha la sua copia la tiene finché non passa
- * a questa. GET, HEAD e OPTIONS passano (il metodo vero della richiesta: un POST con `_method=OPTIONS` non è un OPTIONS). Controlla
+ * Gira dopo ConGettone, e salvo `zr-auth.persona.controllo` spento (ZR_AUTH_PERSONA_CONTROLLO=false): un modulo che ha la sua
+ * copia la spegne finché non passa a questa. GET, HEAD e OPTIONS passano (il metodo vero della richiesta: un POST con `_method=OPTIONS` non è un OPTIONS). Controlla
  * le rotte con la guardia: una pagina pubblica (`withoutMiddleware(ConGettone::class)`, l'accesso, la registrazione) è la strada
  * di chi entra, e un'altra persona deve poter entrare. Una rotta fuori dalla guardia che è un'azione della persona nella sessione
  * (il consenso, l'invito) lo vuole con `->middleware(SoloDallaPersona::class.':sempre')`. Una rotta che non deve averlo («Esci»:
@@ -31,7 +31,7 @@ final class SoloDallaPersona
     public function handle(Request $richiesta, Closure $next, ?string $quando = null): Response
     {
         // `1`, `on` e `yes` accendono come `true`: un valore che non si legge non lascia la guardia spenta senza dirlo.
-        if (! filter_var(config('zr-auth.persona.controllo'), FILTER_VALIDATE_BOOL) || in_array($richiesta->getRealMethod(), ['GET', 'HEAD', 'OPTIONS'], true)) {
+        if (! filter_var(config('zr-auth.persona.controllo', true), FILTER_VALIDATE_BOOL) || in_array($richiesta->getRealMethod(), ['GET', 'HEAD', 'OPTIONS'], true)) {
             return $next($richiesta);
         }
         if ($quando !== 'sempre' && ! $this->conLaGuardia($richiesta)) {

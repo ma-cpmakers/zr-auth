@@ -196,15 +196,102 @@ it('il controllo si accende anche con 1, on e yes (un valore che non si legge no
     $this->postJson('/persona/scrive')->assertStatus(409);
 })->with(['1', 'on', 'yes', 1, true]);
 
-it('col controllo spento (il default) una scrittura senza intestazione passa come prima', function () {
+it('col controllo spento a mano una scrittura senza intestazione passa come prima', function () {
     config(['zr-auth.persona.controllo' => false]);
     apriSessione();
 
     $this->postJson('/persona/scrive')->assertOk();
 
     expect(scritture())->toBe(1)
-        ->and((new ReflectionClass(Persona::class))->hasMethod('impronta'))->toBeTrue()
-        ->and(require __DIR__.'/../../config/zr-auth.php')->toHaveKey('persona.controllo', false);
+        ->and((new ReflectionClass(Persona::class))->hasMethod('impronta'))->toBeTrue();
+});
+
+/** La config del pacchetto come la legge un modulo con quell'`.env` (nessuna riga se `$env` è null). */
+function configDelPacchetto(?string $env): array
+{
+    $prima = getenv('ZR_AUTH_PERSONA_CONTROLLO');
+    $env === null ? putenv('ZR_AUTH_PERSONA_CONTROLLO') : putenv('ZR_AUTH_PERSONA_CONTROLLO='.$env);
+    try {
+        return require __DIR__.'/../../config/zr-auth.php';
+    } finally {
+        $prima === false ? putenv('ZR_AUTH_PERSONA_CONTROLLO') : putenv('ZR_AUTH_PERSONA_CONTROLLO='.$prima);
+    }
+}
+
+// PD.1
+it('senza nessuna riga nell\'.env il controllo è acceso: una scrittura senza intestazione è 409', function () {
+    config(['zr-auth.persona' => configDelPacchetto(null)['persona']]);
+    apriSessione();
+
+    expect(config('zr-auth.persona.controllo'))->toBeTrue();
+    $this->postJson('/persona/scrive')->assertStatus(409)->assertExactJson(['errore' => 'persona_diversa']);
+    expect(scritture())->toBe(0);
+});
+
+it('con la config pubblicata di prima, senza la chiave `persona`, il controllo è acceso', function () {
+    config(['zr-auth.persona' => null]);
+    apriSessione();
+
+    $this->postJson('/persona/scrive')->assertStatus(409);
+    expect(scritture())->toBe(0);
+});
+
+// PD.2
+it('ZR_AUTH_PERSONA_CONTROLLO=false, 0 e off lo spengono: una scrittura senza intestazione passa', function (string $env) {
+    config(['zr-auth.persona' => configDelPacchetto($env)['persona']]);
+    apriSessione();
+
+    expect(config('zr-auth.persona.controllo'))->toBeFalse();
+    $this->postJson('/persona/scrive')->assertOk();
+    expect(scritture())->toBe(1);
+})->with(['false', '0', 'off']);
+
+// PD.3
+it('spento, il pacchetto lo scrive nel log una volta, col nome della variabile e senza dati', function () {
+    Illuminate\Support\Facades\Cache::flush();
+    Illuminate\Support\Facades\Log::spy();
+    config(['zr-auth.persona.controllo' => false]);
+    apriSessione();
+
+    $provider = new Zeiras\Auth\ZrAuthServiceProvider(app());
+    $provider->avvisaSeSpento();
+    $provider->avvisaSeSpento();
+    $this->postJson('/persona/scrive')->assertOk();
+
+    Illuminate\Support\Facades\Log::shouldHaveReceived('warning')->once()->withArgs(function (string $messaggio, array $contesto = []): bool {
+        return str_contains($messaggio, 'ZR_AUTH_PERSONA_CONTROLLO')
+            && $contesto === []
+            && ! str_contains($messaggio, 'anna@example.com')
+            && ! str_contains($messaggio, Persona::impronta());
+    });
+});
+
+it('acceso, il pacchetto non scrive niente nel log', function () {
+    Illuminate\Support\Facades\Cache::flush();
+    Illuminate\Support\Facades\Log::spy();
+    config(['zr-auth.persona.controllo' => true]);
+
+    (new Zeiras\Auth\ZrAuthServiceProvider(app()))->avvisaSeSpento();
+
+    Illuminate\Support\Facades\Log::shouldNotHaveReceived('warning');
+});
+
+// PD.4
+it('il README e il commento della config dicono che è acceso, come si spegne e che spento lo scrive nel log', function () {
+    $readme = file_get_contents(__DIR__.'/../../README.md');
+    preg_match('/^## La stessa persona[^\n]*\n(.*?)(?=^## |\z)/ms', $readme, $trovata);
+    $config = file_get_contents(__DIR__.'/../../config/zr-auth.php');
+
+    foreach ([$trovata[1] ?? '', $config] as $testo) {
+        expect($testo)->not->toBe('')
+            ->toContain('ZR_AUTH_PERSONA_CONTROLLO')
+            ->toContain('persona.controllo')
+            ->toContain('acceso di default')
+            ->toContain('ZR_AUTH_PERSONA_CONTROLLO=false')
+            ->toContain('log');
+    }
+    expect($trovata[1])->not->toContain('spento di default');
+    expect($config)->not->toContain('Spento di default');
 });
 
 // T1.11
