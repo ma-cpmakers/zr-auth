@@ -31,7 +31,7 @@ final class SoloDallaPersona
     public function handle(Request $richiesta, Closure $next, ?string $quando = null): Response
     {
         // `1`, `on` e `yes` accendono come `true`: un valore che non si legge non lascia la guardia spenta senza dirlo.
-        if (! (filter_var(config('zr-auth.persona.controllo', true), FILTER_VALIDATE_BOOL | FILTER_NULL_ON_FAILURE) ?? true) || in_array($richiesta->getRealMethod(), ['GET', 'HEAD', 'OPTIONS'], true)) {
+        if (! (filter_var(config('zr-auth.persona.controllo', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true) || in_array($richiesta->getRealMethod(), ['GET', 'HEAD', 'OPTIONS'], true)) {
             return $next($richiesta);
         }
         if ($quando !== 'sempre' && ! $this->conLaGuardia($richiesta)) {

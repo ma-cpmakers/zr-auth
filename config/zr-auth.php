@@ -76,7 +76,7 @@ return [
     // Una riga vuota (`ZR_AUTH_PERSONA_CONTROLLO=`) o un valore che non si legge non lo spengono.
     'persona' => [
         // Si spegne solo con un valore falso che si legge (false, 0, off, no): una riga vuota o un refuso lo lasciano acceso.
-        'controllo' => filter_var(in_array(env('ZR_AUTH_PERSONA_CONTROLLO'), [null, ''], true) ? true : env('ZR_AUTH_PERSONA_CONTROLLO'), FILTER_VALIDATE_BOOL | FILTER_NULL_ON_FAILURE) ?? true,
+        'controllo' => filter_var(in_array(env('ZR_AUTH_PERSONA_CONTROLLO'), [null, ''], true) ? true : env('ZR_AUTH_PERSONA_CONTROLLO'), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
     ],
 
 ];

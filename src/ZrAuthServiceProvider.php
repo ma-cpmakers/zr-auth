@@ -89,7 +89,7 @@ final class ZrAuthServiceProvider extends ServiceProvider
      */
     public function avvisaSeSpento(): void
     {
-        if (filter_var(config('zr-auth.persona.controllo', true), FILTER_VALIDATE_BOOL | FILTER_NULL_ON_FAILURE) ?? true) {
+        if (filter_var(config('zr-auth.persona.controllo', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true) {
             return;
         }
 
