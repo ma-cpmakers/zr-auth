@@ -40,6 +40,9 @@ trait CrmCampi
     /** Le opzioni di un elenco o di una scelta multipla, al più (Catalogo::OPZIONI_MASSIME). */
     private const CRM_OPZIONI_MASSIME = 100;
 
+    /** Il totale delle opzioni di un campo, vive e archiviate (Catalogo::OPZIONI_TOTALI, #2156). */
+    private const CRM_OPZIONI_TOTALI = 500;
+
     /** Il tetto di `limite` degli elenchi di sezioni e di campi, ed è anche il valore se manca (SezioniElencaRequest, CampiElencaRequest). */
     private const CRM_LIMITE_DEI_CAMPI = 300;
 
@@ -619,6 +622,260 @@ trait CrmCampi
     }
 
     /**
+     * crm.campi.opzioni.crea (CampiOpzioniController::crea): aggiunge un'opzione a un campo `elenco` o `scelta_multipla` «tuo» (201 con
+     * l'opzione e `Location`). `nome.it` unico fra le vive senza maiuscole né accenti (422 `duplicato` su `#/nome/it`), al più 100 vive
+     * (409 `limite_raggiunto`), `posizione` da 1 fra le vive (oltre la fine, in fondo). Un campo senza opzioni proprie, eliminato o
+     * di un altro workspace è 404.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaOpzioneCrm(Request $richiesta, array $corpo, string $campo): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+
+        return $this->conIdempotenza($richiesta, 'crm.campi.opzioni.crea', $chi, $corpo, function () use ($chi, $corpo, $campo) {
+            $campi = $this->testi->validaCorpo($corpo, [
+                'nome' => ['required', 'array'],
+                'nome.it' => ['bail', 'required', 'string', 'max:'.self::CRM_NOME_DI_UNA_SEZIONE, new NomeScritto],
+                'nome.en' => $this->regoleDiUnNomeCrm(),
+                'nome.es' => $this->regoleDiUnNomeCrm(),
+                'colore' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+                'posizione' => ['filled', 'integer:strict', 'min:1'],
+            ]);
+            $riga = &$this->rigaConOpzioniCrm($chi['workspace'], $campo);
+            $vive = array_values(array_filter($riga['opzioni'], fn (array $opzione) => ($opzione['archiviato_il'] ?? null) === null));
+
+            if (count($vive) >= self::CRM_OPZIONI_MASSIME) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_OPZIONI_MASSIME]);
+            }
+
+            if (count($riga['opzioni']) >= self::CRM_OPZIONI_TOTALI) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_OPZIONI_TOTALI]);
+            }
+
+            $this->opzioneUnicaCrm($vive, $campi['nome']['it'], null);
+            $opzione = [
+                'id' => self::id(),
+                'nome' => ['it' => $campi['nome']['it'], 'en' => $campi['nome']['en'] ?? null, 'es' => $campi['nome']['es'] ?? null],
+                'colore' => isset($campi['colore']) ? strtolower($campi['colore']) : null,
+            ];
+            $posto = min($campi['posizione'] ?? count($vive) + 1, count($vive) + 1);
+            array_splice($vive, $posto - 1, 0, [$opzione]);
+            $riga['opzioni'] = [...$vive, ...array_values(array_filter($riga['opzioni'], fn (array $o) => ($o['archiviato_il'] ?? null) !== null))];
+            $riga['aggiornato_il'] = self::dopoCrm($riga['aggiornato_il']);
+
+            return [201, ['data' => self::voceOpzioneCrm($opzione, $posto)], ['Location' => "/v1/crm/campi/{$campo}/opzioni/{$opzione['id']}"]];
+        });
+    }
+
+    /**
+     * crm.campi.opzioni.modifica (CampiOpzioniController::modifica): nome (`en` ed `es` si tolgono con `null`, `it` no), colore e
+     * posto fra le vive in Merge Patch (200 con l'opzione). Una modifica che non cambia niente non scrive.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaOpzioneCrm(Request $richiesta, array $corpo, string $campo, string $opzione): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+        $campi = $this->modificaCrm($corpo, [
+            'nome' => ['filled', 'array'],
+            'nome.it' => ['sometimes', 'nullable', 'string', 'max:'.self::CRM_NOME_DI_UNA_SEZIONE, new NomeScritto],
+            'nome.en' => $this->regoleDiUnNomeCrm(),
+            'nome.es' => $this->regoleDiUnNomeCrm(),
+            'colore' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'posizione' => ['filled', 'integer:strict', 'min:1'],
+        ]);
+
+        if (array_key_exists('it', $campi['nome'] ?? []) && $campi['nome']['it'] === null) {
+            throw $this->erroreCrm('nome.it', 'regole.campo_nome_it_obbligatorio', Regola::OBBLIGATORIO);
+        }
+
+        $riga = &$this->rigaConOpzioniCrm($chi['workspace'], $campo);
+        $vive = array_values(array_filter($riga['opzioni'], fn (array $o) => ($o['archiviato_il'] ?? null) === null));
+        $i = $this->postoDiUnaOpzioneCrm($vive, $opzione);
+        $attuale = $vive[$i];
+        $nome = $attuale['nome'];
+
+        foreach ($campi['nome'] ?? [] as $lingua => $testo) {
+            $nome[$lingua] = $testo;
+        }
+
+        $colore = array_key_exists('colore', $campi) ? ($campi['colore'] === null ? null : strtolower($campi['colore'])) : $attuale['colore'];
+        $posto = array_key_exists('posizione', $campi) ? min($campi['posizione'], count($vive)) : $i + 1;
+
+        if ($nome === $attuale['nome'] && $colore === $attuale['colore'] && $posto === $i + 1) {
+            return [200, ['data' => self::voceOpzioneCrm($attuale, $i + 1)]];
+        }
+
+        if ($nome['it'] !== $attuale['nome']['it']) {
+            $this->opzioneUnicaCrm($vive, $nome['it'], $attuale['id']);
+        }
+
+        $nuova = ['id' => $attuale['id'], 'nome' => $nome, 'colore' => $colore];
+        array_splice($vive, $i, 1);
+        array_splice($vive, $posto - 1, 0, [$nuova]);
+        $riga['opzioni'] = [...$vive, ...array_values(array_filter($riga['opzioni'], fn (array $o) => ($o['archiviato_il'] ?? null) !== null))];
+        $riga['aggiornato_il'] = self::dopoCrm($riga['aggiornato_il']);
+
+        return [200, ['data' => self::voceOpzioneCrm($nuova, $posto)]];
+    }
+
+    /**
+     * crm.campi.opzioni.elimina (CampiOpzioniController::elimina): archivia un'opzione viva (204). L'ultima viva è 409 `ultima_opzione`.
+     * Se era il `predefinito` del campo, il predefinito la perde.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaOpzioneCrm(Request $richiesta, string $campo, string $opzione): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+        $riga = &$this->rigaConOpzioniCrm($chi['workspace'], $campo);
+        $vive = array_values(array_filter($riga['opzioni'], fn (array $o) => ($o['archiviato_il'] ?? null) === null));
+        $i = $this->postoDiUnaOpzioneCrm($vive, $opzione);
+
+        if (count($vive) === 1) {
+            throw new Problema('ultima_opzione');
+        }
+
+        $id = $vive[$i]['id'];
+
+        foreach ($riga['opzioni'] as $k => $o) {
+            if ($o['id'] === $id) {
+                $riga['opzioni'][$k]['archiviato_il'] = self::iso(self::adessoCrm());
+            }
+        }
+
+        $predefinito = $riga['predefinito'] ?? null;
+
+        if (is_string($predefinito) && strtolower($predefinito) === $id) {
+            $riga['predefinito'] = null;
+        } elseif (is_array($predefinito) && in_array($id, array_map(fn (mixed $v) => strtolower((string) $v), $predefinito), true)) {
+            $resto = array_values(array_filter($predefinito, fn (mixed $v) => strtolower((string) $v) !== $id));
+            $riga['predefinito'] = $resto === [] ? null : $resto;
+        }
+
+        $riga['aggiornato_il'] = self::dopoCrm($riga['aggiornato_il']);
+
+        return [204, null];
+    }
+
+    /**
+     * La riga (per riferimento) di un campo «tuo» vivo a elenco o a scelta multipla; altrimenti 404.
+     *
+     * @return array<string, mixed>
+     */
+    private function &rigaConOpzioniCrm(string $workspace, string $id): array
+    {
+        $this->campiDelWorkspaceCrm($workspace);
+        [$voce] = $this->trovaCampoCrm($workspace, $id);
+
+        if ($voce['origine'] !== 'tuo' || ! in_array($voce['tipo'], ['elenco', 'scelta_multipla'], true)) {
+            throw new Problema('non_trovato');
+        }
+
+        return $this->campiCrm[$workspace][$voce['oggetto']]['campi'][$voce['codice']];
+    }
+
+    /**
+     * Il posto (da 0) di un'opzione viva per id, senza distinguere maiuscole e minuscole; 404 se non è fra le vive.
+     *
+     * @param  list<array<string, mixed>>  $vive
+     */
+    private function postoDiUnaOpzioneCrm(array $vive, string $id): int
+    {
+        foreach ($vive as $i => $opzione) {
+            if (strtolower($opzione['id']) === strtolower($id)) {
+                return $i;
+            }
+        }
+
+        throw new Problema('non_trovato');
+    }
+
+    /**
+     * Il nome `it` non è di un'altra opzione viva (senza maiuscole, accenti e spazi ai bordi): 422 `duplicato` su `#/nome/it`.
+     *
+     * @param  list<array<string, mixed>>  $vive
+     */
+    private function opzioneUnicaCrm(array $vive, string $nome, ?string $tranne): void
+    {
+        foreach ($vive as $altra) {
+            if ($altra['id'] !== $tranne && self::nomeSimileCrm($altra['nome']['it'], null) === self::nomeSimileCrm($nome, null)) {
+                throw $this->erroreCrm('nome.it', 'regole.campo_opzione_duplicata', Regola::DUPLICATO);
+            }
+        }
+    }
+
+    /**
+     * Le opzioni vive nella forma dell'API (Opzioni::vive): `id`, `nome`, `colore`, `posizione` da 1 e `archiviato_il` sempre nullo;
+     * `null` per un campo che non ne ha.
+     *
+     * @param  list<array<string, mixed>>|null  $righe
+     * @return list<array<string, mixed>>|null
+     */
+    private static function opzioniVisibiliCrm(?array $righe): ?array
+    {
+        if ($righe === null) {
+            return null;
+        }
+
+        $vive = [];
+
+        foreach ($righe as $opzione) {
+            if (($opzione['archiviato_il'] ?? null) === null) {
+                $vive[] = self::voceOpzioneCrm($opzione, count($vive) + 1);
+            }
+        }
+
+        return $vive;
+    }
+
+    /**
+     * Le opzioni tolte nella forma dell'API (Opzioni::archiviateInUscita): `id`, `nome` e `archiviato_il`, dalla meno recente (poi per
+     * `id`); `null` per un campo senza opzioni proprie. Sola lettura.
+     *
+     * @param  list<array<string, mixed>>|null  $righe
+     * @return list<array<string, mixed>>|null
+     */
+    private static function opzioniArchiviateCrm(?array $righe): ?array
+    {
+        if ($righe === null) {
+            return null;
+        }
+
+        $tolte = [];
+
+        foreach ($righe as $opzione) {
+            if (($opzione['archiviato_il'] ?? null) !== null) {
+                $tolte[] = [
+                    'id' => $opzione['id'],
+                    'nome' => ['it' => $opzione['nome']['it'], 'en' => $opzione['nome']['en'] ?? null, 'es' => $opzione['nome']['es'] ?? null],
+                    'archiviato_il' => $opzione['archiviato_il'],
+                ];
+            }
+        }
+
+        usort($tolte, fn (array $a, array $b) => [$a['archiviato_il'], $a['id']] <=> [$b['archiviato_il'], $b['id']]);
+
+        return $tolte;
+    }
+
+    /**
+     * @param  array<string, mixed>  $opzione
+     * @return array<string, mixed>
+     */
+    private static function voceOpzioneCrm(array $opzione, int $posizione): array
+    {
+        return [
+            'id' => $opzione['id'],
+            'nome' => ['it' => $opzione['nome']['it'], 'en' => $opzione['nome']['en'] ?? null, 'es' => $opzione['nome']['es'] ?? null],
+            'colore' => $opzione['colore'] ?? null,
+            'posizione' => $posizione,
+            'archiviato_il' => null,
+        ];
+    }
+
+    /**
      * Il ripristino (`archiviato: false` su un eliminato): ogni altro campo del corpo è estraneo, il nome `it` non dev'essere stato preso
      * da un altro campo (422 `duplicato`, e il campo resta eliminato); torna vivo in fondo alla sua sezione, o a «Principali» se la
      * sezione non c'è più.
@@ -842,7 +1099,8 @@ trait CrmCampi
             'origine' => $campo['origine'],
             'tipo' => $campo['tipo'],
         ] + ($campo['tipo'] === 'sistema' ? ['sistema' => $campo['sistema']] : []) + [
-            'opzioni' => $campo['opzioni'],
+            'opzioni' => self::opzioniVisibiliCrm($campo['opzioni'] ?? null),
+            'opzioni_archiviate' => self::opzioniArchiviateCrm($campo['opzioni'] ?? null),
             'nome' => $campo['nome'],
             'visibilita' => $campo['visibilita'],
             'sezione_id' => $campo['sezione_id'],

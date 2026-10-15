@@ -161,6 +161,10 @@ return [
         'title' => 'Campo del sistema',
         'detail' => 'Este campo es estándar o del sistema: se oculta y se mueve, pero no se elimina. Solo se elimina un campo «tuyo», creado por el espacio de trabajo. No se escribió nada.',
     ],
+    'ultima_opzione' => [
+        'title' => 'Última opción',
+        'detail' => 'Esta es la última opción viva del campo, y un campo de lista o de selección múltiple siempre tiene al menos una. Añade otra con crm.campi.opzioni.crea y luego quita esta. No se escribió nada.',
+    ],
     'sezione_di_sistema' => [
         'title' => 'Sección del sistema',
         'detail' => '«Principali» (Principales) es la sección fija de los campos de un objeto: no se renombra, no se mueve y no se elimina. No se escribió nada.',

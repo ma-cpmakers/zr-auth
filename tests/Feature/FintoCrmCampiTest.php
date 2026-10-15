@@ -53,7 +53,7 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
 
     expect($persona['nome']['chiave'])->toBe('nome')
         ->and($nome)->toBe([
-            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null,
+            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null, 'opzioni_archiviate' => null,
             'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
             'posizione' => 1, 'obbligatorio' => false, 'aiuto' => null, 'predefinito' => null, 'limiti' => null, 'in_elenco' => false, 'nel_crea' => false,
             'indispensabile' => true, 'in_campi' => false,
@@ -819,4 +819,97 @@ it('un campo standard con due avanzate dà un errore per ognuna; il predefinito 
         ->and($lista->json('errors'))->toHaveCount(1);
 
     riuscita(alFinto('PATCH', '/v1/crm/campi/persona.libero', ['predefinito' => str_repeat('x', 1000)], $anna));
+});
+
+// Sprint 37, #2156 (CRM-12 C3): le opzioni di un elenco proprio nel finto — crea, modifica, elimina.
+
+it('crm.campi.opzioni.crea e modifica: id, posizione e archiviato_il null; unico per nome; al posto chiesto; il nome si cambia senza cambiare l\'id (CO.1-CO.3)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'elenco', 'opzioni' => [['nome' => ['it' => 'Alfa']], ['nome' => ['it' => 'Beta']]]], $anna));
+
+    $nuova = riuscita(alFinto('POST', '/v1/crm/campi/persona.livello/opzioni', ['nome' => ['it' => 'Gamma', 'en' => 'Gamma'], 'colore' => '#A1B2C3'], $anna));
+    $uno = riuscita(alFinto('POST', '/v1/crm/campi/persona.livello/opzioni', ['nome' => ['it' => 'Zero'], 'posizione' => 1], $anna));
+    $doppia = alFinto('POST', '/v1/crm/campi/persona.livello/opzioni', ['nome' => ['it' => ' ZERO ']], $anna);
+    $id = $nuova->json('data.id');
+    $rinominata = riuscita(alFinto('PATCH', "/v1/crm/campi/persona.livello/opzioni/{$id}", ['nome' => ['it' => 'Gamma due', 'en' => null], 'colore' => null, 'posizione' => 99], $anna));
+    $senzaIt = alFinto('PATCH', "/v1/crm/campi/persona.livello/opzioni/{$id}", ['nome' => ['it' => null]], $anna);
+    $opzioni = collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->firstWhere('id', 'persona.livello')['opzioni'];
+
+    expect($nuova->status())->toBe(201)
+        ->and(array_keys($nuova->json('data')))->toBe(['id', 'nome', 'colore', 'posizione', 'archiviato_il'])
+        ->and($nuova->json('data.colore'))->toBe('#a1b2c3')
+        ->and($nuova->json('data.posizione'))->toBe(3)
+        ->and($nuova->header('Location'))->toBe("/v1/crm/campi/persona.livello/opzioni/{$id}")
+        ->and($uno->json('data.posizione'))->toBe(1)
+        ->and([$doppia->status(), $doppia->json('errors.0.pointer'), $doppia->json('errors.0.regola')])->toBe([422, '#/nome/it', 'duplicato'])
+        ->and($rinominata->json('data.id'))->toBe($id)
+        ->and($rinominata->json('data.nome'))->toBe(['it' => 'Gamma due', 'en' => null, 'es' => null])
+        ->and($rinominata->json('data.posizione'))->toBe(4)
+        ->and([$senzaIt->status(), $senzaIt->json('errors.0.pointer'), $senzaIt->json('errors.0.regola')])->toBe([422, '#/nome/it', 'obbligatorio'])
+        ->and(array_column($opzioni, 'posizione'))->toBe([1, 2, 3, 4])
+        ->and(array_column(array_column($opzioni, 'nome'), 'it'))->toBe(['Zero', 'Alfa', 'Beta', 'Gamma due']);
+});
+
+it('crm.campi.opzioni.elimina archivia: 204, esce dall\'elenco, il record la tiene e un altro non la prende; l\'ultima è 409 ultima_opzione (CO.4, CO.5)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    $campo = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'elenco', 'opzioni' => [['nome' => ['it' => 'Alfa']], ['nome' => ['it' => 'Beta']]]], $anna))->json('data');
+    [$alfa, $beta] = $campo['opzioni'];
+    $giulia = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => ['livello' => $beta['id']]], $anna))->json('data.id');
+    $marta = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Marta'], $anna))->json('data.id');
+
+    $tolta = alFinto('DELETE', "/v1/crm/campi/persona.livello/opzioni/{$beta['id']}", null, $anna);
+    $ancora = alFinto('DELETE', "/v1/crm/campi/persona.livello/opzioni/{$beta['id']}", null, $anna);
+    $rimandata = alFinto('PATCH', "/v1/crm/persone/{$giulia}", ['campi' => ['livello' => $beta['id']]], $anna);
+    $nuova = alFinto('PATCH', "/v1/crm/persone/{$marta}", ['campi' => ['livello' => $beta['id']]], $anna);
+    $ultima = alFinto('DELETE', "/v1/crm/campi/persona.livello/opzioni/{$alfa['id']}", null, $anna);
+    $membro = alFinto('DELETE', "/v1/crm/campi/persona.livello/opzioni/{$alfa['id']}", null, $gettoni['carla']);
+    $opzioni = collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->firstWhere('id', 'persona.livello')['opzioni'];
+
+    expect($tolta->status())->toBe(204)
+        ->and($ancora->status())->toBe(404)
+        ->and(array_column($opzioni, 'id'))->toBe([$alfa['id']])
+        ->and($opzioni[0]['posizione'])->toBe(1)
+        ->and(alFinto('GET', "/v1/crm/persone/{$giulia}", null, $anna)->json('data.campi.livello'))->toBe($beta['id'])
+        ->and($rimandata->status())->toBe(200)
+        ->and([$nuova->status(), $nuova->json('errors.0.pointer'), $nuova->json('errors.0.regola')])->toBe([422, '#/campi/livello', 'valore_non_ammesso'])
+        ->and([$ultima->status(), $ultima->json('codice')])->toBe([409, 'ultima_opzione'])
+        ->and([$membro->status(), $membro->json('codice')])->toBe([403, 'permesso_negato']);
+});
+
+it('crm.campi.opzioni.*: un campo senza opzioni proprie, uno standard o che non c\'è è 404, e il predefinito tolto con l\'opzione torna null (CO.1, CO.4)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Codice'], 'tipo' => 'testo'], $anna));
+    $campo = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'elenco', 'opzioni' => [['nome' => ['it' => 'Alfa']], ['nome' => ['it' => 'Beta']]]], $anna))->json('data');
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.livello', ['predefinito' => $campo['opzioni'][1]['id']], $anna));
+
+    foreach (['persona.codice', 'persona.ruolo', 'persona.inesistente'] as $id) {
+        expect(alFinto('POST', "/v1/crm/campi/{$id}/opzioni", ['nome' => ['it' => 'Nuova']], $anna)->status())->toBe(404);
+    }
+
+    riuscita(alFinto('DELETE', "/v1/crm/campi/persona.livello/opzioni/{$campo['opzioni'][1]['id']}", null, $anna));
+
+    expect(collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->firstWhere('id', 'persona.livello')['predefinito'])->toBeNull();
+});
+
+it('Campo.opzioni_archiviate: id, nome e archiviato_il delle opzioni tolte, dalla meno recente; [] se nessuna, null per gli altri campi (#2156)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    $campo = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'elenco', 'opzioni' => [['nome' => ['it' => 'Alfa'], 'colore' => '#112233'], ['nome' => ['it' => 'Beta']], ['nome' => ['it' => 'Gamma']]]], $anna))->json('data');
+    [$alfa, $beta, $gamma] = $campo['opzioni'];
+    $campi = fn () => collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->keyBy('id');
+
+    expect($campo['opzioni_archiviate'])->toBe([])
+        ->and($campi()['persona.nome']['opzioni_archiviate'])->toBeNull();
+
+    riuscita(alFinto('DELETE', "/v1/crm/campi/persona.livello/opzioni/{$gamma['id']}", null, $anna));
+    riuscita(alFinto('DELETE', "/v1/crm/campi/persona.livello/opzioni/{$alfa['id']}", null, $anna));
+    $tolte = $campi()['persona.livello']['opzioni_archiviate'];
+
+    expect(array_column($tolte, 'id'))->toContain($alfa['id'])->toContain($gamma['id'])->not->toContain($beta['id'])
+        ->and(array_keys($tolte[0]))->toBe(['id', 'nome', 'archiviato_il'])
+        ->and(array_column($campi()['persona.livello']['opzioni'], 'id'))->toBe([$beta['id']])
+        ->and(json_encode($tolte))->not->toContain('colore')->not->toContain('posizione');
 });

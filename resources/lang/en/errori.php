@@ -161,6 +161,10 @@ return [
         'title' => 'System field',
         'detail' => 'This field is a standard or system field: it can be hidden and moved, but not deleted. Only a “yours” field, created by the workspace, can be deleted. Nothing was written.',
     ],
+    'ultima_opzione' => [
+        'title' => 'Last option',
+        'detail' => 'This is the field\'s last live option, and a list or multiple-choice field always has at least one. Add another with crm.campi.opzioni.crea and then remove this one. Nothing was written.',
+    ],
     'sezione_di_sistema' => [
         'title' => 'System section',
         'detail' => "“Principali” (Main) is the fixed section of an object's fields: it cannot be renamed, moved or deleted. Nothing was written.",

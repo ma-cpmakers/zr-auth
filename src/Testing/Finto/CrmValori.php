@@ -69,7 +69,7 @@ trait CrmValori
 
             $apertura = $campo['obbligatorio'] ? ['bail', $creazione ? 'required' : 'filled'] : ['bail', 'nullable'];
 
-            foreach ($this->regoleDiUnValoreCrm($workspace, "campi.{$chiave}", $campo) as $attributo => $regoleDelValore) {
+            foreach ($this->regoleDiUnValoreCrm($workspace, "campi.{$chiave}", $campo, true) as $attributo => $regoleDelValore) {
                 $regole[$attributo] = $attributo === "campi.{$chiave}" ? [...$apertura, ...$regoleDelValore] : $regoleDelValore;
             }
         }
@@ -168,9 +168,9 @@ trait CrmValori
      * @param  array<string, mixed>  $campo
      * @return array<string, list<mixed>>
      */
-    private function regoleDiUnValoreCrm(string $workspace, string $attributo, array $campo): array
+    private function regoleDiUnValoreCrm(string $workspace, string $attributo, array $campo, bool $conArchiviate = false): array
     {
-        $regole = [$attributo => $this->regoleDelTipoCrm($workspace, (string) $campo['tipo'], $campo)];
+        $regole = [$attributo => $this->regoleDelTipoCrm($workspace, (string) $campo['tipo'], $campo, $conArchiviate)];
 
         if ($campo['tipo'] === 'valuta') {
             $regole["{$attributo}.importo"] = ['bail', 'integer:strict', 'between:0,'.self::CRM_VALORE_IMPORTO, $this->neiLimitiCrm($campo)];
@@ -190,7 +190,7 @@ trait CrmValori
      * @param  array<string, mixed>  $campo
      * @return list<mixed>
      */
-    private function regoleDelTipoCrm(string $workspace, string $tipo, array $campo): array
+    private function regoleDelTipoCrm(string $workspace, string $tipo, array $campo, bool $conArchiviate = false): array
     {
         $limiti = $campo['limiti'] ?? [];
 
@@ -221,8 +221,8 @@ trait CrmValori
                 }
             }],
             'si_no' => ['boolean:strict'],
-            'elenco' => ['string', $this->unaOpzioneCrm($campo)],
-            'scelta_multipla' => ['array', 'list', 'min:1', 'max:'.self::CRM_VALORE_SCELTE, $this->scelteDelCampoCrm($campo)],
+            'elenco' => ['string', $this->unaOpzioneCrm($campo, $conArchiviate)],
+            'scelta_multipla' => ['array', 'list', 'min:1', 'max:'.self::CRM_VALORE_SCELTE, $this->scelteDelCampoCrm($campo, $conArchiviate)],
             'membro' => ['string', function (string $nome, mixed $valore, Closure $fail) use ($workspace) {
                 if (! isset($this->membri[$workspace][strtolower((string) $valore)])) {
                     $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.responsabile_del_workspace');
@@ -239,10 +239,10 @@ trait CrmValori
      *
      * @param  array<string, mixed>  $campo
      */
-    private function scelteDelCampoCrm(array $campo): Closure
+    private function scelteDelCampoCrm(array $campo, bool $conArchiviate = false): Closure
     {
-        return function (string $nome, mixed $valore, Closure $fail) use ($campo) {
-            $vive = array_filter($campo['opzioni'] ?? [], fn (array $opzione) => ($opzione['archiviato_il'] ?? null) === null);
+        return function (string $nome, mixed $valore, Closure $fail) use ($campo, $conArchiviate) {
+            $vive = array_filter($campo['opzioni'] ?? [], fn (array $opzione) => $conArchiviate || ($opzione['archiviato_il'] ?? null) === null);
             $ammessi = array_fill_keys(array_map(fn (mixed $id) => strtolower((string) $id), array_column($vive, 'id')), true);
             $viste = [];
 
@@ -269,10 +269,10 @@ trait CrmValori
      *
      * @param  array<string, mixed>  $campo
      */
-    private function unaOpzioneCrm(array $campo): Closure
+    private function unaOpzioneCrm(array $campo, bool $conArchiviate = false): Closure
     {
-        return function (string $nome, mixed $valore, Closure $fail) use ($campo) {
-            $vive = array_filter($campo['opzioni'] ?? [], fn (array $opzione) => ($opzione['archiviato_il'] ?? null) === null);
+        return function (string $nome, mixed $valore, Closure $fail) use ($campo, $conArchiviate) {
+            $vive = array_filter($campo['opzioni'] ?? [], fn (array $opzione) => $conArchiviate || ($opzione['archiviato_il'] ?? null) === null);
             $ids = array_map(fn (mixed $id) => strtolower((string) $id), array_column($vive, 'id'));
 
             if (! is_string($valore) || ! in_array(strtolower($valore), $ids, true)) {
@@ -337,6 +337,7 @@ trait CrmValori
             $presente = array_key_exists($chiave, $this->crm['valori'][$oggetto][$id] ?? []);
             $prima = $presente ? $this->crm['valori'][$oggetto][$id][$chiave] : null;
             $riga = $valori[$chiave] === null ? null : self::valorePerLaRigaCrm($tipo, $valori[$chiave]);
+            $this->soloLeArchiviateDiPrimaCrm($chiave, $campo, $prima, $riga);
 
             if ($riga === null && ! $presente || $presente && $prima === $riga) {
                 continue;
@@ -351,6 +352,28 @@ trait CrmValori
         }
 
         return $piano;
+    }
+
+    /**
+     * Un'opzione archiviata resta sul record che la ha: un valore nuovo non la può prendere (422 `valore_non_ammesso` su
+     * `#/campi/<chiave>`), come ValoriDeiCampi::soloLeArchiviateDiPrima.
+     *
+     * @param  array<string, mixed>  $campo
+     */
+    private function soloLeArchiviateDiPrimaCrm(string $chiave, array $campo, mixed $prima, mixed $dopo): void
+    {
+        if ($dopo === null || ! in_array($campo['tipo'], ['elenco', 'scelta_multipla'], true)) {
+            return;
+        }
+
+        $archiviate = array_map(fn (mixed $id) => strtolower((string) $id), array_column(array_filter($campo['opzioni'] ?? [], fn (array $opzione) => ($opzione['archiviato_il'] ?? null) !== null), 'id'));
+        $erano = array_map(fn (mixed $id) => strtolower((string) $id), (array) $prima);
+
+        foreach ((array) $dopo as $id) {
+            if (in_array(strtolower((string) $id), $archiviate, true) && ! in_array(strtolower((string) $id), $erano, true)) {
+                throw $this->erroreCrm("campi.{$chiave}", 'regole.campo_opzione', Regola::VALORE_NON_AMMESSO);
+            }
+        }
     }
 
     /**
