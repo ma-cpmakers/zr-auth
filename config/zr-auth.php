@@ -73,8 +73,10 @@ return [
     // portare in `X-Zr-Persona` l'impronta della persona della sessione (Persona::impronta()), o è 409 `persona_diversa`. L'`.env` serve
     // solo a spegnerlo, con ZR_AUTH_PERSONA_CONTROLLO=false (anche 0 e off): un modulo che ha ancora la sua copia lo spegne PRIMA di
     // aggiornare, finché non passa a questa. Spento, il pacchetto lo scrive nel log (un avviso, al più uno all'ora per cache).
+    // Una riga vuota (`ZR_AUTH_PERSONA_CONTROLLO=`) o un valore che non si legge non lo spengono.
     'persona' => [
-        'controllo' => filter_var(env('ZR_AUTH_PERSONA_CONTROLLO', true), FILTER_VALIDATE_BOOL),
+        // Si spegne solo con un valore falso che si legge (false, 0, off, no): una riga vuota o un refuso lo lasciano acceso.
+        'controllo' => filter_var(in_array(env('ZR_AUTH_PERSONA_CONTROLLO'), [null, ''], true) ? true : env('ZR_AUTH_PERSONA_CONTROLLO'), FILTER_VALIDATE_BOOL | FILTER_NULL_ON_FAILURE) ?? true,
     ],
 
 ];

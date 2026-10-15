@@ -246,6 +246,29 @@ it('ZR_AUTH_PERSONA_CONTROLLO=false, 0 e off lo spengono: una scrittura senza in
     expect(scritture())->toBe(1);
 })->with(['false', '0', 'off']);
 
+it('una riga vuota o un valore che non si legge non spengono il controllo', function (string $env) {
+    config(['zr-auth.persona' => configDelPacchetto($env)['persona']]);
+    apriSessione();
+
+    expect(config('zr-auth.persona.controllo'))->toBeTrue();
+    $this->postJson('/persona/scrive')->assertStatus(409);
+    expect(scritture())->toBe(0);
+})->with(['', 'ture', 'si']);
+
+it('un valore che non si legge nella config non lo spegne nemmeno nel middleware', function () {
+    config(['zr-auth.persona.controllo' => 'ture']);
+    apriSessione();
+
+    $this->postJson('/persona/scrive')->assertStatus(409);
+});
+
+// PD.3, l'avvio: il provider chiama l'avviso da sé (il log di prova è quello dell'app di questo test, già avviata spenta).
+it('all\'avvio, col controllo spento, il pacchetto scrive l\'avviso nel log', function () {
+    $gestori = Illuminate\Support\Facades\Log::channel('prova')->getLogger()->getHandlers();
+
+    expect($gestori[0]->hasWarningThatContains('ZR_AUTH_PERSONA_CONTROLLO'))->toBeTrue();
+});
+
 // PD.3
 it('spento, il pacchetto lo scrive nel log una volta, col nome della variabile e senza dati', function () {
     Illuminate\Support\Facades\Cache::flush();
@@ -288,7 +311,7 @@ it('il README e il commento della config dicono che è acceso, come si spegne e 
             ->toContain('persona.controllo')
             ->toContain('acceso di default')
             ->toContain('ZR_AUTH_PERSONA_CONTROLLO=false')
-            ->toContain('log');
+            ->toContain('lo scrive nel log');
     }
     expect($trovata[1])->not->toContain('spento di default');
     expect($config)->not->toContain('Spento di default');

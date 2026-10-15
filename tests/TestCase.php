@@ -4,6 +4,7 @@ namespace Zeiras\Auth\Tests;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Monolog\Handler\TestHandler;
 use Orchestra\Testbench\TestCase as Testbench;
 use Zeiras\Auth\Api;
 use Zeiras\Auth\Http\Middleware\ConGettone;
@@ -37,6 +38,9 @@ abstract class TestCase extends Testbench
         // I test del pacchetto non dipendono dal default: quelli che provano il controllo lo accendono o ne leggono la config vera
         // (PersonaComuneTest); gli altri scrivono con la sessione senza portare l'impronta.
         $app['config']->set('zr-auth.persona.controllo', false);
+        // Un log di prova in memoria (Monolog TestHandler): l'avviso dell'avvio si legge qui, e gli altri errori non vanno su disco.
+        $app['config']->set('logging.channels.prova', ['driver' => 'monolog', 'handler' => TestHandler::class]);
+        $app['config']->set('logging.default', 'prova');
     }
 
     /** Le pagine del frontend, nel gruppo `web`: zr-auth ci mette la guardia da sé. */

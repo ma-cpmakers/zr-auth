@@ -66,7 +66,7 @@ final class ZrAuthServiceProvider extends ServiceProvider
             foreach (['web', 'api'] as $gruppo) {
                 if (array_key_exists($gruppo, $kernel->getMiddlewareGroups())) {
                     $kernel->appendMiddlewareToGroup($gruppo, ConGettone::class);
-                    // Subito dopo la guardia, e acceso solo da `zr-auth.persona.controllo` (#2136).
+                    // Subito dopo la guardia; gira salvo `zr-auth.persona.controllo` spento (#2136, #2146).
                     $kernel->appendMiddlewareToGroup($gruppo, SoloDallaPersona::class);
                 }
             }
@@ -84,23 +84,27 @@ final class ZrAuthServiceProvider extends ServiceProvider
     /**
      * Il controllo «Resta poi Salva» spento (`ZR_AUTH_PERSONA_CONTROLLO=false`) lascia la difesa spenta senza che nessuno lo veda (#2146):
      * il pacchetto lo scrive nel log, un avviso e mai un dato della persona o della richiesta. L'avvio di un processo PHP-FPM è ogni richiesta,
-     * quindi la riga la ferma la cache (`add`: al più una all'ora per cache); una cache che non risponde non deve fermare l'avvio.
+     * quindi la riga la ferma la cache (`add`: al più una all'ora per cache). Con una cache per processo (`array`) o che non risponde la
+     * riga esce a ogni richiesta: il modulo ha scelto lui quella cache.
      */
     public function avvisaSeSpento(): void
     {
-        if (filter_var(config('zr-auth.persona.controllo', true), FILTER_VALIDATE_BOOL)) {
+        if (filter_var(config('zr-auth.persona.controllo', true), FILTER_VALIDATE_BOOL | FILTER_NULL_ON_FAILURE) ?? true) {
             return;
         }
 
+        // Né la cache né il log che non rispondono devono rompere l'avvio: nel primo caso la riga esce a ogni richiesta, nel secondo non esce.
         try {
             if (! Cache::add('zr-auth:persona-controllo-spento', 1, 3600)) {
                 return;
             }
         } catch (Throwable) {
-            // Senza cache si rischia una riga in più, non l'avvio rotto.
         }
 
-        Log::warning('zr-auth: il controllo «Resta poi Salva» è spento (ZR_AUTH_PERSONA_CONTROLLO=false): una scrittura dalla scheda di un\'altra persona passa.');
+        try {
+            Log::warning('zr-auth: il controllo «Resta poi Salva» è spento (ZR_AUTH_PERSONA_CONTROLLO=false): una scrittura dalla scheda di un\'altra persona passa.');
+        } catch (Throwable) {
+        }
     }
 
     /**

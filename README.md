@@ -240,7 +240,7 @@ scheda rimasta su un altro workspace della stessa persona la ferma il modulo con
 
 ### Come passa ciascun modulo alla comune
 
-Ognuno tiene la sua copia finché non passa, in una PR a sé, **col test delle due persone rifatto** (A apre la scheda, B entra, la
+Ognuno tiene la sua copia finché non passa, **con `ZR_AUTH_PERSONA_CONTROLLO=false` nell'`.env` e nel `phpunit.xml`/`.env.testing`** (acceso di default, le scritture dei suoi test senza `X-Zr-Persona` sarebbero 409), in una PR a sé, **col test delle due persone rifatto** (A apre la scheda, B entra, la
 scheda di A scrive: 409 e niente scritto):
 
 - **zr-home** (#2047, `PersonaDellaPagina`): la pagina smette di portare l'email (`Persona`, `encodeURIComponent`) e porta
