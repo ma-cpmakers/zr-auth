@@ -10,6 +10,8 @@ use Illuminate\Foundation\Http\Kernel;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Route as Rotta;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,6 +35,7 @@ final class ZrAuthServiceProvider extends ServiceProvider
         $this->publishes([__DIR__.'/../config/zr-auth.php' => config_path('zr-auth.php')], 'zr-auth-config');
 
         $this->bloccoDellaSessione();
+        $this->avvisaSeSpento();
 
         // Ogni pagina e ogni API del frontend vuole la sessione col gettone: ConGettone entra nei gruppi `web` e `api`, e
         // gira prima dei binding delle rotte. Dal kernel, non dal router: il kernel ricopia i suoi gruppi nel router, e
@@ -63,7 +66,7 @@ final class ZrAuthServiceProvider extends ServiceProvider
             foreach (['web', 'api'] as $gruppo) {
                 if (array_key_exists($gruppo, $kernel->getMiddlewareGroups())) {
                     $kernel->appendMiddlewareToGroup($gruppo, ConGettone::class);
-                    // Subito dopo la guardia, e acceso solo da `zr-auth.persona.controllo` (#2136).
+                    // Subito dopo la guardia; gira salvo `zr-auth.persona.controllo` spento (#2136, #2146).
                     $kernel->appendMiddlewareToGroup($gruppo, SoloDallaPersona::class);
                 }
             }
@@ -76,6 +79,32 @@ final class ZrAuthServiceProvider extends ServiceProvider
             $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, ConGettone::class);
             $kernel->addToMiddlewarePriorityAfter(ConGettone::class, SoloDallaPersona::class);
         });
+    }
+
+    /**
+     * Il controllo «Resta poi Salva» spento (`ZR_AUTH_PERSONA_CONTROLLO=false`) lascia la difesa spenta senza che nessuno lo veda (#2146):
+     * il pacchetto lo scrive nel log, un avviso e mai un dato della persona o della richiesta. L'avvio di un processo PHP-FPM è ogni richiesta,
+     * quindi la riga la ferma la cache (`add`: al più una all'ora per cache). Con una cache per processo (`array`) o che non risponde la
+     * riga esce a ogni richiesta: il modulo ha scelto lui quella cache.
+     */
+    public function avvisaSeSpento(): void
+    {
+        if (filter_var(config('zr-auth.persona.controllo', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true) {
+            return;
+        }
+
+        // Né la cache né il log che non rispondono devono rompere l'avvio: nel primo caso la riga esce a ogni richiesta, nel secondo non esce.
+        try {
+            if (! Cache::add('zr-auth:persona-controllo-spento', 1, 3600)) {
+                return;
+            }
+        } catch (Throwable) {
+        }
+
+        try {
+            Log::warning('zr-auth: il controllo «Resta poi Salva» è spento (ZR_AUTH_PERSONA_CONTROLLO=false): una scrittura dalla scheda di un\'altra persona passa.');
+        } catch (Throwable) {
+        }
     }
 
     /**

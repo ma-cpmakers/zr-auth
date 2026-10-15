@@ -201,7 +201,7 @@ quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrat
 - **Cosa provare** in un modulo: una richiesta lenta della persona A in volo, entra B dallo stesso browser, la risposta di A
   arriva → il browser resta B.
 
-## La stessa persona: «Resta poi Salva» (da v0.12.41, #2136)
+## La stessa persona: «Resta poi Salva» (da v0.12.41, #2136; acceso di default da #2146)
 
 Il cookie di sessione è uno per browser. Se A lascia una scheda aperta e B entra da un'altra, una scrittura dalla scheda di A parte
 col gettone di B, e i dati di A finiscono sotto il nome di B. La difesa è una sola, qui: ogni scrittura dice di chi è la pagina che
@@ -211,12 +211,16 @@ la manda, e il server lo confronta con la persona della sessione prima della rot
   l'id né l'email escono; la stessa persona ha sempre la stessa impronta, quindi rientrare non fa perdere il lavoro di una scheda
   aperta. `null` senza sessione. La pagina la riceve nelle props e la manda in `X-Zr-Persona` (`Persona::INTESTAZIONE`) su ogni
   richiesta che non legge.
-- `SoloDallaPersona` entra da sé nei gruppi `web` e `api`, subito dopo la guardia, ma **gira solo con `zr-auth.persona.controllo`
-  acceso** (`ZR_AUTH_PERSONA_CONTROLLO=true`; spento di default: un modulo che ha la sua copia non cambia comportamento finché non
-  passa a questa). Acceso, una scrittura (non GET, HEAD, OPTIONS) con l'impronta diversa, vuota o assente è **409
-  `{"errore":"persona_diversa"}`**: la rotta non gira, nessuna chiamata al backoffice, e il corpo non porta né l'impronta, né
-  l'email, né l'id di nessuno. Un'intestazione ripetuta vale per tutte; il confronto è a tempo costante. Senza sessione passa: la
-  strada è quella della guardia.
+- `SoloDallaPersona` entra da sé nei gruppi `web` e `api`, subito dopo la guardia, e **gira di default**: `zr-auth.persona.controllo`
+  è **acceso di default** (#2146), senza nessuna riga nell'`.env` e anche con la config pubblicata prima di v0.12.41, così un server
+  nuovo o un ripristino non lascia la difesa spenta senza che nessuno lo veda. L'`.env` serve solo a spegnerlo:
+  `ZR_AUTH_PERSONA_CONTROLLO=false` (anche `0` e `off`). **Spento, il pacchetto lo scrive nel log** (un avviso con il nome della
+  variabile, mai un dato della persona o della richiesta; al più uno all'ora per cache). ⚠️ Un modulo che ha ancora la sua copia
+  e non è passato a questa **spegne il controllo PRIMA di aggiornare** a questa versione (`ZR_AUTH_PERSONA_CONTROLLO=false`), o le
+  sue scritture sono 409; lo riaccende quando passa alla comune. Acceso, una scrittura (non GET, HEAD, OPTIONS) con l'impronta
+  diversa, vuota o assente è **409 `{"errore":"persona_diversa"}`**: la rotta non gira, nessuna chiamata al backoffice, e il corpo
+  non porta né l'impronta, né l'email, né l'id di nessuno. Un'intestazione ripetuta vale per tutte; il confronto è a tempo costante.
+  Senza sessione passa: la strada è quella della guardia.
 - **«Esci» è esente**: chiudere la sessione è il lato sicuro, anche da una scheda rimasta su un'altra persona.
   `Route::post('esci', …)->withoutMiddleware(SoloDallaPersona::class)`.
 
@@ -236,7 +240,7 @@ scheda rimasta su un altro workspace della stessa persona la ferma il modulo con
 
 ### Come passa ciascun modulo alla comune
 
-Ognuno tiene la sua copia finché non passa, in una PR a sé, **col test delle due persone rifatto** (A apre la scheda, B entra, la
+Ognuno tiene la sua copia finché non passa, **con `ZR_AUTH_PERSONA_CONTROLLO=false` nell'`.env` e nel `phpunit.xml`/`.env.testing`** (acceso di default, le scritture dei suoi test senza `X-Zr-Persona` sarebbero 409), in una PR a sé, **col test delle due persone rifatto** (A apre la scheda, B entra, la
 scheda di A scrive: 409 e niente scritto):
 
 - **zr-home** (#2047, `PersonaDellaPagina`): la pagina smette di portare l'email (`Persona`, `encodeURIComponent`) e porta
