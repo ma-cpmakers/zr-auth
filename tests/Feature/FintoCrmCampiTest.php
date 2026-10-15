@@ -694,9 +694,12 @@ it('crm.campi.modifica {archiviato: false} ripristina in fondo alla sezione coi 
         ->and($preso->json('errors.0.regola'))->toBe('duplicato')
         ->and(array_column(alFinto('GET', '/v1/crm/campi?oggetto=persona&archiviati=true', null, $anna)->json('data'), 'id'))->toBe(['persona.livello']);
 
-    // Dopo 30 giorni passa nell'archivio: per l'API non c'è più, nemmeno per ripristinarlo.
-    $this->travel(31)->days();
+    // Eliminato 31 giorni fa passa nell'archivio: per l'API non c'è più, nemmeno per ripristinarlo (il gettone non scade: il tempo torna indietro).
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Vecchio'], 'tipo' => 'testo'], $anna));
+    $this->travelTo(now()->subDays(31));
+    alFinto('DELETE', '/v1/crm/campi/persona.vecchio', null, $anna);
+    $this->travelBack();
 
-    expect(alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false], $anna)->status())->toBe(404)
-        ->and(alFinto('GET', '/v1/crm/campi?oggetto=persona&archiviati=true', null, $anna)->json('data'))->toBe([]);
+    expect(alFinto('PATCH', '/v1/crm/campi/persona.vecchio', ['archiviato' => false], $anna)->status())->toBe(404)
+        ->and(array_column(alFinto('GET', '/v1/crm/campi?oggetto=persona&archiviati=true', null, $anna)->json('data'), 'id'))->toBe(['persona.livello']);
 });
