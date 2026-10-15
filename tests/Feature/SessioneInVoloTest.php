@@ -22,6 +22,14 @@ beforeEach(function () {
     app('session')->forgetDrivers();
 
     Route::middleware('web')->get('apri-sessione', fn () => ['id' => session()->getId()])->withoutMiddleware(ConGettone::class);
+    // Come `entra-persona`, ma con l'email scelta dal test (#2157: la riga di log dice se la persona è un'identità di prova).
+    Route::middleware('web')->post('entra-persona-email', function (Request $richiesta) {
+        $accesso = accesso();
+        $accesso['gettone']['utente']['email'] = (string) $richiesta->input('email');
+        Sessione::apri($accesso);
+
+        return ['id' => session()->getId()];
+    })->withoutMiddleware(ConGettone::class);
     // Una persona entra: apre la sessione col suo accesso (anche sopra la sessione di un'altra, nello stesso browser).
     Route::middleware('web')->post('entra-persona', function (Request $richiesta) {
         Sessione::apri(['id' => (string) $richiesta->input('chi'), 'gettone' => accesso()['gettone']]);
@@ -227,3 +235,57 @@ it('se la cache dei segni non risponde in scrittura, o rifiuta di scrivere, l\'i
     expect(fn () => $this->withUnencryptedCookie(config('session.cookie'), $cookieAda)->post('/entra-workspace'))->toThrow(RuntimeException::class)
         ->and(file_exists($this->cartellaSessioni.'/'.$idAda))->toBeTrue();
 })->with(['la scrittura lancia' => ['lancia'], 'la scrittura torna falso' => ['falso']]);
+
+
+/**
+ * La risposta tardiva di una persona con quell'email (#2157): il contesto della riga di log «scartata la risposta tardiva».
+ *
+ * @return array<string, mixed>
+ */
+function contestoDellaRigaScartata(string $email): array
+{
+    $risposta = test()->post('/entra-persona-email', ['email' => $email]);
+    $cookie = cookieDellaSessione($risposta);
+    $grace = ['id' => null, 'cookie' => null];
+    registraLaRichiestaLenta($cookie, $grace);
+    $gestore = Illuminate\Support\Facades\Log::channel('prova')->getLogger()->getHandlers()[0];
+    $gestore->clear();
+
+    test()->withUnencryptedCookie(config('session.cookie'), $cookie)->get('/lenta')->assertOk();
+
+    $righe = array_values(array_filter($gestore->getRecords(), fn ($riga) => str_contains($riga->message, 'scartata la risposta tardiva')));
+
+    expect($righe)->toHaveCount(1);
+
+    return $righe[0]->context;
+}
+
+// LP.1, LP.2 (#2157)
+it('la riga della risposta scartata dice `prova: true` per uat+ e uat- (anche in maiuscolo), `false` per una persona vera, e non porta altro', function (string $email, bool $prova) {
+    $contesto = contestoDellaRigaScartata($email);
+
+    expect($contesto)->toBe(['metodo' => 'GET', 'rotta' => 'lenta', 'prova' => $prova])
+        ->and(json_encode($contesto))->not->toContain($email)->not->toContain('@');
+})->with([
+    'uat+' => ['uat+zr-backoffice-37-1@castroandpartners.com', true],
+    'uat-' => ['uat-board-3@lucianocastro.com', true],
+    'maiuscolo' => ['UAT+Board-2@Example.com', true],
+    'persona vera' => ['anna@example.com', false],
+    'uat in mezzo' => ['anna.uat+x@example.com', false],
+]);
+
+it('i prefissi di una persona di prova stanno in `zr-auth.prova.email_prefissi`', function () {
+    config(['zr-auth.prova.email_prefissi' => ['test.']]);
+
+    expect(contestoDellaRigaScartata('test.anna@example.com')['prova'])->toBeTrue();
+});
+
+// LP.4
+it('il README e la config dicono `prova` e i prefissi; la riga di log ha i soli tre nomi', function () {
+    $readme = file_get_contents(__DIR__.'/../../README.md');
+    $config = file_get_contents(__DIR__.'/../../config/zr-auth.php');
+
+    expect($readme)->toContain('zr-auth.prova.email_prefissi')->toContain('`prova`')
+        ->and($config)->toContain('email_prefissi')->toContain('uat+')->toContain('uat-')
+        ->and(require __DIR__.'/../../config/zr-auth.php')->toHaveKey('prova.email_prefissi', ['uat+', 'uat-']);
+});

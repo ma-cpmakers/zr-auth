@@ -51,6 +51,9 @@ final class SessioneChiusa
             return $risposta;
         }
 
+        // La persona si legge prima di distruggere la sessione (#2157).
+        $prova = self::eUnaProva();
+
         // Anche la sessione nuova di una richiesta tardiva che ha cambiato id da sé: nessun cookie la porta al browser.
         foreach ($ids as $id) {
             $richiesta->session()->getHandler()->destroy($id);
@@ -58,13 +61,38 @@ final class SessioneChiusa
 
         self::senzaCookie($risposta);
 
-        // Né l'id né il percorso con i valori: solo che è successo e dove (il disegno della rotta).
+        // Né l'id né il percorso con i valori: solo che è successo e dove (il disegno della rotta), e se la persona è un'identità di prova
+        // (un booleano: nessuna email, nessun id).
         Log::info('zr-auth: scartata la risposta tardiva di una sessione chiusa', [
             'metodo' => $richiesta->method(),
             'rotta' => $richiesta->route()?->uri(),
+            'prova' => $prova,
         ]);
 
         return $risposta;
+    }
+
+    /** Vero se l'email della persona della sessione comincia per uno dei prefissi di prova (`zr-auth.prova.email_prefissi`). */
+    private static function eUnaProva(): bool
+    {
+        try {
+            $email = Sessione::utente()['email'] ?? null;
+        } catch (Throwable) {
+            return false;
+        }
+
+        if (! is_string($email)) {
+            return false;
+        }
+
+        $email = strtolower($email);
+        foreach ((array) config('zr-auth.prova.email_prefissi', ['uat+', 'uat-']) as $prefisso) {
+            if (is_string($prefisso) && $prefisso !== '' && str_starts_with($email, strtolower($prefisso))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Toglie dalla risposta il cookie di sessione e quello del gettone CSRF: al browser resta quello che ha. */
