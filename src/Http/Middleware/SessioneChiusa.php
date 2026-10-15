@@ -51,8 +51,8 @@ final class SessioneChiusa
             return $risposta;
         }
 
-        // La persona si legge prima di distruggere la sessione (#2157).
-        $prova = self::eUnaProva();
+        // La persona della sessione che si chiude, com'era a inizio richiesta (#2157): a fine corsa la richiesta può averla cambiata.
+        $prova = $richiesta->attributes->get(RicordaLIdDellaSessione::PROVA) === true;
 
         // Anche la sessione nuova di una richiesta tardiva che ha cambiato id da sé: nessun cookie la porta al browser.
         foreach ($ids as $id) {
@@ -70,29 +70,6 @@ final class SessioneChiusa
         ]);
 
         return $risposta;
-    }
-
-    /** Vero se l'email della persona della sessione comincia per uno dei prefissi di prova (`zr-auth.prova.email_prefissi`). */
-    private static function eUnaProva(): bool
-    {
-        try {
-            $email = Sessione::utente()['email'] ?? null;
-        } catch (Throwable) {
-            return false;
-        }
-
-        if (! is_string($email)) {
-            return false;
-        }
-
-        $email = strtolower($email);
-        foreach ((array) config('zr-auth.prova.email_prefissi', ['uat+', 'uat-']) as $prefisso) {
-            if (is_string($prefisso) && $prefisso !== '' && str_starts_with($email, strtolower($prefisso))) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /** Toglie dalla risposta il cookie di sessione e quello del gettone CSRF: al browser resta quello che ha. */

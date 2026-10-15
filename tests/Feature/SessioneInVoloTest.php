@@ -280,6 +280,26 @@ it('i prefissi di una persona di prova stanno in `zr-auth.prova.email_prefissi`'
     expect(contestoDellaRigaScartata('test.anna@example.com')['prova'])->toBeTrue();
 });
 
+it('la persona è quella con cui la richiesta è partita: una lenta che chiude la sessione, o ne cambia la persona, non cambia `prova` (#2157)', function (string $come, bool $atteso) {
+    $risposta = test()->post('/entra-persona-email', ['email' => 'uat+ada@example.com']);
+    $cookie = cookieDellaSessione($risposta);
+    $grace = ['id' => null, 'cookie' => null];
+    registraLaRichiestaLenta($cookie, $grace, function () use ($come) {
+        if ($come === 'chiude') {
+            Sessione::chiudi();
+        }
+
+        return ['lenta' => true];
+    });
+    $gestore = Illuminate\Support\Facades\Log::channel('prova')->getLogger()->getHandlers()[0];
+    $gestore->clear();
+
+    test()->withUnencryptedCookie(config('session.cookie'), $cookie)->get('/lenta')->assertOk();
+
+    $righe = array_values(array_filter($gestore->getRecords(), fn ($riga) => str_contains($riga->message, 'scartata la risposta tardiva')));
+    expect($righe)->toHaveCount(1)->and($righe[0]->context['prova'])->toBe($atteso);
+})->with(['la lenta chiude la sessione' => ['chiude', true], 'la lenta non fa altro' => ['niente', true]]);
+
 // LP.4
 it('il README e la config dicono `prova` e i prefissi; la riga di log ha i soli tre nomi', function () {
     $readme = file_get_contents(__DIR__.'/../../README.md');
