@@ -204,7 +204,7 @@ quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrat
 - **Cosa provare** in un modulo: una richiesta lenta della persona A in volo, entra B dallo stesso browser, la risposta di A
   arriva → il browser resta B.
 
-## La stessa persona: «Resta poi Salva» (da v0.12.41, #2136; acceso di default da #2146)
+## La stessa persona: «Resta poi Salva» (da v0.12.41, #2136; acceso di default da #2146; sessione senza impronta = 409 da v0.12.58, #2201)
 
 Il cookie di sessione è uno per browser. Se A lascia una scheda aperta e B entra da un'altra, una scrittura dalla scheda di A parte
 col gettone di B, e i dati di A finiscono sotto il nome di B. La difesa è una sola, qui: ogni scrittura dice di chi è la pagina che
@@ -212,7 +212,7 @@ la manda, e il server lo confronta con la persona della sessione prima della rot
 
 - `Persona::impronta()` è l'impronta della persona della sessione: 32 cifre esadecimali, un HMAC dell'id con la chiave dell'app. Né
   l'id né l'email escono; la stessa persona ha sempre la stessa impronta, quindi rientrare non fa perdere il lavoro di una scheda
-  aperta. `null` senza sessione. La pagina la riceve nelle props e la manda in `X-Zr-Persona` (`Persona::INTESTAZIONE`) su ogni
+  aperta. `null` senza sessione, o con la sessione aperta e `utente.id` assente, vuoto o non stringa. La pagina la riceve nelle props e la manda in `X-Zr-Persona` (`Persona::INTESTAZIONE`) su ogni
   richiesta che non legge.
 - `SoloDallaPersona` entra da sé nei gruppi `web` e `api`, subito dopo la guardia, e **gira di default**: `zr-auth.persona.controllo`
   è **acceso di default** (#2146), senza nessuna riga nell'`.env` e anche con la config pubblicata prima di v0.12.41, così un server
@@ -223,7 +223,8 @@ la manda, e il server lo confronta con la persona della sessione prima della rot
   sue scritture sono 409; lo riaccende quando passa alla comune. Acceso, una scrittura (non GET, HEAD, OPTIONS) con l'impronta
   diversa, vuota o assente è **409 `{"errore":"persona_diversa"}`**: la rotta non gira, nessuna chiamata al backoffice, e il corpo
   non porta né l'impronta, né l'email, né l'id di nessuno. Un'intestazione ripetuta vale per tutte; il confronto è a tempo costante.
-  Senza sessione passa: la strada è quella della guardia.
+  Senza sessione passa: la strada è quella della guardia. Con la sessione aperta e l'impronta che manca (`utente.id` assente, vuoto o
+  non stringa) è 409 `persona_diversa` anche sulle rotte `:sempre`: non c'è una persona da confrontare (#2201).
 - **«Esci» è esente**: chiudere la sessione è il lato sicuro, anche da una scheda rimasta su un'altra persona.
   `Route::post('esci', …)->withoutMiddleware(SoloDallaPersona::class)`.
 

@@ -167,6 +167,37 @@ it('le impronte si confrontano a tempo costante', function () {
         ->and($sorgente)->not->toMatch('/\$(impronta|detta|sua|attesa)\b\s*(===|!==|==|!=)\s*\$/');
 });
 
+// SD.1 (#2201): la sessione è aperta ma l'impronta manca (`utente.id` assente, vuoto o non stringa): la scrittura userebbe il
+// gettone di chi c'è senza il controllo, quindi è 409 come la persona diversa, e il backoffice non è chiamato.
+it('con la sessione aperta e l\'impronta null (utente.id assente, vuoto o non stringa) la scrittura è 409 e non arriva al backoffice', function (mixed $id) {
+    Http::fake(['*' => Http::response(['data' => []])]);
+    $accesso = accesso();
+    $senzaId = array_diff_key(utente(), ['id' => 1]) + ($id === 'assente' ? [] : ['id' => $id]);
+    $accesso['gettone']['utente'] = $senzaId;
+    Sessione::apri($accesso);
+    // Col gettone del workspace (entra() riscrive la persona dal suo `utente`) la rotta chiamerebbe davvero il backoffice.
+    Sessione::entra([...gettoneDelWorkspace(), 'utente' => $senzaId]);
+
+    expect(Sessione::aperta())->toBeTrue()->and(Persona::impronta())->toBeNull();
+
+    $this->postJson('/scrive', [], ['X-Zr-Persona' => str_repeat('0', 32)])
+        ->assertStatus(409)
+        ->assertExactJson(['errore' => 'persona_diversa']);
+    $this->postJson('/persona/scrive')->assertStatus(409);
+    $this->postJson('/persona/azione')->assertStatus(409); // anche una rotta fuori dalla guardia con :sempre
+
+    expect(scritture())->toBe(0);
+    Http::assertNothingSent();
+})->with(['assente', '', 123, [['01k6']], null]);
+
+// SD.2 (#2201): senza sessione la rotta :sempre passa come prima (il ramo «sessione aperta» non scatta); con l'impronta presente passa.
+it('SD.2: senza sessione una rotta :sempre passa, e con la sessione e l\'impronta giusta la scrittura passa', function () {
+    $this->postJson('/persona/azione')->assertOk();
+
+    apriSessione();
+    $this->call('POST', '/persona/scrive', [], [], [], ['HTTP_X_ZR_PERSONA' => Persona::impronta()])->assertOk();
+});
+
 // T1.10
 it('senza sessione la strada è quella della guardia, non il 409', function () {
     $this->postJson('/persona/scrive', [], ['X-Zr-Persona' => str_repeat('0', 32)])->assertStatus(401);
