@@ -215,6 +215,36 @@ it('accessi.corrente.elimina chiude l\'accesso del gettone senza id: 204 con il 
         ->and(alFinto('DELETE', '/v1/accessi/corrente')->status())->toBe(401);
 });
 
+it('accessi.altri.elimina chiude ogni altro accesso della persona e tiene quello del gettone: 204 con il Link, gli altri gettoni sono 401, 204 anche senza altri accessi (#1957)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $finto->persona('bruno@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio Anna', $anna);
+    $corrente = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $delWorkspace = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $corrente)->json('data.gettone');
+    $secondo = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $terzo = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $diBruno = entraNelFinto('bruno@example.com')['gettone']['gettone'];
+
+    $uscita = alFinto('DELETE', '/v1/accessi/altri', gettone: $delWorkspace);
+
+    expect($uscita->status())->toBe(204)
+        ->and($uscita->body())->toBe('')
+        ->and($uscita->header('Link'))->toBe(linkDi('accessi.altri.elimina'));
+
+    foreach ([$secondo, $terzo] as $chiuso) {
+        $rifiutato = alFinto('DELETE', '/v1/accessi/altri', gettone: $chiuso);
+        expect($rifiutato->status())->toBe(401)
+            ->and($rifiutato->json('codice'))->toBe('gettone_non_valido');
+    }
+
+    expect(alFinto('DELETE', '/v1/accessi/altri', gettone: $corrente)->status())->toBe(204)
+        ->and(alFinto('DELETE', '/v1/accessi/altri', gettone: $delWorkspace)->status())->toBe(204)
+        ->and(alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $corrente)->status())->toBe(201)
+        ->and(alFinto('DELETE', '/v1/accessi/altri', gettone: $diBruno)->status())->toBe(204)
+        ->and(alFinto('DELETE', '/v1/accessi/altri')->status())->toBe(401);
+});
+
 it('si esce da un accesso con il gettone di un altro accesso della stessa persona, che resta aperto (T2.3)', function () {
     $finto = BackofficeFinto::attiva();
     $finto->persona('anna@example.com', PASSWORD);
