@@ -143,6 +143,7 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/aziende/([^/]+)$#', 'aziende.modifica'],
         ['GET', '#^/v1/aziende/([^/]+)/workspace$#', 'aziende.workspace.elenca'],
         ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
+        ['POST', '#^/v1/io/inviti/verifica$#', 'io.inviti.verifica.crea'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
         ['POST', '#^/v1/io/email/verifica$#', 'io.email.verifica.crea'],
@@ -251,7 +252,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
@@ -353,6 +354,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{id: string, workspace: string, email: string, ruolo: string, codice: string, scade: CarbonImmutable, creato_il: CarbonImmutable}> gli inviti che non sono né revocati né accettati, per id */
     private array $inviti = [];
+
+    /** @var array<string, string> gli inviti accettati: l'HMAC del codice => il workspace. Il backoffice li tiene archiviati e li legge solo io.inviti.verifica.crea */
+    private array $invitiAccettati = [];
 
     /** @var array<string, string> l'ultimo codice d'invito partito, per email */
     private array $postaInviti = [];
@@ -1127,6 +1131,7 @@ final class BackofficeFinto
                 'aziende.modifica' => $this->modificaAzienda($richiesta, $corpo, $parametri[0]),
                 'aziende.workspace.elenca' => $this->elencaWorkspaceDellAzienda($richiesta, $parametri[0]),
                 'io.aziende.elenca' => $this->elencaAziende($richiesta),
+                'io.inviti.verifica.crea' => $this->verificaInvitoIo($richiesta, $corpo),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
                 'io.workspace.crea' => $this->creaWorkspaceDellaPersona($richiesta, $corpo),
                 'lingue.elenca' => $this->elencaLingue($richiesta),
@@ -2706,6 +2711,55 @@ final class BackofficeFinto
         ], fn (mixed $valore) => $valore !== null)]];
     }
 
+    /**
+     * io.inviti.verifica.crea (IoInvitiController::verificaCrea), col gettone di una persona, di qualunque specie: se è già membro del
+     * workspace dell'invito (vivo o già accettato, da chiunque) `valido: false`, `gia_membro: true` e il workspace (id, slug, nome);
+     * se l'invito vale e non è membro, quello di inviti.verifica.crea; ogni altro caso `{"valido": false}`. Il codice conta nel freno
+     * dell'anonimo e la persona ha il suo. Di sola lettura.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function verificaInvitoIo(Request $richiesta, array $corpo): array
+    {
+        $persona = $this->autentica($richiesta)['persona'];
+        $codice = (string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'bail', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/']])['codice'];
+        $this->frena('inviti-verifica:'.hash('sha256', $codice), self::FRENI['inviti_verifiche_per_codice'], self::MINUTO);
+        $this->frena('io-inviti-verifica:'.$persona, self::FRENI['io_inviti_verifiche_per_persona'], self::MINUTO);
+
+        $id = $this->invitoDelCodice($codice);
+        $vivo = $id !== null && $this->inviti[$id]['scade']->gt(now());
+        $workspace = $id !== null ? $this->inviti[$id]['workspace'] : ($this->invitiAccettati[hash('sha256', $codice)] ?? null);
+
+        if ($workspace === null || ! isset($this->workspace[$workspace])) {
+            return [200, ['data' => ['valido' => false]]];
+        }
+
+        if (isset($this->membri[$workspace][$persona]) && ($vivo || $id === null)) {
+            return [200, ['data' => [
+                'valido' => false,
+                'gia_membro' => true,
+                'workspace' => ['id' => $workspace, 'slug' => $this->workspace[$workspace]['slug'], 'nome' => $this->workspace[$workspace]['nome']],
+            ]]];
+        }
+
+        if (! $vivo) {
+            return [200, ['data' => ['valido' => false]]];
+        }
+
+        $invito = $this->inviti[$id];
+        $azienda = $this->aziende[$this->workspace[$workspace]['azienda_id']] ?? null;
+        $invitante = isset($invito['invitante']) ? ($this->persone[$invito['invitante']] ?? null) : null;
+
+        return [200, ['data' => array_filter([
+            'valido' => true,
+            'workspace_nome' => $this->workspace[$workspace]['nome'],
+            'azienda_nome' => $azienda !== null && $azienda !== $this->workspace[$workspace]['nome'] ? $azienda : null,
+            'invitante_nome' => $invitante === null ? null : trim($invitante['nome'].' '.($invitante['cognome'] ?? '')),
+            'ruolo' => $invito['ruolo'],
+        ], fn (mixed $valore) => $valore !== null)]];
+    }
+
     /** Il workspace del link che ha questo codice, se è vivo (non scaduto, con ingressi liberi): null se no (Link::valido). */
     private function linkDelCodice(#[SensitiveParameter] string $codice): ?string
     {
@@ -4208,6 +4262,7 @@ final class BackofficeFinto
         $this->tettoDeiMembri($invito['workspace']);
 
         $this->entra($invito['workspace'], $persona, $invito['ruolo']);
+        $this->invitiAccettati[hash('sha256', $codice)] = $invito['workspace'];
         unset($this->inviti[$id]);
 
         return $invito['workspace'];
