@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
 use Symfony\Component\HttpFoundation\Response;
 use Zeiras\Auth\Persona;
+use Zeiras\Auth\Sessione;
 
 /**
  * «Resta poi Salva» (#2136): una scrittura vale solo dalla pagina della persona che è nella sessione. Il cookie di sessione è
@@ -23,7 +24,8 @@ use Zeiras\Auth\Persona;
  * di chi entra, e un'altra persona deve poter entrare. Una rotta fuori dalla guardia che è un'azione della persona nella sessione
  * (il consenso, l'invito) lo vuole con `->middleware(SoloDallaPersona::class.':sempre')`. Una rotta che non deve averlo («Esci»:
  * chiudere la sessione è il lato sicuro) se lo toglie con `withoutMiddleware(SoloDallaPersona::class)`. Senza sessione passa: la
- * strada è quella della guardia.
+ * strada è quella della guardia. Con la sessione aperta e l'impronta che manca (`utente.id` assente, vuoto o non stringa) è 409: non c'è
+ * una persona da confrontare, e la scrittura userebbe il gettone di chi c'è.
  */
 final class SoloDallaPersona
 {
@@ -40,7 +42,9 @@ final class SoloDallaPersona
 
         $attesa = Persona::impronta();
         if ($attesa === null) {
-            return $next($richiesta);
+            // Senza sessione la strada è quella della guardia. Con la sessione aperta e l'impronta che manca (`utente.id` che non è
+            // una stringa non vuota) la scrittura userebbe il gettone di chi c'è senza il controllo: 409, come la persona diversa (#2201).
+            return Sessione::aperta() ? new JsonResponse(['errore' => 'persona_diversa'], Response::HTTP_CONFLICT) : $next($richiesta);
         }
 
         $dette = [];
