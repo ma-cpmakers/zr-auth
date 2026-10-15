@@ -55,7 +55,8 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
         ->and($nome)->toBe([
             'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null,
             'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
-            'posizione' => 1, 'obbligatorio' => false, 'indispensabile' => true, 'in_campi' => false,
+            'posizione' => 1, 'obbligatorio' => false, 'aiuto' => null, 'predefinito' => null, 'limiti' => null, 'in_elenco' => false, 'nel_crea' => false,
+            'indispensabile' => true, 'in_campi' => false,
             'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z', 'archiviato_il' => null, 'ripristinabile_fino' => null,
         ])
         ->and($persona['organizzazione_id']['sistema'])->toBe('organizzazione')
@@ -725,4 +726,97 @@ it('la cronologia non porta le voci di un campo eliminato, e una riga che diceva
     riuscita(alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false], $anna));
 
     expect($voci())->toContain('campi.livello')->and(count($righe()))->toBe($prima);
+});
+
+// #2155 (CRM-12 C2): le avanzate di un campo «tuo». Che le risposte siano quelle del backoffice lo prova il suo FintoTest.
+it('crm.campi.crea e modifica: aiuto, predefinito, limiti, in_elenco e nel_crea si scrivono, si fondono e tornano in elenca (CA.1, CA.2, CA.4)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    $campo = riuscita(alFinto('POST', '/v1/crm/campi', [
+        'oggetto' => 'persona', 'nome' => ['it' => 'Punteggio'], 'tipo' => 'numero', 'aiuto' => ['it' => 'Da 1 a 10'],
+        'limiti' => ['minimo' => 1, 'massimo' => 10], 'predefinito' => 5, 'in_elenco' => true,
+    ], $anna))->json('data');
+    $semplice = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Soprannome'], 'tipo' => 'testo'], $anna))->json('data');
+
+    expect($campo['aiuto'])->toBe(['it' => 'Da 1 a 10', 'en' => null, 'es' => null])
+        ->and($campo['limiti'])->toBe(['minimo' => 1, 'massimo' => 10])
+        ->and($campo['predefinito'])->toBe(5)
+        ->and($campo['in_elenco'])->toBeTrue()
+        ->and($campo['nel_crea'])->toBeFalse()
+        ->and(array_intersect_key($semplice, array_flip(['aiuto', 'predefinito', 'limiti', 'in_elenco', 'nel_crea'])))
+        ->toBe(['aiuto' => null, 'predefinito' => null, 'limiti' => null, 'in_elenco' => false, 'nel_crea' => false]);
+
+    $r = riuscita(alFinto('PATCH', '/v1/crm/campi/persona.punteggio', ['aiuto' => ['en' => 'From 1 to 10'], 'limiti' => ['massimo' => 20], 'predefinito' => null], $anna));
+
+    expect($r->json('data.aiuto'))->toBe(['it' => 'Da 1 a 10', 'en' => 'From 1 to 10', 'es' => null])
+        ->and($r->json('data.limiti'))->toBe(['minimo' => 1, 'massimo' => 20])
+        ->and($r->json('data.predefinito'))->toBeNull();
+
+    $senzaItaliano = alFinto('PATCH', '/v1/crm/campi/persona.punteggio', ['aiuto' => ['it' => null]], $anna);
+    $invertiti = alFinto('PATCH', '/v1/crm/campi/persona.punteggio', ['limiti' => ['minimo' => 30]], $anna);
+    $vietati = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Interessato'], 'tipo' => 'si_no', 'limiti' => ['minimo' => 0]], $anna);
+    $standard = alFinto('PATCH', '/v1/crm/campi/persona.ruolo', ['in_elenco' => true], $anna);
+
+    expect([$senzaItaliano->status(), $senzaItaliano->json('errors.0.pointer'), $senzaItaliano->json('errors.0.regola')])->toBe([422, '#/aiuto/it', 'obbligatorio'])
+        ->and([$invertiti->status(), $invertiti->json('errors.0.pointer'), $invertiti->json('errors.0.regola')])->toBe([422, '#/limiti/minimo', 'fuori_intervallo'])
+        ->and([$vietati->status(), $vietati->json('errors.0.pointer'), $vietati->json('errors.0.regola')])->toBe([422, '#/limiti', 'campo_vietato'])
+        ->and([$standard->status(), $standard->json('errors.0.pointer'), $standard->json('errors.0.regola')])->toBe([422, '#/in_elenco', 'campo_estraneo']);
+});
+
+it('i limiti valgono per le scritture nuove di campi: fuori è 422 troppo_lungo o fuori_intervallo, e un valore già salvato resta (CA.3)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Soprannome'], 'tipo' => 'testo', 'limiti' => ['lunghezza_max' => 5]], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Voto'], 'tipo' => 'numero', 'limiti' => ['minimo' => 1, 'massimo' => 10]], $anna));
+    $persona = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => ['soprannome' => '12345', 'voto' => 10]], $anna))->json('data.id');
+
+    $lungo = alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['soprannome' => '123456']], $anna);
+    $fuori = alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['voto' => 11]], $anna);
+
+    expect([$lungo->status(), $lungo->json('errors.0.pointer'), $lungo->json('errors.0.regola')])->toBe([422, '#/campi/soprannome', 'troppo_lungo'])
+        ->and([$fuori->status(), $fuori->json('errors.0.pointer'), $fuori->json('errors.0.regola')])->toBe([422, '#/campi/voto', 'fuori_intervallo']);
+
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.voto', ['limiti' => ['minimo' => 20, 'massimo' => 30]], $anna));
+
+    expect(alFinto('GET', "/v1/crm/persone/{$persona}", null, $anna)->json('data.campi.voto'))->toBe(10);
+});
+
+it('un valore rimandato uguale a quello salvato non si rigiudica coi limiti, e il predefinito salvato deve rientrare nei limiti nuovi (rilievi 2 e 3 di C2)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Voto'], 'tipo' => 'numero', 'limiti' => ['minimo' => 1, 'massimo' => 10], 'predefinito' => 5], $anna));
+    $persona = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => ['voto' => 10]], $anna))->json('data.id');
+
+    $fuori = alFinto('PATCH', '/v1/crm/campi/persona.voto', ['limiti' => ['minimo' => 20, 'massimo' => 30]], $anna);
+
+    expect([$fuori->status(), $fuori->json('errors.0.pointer'), $fuori->json('errors.0.regola')])->toBe([422, '#/limiti', 'fuori_intervallo']);
+
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.voto', ['limiti' => ['minimo' => 20, 'massimo' => 30], 'predefinito' => 25], $anna));
+    riuscita(alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['voto' => 10]], $anna));
+    $cambiato = alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['voto' => 11]], $anna);
+
+    expect([$cambiato->status(), $cambiato->json('errors.0.pointer'), $cambiato->json('errors.0.regola')])->toBe([422, '#/campi/voto', 'fuori_intervallo']);
+});
+
+it('un campo standard con due avanzate dà un errore per ognuna; il predefinito di un testo è al più 1.000 caratteri e una lista enorme è un errore solo (rilievi 1, 4 e 7 di C2)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    $standard = alFinto('PATCH', '/v1/crm/campi/persona.ruolo', ['aiuto' => ['it' => 'Ciao'], 'limiti' => ['lunghezza_max' => 10]], $anna);
+
+    expect($standard->status())->toBe(422)
+        ->and(array_column($standard->json('errors'), 'pointer'))->toBe(['#/aiuto', '#/limiti']);
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Libero'], 'tipo' => 'testo_lungo'], $anna));
+    $lungo = alFinto('PATCH', '/v1/crm/campi/persona.libero', ['predefinito' => str_repeat('x', 1001)], $anna);
+    $lista = alFinto('PATCH', '/v1/crm/campi/persona.libero', ['predefinito' => array_fill(0, 10000, 1)], $anna);
+
+    expect([$lungo->status(), $lungo->json('errors.0.pointer'), $lungo->json('errors.0.regola')])->toBe([422, '#/predefinito', 'troppo_lungo'])
+        ->and($lista->status())->toBe(422)
+        ->and($lista->json('errors'))->toHaveCount(1);
+
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.libero', ['predefinito' => str_repeat('x', 1000)], $anna));
 });

@@ -1261,7 +1261,7 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('organizzazioni', $chi['workspace'], $id);
-        $campi = $this->modificaCrm($corpo, [...$this->regoleOrganizzazione($chi['workspace'], false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'organizzazione', false), 'archiviata' => ['filled', 'boolean:strict']]);
+        $campi = $this->modificaCrm($corpo, [...$this->regoleOrganizzazione($chi['workspace'], false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'organizzazione', false, $riga['id'], $corpo['campi'] ?? null), 'archiviata' => ['filled', 'boolean:strict']]);
 
         if (array_key_exists('indirizzo', $campi)) {
             $campi['indirizzo'] = self::indirizzoCrm($campi['indirizzo']);
@@ -1520,7 +1520,7 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('persone', $chi['workspace'], $id);
-        $campi = $this->modificaCrm($corpo, [...$this->regolePersona($chi['workspace']), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', false), 'archiviato' => ['filled', 'boolean:strict']]);
+        $campi = $this->modificaCrm($corpo, [...$this->regolePersona($chi['workspace']), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', false, $riga['id'], $corpo['campi'] ?? null), 'archiviato' => ['filled', 'boolean:strict']]);
 
         if ($riga['anonimizzata_il'] !== null) {
             throw new Problema('persona_anonimizzata');
@@ -2949,7 +2949,7 @@ trait Crm
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('trattative', $chi['workspace'], $id);
         $this->valoreTestoCrm($corpo);
-        $campi = $this->modificaCrm($corpo, [...$this->regoleTrattativa($chi['workspace'], Testi::pulisci($corpo), false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'trattativa', false)]);
+        $campi = $this->modificaCrm($corpo, [...$this->regoleTrattativa($chi['workspace'], Testi::pulisci($corpo), false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'trattativa', false, $riga['id'], $corpo['campi'] ?? null)]);
 
         if (array_key_exists('fase_id', $campi) && ! array_key_exists('pipeline_id', $campi)) {
             throw $this->erroreCrm('fase_id', 'regole.fase_con_la_pipeline', Regola::CAMPO_ESTRANEO);

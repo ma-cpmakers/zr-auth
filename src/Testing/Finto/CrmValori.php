@@ -55,22 +55,22 @@ trait CrmValori
      *
      * @return array<string, mixed>
      */
-    private function regoleDeiValoriCrm(string $workspace, string $oggetto, bool $creazione): array
+    private function regoleDeiValoriCrm(string $workspace, string $oggetto, bool $creazione, ?string $id = null, mixed $inviati = null): array
     {
         $regole = ['campi' => ['sometimes', 'array'], 'campi.-' => ['prohibited']];
+        $campi = $this->campiTuoiCrm($workspace, $oggetto);
+        $invariati = $id === null || ! is_array($inviati) ? [] : $this->valoriInvariatiCrm($oggetto, $id, $campi, $inviati);
 
-        foreach ($this->campiTuoiCrm($workspace, $oggetto) as $chiave => $campo) {
-            $attributo = "campi.{$chiave}";
+        foreach ($campi as $chiave => $campo) {
+            // Un valore rimandato uguale a quello salvato non si rigiudica coi limiti del campo (il tipo sì): solo uno nuovo o cambiato.
+            if (isset($invariati[$chiave])) {
+                $campo['limiti'] = null;
+            }
+
             $apertura = $campo['obbligatorio'] ? ['bail', $creazione ? 'required' : 'filled'] : ['bail', 'nullable'];
-            $regole[$attributo] = [...$apertura, ...$this->regoleDelTipoCrm($workspace, (string) $campo['tipo'], $campo)];
 
-            if ($campo['tipo'] === 'valuta') {
-                $regole["{$attributo}.importo"] = ['bail', 'integer:strict', 'between:0,'.self::CRM_VALORE_IMPORTO];
-                $regole["{$attributo}.valuta"] = ['bail', 'string', function (string $nome, mixed $valore, Closure $fail) use ($workspace) {
-                    if ($valore !== $this->valutaCrm($workspace)) {
-                        $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.valuta_del_workspace', ['valuta' => $this->valutaCrm($workspace)]);
-                    }
-                }];
+            foreach ($this->regoleDiUnValoreCrm($workspace, "campi.{$chiave}", $campo) as $attributo => $regoleDelValore) {
+                $regole[$attributo] = $attributo === "campi.{$chiave}" ? [...$apertura, ...$regoleDelValore] : $regoleDelValore;
             }
         }
 
@@ -82,6 +82,40 @@ trait CrmValori
         }
 
         return $regole;
+    }
+
+    /**
+     * Le chiavi dei campi con limiti il cui valore nel corpo è lo stesso che il record ha salvato (ValoriDeiCampi::invariati).
+     *
+     * @param  array<string, array<string, mixed>>  $campi
+     * @param  array<string, mixed>  $inviati
+     * @return array<string, true>
+     */
+    private function valoriInvariatiCrm(string $oggetto, string $id, array $campi, array $inviati): array
+    {
+        $invariati = [];
+
+        foreach ($campi as $chiave => $campo) {
+            if (($campo['limiti'] ?? null) === null || ! array_key_exists($chiave, $inviati) || ! array_key_exists($chiave, $this->crm['valori'][$oggetto][$id] ?? [])) {
+                continue;
+            }
+
+            $inviato = $inviati[$chiave];
+            $salvato = $this->crm['valori'][$oggetto][$id][$chiave];
+
+            $uguale = match ($campo['tipo']) {
+                'testo', 'testo_lungo', 'data' => is_string($inviato) && $inviato === $salvato,
+                'numero', 'percentuale' => (is_int($inviato) || is_float($inviato)) && (is_int($salvato) || is_float($salvato)) && (float) $inviato === (float) $salvato,
+                'valuta' => is_array($inviato) && is_int($inviato['importo'] ?? null) && $inviato['importo'] === $salvato,
+                default => false,
+            };
+
+            if ($uguale) {
+                $invariati[$chiave] = true;
+            }
+        }
+
+        return $invariati;
     }
 
     /**
@@ -128,6 +162,29 @@ trait CrmValori
     }
 
     /**
+     * Le regole di un valore del campo `$campo` (tipo, limiti, opzioni vive) sotto `$attributo`: una per il valore intero e, per una
+     * valuta, una per ogni parte. Le stesse valgono per un valore di `campi` e per il `predefinito` (ValoriDeiCampi::regoleDiUnValore).
+     *
+     * @param  array<string, mixed>  $campo
+     * @return array<string, list<mixed>>
+     */
+    private function regoleDiUnValoreCrm(string $workspace, string $attributo, array $campo): array
+    {
+        $regole = [$attributo => $this->regoleDelTipoCrm($workspace, (string) $campo['tipo'], $campo)];
+
+        if ($campo['tipo'] === 'valuta') {
+            $regole["{$attributo}.importo"] = ['bail', 'integer:strict', 'between:0,'.self::CRM_VALORE_IMPORTO, $this->neiLimitiCrm($campo)];
+            $regole["{$attributo}.valuta"] = ['bail', 'string', function (string $nome, mixed $valore, Closure $fail) use ($workspace) {
+                if ($valore !== $this->valutaCrm($workspace)) {
+                    $this->rifiutaCrm($fail, $nome, Regola::VALORE_NON_AMMESSO, 'regole.valuta_del_workspace', ['valuta' => $this->valutaCrm($workspace)]);
+                }
+            }];
+        }
+
+        return $regole;
+    }
+
+    /**
      * Le regole del tipo del campo, sul valore intero.
      *
      * @param  array<string, mixed>  $campo
@@ -135,22 +192,24 @@ trait CrmValori
      */
     private function regoleDelTipoCrm(string $workspace, string $tipo, array $campo): array
     {
+        $limiti = $campo['limiti'] ?? [];
+
         return match ($tipo) {
-            'testo' => ['string', 'max:'.self::CRM_VALORE_TESTO, new SenzaCarattereNullo],
-            'testo_lungo' => ['string', 'max:'.self::CRM_VALORE_TESTO_LUNGO, new SenzaCarattereNullo],
+            'testo' => ['string', 'max:'.min(self::CRM_VALORE_TESTO, (int) ($limiti['lunghezza_max'] ?? self::CRM_VALORE_TESTO)), new SenzaCarattereNullo],
+            'testo_lungo' => ['string', 'max:'.min(self::CRM_VALORE_TESTO_LUNGO, (int) ($limiti['lunghezza_max'] ?? self::CRM_VALORE_TESTO_LUNGO)), new SenzaCarattereNullo],
             'url' => ['string', 'max:'.self::CRM_VALORE_URL, 'url:http,https', new SenzaCarattereNullo],
             'numero', 'percentuale' => [function (string $nome, mixed $valore, Closure $fail) {
                 if (! (is_int($valore) || is_float($valore)) || ! is_finite((float) $valore) || abs($valore) > self::CRM_VALORE_MASSIMO
                     || round((float) $valore, self::CRM_VALORE_DECIMALI) !== (float) $valore) {
                     $this->rifiutaCrm($fail, $nome, Regola::NON_VALIDA, 'regole.campo_numero');
                 }
-            }],
+            }, $this->neiLimitiCrm($campo)],
             'valuta' => ['array', function (string $nome, mixed $valore, Closure $fail) {
                 if (! is_array($valore) || ! array_key_exists('importo', $valore)) {
                     $this->rifiutaCrm($fail, $nome, Regola::OBBLIGATORIO, 'regole.campo_valuta');
                 }
             }],
-            'data' => ['string', 'date_format:Y-m-d'],
+            'data' => ['string', 'date_format:Y-m-d', $this->neiLimitiCrm($campo)],
             'data_ora' => ['string', function (string $nome, mixed $valore, Closure $fail) {
                 $parti = [];
                 $istante = is_string($valore) && preg_match('/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d{1,6})?Z$/', $valore, $parti) === 1
