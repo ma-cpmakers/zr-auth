@@ -819,6 +819,7 @@ it('un campo standard con due avanzate dà un errore per ognuna; il predefinito 
         ->and($lista->json('errors'))->toHaveCount(1);
 
     riuscita(alFinto('PATCH', '/v1/crm/campi/persona.libero', ['predefinito' => str_repeat('x', 1000)], $anna));
+});
 
 // Sprint 37, #2156 (CRM-12 C3): le opzioni di un elenco proprio nel finto — crea, modifica, elimina.
 
