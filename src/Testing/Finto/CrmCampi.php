@@ -342,8 +342,9 @@ trait CrmCampi
                 'opzioni.*.nome.en' => $this->regoleDiUnNomeCrm(),
                 'opzioni.*.nome.es' => $this->regoleDiUnNomeCrm(),
                 'opzioni.*.colore' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            ]);
+            ] + $this->regoleDelleAvanzateCrm());
             $opzioni = $this->opzioniDelCampoCrm($campi);
+            $avanzate = $this->avanzateCrm($chi['workspace'], $campi, $campi['tipo'], $opzioni, null);
             $oggetto = $campi['oggetto'];
             $this->campiDelWorkspaceCrm($chi['workspace']);
             $lista = $this->campiDiUnOggettoCrm($chi['workspace'], $oggetto);
@@ -370,6 +371,8 @@ trait CrmCampi
             $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$chiave] = [
                 'id' => "{$oggetto}.{$chiave}", 'oggetto' => $oggetto, 'codice' => $chiave, 'origine' => 'tuo', 'tipo' => $campi['tipo'], 'sistema' => null,
                 'opzioni' => $opzioni, 'obbligatorio' => $campi['obbligatorio'] ?? false,
+                'aiuto' => $avanzate['aiuto'] ?? null, 'predefinito' => $avanzate['predefinito'] ?? null, 'limiti' => $avanzate['limiti'] ?? null,
+                'in_elenco' => $avanzate['in_elenco'] ?? false, 'nel_crea' => $avanzate['nel_crea'] ?? false,
                 'catalogo' => ['nome' => []], 'scritti' => array_filter($campi['nome'], fn ($nome) => is_string($nome) && $nome !== ''),
                 'visibilita' => $campi['visibilita'] ?? 'visibile', 'sezione_id' => $sezione,
                 'ord' => ($ordini === [] ? 0 : max($ordini)) + self::CRM_PASSO, 'indispensabile' => false, 'in_campi' => true,
@@ -466,7 +469,7 @@ trait CrmCampi
             'posizione' => ['filled', 'integer:strict', 'min:1'],
             'obbligatorio' => ['filled', 'boolean:strict'],
             'archiviato' => ['filled', 'boolean:strict'],
-        ]);
+        ] + $this->regoleDelleAvanzateCrm());
 
         if (($campi['archiviato'] ?? null) === true) {
             throw $this->erroreCrm('archiviato', 'regole.campo_archiviato_si_elimina', Regola::VALORE_NON_AMMESSO);
@@ -486,6 +489,25 @@ trait CrmCampi
         if (array_key_exists('obbligatorio', $campi) && $voce['origine'] !== 'tuo') {
             throw $this->erroreCrm('obbligatorio', 'regole.campo_obbligatorio_standard', Regola::CAMPO_ESTRANEO);
         }
+        $avanzate = [];
+
+        foreach (array_intersect(self::CRM_AVANZATE, array_keys($campi)) as $chiave) {
+            if ($voce['origine'] !== 'tuo') {
+                throw $this->erroreCrm($chiave, 'regole.campo_avanzata_standard', Regola::CAMPO_ESTRANEO);
+            }
+        }
+
+        if ($voce['origine'] === 'tuo') {
+            $avanzate = $this->avanzateCrm($chi['workspace'], $campi, $voce['tipo'], $voce['opzioni'], $voce);
+
+            foreach (self::CRM_AVANZATE as $chiave) {
+                if (array_key_exists($chiave, $avanzate) && ! self::avanzataUgualeCrm($avanzate[$chiave], $voce[$chiave] ?? ($chiave === 'in_elenco' || $chiave === 'nel_crea' ? false : null))) {
+                    $cambiati[] = $chiave;
+                }
+            }
+        }
+
+        $avanzate = array_intersect_key($avanzate, array_flip($cambiati));
         $nome = $this->nomiNuoviCrm($voce['catalogo']['nome'], $voce['scritti'], $campi['nome'] ?? [], $voce['origine'] === 'tuo');
 
         if (! self::scrittiUgualiCrm($nome['riga'], $voce['scritti'])) {
@@ -552,6 +574,7 @@ trait CrmCampi
         $riga['visibilita'] = $visibilita;
         $riga['sezione_id'] = $sezione;
         $riga['obbligatorio'] = $obbligatorio;
+        $riga = $avanzate + $riga;
         $riga['aggiornato_il'] = self::dopoCrm($riga['aggiornato_il']);
 
         if ($siSposta) {
@@ -660,6 +683,7 @@ trait CrmCampi
                 $this->campiCrm[$workspace][$oggetto]['campi'][$campo['codice']] = [
                     'id' => "{$oggetto}.{$campo['codice']}", 'oggetto' => $oggetto, 'codice' => $campo['codice'], 'origine' => 'standard', 'tipo' => $campo['tipo'], 'sistema' => $campo['sistema'],
                     'opzioni' => null, 'obbligatorio' => false,
+                    'aiuto' => null, 'predefinito' => null, 'limiti' => null, 'in_elenco' => false, 'nel_crea' => false,
                     'catalogo' => ['nome' => $campo['nome']], 'scritti' => [], 'visibilita' => $campo['visibilita'], 'sezione_id' => $sezione,
                     'ord' => $inSezione[$sezione], 'indispensabile' => $campo['indispensabile'], 'in_campi' => $campo['in_campi'],
                     'creato_il' => $dal, 'aggiornato_il' => $dal,
@@ -698,6 +722,7 @@ trait CrmCampi
             $contati[$campo['sezione_id']] = ($contati[$campo['sezione_id']] ?? 0) + 1;
             $campi[$i]['posto'] = $contati[$campo['sezione_id']];
             $campi[$i]['nome'] = self::nomiCrm($campo['catalogo']['nome'], $campo['scritti']);
+            $campi[$i]['workspace'] = $workspace;
         }
 
         return $campi;
@@ -721,6 +746,7 @@ trait CrmCampi
         foreach ($eliminati as $i => $campo) {
             $eliminati[$i]['posto'] = $i + 1;
             $eliminati[$i]['nome'] = self::nomiCrm($campo['catalogo']['nome'], $campo['scritti']);
+            $eliminati[$i]['workspace'] = $workspace;
         }
 
         return $eliminati;
@@ -821,6 +847,11 @@ trait CrmCampi
             'sezione_id' => $campo['sezione_id'],
             'posizione' => $campo['posto'],
             'obbligatorio' => $campo['obbligatorio'],
+            'aiuto' => ($campo['aiuto'] ?? null) === null ? null : self::nomiCrm(['it' => null, 'en' => null, 'es' => null], $campo['aiuto']),
+            'predefinito' => ($campo['predefinito'] ?? null) === null ? null : $this->predefinitoInUscitaCrm($campo),
+            'limiti' => $campo['limiti'] ?? null,
+            'in_elenco' => $campo['in_elenco'] ?? false,
+            'nel_crea' => $campo['nel_crea'] ?? false,
             'indispensabile' => $campo['indispensabile'],
             'in_campi' => $campo['in_campi'],
             'creato_il' => self::iso($campo['creato_il']),
@@ -828,6 +859,12 @@ trait CrmCampi
             'archiviato_il' => isset($campo['eliminato_il']) ? self::iso($campo['eliminato_il']) : null,
             'ripristinabile_fino' => isset($campo['eliminato_il']) ? self::iso($campo['eliminato_il']->addDays(self::CRM_GIORNI_PER_RIPRISTINARE)) : null,
         ];
+    }
+
+    /** Il predefinito come lo dà l'API: una valuta è `{importo, valuta}`, gli altri sono quelli della riga. */
+    private function predefinitoInUscitaCrm(array $campo): mixed
+    {
+        return $campo['tipo'] === 'valuta' ? ['importo' => $campo['predefinito'], 'valuta' => $this->valutaCrm($campo['workspace'] ?? '')] : $campo['predefinito'];
     }
 
     /** @return list<mixed> le regole del nome in una lingua: facoltativo e che si può togliere */

@@ -78,4 +78,11 @@ return [
     'campo_data_ora' => 'La fecha y la hora están en ISO 8601 UTC con la Z final, por ejemplo 2026-10-14T09:30:00Z.',
     'campo_opzione' => 'Esta opción no es una de las del campo: los ids de las opciones los da crm.campi.elenca.',
     'campo_scelte_doppie' => 'La misma opción aparece dos veces en la lista, sin contar mayúsculas: cada id va una sola vez.',
+    'campo_fuori_limiti' => 'El valor está fuera de los límites del campo: mira `limiti` en crm.campi.elenca.',
+    'campo_avanzata_standard' => 'Este es un campo estándar: `aiuto`, `predefinito`, `limiti`, `in_elenco` y `nel_crea` solo valen para los campos que has creado.',
+    'campo_limiti_non_ammessi' => 'Solo un campo de texto, número, moneda, porcentaje o fecha tiene límites.',
+    'campo_limiti_invertiti' => 'El mínimo no puede estar por encima del máximo.',
+    'campo_aiuto_it_obbligatorio' => 'La ayuda en italiano es obligatoria si hay ayuda, y no se quita por sí sola.',
+    'campo_predefinito_membro' => 'Un campo de miembro no tiene un valor predeterminado.',
+    'campo_predefinito_dopo_le_opzioni' => 'Las opciones nacen con esta petición y aún no tienen id: el valor predeterminado se indica después, con crm.campi.modifica.',
 ];
