@@ -541,8 +541,8 @@ it('i valori dei campi «tuoi» di un contatto: campi {} senza valori, normalizz
     $tolto = riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => ['pagina' => null, 'budget' => ['importo' => 800]]], $anna));
     expect($tolto->json('data.campi'))->toBe(['budget' => ['importo' => 800, 'valuta' => 'EUR'], 'punteggio' => 10, 'taglia' => $taglia['opzioni'][1]['id']]);
 
-    // L'elenco e la ricerca hanno la forma breve, senza `campi`.
-    expect(alFinto('GET', '/v1/crm/persone', null, $anna)->json('data.0'))->not->toHaveKey('campi');
+    // L'elenco porta `campi` coi soli campi in elenco (qui nessuno: vuoto); la ricerca, senza `campi`, ha il suo test (#2169).
+    expect(alFinto('GET', '/v1/crm/persone', null, $anna)->json('data.0.campi'))->toBe([]);
 
     // La cronologia nomina `campi.<chiave>`: col prima e il dopo per i tipi che lo ammettono, il solo nome per un url.
     $voci = collect(alFinto('GET', "/v1/crm/persone/{$id}/cronologia", null, $anna)->json('data'))->where('tipo', 'modificata')->sortBy(fn (array $voce) => count($voce['campi']))->values();
@@ -933,4 +933,74 @@ it('un `campi` mandato come oggetto è la mappa del JSON: valori scritti, mappa 
     $zero = alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => (object) ['0' => 'x']], $anna);
     expect($zero->status())->toBe(422)
         ->and(collect($zero->json('errors'))->pluck('pointer')->all())->not->toContain('#/campi');
+});
+
+it('crm.*.elenca: ogni riga porta campi con i soli campi in elenco che hanno un valore; la ricerca no (#2169, CL.1, CL.2)', function (string $oggetto, string $percorso) {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => $oggetto, 'nome' => ['it' => 'Livello'], 'tipo' => 'testo', 'in_elenco' => true], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => $oggetto, 'nome' => ['it' => 'Nota'], 'tipo' => 'testo'], $anna));
+    $pipeline = $oggetto === 'trattativa'
+        ? riuscita(alFinto('POST', '/v1/crm/pipeline', ['nome' => 'Vendite', 'fasi' => [['nome' => 'Contatto', 'probabilita' => 10]]], $anna))->json('data.id')
+        : null;
+    $corpo = fn (string $nome) => $oggetto === 'trattativa' ? ['titolo' => $nome, 'pipeline_id' => $pipeline] : ['nome' => $nome];
+    $id = riuscita(alFinto('POST', $percorso, $corpo('Rec 1') + ['campi' => (object) ['livello' => 'alto', 'nota' => 'riservata']], $anna))->json('data.id');
+    $senza = riuscita(alFinto('POST', $percorso, $corpo('Rec 2'), $anna))->json('data.id');
+
+    $righe = collect(riuscita(alFinto('GET', $percorso, null, $anna))->json('data'))->keyBy('id');
+
+    // Una riga senza valori porta `{}` nel JSON (un oggetto, non una lista): lo dice il body grezzo, non il decode.
+    $grezzo = riuscita(alFinto('GET', $percorso, null, $anna))->body();
+    expect($grezzo)->toContain('"campi":{}')->and($grezzo)->not->toContain('"campi":[]');
+
+    expect($righe[$id]['campi'])->toBe(['livello' => 'alto'])
+        ->and($righe[$senza]['campi'])->toBe([])
+        ->and(alFinto('GET', "{$percorso}/{$id}", null, $anna)->json('data.campi'))->toBe(['livello' => 'alto', 'nota' => 'riservata']);
+
+    // La ricerca no.
+    $ricerca = riuscita(alFinto('POST', "{$percorso}/ricerca", ['q' => 'Rec'], $anna));
+    expect($ricerca->json('data.0'))->not->toHaveKey('campi');
+})->with([['persona', '/v1/crm/persone'], ['organizzazione', '/v1/crm/organizzazioni'], ['trattativa', '/v1/crm/trattative']]);
+
+it('al più 10 campi in elenco per oggetto: l\'undicesimo in crea, in modifica o nel ripristino è 409 limite_raggiunto con limite 10 (#2169, CL.3)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    foreach (range(1, 10) as $n) {
+        riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => "Colonna {$n}"], 'tipo' => 'testo', 'in_elenco' => true], $anna));
+    }
+
+    $troppo = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Di troppo'], 'tipo' => 'testo', 'in_elenco' => true], $anna);
+    expect($troppo->status())->toBe(409)->and($troppo->json('codice'))->toBe('limite_raggiunto')->and($troppo->json('limite'))->toBe(10);
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Di troppo'], 'tipo' => 'testo'], $anna));
+    $modifica = alFinto('PATCH', '/v1/crm/campi/persona.di_troppo', ['in_elenco' => true], $anna);
+    expect($modifica->status())->toBe(409)->and($modifica->json('limite'))->toBe(10);
+
+    // Chi è già in elenco si modifica; un altro oggetto ha il suo tetto.
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.colonna_2', ['in_elenco' => true, 'nome' => ['it' => 'Colonna due']], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'organizzazione', 'nome' => ['it' => 'Uno'], 'tipo' => 'testo', 'in_elenco' => true], $anna));
+
+    // Eliminare libera il posto; il ripristino oltre il tetto è 409 e il campo resta eliminato; uscito un altro, entra.
+    expect(alFinto('DELETE', '/v1/crm/campi/persona.colonna_1', null, $anna)->status())->toBe(204);
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.di_troppo', ['in_elenco' => true], $anna));
+    $ripristino = alFinto('PATCH', '/v1/crm/campi/persona.colonna_1', ['archiviato' => false], $anna);
+    expect($ripristino->status())->toBe(409)->and($ripristino->json('limite'))->toBe(10);
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.di_troppo', ['in_elenco' => false], $anna));
+    expect(riuscita(alFinto('PATCH', '/v1/crm/campi/persona.colonna_1', ['archiviato' => false], $anna))->json('data.in_elenco'))->toBeTrue();
+});
+
+it('un testo_lungo non va in elenco: in_elenco true in crea o in modifica è 422 valore_non_ammesso su #/in_elenco; false e gli altri tipi passano (#2169, CL.5)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    $crea = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Storia'], 'tipo' => 'testo_lungo', 'in_elenco' => true], $anna);
+    expect($crea->status())->toBe(422)->and($crea->json('errors.0.pointer'))->toBe('#/in_elenco')->and($crea->json('errors.0.regola'))->toBe('valore_non_ammesso')
+        ->and(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data.*.chiave'))->not->toContain('storia');
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Storia'], 'tipo' => 'testo_lungo', 'in_elenco' => false], $anna));
+    $modifica = alFinto('PATCH', '/v1/crm/campi/persona.storia', ['in_elenco' => true], $anna);
+    expect($modifica->status())->toBe(422)->and($modifica->json('errors.0.pointer'))->toBe('#/in_elenco')->and($modifica->json('errors.0.regola'))->toBe('valore_non_ammesso');
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.storia', ['in_elenco' => false], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Breve'], 'tipo' => 'testo', 'in_elenco' => true], $anna));
 });

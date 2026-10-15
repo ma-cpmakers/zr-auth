@@ -690,7 +690,7 @@ trait Crm
         ];
         $this->testi->validaQuery($query, $regole);
 
-        return $this->paginaFiltrataCrm($chi['workspace'], $tipo, $lista, $chiesta);
+        return $this->paginaFiltrataCrm($chi['workspace'], $tipo, $lista, $chiesta, true);
     }
 
     /**
@@ -876,7 +876,7 @@ trait Crm
      * @param  array{ordina: string, limite: int, totale: bool, cursore: ?string, filtri: array<string, mixed>}  $chiesta
      * @return array{int, array<string, mixed>}
      */
-    private function paginaFiltrataCrm(string $workspace, string $tipo, string $lista, array $chiesta): array
+    private function paginaFiltrataCrm(string $workspace, string $tipo, string $lista, array $chiesta, bool $conCampi = false): array
     {
         $righe = array_values(array_filter($this->righeCrm($tipo, $workspace), fn (array $riga) => $this->tieneCrm($tipo, $workspace, $chiesta['filtri'], $riga)));
         $campo = self::CRM_ORDINI[$tipo][ltrim($chiesta['ordina'], '-')];
@@ -907,9 +907,9 @@ trait Crm
         $pagina = array_slice($righe, 0, $limite);
         $ultima = $pagina === [] ? null : $pagina[count($pagina) - 1];
         $voce = match ($tipo) {
-            'organizzazioni' => fn (array $riga) => $this->voceOrganizzazione($riga),
-            'persone' => fn (array $riga) => $this->vocePersona($riga),
-            'trattative' => fn (array $riga) => $this->voceTrattativa($riga),
+            'organizzazioni' => fn (array $riga) => $this->voceOrganizzazione($riga, false, $conCampi),
+            'persone' => fn (array $riga) => $this->vocePersona($riga, false, $conCampi),
+            'trattative' => fn (array $riga) => $this->voceTrattativa($riga, false, $conCampi),
             default => fn (array $riga) => $this->voceAttivita($riga),
         };
         $corpo = [
@@ -1181,7 +1181,7 @@ trait Crm
      *
      * @return array<string, mixed>
      */
-    private function voceOrganizzazione(array $riga, bool $intera = false): array
+    private function voceOrganizzazione(array $riga, bool $intera = false, bool $inElenco = false): array
     {
         return [
             'id' => $riga['id'],
@@ -1200,7 +1200,7 @@ trait Crm
             'creata_il' => self::iso($riga['creata_il']),
             'aggiornata_il' => self::iso($riga['aggiornata_il']),
             'creata_da' => $riga['creata_da'],
-            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'organizzazione', $riga['id'])] : []),
+            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'organizzazione', $riga['id'])] : ($inElenco ? ['campi' => $this->valoriInElencoCrm($riga['workspace'], 'organizzazione', $riga['id'])] : [])),
         ];
     }
 
@@ -1373,7 +1373,7 @@ trait Crm
      *
      * @return array<string, mixed>
      */
-    private function vocePersona(array $riga, bool $intera = false): array
+    private function vocePersona(array $riga, bool $intera = false, bool $inElenco = false): array
     {
         $azienda = $riga['organizzazione_id'] === null ? null : ($this->crm['organizzazioni'][$riga['organizzazione_id']] ?? null);
 
@@ -1401,7 +1401,7 @@ trait Crm
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
             'creato_da' => $riga['creato_da'],
-            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'persona', $riga['id'])] : []),
+            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'persona', $riga['id'])] : ($inElenco ? ['campi' => $this->valoriInElencoCrm($riga['workspace'], 'persona', $riga['id'])] : [])),
         ];
     }
 
@@ -2769,7 +2769,7 @@ trait Crm
      *
      * @return array<string, mixed>
      */
-    private function voceTrattativa(array $riga, bool $intera = false): array
+    private function voceTrattativa(array $riga, bool $intera = false, bool $inElenco = false): array
     {
         $persona = $riga['persona_id'] === null ? null : ($this->crm['persone'][$riga['persona_id']] ?? null);
         $azienda = $riga['organizzazione_id'] === null ? null : ($this->crm['organizzazioni'][$riga['organizzazione_id']] ?? null);
@@ -2797,7 +2797,7 @@ trait Crm
             'creata_il' => self::iso($riga['creata_il']),
             'aggiornata_il' => self::iso($riga['aggiornata_il']),
             'creata_da' => $riga['creata_da'],
-            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'trattativa', $riga['id'])] : []),
+            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'trattativa', $riga['id'])] : ($inElenco ? ['campi' => $this->valoriInElencoCrm($riga['workspace'], 'trattativa', $riga['id'])] : [])),
         ];
     }
 

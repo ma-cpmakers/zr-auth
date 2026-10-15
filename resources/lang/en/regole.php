@@ -86,4 +86,5 @@ return [
     'campo_aiuto_it_obbligatorio' => 'The Italian help is required when there is a help text, and it cannot be removed on its own.',
     'campo_predefinito_membro' => 'A member field has no default value.',
     'campo_predefinito_dopo_le_opzioni' => 'The options are born with this request and have no id yet: set the default afterwards, with crm.campi.modifica.',
+    'campo_testo_lungo_non_in_elenco' => 'Long texts do not go in the list.',
 ];

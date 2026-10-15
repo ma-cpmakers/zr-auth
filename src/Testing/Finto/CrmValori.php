@@ -318,6 +318,23 @@ trait CrmValori
     }
 
     /**
+     * I valori dei soli campi «tuoi» vivi che stanno in elenco (`in_elenco`), per la riga di `elenca` (#2169): come valoriDiCrm(),
+     * ma senza gli altri. Sempre un oggetto: senza valori `{}`.
+     */
+    private function valoriInElencoCrm(string $workspace, string $oggetto, string $id): stdClass
+    {
+        $valori = [];
+
+        foreach ($this->campiTuoiCrm($workspace, $oggetto) as $chiave => $campo) {
+            if (($campo['in_elenco'] ?? false) === true && array_key_exists($chiave, $this->crm['valori'][$oggetto][$id] ?? [])) {
+                $valori[$chiave] = $this->valoreInUscitaCrm($workspace, (string) $campo['tipo'], $this->crm['valori'][$oggetto][$id][$chiave]);
+            }
+        }
+
+        return (object) $valori;
+    }
+
+    /**
      * Ciò che una scrittura di `campi` cambierebbe, senza scrivere: per chiave, nell'ordine dei campi, il tipo, il valore di prima e di
      * dopo come li dà l'API e il valore della riga (`null` toglie). Un valore uguale, o una rimozione di ciò che non c'è, non cambia.
      *
