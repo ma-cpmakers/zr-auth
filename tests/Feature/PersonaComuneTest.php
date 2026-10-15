@@ -174,6 +174,7 @@ it('con la sessione aperta e l\'impronta null (utente.id assente, vuoto o non st
     $accesso = accesso();
     $accesso['gettone']['utente'] = array_diff_key(utente(), ['id' => 1]) + ($id === 'assente' ? [] : ['id' => $id]);
     Sessione::apri($accesso);
+    Sessione::entra(gettoneDelWorkspace()); // col gettone del workspace la rotta chiamerebbe davvero il backoffice
 
     expect(Sessione::aperta())->toBeTrue()->and(Persona::impronta())->toBeNull();
 
@@ -181,14 +182,15 @@ it('con la sessione aperta e l\'impronta null (utente.id assente, vuoto o non st
         ->assertStatus(409)
         ->assertExactJson(['errore' => 'persona_diversa']);
     $this->postJson('/persona/scrive')->assertStatus(409);
+    $this->postJson('/persona/azione')->assertStatus(409); // anche una rotta fuori dalla guardia con :sempre
 
     expect(scritture())->toBe(0);
     Http::assertNothingSent();
 })->with(['assente', '', 123, [['01k6']], null]);
 
-// SD.2 (#2201): senza sessione, o con la sessione aperta e l'impronta presente, il comportamento è quello di prima.
-it('SD.2: senza sessione passa alla guardia (401), con l\'impronta giusta la scrittura passa', function () {
-    $this->postJson('/persona/scrive')->assertStatus(401);
+// SD.2 (#2201): senza sessione la rotta :sempre passa come prima (il ramo «sessione aperta» non scatta); con l'impronta presente passa.
+it('SD.2: senza sessione una rotta :sempre passa, e con la sessione e l\'impronta giusta la scrittura passa', function () {
+    $this->postJson('/persona/azione')->assertOk();
 
     apriSessione();
     $this->call('POST', '/persona/scrive', [], [], [], ['HTTP_X_ZR_PERSONA' => Persona::impronta()])->assertOk();

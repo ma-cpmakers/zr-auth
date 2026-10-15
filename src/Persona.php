@@ -15,7 +15,7 @@ final class Persona
     /**
      * L'impronta della persona della sessione: 32 cifre esadecimali, un HMAC dell'id con la chiave dell'app e un prefisso suo
      * (un altro HMAC della stessa chiave non la rifà). Né l'id né l'email escono; la stessa persona ha sempre la stessa impronta,
-     * quindi rientrare non fa perdere il lavoro di una scheda aperta. `null` senza una sessione aperta.
+     * quindi rientrare non fa perdere il lavoro di una scheda aperta. `null` senza una sessione aperta, o se `utente.id` non è una stringa non vuota.
      */
     public static function impronta(): ?string
     {
