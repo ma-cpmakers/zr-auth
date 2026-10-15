@@ -69,6 +69,13 @@ return [
         'senza_query' => ['q', 'scelta'],
     ],
 
+    // Le identità di prova (#2157): la riga di log «scartata la risposta tardiva» porta `prova: true` se l'email della persona della
+    // sessione chiusa comincia per uno di questi prefissi (senza distinguere le maiuscole), `false` altrimenti. Né l'email né altro
+    // di personale esce: serve a separare le prove a due persone degli agenti dai casi veri.
+    'prova' => [
+        'email_prefissi' => ['uat+', 'uat-'],
+    ],
+
     // «Resta poi Salva» (SoloDallaPersona, #2136, #2146): `zr-auth.persona.controllo` è acceso di default. Ogni scrittura (non GET, HEAD, OPTIONS) deve
     // portare in `X-Zr-Persona` l'impronta della persona della sessione (Persona::impronta()), o è 409 `persona_diversa`. L'`.env` serve
     // solo a spegnerlo, con ZR_AUTH_PERSONA_CONTROLLO=false (anche 0 e off): un modulo che ha ancora la sua copia lo spegne PRIMA di

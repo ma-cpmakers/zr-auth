@@ -51,6 +51,9 @@ final class SessioneChiusa
             return $risposta;
         }
 
+        // La persona della sessione che si chiude, com'era a inizio richiesta (#2157): a fine corsa la richiesta può averla cambiata.
+        $prova = $richiesta->attributes->get(RicordaLIdDellaSessione::PROVA) === true;
+
         // Anche la sessione nuova di una richiesta tardiva che ha cambiato id da sé: nessun cookie la porta al browser.
         foreach ($ids as $id) {
             $richiesta->session()->getHandler()->destroy($id);
@@ -58,10 +61,12 @@ final class SessioneChiusa
 
         self::senzaCookie($risposta);
 
-        // Né l'id né il percorso con i valori: solo che è successo e dove (il disegno della rotta).
+        // Né l'id né il percorso con i valori: solo che è successo e dove (il disegno della rotta), e se la persona è un'identità di prova
+        // (un booleano: nessuna email, nessun id).
         Log::info('zr-auth: scartata la risposta tardiva di una sessione chiusa', [
             'metodo' => $richiesta->method(),
             'rotta' => $richiesta->route()?->uri(),
+            'prova' => $prova,
         ]);
 
         return $risposta;
