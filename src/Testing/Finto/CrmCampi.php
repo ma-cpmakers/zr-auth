@@ -40,6 +40,9 @@ trait CrmCampi
     /** Le opzioni di un elenco o di una scelta multipla, al più (Catalogo::OPZIONI_MASSIME). */
     private const CRM_OPZIONI_MASSIME = 100;
 
+    /** Il totale delle opzioni di un campo, vive e archiviate (Catalogo::OPZIONI_TOTALI, #2156). */
+    private const CRM_OPZIONI_TOTALI = 500;
+
     /** Il tetto di `limite` degli elenchi di sezioni e di campi, ed è anche il valore se manca (SezioniElencaRequest, CampiElencaRequest). */
     private const CRM_LIMITE_DEI_CAMPI = 300;
 
@@ -646,6 +649,10 @@ trait CrmCampi
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_OPZIONI_MASSIME]);
             }
 
+            if (count($riga['opzioni']) >= self::CRM_OPZIONI_TOTALI) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_OPZIONI_TOTALI]);
+            }
+
             $this->opzioneUnicaCrm($vive, $campi['nome']['it'], null);
             $opzione = [
                 'id' => self::id(),
@@ -821,6 +828,36 @@ trait CrmCampi
         }
 
         return $vive;
+    }
+
+    /**
+     * Le opzioni tolte nella forma dell'API (Opzioni::archiviateInUscita): `id`, `nome` e `archiviato_il`, dalla meno recente (poi per
+     * `id`); `null` per un campo senza opzioni proprie. Sola lettura.
+     *
+     * @param  list<array<string, mixed>>|null  $righe
+     * @return list<array<string, mixed>>|null
+     */
+    private static function opzioniArchiviateCrm(?array $righe): ?array
+    {
+        if ($righe === null) {
+            return null;
+        }
+
+        $tolte = [];
+
+        foreach ($righe as $opzione) {
+            if (($opzione['archiviato_il'] ?? null) !== null) {
+                $tolte[] = [
+                    'id' => $opzione['id'],
+                    'nome' => ['it' => $opzione['nome']['it'], 'en' => $opzione['nome']['en'] ?? null, 'es' => $opzione['nome']['es'] ?? null],
+                    'archiviato_il' => $opzione['archiviato_il'],
+                ];
+            }
+        }
+
+        usort($tolte, fn (array $a, array $b) => [$a['archiviato_il'], $a['id']] <=> [$b['archiviato_il'], $b['id']]);
+
+        return $tolte;
     }
 
     /**
@@ -1063,6 +1100,7 @@ trait CrmCampi
             'tipo' => $campo['tipo'],
         ] + ($campo['tipo'] === 'sistema' ? ['sistema' => $campo['sistema']] : []) + [
             'opzioni' => self::opzioniVisibiliCrm($campo['opzioni'] ?? null),
+            'opzioni_archiviate' => self::opzioniArchiviateCrm($campo['opzioni'] ?? null),
             'nome' => $campo['nome'],
             'visibilita' => $campo['visibilita'],
             'sezione_id' => $campo['sezione_id'],
