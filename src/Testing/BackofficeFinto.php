@@ -4115,9 +4115,11 @@ final class BackofficeFinto
      * inviti.accettazione.crea (InvitiAccettazioneController::crea): la persona del gettone dell'accesso entra nel workspace
      * dell'invito col suo ruolo (201, la forma Membro), solo se l'email dell'invito è la sua ed è verificata. Il gettone di
      * un workspace è 403 prima del corpo; ogni fallimento è la stessa 422 verifica_non_riuscita (G11); chi è già membro 409.
+     * Con l'header Idempotency-Key (#1916) la ripetizione dopo una risposta persa dà lo stesso 201 senza rifare niente: la
+     * chiave è della persona e del metodo, come in io.workspace.crea, e viene dopo il gettone e prima del corpo.
      *
      * @param  array<mixed>  $corpo
-     * @return array{int, array<string, mixed>}
+     * @return array{int, array<string, mixed>, array<string, string>}
      */
     private function accettaInvito(Request $richiesta, array $corpo): array
     {
@@ -4127,11 +4129,14 @@ final class BackofficeFinto
             throw new Problema('gettone_con_workspace');
         }
 
-        $codice = (string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'string', 'max:255']])['codice'];
-        $workspace = $this->accettaCodice($codice, $chi['persona']);
-        $persona = $this->persone[$chi['persona']];
+        $chi['workspace'] = '';
 
-        return [201, ['data' => $this->voceMembro($workspace, $chi['persona'])]];
+        return $this->conIdempotenza($richiesta, 'inviti.accettazione.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $codice = (string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'string', 'max:255']])['codice'];
+            $workspace = $this->accettaCodice($codice, $chi['persona']);
+
+            return [201, ['data' => $this->voceMembro($workspace, $chi['persona'])], []];
+        });
     }
 
     /** Un membro in più nel workspace dell'invito che si accetta (Tetti::membri): con 50 membri, 409 limite_raggiunto. */
