@@ -152,7 +152,7 @@ trait Crm
     private const CRM_ESPORTAZIONI_PERSONA_ALL_ORA = 10;
 
     /** I secondi di `Retry-After` del tetto alle esportazioni in corso, quando il finto lo simula (occupaEsportazioni()). */
-    private const CRM_ESPORTAZIONI_IN_CORSO_ATTESA = 30;
+    private const CRM_ESPORTAZIONI_IN_CORSO_ATTESA = 5;
 
     private const CRM_ESPORTAZIONI_WORKSPACE_ALL_ORA = 20;
 
