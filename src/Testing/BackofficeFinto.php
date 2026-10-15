@@ -414,6 +414,9 @@ final class BackofficeFinto
     /** @var array<string, true> i provider che non rispondono (guastaProvider()), per slug */
     private array $providerGuasti = [];
 
+    /** Il tetto alle esportazioni del CRM in corso è pieno (occupaEsportazioni()): le due esportazioni rispondono `429` `troppe_richieste`. */
+    private bool $esportazioniOccupate = false;
+
     /** @var array<string, array{id: string, email: string, verificata: bool, nome: ?string}> il profilo che il provider dà per un codice (identitaDelProvider()), per slug e codice */
     private array $profili = [];
 
@@ -740,6 +743,18 @@ final class BackofficeFinto
             'verificata' => $verificata,
             'nome' => $nome,
         ];
+
+        return $this;
+    }
+
+    /**
+     * Il tetto alle esportazioni del CRM in corso è pieno (#2162): `crm.persone.esportazione.mostra` e `crm.organizzazioni.esportazione.mostra`
+     * rispondono `429` `troppe_richieste` con `Retry-After`, come col backoffice quando un'esportazione della stessa persona scorre ancora.
+     * Il ruolo, l'app e i filtri vengono prima, come là; il 429 non consuma il freno a ora. `occupaEsportazioni(false)` lo libera.
+     */
+    public function occupaEsportazioni(bool $occupate = true): self
+    {
+        $this->esportazioniOccupate = $occupate;
 
         return $this;
     }

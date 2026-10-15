@@ -151,6 +151,9 @@ trait Crm
     /** I freni delle esportazioni, all'ora (config zeiras.freni.crm_esportazioni_*, #1905): per persona e per workspace, i due metodi insieme. */
     private const CRM_ESPORTAZIONI_PERSONA_ALL_ORA = 10;
 
+    /** I secondi di `Retry-After` del tetto alle esportazioni in corso, quando il finto lo simula (occupaEsportazioni()). */
+    private const CRM_ESPORTAZIONI_IN_CORSO_ATTESA = 30;
+
     private const CRM_ESPORTAZIONI_WORKSPACE_ALL_ORA = 20;
 
     /** Quanti id al più nel filtro `id` (FiltroPerId::MASSIMO). */
@@ -558,6 +561,11 @@ trait Crm
             'archiviate' => $vero($tipo === 'persone' ? 'archiviati' : 'archiviate'), 'ricerca' => null, 'id' => self::idDelFiltroCrm($testo('id')),
             ...($tipo === 'persone' ? ['email' => null, 'organizzazione' => self::idCrm($testo('organizzazione_id'))] : []),
         ];
+
+        // Il tetto alle esportazioni in corso (#2162) viene dopo il ruolo, l'app e i filtri e prima del freno a ora, che non consuma.
+        if ($this->esportazioniOccupate) {
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) self::CRM_ESPORTAZIONI_IN_CORSO_ATTESA]);
+        }
 
         $this->frena('freni:crm.esportazioni:persona:'.$chi['persona'], self::CRM_ESPORTAZIONI_PERSONA_ALL_ORA, 3600);
         $this->frena('freni:crm.esportazioni:workspace:'.$chi['workspace'], self::CRM_ESPORTAZIONI_WORKSPACE_ALL_ORA, 3600);
