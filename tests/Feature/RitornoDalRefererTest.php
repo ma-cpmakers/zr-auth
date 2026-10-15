@@ -1,6 +1,8 @@
 <?php
 
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
+use Zeiras\Auth\Api;
 use Zeiras\Auth\Sessione;
 
 // #2043: una scrittura a sessione scaduta ricorda la pagina da cui è partita, dal Referer, a condizioni strette. Dopo l'accesso si
@@ -9,7 +11,6 @@ use Zeiras\Auth\Sessione;
 const PAGINA_BUONA = FRONTEND.'/w/studio/b/3?vista=2';
 
 beforeEach(function () {
-    $this->scritture = 0;
     Route::middleware('web')->match(['POST', 'PUT', 'PATCH', 'DELETE'], 'w/{workspace}/nota', function () {
         app()->instance('ritorno.scritture', (app()->bound('ritorno.scritture') ? app('ritorno.scritture') : 0) + 1);
 
@@ -60,6 +61,8 @@ it('un Referer che non è una pagina di questo workspace, su questa origine, non
     'che risale' => 'https://board.zeiras.com/w/studio/../altro/b/3',
     'che risale, codificato' => 'https://board.zeiras.com/w/studio/%2e%2e/altro/b/3',
     'con una barra rovesciata' => 'https://board.zeiras.com/w/studio/\\evil',
+    'con una barra rovesciata codificata' => 'https://board.zeiras.com/w/studio/%5Cevil',
+    'con un segmento .' => 'https://board.zeiras.com/w/studio/./b/3',
     'con una barra rovesciata iniziale' => '/\\evil.example',
     'con un a capo' => "https://board.zeiras.com/w/studio/b/3\nSet-Cookie: a=b",
     'con un carattere di controllo codificato' => 'https://board.zeiras.com/w/studio/b%00/3',
@@ -85,6 +88,26 @@ it('il testo cercato (q, scelta) non entra nel ritorno, il resto della query sì
     scriviDa(FRONTEND.'/w/studio/b?q=Mario+Rossi&scelta=mario%40example.com&vista=2&pagina=3')->assertRedirect(INGRESSO);
 
     expect(session('url.intended'))->toBe(FRONTEND.'/w/studio/b?vista=2&pagina=3');
+});
+
+it('del resto della query restano chiavi, ordine, doppioni e parentesi; q e scelta (anche con parentesi) escono', function () {
+    scriviDa(FRONTEND.'/w/studio/b?ordina.per=nome&tag=a&tag=b&k&z[]=1&q[]=Mario&scelta=x')->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(FRONTEND.'/w/studio/b?ordina.per=nome&tag=a&tag=b&k&z[]=1');
+});
+
+it('i byte fuori da una query si percent-codificano', function () {
+    scriviDa(FRONTEND.'/w/studio/b?x=è"<>')->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(FRONTEND.'/w/studio/b?x=%C3%A8%22%3C%3E');
+});
+
+it('con la config del modulo pubblicata senza `senza_query` il testo cercato esce lo stesso', function () {
+    config(['zr-auth.ritorno' => []]);
+
+    scriviDa(FRONTEND.'/w/studio/b?q=Mario&vista=2')->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(FRONTEND.'/w/studio/b?vista=2');
 });
 
 it('una rotta senza workspace nel percorso non ricorda il Referer', function () {
@@ -114,15 +137,36 @@ it('una visita di Inertia riceve 409 con X-Inertia-Location e ricorda la pagina;
     expect(session()->has('url.intended'))->toBeFalse();
 });
 
+it('un gettone rifiutato dal backoffice durante una scrittura ricorda la pagina di partenza', function () {
+    Route::middleware('web')->post('w/{workspace}/scrive', fn () => Api::workspace()->post('/v1/x', ['a' => 1]));
+    Http::fake(['*' => problema(401, 'gettone_non_valido')]);
+    apriSessione();
+
+    test()->call('POST', FRONTEND.'/w/studio/scrive', [], [], [], ['HTTP_REFERER' => PAGINA_BUONA])->assertStatus(302)->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(PAGINA_BUONA);
+});
+
+it('un POST con _method=DELETE è una scrittura e ricorda la pagina', function () {
+    test()->call('POST', FRONTEND.'/w/studio/nota', ['_method' => 'DELETE'], [], [], ['HTTP_REFERER' => PAGINA_BUONA])->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(PAGINA_BUONA);
+});
+
 // ZA.2
-it('dopo l\'accesso si torna alla pagina con un GET, e la scrittura non si ripete', function () {
-    scriviDa(PAGINA_BUONA)->assertRedirect(INGRESSO);
+it('la scrittura risponde 302 (mai 307 o 308: rimanderebbero il corpo) e dopo l\'accesso si torna alla pagina, una volta sola', function () {
+    scriviDa(PAGINA_BUONA)->assertStatus(302)->assertRedirect(INGRESSO);
     apriSessione();
 
     expect(Sessione::ritorno(FRONTEND.'/predefinita'))->toBe(PAGINA_BUONA)
-        ->and(app()->bound('ritorno.scritture') ? app('ritorno.scritture') : 0)->toBe(0)
         // Vale una volta.
         ->and(Sessione::ritorno(FRONTEND.'/predefinita'))->toBe(FRONTEND.'/predefinita');
+});
+
+it('la scrittura non gira: la guardia la ferma prima della rotta', function () {
+    scriviDa(PAGINA_BUONA)->assertRedirect(INGRESSO);
+
+    expect(app()->bound('ritorno.scritture'))->toBeFalse();
 });
 
 // ZA.3
@@ -138,5 +182,8 @@ it('il README descrive il ritorno dopo una scrittura e i suoi limiti', function 
         ->toContain('senza_query')
         ->toContain('GET')
         ->toContain('non si ripete')
-        ->toContain('zr-crm');
+        ->toContain('zr-crm')
+        ->toContain('Ritorno::dalReferer($richiesta')
+        ->toContain('sostituisce')
+        ->toContain('302');
 });

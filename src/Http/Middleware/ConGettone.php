@@ -11,8 +11,9 @@ use Zeiras\Auth\Sessione;
 
 /**
  * La guardia di zr-auth: ogni rotta dei gruppi `web` e `api` vuole una sessione con un gettone che non è scaduto
- * (ZrAuthServiceProvider la mette nei gruppi da sé). Senza, una pagina rimanda all'ingresso e, se è un GET, ricorda dove
- * voleva andare; una visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401.
+ * (ZrAuthServiceProvider la mette nei gruppi da sé). Senza, una pagina rimanda all'ingresso e ricorda dove voleva andare
+ * (un GET: la sua pagina; una scrittura: la pagina da cui è partita, dal Referer, Ritorno::dalReferer); una visita di Inertia
+ * riceve 409 con `X-Inertia-Location`; una richiesta JSON 401.
  */
 final class ConGettone
 {

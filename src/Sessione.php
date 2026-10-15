@@ -171,7 +171,7 @@ final class Sessione
 
     /**
      * Dove tornare dopo l'accesso, al posto di redirect()->intended(): la pagina che la guardia ha ricordato (`url.intended`,
-     * solo da un GET) se ha l'origine della richiesta, cioè lo stesso schema, lo stesso host e la stessa porta; se no
+     * da un GET, o dal Referer di una scrittura, Ritorno::dalReferer) se ha l'origine della richiesta, cioè lo stesso schema, lo stesso host e la stessa porta; se no
      * `$predefinita`, la pagina che sceglie il modulo. Il ritorno esce dalla sessione in ogni caso: vale una volta.
      */
     public static function ritorno(string $predefinita): string

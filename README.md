@@ -458,8 +458,9 @@ che dà, con `codice` e `state`. Un esempio per intero: `tests/Feature/IngressoT
 ## La guardia, e il suo test
 
 `ConGettone` entra da sé nei gruppi `web` e `api`: senza una sessione col gettone, una pagina rimanda all'ingresso; una
-visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401. Solo un GET ricorda la pagina chiesta
-(`url.intended`, l'indirizzo della richiesta): ogni altro metodo, HEAD compreso, non ricorda niente, e mai il `Referer`.
+visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401. Un GET ricorda la pagina chiesta
+(`url.intended`, l'indirizzo della richiesta); una scrittura (POST, PUT, PATCH, DELETE) ricorda solo la pagina da cui è partita,
+dal `Referer` a condizioni strette (sotto, «Il ritorno dopo una scrittura»); HEAD non ricorda niente.
 
 Dopo l'accesso si torna lì con `Sessione::ritorno()`, **al posto di `redirect()->intended()`**, che manderebbe la persona
 a qualunque indirizzo ci sia in `url.intended`, anche di un altro sito:
@@ -494,9 +495,16 @@ carattere di controllo, più di 2000 caratteri — non ricorda niente, e dopo l'
 ricordato prima non vale per questa scrittura. I parametri di `zr-auth.ritorno.senza_query` (`q`, `scelta`: testo cercato) non
 entrano nel ritorno. HEAD non ricorda niente; una richiesta JSON senza Inertia resta 401.
 
-Si torna con un GET, con `Sessione::ritorno()`: la scrittura **non si ripete** e ciò che la persona aveva scritto non si tiene. Il
-modulo che aveva una copia di questa regola (zr-crm, `NelWorkspace::dovEri`) la toglie, in una PR a sé; per un GET la guardia
-ricorda ancora l'indirizzo com'è (la query compresa).
+Si torna con un GET, con `Sessione::ritorno()` (un 302: mai un 307 o 308, che rimanderebbero il corpo): la scrittura **non si
+ripete** e ciò che la persona aveva scritto non si tiene. Della query si tolgono le coppie dei parametri di `senza_query` e il resto
+resta com'era (chiavi, ordine, doppioni, parentesi), con i byte fuori dall'alfabeto di una query percent-codificati.
+
+Chi risponde prima della guardia non ne riceve niente da sé: in zr-crm `NelWorkspace` risponde a sessione assente prima di
+`ConGettone`, quindi la guardia ricorda il `Referer` solo dopo un `GettoneRifiutato` e per `POST w/{workspace}/esci`. La copia di
+zr-crm (`NelWorkspace::dovEri`, usata anche dal 419 e da `StessaPersona`) si **sostituisce** con `Ritorno::dalReferer($richiesta,
+$slug)` in quei punti, in una PR a sé; zr-board, che risponde prima della guardia e non ricorda le scritture, può fare lo stesso.
+Con la guardia, «Esci» da una pagina con la sessione scaduta ricorda la pagina dove si è premuto: dopo l'accesso si torna lì. Per un
+GET la guardia ricorda ancora l'indirizzo com'è (la query compresa).
 
 ## Gli eventi del backoffice: il ricevitore
 
