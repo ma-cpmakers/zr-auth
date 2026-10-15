@@ -934,3 +934,54 @@ it('un `campi` mandato come oggetto è la mappa del JSON: valori scritti, mappa 
     expect($zero->status())->toBe(422)
         ->and(collect($zero->json('errors'))->pluck('pointer')->all())->not->toContain('#/campi');
 });
+
+it('crm.*.elenca: ogni riga porta campi con i soli campi in elenco che hanno un valore; la ricerca no (#2169, CL.1, CL.2)', function (string $oggetto, string $percorso) {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => $oggetto, 'nome' => ['it' => 'Livello'], 'tipo' => 'testo', 'in_elenco' => true], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => $oggetto, 'nome' => ['it' => 'Nota'], 'tipo' => 'testo'], $anna));
+    $pipeline = $oggetto === 'trattativa'
+        ? riuscita(alFinto('GET', '/v1/crm/pipeline', null, $anna))->json('data.0.id')
+        : null;
+    $corpo = fn (string $nome) => $oggetto === 'trattativa' ? ['titolo' => $nome, 'pipeline_id' => $pipeline] : ['nome' => $nome];
+    $id = riuscita(alFinto('POST', $percorso, $corpo('Rec 1') + ['campi' => (object) ['livello' => 'alto', 'nota' => 'riservata']], $anna))->json('data.id');
+    $senza = riuscita(alFinto('POST', $percorso, $corpo('Rec 2'), $anna))->json('data.id');
+
+    $righe = collect(riuscita(alFinto('GET', $percorso, null, $anna))->json('data'))->keyBy('id');
+
+    expect($righe[$id]['campi'])->toBe(['livello' => 'alto'])
+        ->and($righe[$senza]['campi'])->toBe([])
+        ->and(alFinto('GET', "{$percorso}/{$id}", null, $anna)->json('data.campi'))->toBe(['livello' => 'alto', 'nota' => 'riservata']);
+
+    // La ricerca no.
+    $ricerca = riuscita(alFinto('POST', "{$percorso}/ricerca", ['q' => 'Rec'], $anna));
+    expect($ricerca->json('data.0'))->not->toHaveKey('campi');
+})->with([['persona', '/v1/crm/persone'], ['organizzazione', '/v1/crm/organizzazioni'], ['trattativa', '/v1/crm/trattative']]);
+
+it('al più 10 campi in elenco per oggetto: l\'undicesimo in crea, in modifica o nel ripristino è 409 limite_raggiunto con limite 10 (#2169, CL.3)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    foreach (range(1, 10) as $n) {
+        riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => "Colonna {$n}"], 'tipo' => 'testo', 'in_elenco' => true], $anna));
+    }
+
+    $troppo = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Di troppo'], 'tipo' => 'testo', 'in_elenco' => true], $anna);
+    expect($troppo->status())->toBe(409)->and($troppo->json('codice'))->toBe('limite_raggiunto')->and($troppo->json('limite'))->toBe(10);
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Di troppo'], 'tipo' => 'testo'], $anna));
+    $modifica = alFinto('PATCH', '/v1/crm/campi/persona.di_troppo', ['in_elenco' => true], $anna);
+    expect($modifica->status())->toBe(409)->and($modifica->json('limite'))->toBe(10);
+
+    // Chi è già in elenco si modifica; un altro oggetto ha il suo tetto.
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.colonna_2', ['in_elenco' => true, 'nome' => ['it' => 'Colonna due']], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'organizzazione', 'nome' => ['it' => 'Uno'], 'tipo' => 'testo', 'in_elenco' => true], $anna));
+
+    // Eliminare libera il posto; il ripristino oltre il tetto è 409 e il campo resta eliminato; uscito un altro, entra.
+    expect(alFinto('DELETE', '/v1/crm/campi/persona.colonna_1', null, $anna)->status())->toBe(204);
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.di_troppo', ['in_elenco' => true], $anna));
+    $ripristino = alFinto('PATCH', '/v1/crm/campi/persona.colonna_1', ['archiviato' => false], $anna);
+    expect($ripristino->status())->toBe(409)->and($ripristino->json('limite'))->toBe(10);
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.di_troppo', ['in_elenco' => false], $anna));
+    expect(riuscita(alFinto('PATCH', '/v1/crm/campi/persona.colonna_1', ['archiviato' => false], $anna))->json('data.in_elenco'))->toBeTrue();
+});

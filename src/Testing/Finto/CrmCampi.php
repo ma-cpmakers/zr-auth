@@ -31,6 +31,9 @@ trait CrmCampi
     /** I campi di un oggetto per tetto, standard e «tuoi» (Catalogo::TETTO_CAMPI): contano anche gli eliminati ancora ripristinabili. */
     private const CRM_TETTO_DEI_CAMPI = 300;
 
+    /** I campi «tuoi» vivi di un oggetto che stanno nelle righe di un elenco (`in_elenco`), al più (#2169). */
+    private const CRM_TETTO_IN_ELENCO = 10;
+
     /** I giorni in cui un campo eliminato si ripristina (Campo::GIORNI_PER_RIPRISTINARE): poi, per l'API, non c'è più. */
     private const CRM_GIORNI_PER_RIPRISTINARE = 30;
 
@@ -356,6 +359,10 @@ trait CrmCampi
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_DEI_CAMPI]);
             }
 
+            if (($avanzate['in_elenco'] ?? false) === true) {
+                $this->tettoInElencoCrm($chi['workspace'], $oggetto);
+            }
+
             foreach ($lista as $altro) {
                 if (self::nomeSimileCrm($altro['nome']['it'], null) === self::nomeSimileCrm($campi['nome']['it'], null)) {
                     throw $this->erroreCrm('nome.it', 'regole.campo_nome_duplicato', Regola::DUPLICATO);
@@ -512,6 +519,11 @@ trait CrmCampi
         }
 
         $avanzate = array_intersect_key($avanzate, array_flip($cambiati));
+
+        if (in_array('in_elenco', $cambiati, true) && ($avanzate['in_elenco'] ?? false) === true) {
+            $this->tettoInElencoCrm($chi['workspace'], (string) $voce['oggetto']);
+        }
+
         $nome = $this->nomiNuoviCrm($voce['catalogo']['nome'], $voce['scritti'], $campi['nome'] ?? [], $voce['origine'] === 'tuo');
 
         if (! self::scrittiUgualiCrm($nome['riga'], $voce['scritti'])) {
@@ -876,6 +888,19 @@ trait CrmCampi
     }
 
     /**
+     * Al più 10 campi «tuoi» vivi di un oggetto stanno in elenco (`in_elenco`): chi entra (creazione, modifica o ripristino) trova il
+     * posto o è 409 `limite_raggiunto` con `limite: 10`. Gli eliminati non contano (#2169).
+     */
+    private function tettoInElencoCrm(string $workspace, string $oggetto): void
+    {
+        $presenti = count(array_filter($this->campiTuoiCrm($workspace, $oggetto), fn (array $campo) => ($campo['in_elenco'] ?? false) === true));
+
+        if ($presenti >= self::CRM_TETTO_IN_ELENCO) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_IN_ELENCO]);
+        }
+    }
+
+    /**
      * Il ripristino (`archiviato: false` su un eliminato): ogni altro campo del corpo è estraneo, il nome `it` non dev'essere stato preso
      * da un altro campo (422 `duplicato`, e il campo resta eliminato); torna vivo in fondo alla sua sezione, o a «Principali» se la
      * sezione non c'è più.
@@ -901,6 +926,11 @@ trait CrmCampi
 
         $sezione = in_array($eliminato['sezione_id'], array_column($this->sezioniViveCrm($workspace, $oggetto), 'id'), true) ? $eliminato['sezione_id'] : "{$oggetto}.principali";
         $ordini = array_column(array_filter($lista, fn (array $altro) => $altro['sezione_id'] === $sezione), 'ord');
+        // Un campo che torna in elenco prende un posto fra i dieci: se non c'è è 409 e il campo resta eliminato.
+        if (($eliminato['in_elenco'] ?? false) === true) {
+            $this->tettoInElencoCrm($workspace, $oggetto);
+        }
+
         $riga = &$this->campiCrm[$workspace][$oggetto]['campi'][$eliminato['codice']];
         $riga['eliminato_il'] = null;
         $riga['sezione_id'] = $sezione;
