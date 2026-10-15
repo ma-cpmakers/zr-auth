@@ -1411,7 +1411,7 @@ trait Crm
         return [
             'nome' => ['nullable', 'string', 'max:120', new NomeScritto],
             'cognome' => ['nullable', 'string', 'max:120', new NomeScritto],
-            'ruolo' => ['nullable', 'string', 'max:120'],
+            'ruolo' => ['nullable', 'string', 'max:120', new NomeScritto],
             'organizzazione_id' => ['bail', 'nullable', 'string', 'max:64', $this->regolaCheEsiste($workspace, 'organizzazioni', 'regole.organizzazione_non_esiste')],
             'email' => ['nullable', 'array', 'list', 'max:5'],
             'email.*.indirizzo' => ['required', 'string', 'email', 'max:254'],
@@ -1424,7 +1424,7 @@ trait Crm
             'base_giuridica' => ['nullable', 'string', Rule::in(self::CRM_BASI_GIURIDICHE)],
             'consenso_marketing' => ['sometimes', 'array'],
             'consenso_marketing.dato' => ['present_with:consenso_marketing', 'boolean:strict'],
-            'fonte' => ['nullable', 'string', 'max:120'],
+            'fonte' => ['nullable', 'string', 'max:120', new NomeScritto],
         ];
     }
 

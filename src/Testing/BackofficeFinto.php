@@ -3229,7 +3229,7 @@ final class BackofficeFinto
             'utente.lingua' => ['filled', 'string', Rule::in(Testi::LINGUE)],
             'utente.fuso_orario' => ['filled', 'string', 'timezone:all'],
             'utente.cognome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
-            'utente.mansione' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'utente.mansione' => ['sometimes', 'nullable', 'string', 'max:100', new NomeScritto],
             'utente.telefono' => ['sometimes', 'nullable', 'bail', 'string', 'max:32', 'regex:/^(?=(?:\\D*\\d){5})[0-9+().\\- ]+$/'],
             'primi_passi_nascosti' => $conWorkspace ? ['filled', 'boolean:strict'] : [function (string $attributo, mixed $valore, Closure $rifiuta) {
                 $this->testi->dichiara($attributo, 'campo_vietato');
