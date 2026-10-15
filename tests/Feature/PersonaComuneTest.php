@@ -184,7 +184,7 @@ it('con la sessione aperta e l\'impronta null (utente.id assente, vuoto o non st
 
     expect(scritture())->toBe(0);
     Http::assertNothingSent();
-})->with(['assente', '', 123, ['01k6'], null]);
+})->with(['assente', '', 123, [['01k6']], null]);
 
 // SD.2 (#2201): senza sessione, o con la sessione aperta e l'impronta presente, il comportamento è quello di prima.
 it('SD.2: senza sessione passa alla guardia (401), con l\'impronta giusta la scrittura passa', function () {
