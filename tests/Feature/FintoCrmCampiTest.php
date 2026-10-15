@@ -55,7 +55,8 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
         ->and($nome)->toBe([
             'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null,
             'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
-            'posizione' => 1, 'obbligatorio' => false, 'indispensabile' => true, 'in_campi' => false,
+            'posizione' => 1, 'obbligatorio' => false, 'aiuto' => null, 'predefinito' => null, 'limiti' => null, 'in_elenco' => false, 'nel_crea' => false,
+            'indispensabile' => true, 'in_campi' => false,
             'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z', 'archiviato_il' => null, 'ripristinabile_fino' => null,
         ])
         ->and($persona['organizzazione_id']['sistema'])->toBe('organizzazione')
