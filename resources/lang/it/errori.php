@@ -157,6 +157,10 @@ return [
         'title' => 'Fase non vuota',
         'detail' => "Questa fase ha ancora trattative (aperte, vinte, perse o archiviate) e si elimina solo senza: sposta le sue trattative in un'altra fase (una chiusa o archiviata si riapre o si ripristina prima con crm.trattative.modifica), poi ripeti.",
     ],
+    'campo_di_sistema' => [
+        'title' => 'Campo di sistema',
+        'detail' => 'Questo campo è uno standard o di sistema: si nasconde e si sposta, ma non si elimina. Solo un campo «tuo», creato dal workspace, si elimina. Il metodo non ha scritto niente.',
+    ],
     'sezione_di_sistema' => [
         'title' => 'Sezione di sistema',
         'detail' => '«Principali» è la sezione fissa dei campi di un oggetto: non si rinomina, non si sposta e non si elimina. Il metodo non ha scritto niente.',

@@ -42,7 +42,7 @@ trait CrmValori
     private function campiTuoiCrm(string $workspace, string $oggetto): array
     {
         $this->campiDelWorkspaceCrm($workspace);
-        $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo');
+        $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo' && ($campo['eliminato_il'] ?? null) === null);
         uasort($campi, fn (array $a, array $b) => $a['ord'] <=> $b['ord']);
 
         return $campi;
@@ -74,7 +74,57 @@ trait CrmValori
             }
         }
 
+        // Un campo eliminato (ripristinabile per 30 giorni) non si scrive più: la sua chiave è 422 `non_trovato`, non `campo_estraneo`.
+        foreach ($this->campiEliminatiCrm($workspace, $oggetto) as $campo) {
+            $regole["campi.{$campo['codice']}"] = [function (string $nome, mixed $valore, Closure $fail) {
+                $this->rifiutaCrm($fail, $nome, Regola::NON_TROVATO, 'regole.campo_eliminato');
+            }];
+        }
+
         return $regole;
+    }
+
+    /**
+     * Le righe di una cronologia senza le voci dei campi «tuoi» eliminati (`campi.<chiave>`): finché il campo non c'è per l'API, la sua
+     * storia non esce (e tornano col ripristino). Una riga che diceva solo di quelle esce intera.
+     *
+     * @param  list<array<string, mixed>>  $righe
+     * @return list<array<string, mixed>>
+     */
+    private function senzaCampiEliminatiCrm(string $workspace, string $oggetto, array $righe): array
+    {
+        $this->campiDelWorkspaceCrm($workspace);
+        $nascosti = [];
+
+        foreach ($this->campiCrm[$workspace][$oggetto]['campi'] as $campo) {
+            if ($campo['origine'] === 'tuo' && ($campo['eliminato_il'] ?? null) !== null) {
+                $nascosti[] = "campi.{$campo['codice']}";
+            }
+        }
+
+        if ($nascosti === []) {
+            return $righe;
+        }
+
+        $fuori = [];
+
+        foreach ($righe as $riga) {
+            $voci = $riga['campi'] ?? [];
+
+            if (! is_array($voci) || $voci === []) {
+                $fuori[] = $riga;
+
+                continue;
+            }
+
+            $restano = array_values(array_filter($voci, fn (mixed $voce) => ! (is_array($voce) && in_array($voce['campo'] ?? null, $nascosti, true))));
+
+            if ($restano !== []) {
+                $fuori[] = ['campi' => $restano] + $riga;
+            }
+        }
+
+        return $fuori;
     }
 
     /**

@@ -28,8 +28,11 @@ trait CrmCampi
     /** I caratteri del nome di una sezione o di un campo, per lingua (Sezioni::NOME). */
     private const CRM_NOME_DI_UNA_SEZIONE = 60;
 
-    /** I campi di un oggetto per tetto, standard e «tuoi» (Catalogo::TETTO_CAMPI). */
+    /** I campi di un oggetto per tetto, standard e «tuoi» (Catalogo::TETTO_CAMPI): contano anche gli eliminati ancora ripristinabili. */
     private const CRM_TETTO_DEI_CAMPI = 300;
+
+    /** I giorni in cui un campo eliminato si ripristina (Campo::GIORNI_PER_RIPRISTINARE): poi, per l'API, non c'è più. */
+    private const CRM_GIORNI_PER_RIPRISTINARE = 30;
 
     /** I tipi di un campo «tuo» in V1 (Catalogo::TIPI_V1); `email` e `telefono` no. */
     private const CRM_TIPI_DEI_CAMPI_TUOI = ['testo', 'testo_lungo', 'numero', 'valuta', 'percentuale', 'data', 'data_ora', 'si_no', 'elenco', 'scelta_multipla', 'url', 'membro'];
@@ -281,7 +284,7 @@ trait CrmCampi
             throw new Problema('sezione_di_sistema');
         }
 
-        if (array_filter($this->campiCrm[$chi['workspace']][$riga['oggetto']]['campi'], fn (array $campo) => $campo['sezione_id'] === $riga['id']) !== []) {
+        if (array_filter($this->campiCrm[$chi['workspace']][$riga['oggetto']]['campi'], fn (array $campo) => $campo['sezione_id'] === $riga['id'] && ($campo['eliminato_il'] ?? null) === null) !== []) {
             throw new Problema('sezione_non_vuota');
         }
 
@@ -294,7 +297,7 @@ trait CrmCampi
 
     /**
      * crm.campi.elenca (CampiController::elenca): i campi di un oggetto, sezione per sezione e per posto; stessi parametri di
-     * `crm.sezioni.elenca`.
+     * `crm.sezioni.elenca`, più `archiviati=true` per i «tuoi» eliminati da meno di 30 giorni (i più recenti per primi).
      *
      * @return array{int, array<string, mixed>}
      */
@@ -303,9 +306,9 @@ trait CrmCampi
         $chi = $this->conCrm($richiesta);
         $this->campiDelWorkspaceCrm($chi['workspace']);
 
-        return $this->paginaDeiCampiCrm($richiesta, 'crm.campi.elenca', fn (string $oggetto): array => array_map(
+        return $this->paginaDeiCampiCrm($richiesta, 'crm.campi.elenca', fn (string $oggetto, bool $archiviati = false): array => array_map(
             fn (array $campo) => $this->voceCampoCrm($campo),
-            $this->campiDiUnOggettoCrm($chi['workspace'], $oggetto),
+            $archiviati ? $this->campiEliminatiCrm($chi['workspace'], $oggetto) : $this->campiDiUnOggettoCrm($chi['workspace'], $oggetto),
         ));
     }
 
@@ -345,7 +348,7 @@ trait CrmCampi
             $this->campiDelWorkspaceCrm($chi['workspace']);
             $lista = $this->campiDiUnOggettoCrm($chi['workspace'], $oggetto);
 
-            if (count($lista) >= self::CRM_TETTO_DEI_CAMPI) {
+            if (count($lista) + count($this->campiEliminatiCrm($chi['workspace'], $oggetto)) >= self::CRM_TETTO_DEI_CAMPI) {
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_DEI_CAMPI]);
             }
 
@@ -462,8 +465,20 @@ trait CrmCampi
             'sezione_id' => ['filled', 'string', 'max:40'],
             'posizione' => ['filled', 'integer:strict', 'min:1'],
             'obbligatorio' => ['filled', 'boolean:strict'],
+            'archiviato' => ['filled', 'boolean:strict'],
         ]);
+
+        if (($campi['archiviato'] ?? null) === true) {
+            throw $this->erroreCrm('archiviato', 'regole.campo_archiviato_si_elimina', Regola::VALORE_NON_AMMESSO);
+        }
+
         $this->campiDelWorkspaceCrm($chi['workspace']);
+
+        if (($campi['archiviato'] ?? null) === false && ($eliminato = $this->trovaCampoEliminatoCrm($chi['workspace'], $id)) !== null) {
+            return $this->ripristinaCampoCrm($chi['workspace'], $eliminato, $campi);
+        }
+
+        unset($campi['archiviato']);
         [$voce, $lista] = $this->trovaCampoCrm($chi['workspace'], $id);
         $oggetto = $voce['oggetto'];
         $cambiati = [];
@@ -555,6 +570,66 @@ trait CrmCampi
         return [200, ['data' => $this->voceCampoCrm($nuovo)]];
     }
 
+    /**
+     * crm.campi.elimina (CampiController::elimina): archivia un campo «tuo» (204); uno standard o di tipo `sistema` è 409
+     * `campo_di_sistema`; uno che non c'è, già eliminato o di un altro workspace è 404. Il campo esce dalle letture e dalle scritture;
+     * per 30 giorni si ripristina con `crm.campi.modifica {archiviato: false}`, poi per l'API non c'è più.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaCampoCrm(Request $richiesta, string $id): array
+    {
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
+        $this->campiDelWorkspaceCrm($chi['workspace']);
+        [$voce] = $this->trovaCampoCrm($chi['workspace'], $id);
+
+        if ($voce['origine'] !== 'tuo') {
+            throw new Problema('campo_di_sistema');
+        }
+
+        $riga = &$this->campiCrm[$chi['workspace']][$voce['oggetto']]['campi'][$voce['codice']];
+        $riga['eliminato_il'] = self::adessoCrm();
+        $riga['aggiornato_il'] = self::dopoCrm($riga['aggiornato_il']);
+
+        return [204, null];
+    }
+
+    /**
+     * Il ripristino (`archiviato: false` su un eliminato): ogni altro campo del corpo è estraneo, il nome `it` non dev'essere stato preso
+     * da un altro campo (422 `duplicato`, e il campo resta eliminato); torna vivo in fondo alla sua sezione, o a «Principali» se la
+     * sezione non c'è più.
+     *
+     * @param  array<string, mixed>  $eliminato
+     * @param  array<string, mixed>  $campi
+     * @return array{int, array<string, mixed>}
+     */
+    private function ripristinaCampoCrm(string $workspace, array $eliminato, array $campi): array
+    {
+        foreach (array_diff(array_keys($campi), ['archiviato']) as $altro) {
+            throw $this->erroreCrm((string) $altro, 'regole.campo_ripristino_solo', Regola::CAMPO_ESTRANEO);
+        }
+
+        $oggetto = $eliminato['oggetto'];
+        $lista = $this->campiDiUnOggettoCrm($workspace, $oggetto);
+
+        foreach ($lista as $altro) {
+            if (self::nomeSimileCrm($altro['nome']['it'], null) === self::nomeSimileCrm($eliminato['nome']['it'], null)) {
+                throw $this->erroreCrm('nome.it', 'regole.campo_nome_duplicato', Regola::DUPLICATO);
+            }
+        }
+
+        $sezione = in_array($eliminato['sezione_id'], array_column($this->sezioniViveCrm($workspace, $oggetto), 'id'), true) ? $eliminato['sezione_id'] : "{$oggetto}.principali";
+        $ordini = array_column(array_filter($lista, fn (array $altro) => $altro['sezione_id'] === $sezione), 'ord');
+        $riga = &$this->campiCrm[$workspace][$oggetto]['campi'][$eliminato['codice']];
+        $riga['eliminato_il'] = null;
+        $riga['sezione_id'] = $sezione;
+        $riga['ord'] = ($ordini === [] ? 0 : max($ordini)) + self::CRM_PASSO;
+        $riga['aggiornato_il'] = self::dopoCrm($riga['aggiornato_il']);
+        [$nuovo] = $this->trovaCampoCrm($workspace, $eliminato['id']);
+
+        return [200, ['data' => $this->voceCampoCrm($nuovo)]];
+    }
+
     // ———————————————————————————————————————— Lo stato
 
     /** Il catalogo nel workspace, al primo metodo: ogni sezione e ogni campo con i valori del catalogo e la data dei suoi dati. */
@@ -615,7 +690,7 @@ trait CrmCampi
     private function campiDiUnOggettoCrm(string $workspace, string $oggetto): array
     {
         $ordineDelleSezioni = array_flip(array_column($this->sezioniViveCrm($workspace, $oggetto), 'id'));
-        $campi = array_values($this->campiCrm[$workspace][$oggetto]['campi']);
+        $campi = array_values(array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => ($campo['eliminato_il'] ?? null) === null));
         usort($campi, fn (array $a, array $b) => [$ordineDelleSezioni[$a['sezione_id']] ?? PHP_INT_MAX, $a['ord'], $a['codice']] <=> [$ordineDelleSezioni[$b['sezione_id']] ?? PHP_INT_MAX, $b['ord'], $b['codice']]);
         $contati = [];
 
@@ -626,6 +701,49 @@ trait CrmCampi
         }
 
         return $campi;
+    }
+
+    /**
+     * I campi «tuoi» eliminati di un oggetto e ancora ripristinabili (eliminati da meno di 30 giorni), i più recenti per primi, col
+     * posto da 1 nell'elenco; quelli eliminati da più tempo, per l'API, non ci sono più.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function campiEliminatiCrm(string $workspace, string $oggetto): array
+    {
+        $limite = self::adessoCrm()->subDays(self::CRM_GIORNI_PER_RIPRISTINARE);
+        $eliminati = array_values(array_filter(
+            $this->campiCrm[$workspace][$oggetto]['campi'],
+            fn (array $campo) => $campo['origine'] === 'tuo' && ($campo['eliminato_il'] ?? null) !== null && $campo['eliminato_il']->greaterThan($limite),
+        ));
+        usort($eliminati, fn (array $a, array $b) => [$b['eliminato_il'], $a['codice']] <=> [$a['eliminato_il'], $b['codice']]);
+
+        foreach ($eliminati as $i => $campo) {
+            $eliminati[$i]['posto'] = $i + 1;
+            $eliminati[$i]['nome'] = self::nomiCrm($campo['catalogo']['nome'], $campo['scritti']);
+        }
+
+        return $eliminati;
+    }
+
+    /**
+     * Il campo eliminato (e ancora ripristinabile) di un id, con la sua voce; `null` se è vivo, se è passato nell'archivio o non c'è.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function trovaCampoEliminatoCrm(string $workspace, string $id): ?array
+    {
+        if (preg_match('/^([a-z]+)\.[a-z0-9_]+$/', $id, $trovato) !== 1 || ! in_array($trovato[1], self::CRM_OGGETTI_DEI_CAMPI, true)) {
+            return null;
+        }
+
+        foreach ($this->campiEliminatiCrm($workspace, $trovato[1]) as $campo) {
+            if ($campo['id'] === $id) {
+                return $campo;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -707,6 +825,8 @@ trait CrmCampi
             'in_campi' => $campo['in_campi'],
             'creato_il' => self::iso($campo['creato_il']),
             'aggiornato_il' => self::iso($campo['aggiornato_il']),
+            'archiviato_il' => isset($campo['eliminato_il']) ? self::iso($campo['eliminato_il']) : null,
+            'ripristinabile_fino' => isset($campo['eliminato_il']) ? self::iso($campo['eliminato_il']->addDays(self::CRM_GIORNI_PER_RIPRISTINARE)) : null,
         ];
     }
 
@@ -789,9 +909,11 @@ trait CrmCampi
     private function paginaDeiCampiCrm(Request $richiesta, string $operazione, Closure $voci): array
     {
         $grezza = self::query($richiesta);
-        $lista = $operazione.':'.(is_string($grezza['oggetto'] ?? null) ? $grezza['oggetto'] : '');
+        $archiviati = $operazione === 'crm.campi.elenca' && ($grezza['archiviati'] ?? null) === 'true';
+        $lista = $operazione.':'.(is_string($grezza['oggetto'] ?? null) ? $grezza['oggetto'] : '').($archiviati ? ':archiviati' : '');
         $query = $this->testi->validaQuery($grezza, [
             'oggetto' => ['required', 'string', Rule::in(self::CRM_OGGETTI_DEI_CAMPI)],
+            ...($operazione === 'crm.campi.elenca' ? ['archiviati' => ['sometimes', 'string', Rule::in(['true', 'false'])]] : []),
             'limite' => ['sometimes', 'integer', 'between:1,'.self::CRM_LIMITE_DEI_CAMPI],
             'cursore' => ['sometimes', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($lista) {
                 if ($this->leggiCursore($lista, 'posizione', $valore) === null) {
@@ -802,7 +924,7 @@ trait CrmCampi
         ]);
         $limite = (int) ($query['limite'] ?? self::CRM_LIMITE_DEI_CAMPI);
         $dopo = isset($query['cursore']) ? (int) $this->leggiCursore($lista, 'posizione', $query['cursore']) : 0;
-        $resto = array_slice($voci($query['oggetto']), $dopo);
+        $resto = array_slice($voci($query['oggetto'], $archiviati), $dopo);
 
         return [200, [
             'data' => array_slice($resto, 0, $limite),

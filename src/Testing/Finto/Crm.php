@@ -52,6 +52,7 @@ trait Crm
         ['GET', '#^/v1/crm/campi$#', 'crm.campi.elenca'],
         ['POST', '#^/v1/crm/campi$#', 'crm.campi.crea'],
         ['PATCH', '#^/v1/crm/campi/([^/]+)$#', 'crm.campi.modifica'],
+        ['DELETE', '#^/v1/crm/campi/([^/]+)$#', 'crm.campi.elimina'],
         ['GET', '#^/v1/crm/pipeline$#', 'crm.pipeline.elenca'],
         ['POST', '#^/v1/crm/pipeline$#', 'crm.pipeline.crea'],
         ['POST', '#^/v1/crm/pipeline/partenza$#', 'crm.pipeline.partenza.crea'],
@@ -230,6 +231,7 @@ trait Crm
             'crm.campi.elenca' => $this->elencaCampiCrm($richiesta),
             'crm.campi.crea' => $this->creaCampoCrm($richiesta, $corpo),
             'crm.campi.modifica' => $this->modificaCampoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.campi.elimina' => $this->eliminaCampoCrm($richiesta, $parametri[0]),
             'crm.pipeline.crea' => $this->creaPipelineCrm($richiesta, $corpo),
             'crm.pipeline.partenza.crea' => $this->partenzaPipelineCrm($richiesta, $corpo),
             'crm.pipeline.mostra' => $this->mostraCrm($richiesta, 'pipeline', $parametri[0]),
@@ -1115,6 +1117,9 @@ trait Crm
             return $voce + ($tipo === 'trattative' ? [] : ['importazione_id' => $cambio['importazione_id']]) + ['attivita_id' => $cambio['attivita_id']];
         };
         $esito = $this->paginaCrm($richiesta, "{$lista}:{$riga['id']}", $righe, fn (array $una, array $altra) => [$altra['istante'], $altra['id']] <=> [$una['istante'], $una['id']], $voce);
+        // Come il backoffice (ValoriDeiCampi::senzaEliminati): le voci `campi.<chiave>` di un campo «tuo» eliminato non escono, e una riga che
+        // diceva solo di quelle esce intera; col ripristino tornano. Si toglie dopo la pagina, come là.
+        $esito[1]['data'] = $this->senzaCampiEliminatiCrm($chi['workspace'], ['persone' => 'persona', 'organizzazioni' => 'organizzazione', 'trattative' => 'trattativa'][$tipo], $esito[1]['data']);
 
         if ($tipo === 'persone') {
             $esito[1]['trattative_fuori_finestra'] = max(0, count($collegate) - self::CRM_FINESTRA_DELLE_TRATTATIVE);

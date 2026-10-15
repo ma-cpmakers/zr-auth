@@ -157,6 +157,10 @@ return [
         'title' => 'Fase no vacía',
         'detail' => 'Esta fase aún tiene negociaciones (abiertas, ganadas, perdidas o archivadas) y solo se elimina sin ellas: mueve sus negociaciones a otra fase (una cerrada o archivada se reabre o se restaura antes con crm.trattative.modifica) y vuelve a intentarlo.',
     ],
+    'campo_di_sistema' => [
+        'title' => 'Campo del sistema',
+        'detail' => 'Este campo es estándar o del sistema: se oculta y se mueve, pero no se elimina. Solo se elimina un campo «tuyo», creado por el espacio de trabajo. No se escribió nada.',
+    ],
     'sezione_di_sistema' => [
         'title' => 'Sección del sistema',
         'detail' => '«Principali» (Principales) es la sección fija de los campos de un objeto: no se renombra, no se mueve y no se elimina. No se escribió nada.',

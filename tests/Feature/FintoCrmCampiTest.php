@@ -56,7 +56,7 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
             'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null,
             'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
             'posizione' => 1, 'obbligatorio' => false, 'indispensabile' => true, 'in_campi' => false,
-            'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z',
+            'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z', 'archiviato_il' => null, 'ripristinabile_fino' => null,
         ])
         ->and($persona['organizzazione_id']['sistema'])->toBe('organizzazione')
         ->and($persona['ruolo'])->not->toHaveKey('sistema')
@@ -612,4 +612,117 @@ it('crm.campi.modifica: obbligatorio si cambia su un campo «tuo» e vale per le
     expect($standard->status())->toBe(422, $standard->body())
         ->and($standard->json('errors.0.pointer'))->toBe('#/obbligatorio')
         ->and($standard->json('errors.0.regola'))->toBe('campo_estraneo');
+});
+
+// #2154 (CRM-12 C1): crm.campi.elimina e il ripristino. Che le risposte siano quelle del backoffice lo prova il suo FintoTest.
+it('crm.campi.elimina: 204, il campo esce dall\'elenco e compare in archiviati=true; i suoi valori non si leggono né si scrivono (CE.1, CE.2)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'testo'], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Codice'], 'tipo' => 'testo', 'obbligatorio' => true], $anna));
+    $persona = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => ['codice' => 'A1', 'livello' => 'alto']], $anna))->json('data.id');
+
+    $eliminato = alFinto('DELETE', '/v1/crm/campi/persona.livello', null, $anna);
+    $eliminatoObbligatorio = alFinto('DELETE', '/v1/crm/campi/persona.codice', null, $anna);
+    $archiviati = alFinto('GET', '/v1/crm/campi?oggetto=persona&archiviati=true', null, $anna);
+    $scrittura = alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['livello' => 'basso']], $anna);
+
+    expect($eliminato->status())->toBe(204)
+        ->and($eliminatoObbligatorio->status())->toBe(204)
+        ->and(collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->pluck('id')->all())->not->toContain('persona.livello')
+        ->and(array_column($archiviati->json('data'), 'id'))->toBe(['persona.codice', 'persona.livello'])
+        ->and($archiviati->json('data.1.archiviato_il'))->not->toBeNull()
+        ->and($archiviati->json('data.1.ripristinabile_fino'))->toBeGreaterThan($archiviati->json('data.1.archiviato_il'))
+        ->and(alFinto('GET', "/v1/crm/persone/{$persona}", null, $anna)->json('data.campi'))->toBe([])
+        ->and($scrittura->status())->toBe(422)
+        ->and($scrittura->json('errors.0.pointer'))->toBe('#/campi/livello')
+        ->and($scrittura->json('errors.0.regola'))->toBe('non_trovato')
+        // `codice` era obbligatorio: eliminato non vincola più.
+        ->and(alFinto('POST', '/v1/crm/persone', ['nome' => 'Zeno'], $anna)->status())->toBe(201)
+        ->and(alFinto('GET', '/v1/crm/campi?oggetto=persona&archiviati=forse', null, $anna)->status())->toBe(422);
+});
+
+it('crm.campi.elimina: uno standard è 409 campo_di_sistema, uno già eliminato o che non c\'è è 404, il membro 403 (CE.3, CE.8)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'testo'], $anna));
+
+    $standard = alFinto('DELETE', '/v1/crm/campi/persona.ruolo', null, $anna);
+    $membro = alFinto('DELETE', '/v1/crm/campi/persona.livello', null, $gettoni['carla']);
+
+    expect($standard->status())->toBe(409)
+        ->and($standard->json('codice'))->toBe('campo_di_sistema')
+        ->and($membro->status())->toBe(403)
+        ->and($membro->json('codice'))->toBe('permesso_negato')
+        ->and(alFinto('DELETE', '/v1/crm/campi/persona.livello', null, $anna)->status())->toBe(204)
+        ->and(alFinto('DELETE', '/v1/crm/campi/persona.livello', null, $anna)->status())->toBe(404)
+        ->and(alFinto('DELETE', '/v1/crm/campi/persona.inesistente', null, $anna)->status())->toBe(404);
+});
+
+it('crm.campi.modifica {archiviato: false} ripristina in fondo alla sezione coi valori; true è 422; un nome preso è 422 duplicato; dopo 30 giorni è 404 (CE.4, CE.5)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'testo'], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Codice'], 'tipo' => 'testo'], $anna));
+    $persona = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => ['livello' => 'alto']], $anna))->json('data.id');
+    alFinto('DELETE', '/v1/crm/campi/persona.livello', null, $anna);
+
+    $vero = alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => true], $anna);
+    $estraneo = alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false, 'nome' => ['it' => 'Altro']], $anna);
+    $ripristinato = riuscita(alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false], $anna));
+    $elenco = array_column(array_filter(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'), fn (array $campo) => $campo['sezione_id'] === 'persona.principali'), 'id');
+
+    expect($vero->status())->toBe(422)
+        ->and($vero->json('errors.0.pointer'))->toBe('#/archiviato')
+        ->and($vero->json('errors.0.regola'))->toBe('valore_non_ammesso')
+        ->and($estraneo->status())->toBe(422)
+        ->and($estraneo->json('errors.0.regola'))->toBe('campo_estraneo')
+        ->and($ripristinato->json('data.archiviato_il'))->toBeNull()
+        ->and(array_slice($elenco, -2))->toBe(['persona.codice', 'persona.livello'])
+        ->and(alFinto('GET', "/v1/crm/persone/{$persona}", null, $anna)->json('data.campi'))->toBe(['livello' => 'alto'])
+        // Su un campo vivo `archiviato: false` non cambia niente.
+        ->and(riuscita(alFinto('PATCH', '/v1/crm/campi/persona.codice', ['archiviato' => false], $anna))->json('data.id'))->toBe('persona.codice');
+
+    // Il nome preso nel frattempo: il ripristino è 422 duplicato e il campo resta eliminato.
+    alFinto('DELETE', '/v1/crm/campi/persona.livello', null, $anna);
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'testo'], $anna));
+    $preso = alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false], $anna);
+
+    expect($preso->status())->toBe(422)
+        ->and($preso->json('errors.0.pointer'))->toBe('#/nome/it')
+        ->and($preso->json('errors.0.regola'))->toBe('duplicato')
+        ->and(array_column(alFinto('GET', '/v1/crm/campi?oggetto=persona&archiviati=true', null, $anna)->json('data'), 'id'))->toBe(['persona.livello']);
+
+    // Eliminato 31 giorni fa passa nell'archivio: per l'API non c'è più, nemmeno per ripristinarlo (il gettone non scade: il tempo torna indietro).
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Vecchio'], 'tipo' => 'testo'], $anna));
+    $this->travelTo(now()->subDays(31));
+    alFinto('DELETE', '/v1/crm/campi/persona.vecchio', null, $anna);
+    $this->travelBack();
+
+    expect(alFinto('PATCH', '/v1/crm/campi/persona.vecchio', ['archiviato' => false], $anna)->status())->toBe(404)
+        ->and(array_column(alFinto('GET', '/v1/crm/campi?oggetto=persona&archiviati=true', null, $anna)->json('data'), 'id'))->toBe(['persona.livello']);
+});
+
+it('la cronologia non porta le voci di un campo eliminato, e una riga che diceva solo di quelle esce; col ripristino tornano (CE.10)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Livello'], 'tipo' => 'testo'], $anna));
+    $persona = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia'], $anna))->json('data.id');
+    riuscita(alFinto('PATCH', "/v1/crm/persone/{$persona}", ['campi' => ['livello' => 'alto']], $anna));
+    $righe = fn () => alFinto('GET', "/v1/crm/persone/{$persona}/cronologia", null, $anna)->json('data');
+    $voci = fn () => collect($righe())->pluck('campi')->flatten(1)->pluck('campo')->all();
+    $prima = count($righe());
+
+    expect($voci())->toContain('campi.livello');
+
+    alFinto('DELETE', '/v1/crm/campi/persona.livello', null, $anna);
+
+    expect($voci())->not->toContain('campi.livello')
+        ->and(count($righe()))->toBeLessThan($prima);
+
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false], $anna));
+
+    expect($voci())->toContain('campi.livello')->and(count($righe()))->toBe($prima);
 });
