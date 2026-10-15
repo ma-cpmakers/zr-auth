@@ -941,7 +941,7 @@ it('crm.*.elenca: ogni riga porta campi con i soli campi in elenco che hanno un 
     riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => $oggetto, 'nome' => ['it' => 'Livello'], 'tipo' => 'testo', 'in_elenco' => true], $anna));
     riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => $oggetto, 'nome' => ['it' => 'Nota'], 'tipo' => 'testo'], $anna));
     $pipeline = $oggetto === 'trattativa'
-        ? riuscita(alFinto('GET', '/v1/crm/pipeline', null, $anna))->json('data.0.id')
+        ? riuscita(alFinto('POST', '/v1/crm/pipeline', ['nome' => 'Vendite', 'fasi' => [['nome' => 'Contatto', 'probabilita' => 10]]], $anna))->json('data.id')
         : null;
     $corpo = fn (string $nome) => $oggetto === 'trattativa' ? ['titolo' => $nome, 'pipeline_id' => $pipeline] : ['nome' => $nome];
     $id = riuscita(alFinto('POST', $percorso, $corpo('Rec 1') + ['campi' => (object) ['livello' => 'alto', 'nota' => 'riservata']], $anna))->json('data.id');
