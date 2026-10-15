@@ -83,6 +83,10 @@ trait CrmAvanzate
             }
         }
 
+        if ($tipo === 'testo_lungo' && ($campi['in_elenco'] ?? false) === true) {
+            throw $this->erroreCrm('in_elenco', 'regole.campo_testo_lungo_non_in_elenco', Regola::VALORE_NON_AMMESSO);
+        }
+
         foreach (['in_elenco', 'nel_crea'] as $chiave) {
             if (array_key_exists($chiave, $campi)) {
                 $nuove[$chiave] = $campi[$chiave];

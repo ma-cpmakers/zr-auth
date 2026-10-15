@@ -949,6 +949,10 @@ it('crm.*.elenca: ogni riga porta campi con i soli campi in elenco che hanno un 
 
     $righe = collect(riuscita(alFinto('GET', $percorso, null, $anna))->json('data'))->keyBy('id');
 
+    // Una riga senza valori porta `{}` nel JSON (un oggetto, non una lista): lo dice il body grezzo, non il decode.
+    $grezzo = riuscita(alFinto('GET', $percorso, null, $anna))->body();
+    expect($grezzo)->toContain('"campi":{}')->and($grezzo)->not->toContain('"campi":[]');
+
     expect($righe[$id]['campi'])->toBe(['livello' => 'alto'])
         ->and($righe[$senza]['campi'])->toBe([])
         ->and(alFinto('GET', "{$percorso}/{$id}", null, $anna)->json('data.campi'))->toBe(['livello' => 'alto', 'nota' => 'riservata']);
@@ -984,4 +988,19 @@ it('al più 10 campi in elenco per oggetto: l\'undicesimo in crea, in modifica o
     expect($ripristino->status())->toBe(409)->and($ripristino->json('limite'))->toBe(10);
     riuscita(alFinto('PATCH', '/v1/crm/campi/persona.di_troppo', ['in_elenco' => false], $anna));
     expect(riuscita(alFinto('PATCH', '/v1/crm/campi/persona.colonna_1', ['archiviato' => false], $anna))->json('data.in_elenco'))->toBeTrue();
+});
+
+it('un testo_lungo non va in elenco: in_elenco true in crea o in modifica è 422 valore_non_ammesso su #/in_elenco; false e gli altri tipi passano (#2169, CL.5)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+
+    $crea = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Storia'], 'tipo' => 'testo_lungo', 'in_elenco' => true], $anna);
+    expect($crea->status())->toBe(422)->and($crea->json('errors.0.pointer'))->toBe('#/in_elenco')->and($crea->json('errors.0.regola'))->toBe('valore_non_ammesso')
+        ->and(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data.*.chiave'))->not->toContain('storia');
+
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Storia'], 'tipo' => 'testo_lungo', 'in_elenco' => false], $anna));
+    $modifica = alFinto('PATCH', '/v1/crm/campi/persona.storia', ['in_elenco' => true], $anna);
+    expect($modifica->status())->toBe(422)->and($modifica->json('errors.0.pointer'))->toBe('#/in_elenco')->and($modifica->json('errors.0.regola'))->toBe('valore_non_ammesso');
+    riuscita(alFinto('PATCH', '/v1/crm/campi/persona.storia', ['in_elenco' => false], $anna));
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Breve'], 'tipo' => 'testo', 'in_elenco' => true], $anna));
 });
