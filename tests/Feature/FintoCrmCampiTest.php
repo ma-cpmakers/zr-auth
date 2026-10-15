@@ -671,7 +671,7 @@ it('crm.campi.modifica {archiviato: false} ripristina in fondo alla sezione coi 
     $vero = alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => true], $anna);
     $estraneo = alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false, 'nome' => ['it' => 'Altro']], $anna);
     $ripristinato = riuscita(alFinto('PATCH', '/v1/crm/campi/persona.livello', ['archiviato' => false], $anna));
-    $elenco = array_column(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'), 'id');
+    $elenco = array_column(array_filter(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'), fn (array $campo) => $campo['sezione_id'] === 'persona.principali'), 'id');
 
     expect($vero->status())->toBe(422)
         ->and($vero->json('errors.0.pointer'))->toBe('#/archiviato')
