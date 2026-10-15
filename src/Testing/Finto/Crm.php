@@ -1143,7 +1143,7 @@ trait Crm
         return [200, ['data' => match ($tipo) {
             'organizzazioni' => $this->voceOrganizzazione($riga, true),
             'persone' => $this->vocePersona($riga, true),
-            'trattative' => $this->voceTrattativa($riga),
+            'trattative' => $this->voceTrattativa($riga, true),
             'pipeline' => $this->vocePipeline($riga),
             default => $this->voceAttivita($riga),
         }]];
@@ -2016,12 +2016,18 @@ trait Crm
             ...$persona, 'nome' => null, 'cognome' => null, 'ruolo' => null, 'fonte' => null, 'email' => [], 'telefoni' => [],
             'anonimizzata_il' => $ora, 'aggiornato_il' => $ora,
         ];
-        // L'oblio svuota anche i valori dei campi «tuoi» (Anonimizzazione::valori).
+        // L'oblio svuota anche i valori dei campi «tuoi» del contatto e delle sue opportunità (Anonimizzazione::valori).
+        $opportunita = array_keys(array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['persona_id'] === $persona['id']));
         unset($this->crm['valori']['persona'][$persona['id']]);
 
-        // E dalla cronologia toglie `prima` e `dopo` delle voci `campi.<chiave>`: resta il nome del campo (Anonimizzazione::cronologia).
+        foreach ($opportunita as $trattativa) {
+            unset($this->crm['valori']['trattativa'][$trattativa]);
+        }
+
+        // E dalla cronologia del contatto e delle opportunità toglie `prima` e `dopo` delle voci `campi.<chiave>`: resta il nome del
+        // campo (Anonimizzazione::cronologia e ::cronologiaDelleOpportunita).
         foreach ($this->crm['cambi'] as $cambio => $riga) {
-            if ($riga['tipo_risorsa'] === 'persone' && $riga['risorsa'] === $persona['id']) {
+            if (($riga['tipo_risorsa'] === 'persone' && $riga['risorsa'] === $persona['id']) || ($riga['tipo_risorsa'] === 'trattative' && in_array($riga['risorsa'], $opportunita, true))) {
                 $this->crm['cambi'][$cambio]['campi'] = array_map(
                     fn (array $voce) => str_starts_with((string) ($voce['campo'] ?? ''), 'campi.') ? ['campo' => $voce['campo']] : $voce,
                     $riga['campi'],
@@ -2638,8 +2644,13 @@ trait Crm
 
     // ———————————————————————————————————————— Trattative
 
-    /** @return array<string, mixed> lo schema Trattativa (Forme::trattativa) */
-    private function voceTrattativa(array $riga): array
+    /**
+     * Lo schema Trattativa (Forme::trattativa). La scheda intera (`mostra`, `crea`, `modifica`) porta anche `campi`, i valori dei campi
+     * «tuoi» (#2127); l'elenco, la ricerca e lo spostamento hanno la forma breve, senza.
+     *
+     * @return array<string, mixed>
+     */
+    private function voceTrattativa(array $riga, bool $intera = false): array
     {
         $persona = $riga['persona_id'] === null ? null : ($this->crm['persone'][$riga['persona_id']] ?? null);
         $azienda = $riga['organizzazione_id'] === null ? null : ($this->crm['organizzazioni'][$riga['organizzazione_id']] ?? null);
@@ -2667,6 +2678,7 @@ trait Crm
             'creata_il' => self::iso($riga['creata_il']),
             'aggiornata_il' => self::iso($riga['aggiornata_il']),
             'creata_da' => $riga['creata_da'],
+            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'trattativa', $riga['id'])] : []),
         ];
     }
 
@@ -2743,7 +2755,7 @@ trait Crm
 
         return $this->conIdempotenza($richiesta, 'crm.trattative.crea', $chi, $corpo, function () use ($chi, $corpo) {
             $this->valoreTestoCrm($corpo);
-            $campi = $this->testi->validaCorpo($corpo, $this->regoleTrattativa($chi['workspace'], Testi::pulisci($corpo), true));
+            $campi = $this->testi->validaCorpo($corpo, [...$this->regoleTrattativa($chi['workspace'], Testi::pulisci($corpo), true), ...$this->regoleDeiValoriCrm($chi['workspace'], 'trattativa', true)]);
             $pipeline = $this->crm['pipeline'][strtolower($campi['pipeline_id'])];
 
             if ($pipeline['archiviata_il'] !== null) {
@@ -2770,10 +2782,11 @@ trait Crm
                 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona'],
                 'posizione' => self::inCodaCrm(array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $fase)),
             ];
+            $this->scriviIValoriCrm('trattativa', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'trattativa', $id, $campi['campi'] ?? []));
             $this->cambioCrm('trattative', $id, $chi['persona'], 'creata', []);
             $this->riportaCrm(null, self::contributoCrm($this->crm['trattative'][$id]));
 
-            return [201, ['data' => $this->voceTrattativa($this->crm['trattative'][$id])], ['Location' => "/v1/crm/trattative/{$id}"]];
+            return [201, ['data' => $this->voceTrattativa($this->crm['trattative'][$id], true)], ['Location' => "/v1/crm/trattative/{$id}"]];
         });
     }
 
@@ -2831,7 +2844,7 @@ trait Crm
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('trattative', $chi['workspace'], $id);
         $this->valoreTestoCrm($corpo);
-        $campi = $this->modificaCrm($corpo, $this->regoleTrattativa($chi['workspace'], Testi::pulisci($corpo), false));
+        $campi = $this->modificaCrm($corpo, [...$this->regoleTrattativa($chi['workspace'], Testi::pulisci($corpo), false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'trattativa', false)]);
 
         if (array_key_exists('fase_id', $campi) && ! array_key_exists('pipeline_id', $campi)) {
             throw $this->erroreCrm('fase_id', 'regole.fase_con_la_pipeline', Regola::CAMPO_ESTRANEO);
@@ -2850,7 +2863,7 @@ trait Crm
 
         $diventati = $this->applicaTrattativa($riga, $campi, $chi['persona']);
 
-        return [200, ['data' => $this->voceTrattativa($this->crm['trattative'][$riga['id']]) + ['diventati_clienti' => $diventati]]];
+        return [200, ['data' => $this->voceTrattativa($this->crm['trattative'][$riga['id']], true) + ['diventati_clienti' => $diventati]]];
     }
 
     /**
@@ -2941,11 +2954,18 @@ trait Crm
             $tipi[] = $campi['archiviata'] ? 'archiviata' : 'ripristinata';
         }
 
-        if ($cambi === []) {
+        // I valori dei campi «tuoi» (#2127): il piano si fa adesso, si scrive dopo i controlli che possono rifiutare la modifica.
+        $piano = $this->pianoDeiValoriCrm($riga['workspace'], 'trattativa', $riga['id'], $campi['campi'] ?? []);
+
+        if ($cambi === [] && $piano === []) {
             return $diventati;
         }
 
-        $dopo['aggiornata_il'] = self::dopoCrm($riga['aggiornata_il']);
+        $this->scriviIValoriCrm('trattativa', $riga['id'], $piano);
+
+        // Cambiano solo i valori: la trattativa si tocca comunque (Registro::segnala), e `touch` scrive l'ora, senza il millisecondo in più
+        // che un salvataggio con cambi dà.
+        $dopo['aggiornata_il'] = $cambi === [] ? self::adessoCrm() : self::dopoCrm($riga['aggiornata_il']);
         $this->crm['trattative'][$riga['id']] = $dopo;
         $this->riportaCrm($prima, self::contributoCrm($dopo));
 
@@ -2962,6 +2982,8 @@ trait Crm
                 $voci[] = in_array($campo, $valori, true) ? ['campo' => $campo, ...$cambi[$campo]] : ['campo' => $campo];
             }
         }
+
+        $voci = [...$voci, ...self::vociDeiValoriCrm($piano)];
 
         if ($voci !== []) {
             $this->cambioCrm('trattative', $riga['id'], $autore, 'modificata', $voci);
