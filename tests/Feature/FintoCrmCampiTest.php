@@ -541,8 +541,8 @@ it('i valori dei campi «tuoi» di un contatto: campi {} senza valori, normalizz
     $tolto = riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => ['pagina' => null, 'budget' => ['importo' => 800]]], $anna));
     expect($tolto->json('data.campi'))->toBe(['budget' => ['importo' => 800, 'valuta' => 'EUR'], 'punteggio' => 10, 'taglia' => $taglia['opzioni'][1]['id']]);
 
-    // L'elenco e la ricerca hanno la forma breve, senza `campi`.
-    expect(alFinto('GET', '/v1/crm/persone', null, $anna)->json('data.0'))->not->toHaveKey('campi');
+    // L'elenco porta `campi` coi soli campi in elenco (qui nessuno: vuoto); la ricerca, senza `campi`, ha il suo test (#2169).
+    expect(alFinto('GET', '/v1/crm/persone', null, $anna)->json('data.0.campi'))->toBe([]);
 
     // La cronologia nomina `campi.<chiave>`: col prima e il dopo per i tipi che lo ammettono, il solo nome per un url.
     $voci = collect(alFinto('GET', "/v1/crm/persone/{$id}/cronologia", null, $anna)->json('data'))->where('tipo', 'modificata')->sortBy(fn (array $voce) => count($voce['campi']))->values();
