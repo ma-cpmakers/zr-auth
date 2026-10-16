@@ -107,6 +107,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/altri$#', 'accessi.altri.elimina'],
+        ['POST', '#^/v1/accessi/conferma$#', 'accessi.conferma.crea'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
         ['GET', '#^/v1/ricerca$#', 'ricerca.elenca'],
         ['POST', '#^/v1/ricerca$#', 'ricerca.crea'],
@@ -217,6 +218,13 @@ final class BackofficeFinto
 
     /** Gli errori sulla password attuale che una persona può fare in un'ora (IoPasswordController::ERRORI). */
     private const ERRORI_DELLA_PASSWORD = 5;
+
+    /** I tentativi di «Conferma che sei tu» (#1958): per persona in un'ora, per gettone in dieci minuti. */
+    private const CONFERME_PER_PERSONA = 10;
+
+    private const CONFERME_PER_GETTONE = 5;
+
+    private const DIECI_MINUTI = 600;
 
     /**
      * I provider con cui si entra (App\Provider del backoffice, #1429): per slug, lo scope e l'indirizzo a cui la persona
@@ -1090,6 +1098,7 @@ final class BackofficeFinto
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
                 'accessi.altri.elimina' => $this->eliminaAltriAccessi($richiesta),
+                'accessi.conferma.crea' => $this->confermaAccesso($richiesta, $corpo),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
@@ -3349,6 +3358,38 @@ final class BackofficeFinto
         }
 
         return [204, null];
+    }
+
+    /**
+     * accessi.conferma.crea (AccessiConfermaController::crea, #1958): la persona del gettone conferma di essere lei con la sua password;
+     * 200 con `confermato_fino`, dieci minuti da adesso, scritto sull'accesso del gettone (vale per ogni suo gettone). Nell'ordine del
+     * backoffice: il corpo, poi i due freni dei tentativi (per gettone 5 in 10 minuti, per persona 10 in un'ora: oltre, 429 anche con la
+     * password giusta; una giusta azzera quello del gettone), poi la password (422 su `#/password`, uguale per ogni persona).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function confermaAccesso(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+        $dati = $this->testi->validaCorpo($corpo, ['password' => ['required', 'string', new SenzaCarattereNullo]]);
+
+        $perPersona = 'conferma-persona:'.$chi['persona'];
+        $perGettone = 'conferma-gettone:'.self::gettoneDi($richiesta);
+        $this->frena($perGettone, self::CONFERME_PER_GETTONE, self::DIECI_MINUTI);
+        $this->frena($perPersona, self::CONFERME_PER_PERSONA, self::ORA);
+
+        if (! hash_equals($this->persone[$chi['persona']]['password'], (string) $dati['password'])) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.conferma_password'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/password']]);
+        }
+
+        // Come il backoffice: una giusta azzera il conto del gettone, non quello della persona.
+        $this->freni->clear($perGettone);
+
+        $fino = now()->toImmutable()->startOfMillisecond()->addSeconds(self::DIECI_MINUTI);
+        $this->accessi[$chi['accesso']]['confermato_fino'] = $fino;
+
+        return [200, ['data' => ['confermato_fino' => self::iso($fino)]]];
     }
 
     /**

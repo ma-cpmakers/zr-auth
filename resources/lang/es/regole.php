@@ -40,6 +40,7 @@ return [
     'versione_futura' => 'La versión es posterior a la última del tablero: usa la que board.schede.elenca dio.',
     'numero_senza_archiviate' => 'Con numero la tarjeta llega en cualquier estado, también archivada: el parámetro archiviate no hace falta.',
     'password_attuale' => 'La contraseña actual no es correcta: la contraseña nueva solo se da con la de ahora.',
+    'conferma_password' => 'La contraseña no es correcta: para confirmar que eres tú hace falta la que usas para entrar en Zeiras.',
     'contatto_vuoto' => 'Un contacto necesita al menos uno de nome, cognome y email.',
     'responsabile_del_workspace' => 'Esta persona no es miembro del workspace: los ids de los miembros los da workspace.membri.elenca.',
     'organizzazione_non_esiste' => 'La empresa del contacto no existe en este espacio de trabajo.',

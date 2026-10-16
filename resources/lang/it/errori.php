@@ -189,6 +189,10 @@ return [
         'title' => 'Accettazione richiesta',
         'detail' => 'Per usare Zeiras devi accettare l\'informativa sulla privacy e i termini d\'uso nella versione in vigore. Il problema porta accanto al codice `mancanti`, i documenti da accettare: accettali con legale.accettazioni.crea (li elenca legale.documenti.elenca) e ripeti la richiesta.',
     ],
+    'conferma_richiesta' => [
+        'title' => 'Conferma richiesta',
+        'detail' => 'Questa azione vuole che tu confermi di essere tu: dai di nuovo la tua password con accessi.conferma.crea (vale dieci minuti su questo accesso) e ripeti la richiesta.',
+    ],
     'precondizione_fallita' => [
         'title' => 'Precondizione fallita',
         'detail' => "La risorsa non è più quella che hai letto: qualcun altro l'ha modificata dopo la tua lettura (o l'`ETag` in `If-Match` non è il suo). Non è stato scritto niente. Rileggila (il suo metodo `mostra` dà l'`ETag` aggiornato), controlla cosa è cambiato e, se vuoi ancora la tua modifica, ripeti la richiesta con il nuovo `ETag`.",
