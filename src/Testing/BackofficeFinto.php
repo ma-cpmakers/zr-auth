@@ -3364,7 +3364,7 @@ final class BackofficeFinto
      * accessi.conferma.crea (AccessiConfermaController::crea, #1958): la persona del gettone conferma di essere lei con la sua password;
      * 200 con `confermato_fino`, dieci minuti da adesso, scritto sull'accesso del gettone (vale per ogni suo gettone). Nell'ordine del
      * backoffice: il corpo, poi i due freni dei tentativi (per gettone 5 in 10 minuti, per persona 10 in un'ora: oltre, 429 anche con la
-     * password giusta; una giusta li azzera), poi la password (422 su `#/password`, uguale per ogni persona).
+     * password giusta; una giusta azzera quello del gettone), poi la password (422 su `#/password`, uguale per ogni persona).
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -3383,7 +3383,7 @@ final class BackofficeFinto
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.conferma_password'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/password']]);
         }
 
-        $this->freni->clear($perPersona);
+        // Come il backoffice: una giusta azzera il conto del gettone, non quello della persona.
         $this->freni->clear($perGettone);
 
         $fino = now()->toImmutable()->startOfMillisecond()->addSeconds(self::DIECI_MINUTI);
