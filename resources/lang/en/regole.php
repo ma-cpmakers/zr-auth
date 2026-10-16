@@ -88,4 +88,5 @@ return [
     'campo_predefinito_membro' => 'A member field has no default value.',
     'campo_predefinito_dopo_le_opzioni' => 'The options are born with this request and have no id yet: set the default afterwards, with crm.campi.modifica.',
     'campo_testo_lungo_non_in_elenco' => 'Long texts do not go in the list.',
+    'codice_cambio_email' => 'The code is wrong, has expired or was not requested: ask for a new code to change your email.',
 ];

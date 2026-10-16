@@ -21,6 +21,7 @@ final class Problema extends RuntimeException
         'app_non_attiva' => 403,
         'email_non_verificata' => 403,
         'accettazione_richiesta' => 403,
+        'conferma_richiesta' => 403,
         'precondizione_fallita' => 412,
         'registrazione_non_aperta' => 403,
         'non_trovato' => 404,

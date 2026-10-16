@@ -109,6 +109,8 @@ final class BackofficeFinto
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/altri$#', 'accessi.altri.elimina'],
         ['POST', '#^/v1/accessi/conferma$#', 'accessi.conferma.crea'],
+        ['POST', '#^/v1/io/email/cambio$#', 'io.email.cambio.crea'],
+        ['POST', '#^/v1/io/email/cambio/verifica$#', 'io.email.cambio.verifica.crea'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
         ['GET', '#^/v1/ricerca$#', 'ricerca.elenca'],
         ['POST', '#^/v1/ricerca$#', 'ricerca.crea'],
@@ -211,7 +213,7 @@ final class BackofficeFinto
      */
     private const ALTRI_CAMPI_DI_IO = [
         'utente.id' => null,
-        'utente.email' => null,
+        'utente.email' => 'io.email.cambio.crea',
         'utente.email_verificata_il' => null,
         'workspace' => 'workspace.modifica',
         'ruolo' => 'workspace.membri.modifica',
@@ -328,6 +330,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
     private array $persone = [];
+
+    /** @var array<string, array{codice: string, email: string, scade: CarbonImmutable, tentativi: int}> per id della persona: il cambio di email in attesa */
+    private array $cambiEmail = [];
 
     /** @var array<string, array{utente: string, creato_il: CarbonImmutable, chiuso: bool, via?: string}> per id */
     private array $accessi = [];
@@ -1101,6 +1106,8 @@ final class BackofficeFinto
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
                 'accessi.altri.elimina' => $this->eliminaAltriAccessi($richiesta),
                 'accessi.conferma.crea' => $this->confermaAccesso($richiesta, $corpo),
+                'io.email.cambio.crea' => $this->chiediCambioEmail($richiesta, $corpo),
+                'io.email.cambio.verifica.crea' => $this->verificaCambioEmail($richiesta, $corpo),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
@@ -3419,6 +3426,91 @@ final class BackofficeFinto
         $this->accessi[$chi['accesso']]['confermato_fino'] = $fino;
 
         return [200, ['data' => ['confermato_fino' => self::iso($fino)]]];
+    }
+
+    /**
+     * io.email.cambio.crea (IoEmailCambioController::crea, #1960): la persona del gettone chiede di cambiare l'email. Nell'ordine del
+     * backoffice: la conferma recente dell'accesso (403 `conferma_richiesta`, prima del corpo), il corpo, i freni della persona
+     * (uno al minuto, 5 in un'ora, 10 in un giorno, prima del ramo), poi 202 con i tempi nominali. Il codice parte, e si legge con
+     * ultimoCodice() sul nuovo indirizzo, solo se è libero e non è il suo: la risposta è la stessa in ogni caso. Una richiesta nuova
+     * sostituisce la precedente.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function chiediCambioEmail(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+        $fino = $this->accessi[$chi['accesso']]['confermato_fino'] ?? null;
+
+        if ($fino === null || $fino->lte(now())) {
+            throw new Problema('conferma_richiesta');
+        }
+
+        $dati = $this->testi->validaCorpo($corpo, ['email' => self::REGOLE_EMAIL]);
+        $nuova = self::normalizza($dati['email']);
+
+        $this->frena('cambio-email-minuto:'.$chi['persona'], 1, self::MINUTO);
+        $this->frena('cambio-email-ora:'.$chi['persona'], 5, self::ORA);
+        $this->frena('cambio-email-giorno:'.$chi['persona'], 10, 86400);
+
+        // Come il backoffice: una richiesta nuova sostituisce SEMPRE la precedente, anche con un indirizzo già usato o proprio (allora non
+        // ha un codice): se il ramo «usato» lasciasse viva la richiesta di prima, il suo codice direbbe che l'indirizzo era già di qualcuno.
+        unset($this->cambiEmail[$chi['persona']]);
+
+        if ($nuova !== $this->persone[$chi['persona']]['email'] && $this->conEmail($nuova) === null) {
+            $codice = str_pad((string) random_int(0, 999_999), 6, '0', STR_PAD_LEFT);
+            $this->cambiEmail[$chi['persona']] = ['codice' => $codice, 'email' => $nuova, 'scade' => now()->toImmutable()->addMinutes(10), 'tentativi' => 0];
+            $this->posta[$nuova] = $codice;
+        }
+
+        $adesso = now()->toImmutable()->startOfMillisecond();
+
+        return [202, ['data' => [
+            'scade_il' => self::iso($adesso->addMinutes(10)),
+            'nuovo_codice_dal' => self::iso($adesso->addSeconds(self::MINUTO)),
+        ]]];
+    }
+
+    /**
+     * io.email.cambio.verifica.crea (IoEmailCambioController::verificaCrea, #1960): col codice giusto l'email cambia ed è verificata, e
+     * risponde con la forma di io.mostra. Ogni altro caso (sbagliato, scaduto, esaurito dopo 5 errori, mai chiesto, indirizzo preso nel
+     * frattempo) è lo stesso 422 su `#/codice`, `valore_non_ammesso`. Gli altri accessi restano aperti.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function verificaCambioEmail(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+        $dati = $this->testi->validaCorpo($corpo, ['codice' => ['required', 'string', 'digits:6', new SenzaCarattereNullo]]);
+        $stato = $this->cambiEmail[$chi['persona']] ?? null;
+
+        // Oltre 10 codici sbagliati in un giorno per persona, nemmeno quello giusto (CambioEmail::ERRORI_AL_GIORNO).
+        $giusto = $stato !== null && $stato['scade']->gt(now()) && $stato['tentativi'] < 5 && $this->freni->attempts('cambio-email-errori:'.$chi['persona']) < 10;
+
+        if ($giusto) {
+            $this->cambiEmail[$chi['persona']]['tentativi']++;
+            $giusto = hash_equals($stato['codice'], (string) $dati['codice']);
+
+            if (! $giusto) {
+                $this->freni->hit('cambio-email-errori:'.$chi['persona'], 86400);
+            }
+        }
+
+        if ($giusto) {
+            // Giusto: la richiesta si consuma, anche se l'indirizzo nel frattempo è stato preso (allora è il solito 422).
+            unset($this->cambiEmail[$chi['persona']]);
+        }
+
+        if ($giusto && $this->conEmail($stato['email']) === null) {
+            $this->persone[$chi['persona']]['email'] = $stato['email'];
+            $this->persone[$chi['persona']]['email_verificata_il'] = now()->toImmutable()->startOfMillisecond();
+
+            return [200, ['data' => $this->io($chi)]];
+        }
+
+        throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.codice_cambio_email'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/codice']]);
     }
 
     /**
