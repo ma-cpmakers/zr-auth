@@ -213,6 +213,8 @@ return [
         'lingua' => 'language',
         'lingua_contenuti' => 'content language',
         'fuso_orario' => 'time zone',
+        'formato_data' => 'date format',
+        'inizio_settimana' => 'start of the week',
         'azienda.partita_iva' => 'VAT number',
         'azienda.settore' => 'industry',
         'azienda.persone' => 'number of people',
@@ -227,6 +229,8 @@ return [
         'utente.nome' => 'name',
         'utente.lingua' => 'language',
         'utente.fuso_orario' => 'time zone',
+        'utente.formato_data' => 'date format',
+        'utente.inizio_settimana' => 'start of the week',
     ],
 
 ];

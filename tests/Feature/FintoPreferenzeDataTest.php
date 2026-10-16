@@ -27,7 +27,7 @@ it('un valore fuori elenco è 422 valore_non_ammesso sul pointer del campo e non
     [, $gettoni] = studioColCrm();
     $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
 
-    foreach ([['formato_data', 'dd/mm/yyyy'], ['formato_data', 'GG/MM/AAAA'], ['inizio_settimana', 'martedi'], ['inizio_settimana', 1]] as [$campo, $valore]) {
+    foreach ([['formato_data', 'dd/mm/yyyy'], ['formato_data', 'GG/MM/AAAA'], ['inizio_settimana', 'martedi']] as [$campo, $valore]) {
         $risposta = alFinto('PATCH', '/v1/io', ['utente' => ['nome' => 'Altro nome', $campo => $valore]], $accesso);
 
         expect($risposta->status())->toBe(422)
@@ -35,6 +35,10 @@ it('un valore fuori elenco è 422 valore_non_ammesso sul pointer del campo e non
             ->and($risposta->json('errors.0.regola'))->toBe('valore_non_ammesso');
     }
 
-    expect(alFinto('GET', '/v1/io', gettone: $accesso)->json('data.utente.nome'))->not->toBe('Altro nome')
+    $numero = alFinto('PATCH', '/v1/io', ['utente' => ['inizio_settimana' => 1]], $accesso);
+
+    expect($numero->json('errors.0.pointer'))->toBe('#/utente/inizio_settimana')
+        ->and($numero->json('errors.0.regola'))->toBe('tipo')
+        ->and(alFinto('GET', '/v1/io', gettone: $accesso)->json('data.utente.nome'))->not->toBe('Altro nome')
         ->and(alFinto('PATCH', '/v1/io', ['utente' => ['formato_data' => 'gg/mm/aaaa']], $gettoni['anna'])->json('codice'))->toBe('gettone_con_workspace');
 });
