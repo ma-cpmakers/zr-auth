@@ -258,7 +258,7 @@ it('accessi.conferma.crea: 200 con confermato_fino a dieci minuti, 422 su #/pass
         ->and($giusta->json('data.confermato_fino'))->toMatch('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/')
         ->and(CarbonImmutable::parse($giusta->json('data.confermato_fino'))->diffInSeconds(now(), true))->toBeGreaterThan(598)->toBeLessThan(601);
 
-    $sbagliata = alFinto('POST', '/v1/accessi/conferma', ['password' => 'una password sbagliata'], $altro);
+    $sbagliata = alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD_SBAGLIATA], $altro);
     expect($sbagliata->status())->toBe(422)
         ->and($sbagliata->json('codice'))->toBe('dati_non_validi')
         ->and($sbagliata->json('errors.0.pointer'))->toBe('#/password')
@@ -267,10 +267,10 @@ it('accessi.conferma.crea: 200 con confermato_fino a dieci minuti, 422 su #/pass
         ->and(alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD])->status())->toBe(401);
 
     foreach (range(1, 3) as $_) {
-        alFinto('POST', '/v1/accessi/conferma', ['password' => 'una password sbagliata'], $altro);
+        alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD_SBAGLIATA], $altro);
     }
 
-    expect(alFinto('POST', '/v1/accessi/conferma', ['password' => 'una password sbagliata'], $altro)->status())->toBe(422);
+    expect(alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD_SBAGLIATA], $altro)->status())->toBe(422);
 
     $fermato = alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $altro);
     expect($fermato->status())->toBe(429)->and($fermato->json('codice'))->toBe('troppe_richieste');
