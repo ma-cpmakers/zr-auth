@@ -12,7 +12,7 @@ use Zeiras\Auth\Errori\BackofficeNonRisponde;
 /**
  * Un file che il backoffice manda a flusso (`Api::scarica`, #1906): l'esportazione CSV del CRM. Il corpo non è mai tutto in memoria:
  * `blocchi()` lo legge a pezzi, entro `zr-auth.scarico` secondi, e `comeRisposta()` lo passa al browser a pezzi, con le intestazioni
- * che un file da salvare vuole. Il tipo è uno di `TIPI` (un elenco chiuso: oggi `text/csv`) e il nome del file è ripulito: mai un
+ * che un file da salvare vuole. Il tipo è uno di `TIPI` (un elenco chiuso: `text/csv` e `application/zip`) e il nome del file è ripulito: mai un
  * percorso, un carattere di controllo, un a capo.
  *
  *     return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'lead'])->comeRisposta();
@@ -20,10 +20,16 @@ use Zeiras\Auth\Errori\BackofficeNonRisponde;
 final class Scaricamento
 {
     /** I tipi che si scaricano. Crescere questo elenco è una decisione: ogni tipo è un file che il browser potrebbe eseguire. */
-    public const TIPI = ['text/csv'];
+    public const TIPI = ['text/csv', 'application/zip'];
 
-    /** Il nome che resta se il backoffice non ne dà uno che vale. */
+    /** Il nome che resta se il backoffice non ne dà uno che vale (per un CSV; vedi `NOMI_PREDEFINITI` per gli altri tipi). */
     public const NOME_PREDEFINITO = 'scaricamento.csv';
+
+    /** Il nome che resta, per tipo, se il backoffice non ne dà uno che vale. */
+    public const NOMI_PREDEFINITI = ['text/csv' => 'scaricamento.csv', 'application/zip' => 'zeiras-i-miei-dati.zip'];
+
+    /** L'estensione che un nome di file ha sempre, per tipo. */
+    private const ESTENSIONI = ['text/csv' => 'csv', 'application/zip' => 'zip'];
 
     /** Le lettere di un nome di file: il resto diventa un trattino. */
     private const NOME_MASSIMO = 100;
@@ -44,17 +50,20 @@ final class Scaricamento
             throw new BackofficeNonRisponde('Il backoffice ha risposto con un tipo che non è un file ammesso ('.implode(', ', self::TIPI).').');
         }
 
-        return new self($tipo, self::nomeDi((string) $risposta->header('Content-Disposition')), $risposta->toPsrResponse()->getBody(), max(1, (int) config('zr-auth.scarico')));
+        return new self($tipo, self::nomeDi((string) $risposta->header('Content-Disposition'), $tipo), $risposta->toPsrResponse()->getBody(), max(1, (int) config('zr-auth.scarico')));
     }
 
     /**
      * Il nome del file da `Content-Disposition`, ripulito: senza cartelle, solo lettere, cifre, punto, trattino e trattino basso, mai
-     * più di 100 caratteri, sempre `.csv`. Senza un nome che valga, `NOME_PREDEFINITO`.
+     * più di 100 caratteri, sempre con l'estensione del tipo (`.csv`, `.zip`). Senza un nome che valga, quello predefinito del tipo.
      */
-    public static function nomeDi(string $intestazione): string
+    public static function nomeDi(string $intestazione, string $tipo = 'text/csv'): string
     {
+        $predefinito = self::NOMI_PREDEFINITI[$tipo] ?? self::NOME_PREDEFINITO;
+        $estensione = self::ESTENSIONI[$tipo] ?? 'csv';
+
         if (preg_match('/filename\*?=\s*(?:"([^"]*)"|([^;]*))/i', $intestazione, $parti) !== 1) {
-            return self::NOME_PREDEFINITO;
+            return $predefinito;
         }
 
         $grezzo = ($parti[1] ?? '') !== '' ? $parti[1] : trim($parti[2] ?? '');
@@ -64,10 +73,10 @@ final class Scaricamento
         $nome = substr($nome, 0, self::NOME_MASSIMO);
 
         if ($nome === '') {
-            return self::NOME_PREDEFINITO;
+            return $predefinito;
         }
 
-        return preg_match('/\.csv$/i', $nome) === 1 ? $nome : $nome.'.csv';
+        return preg_match('/\.'.$estensione.'$/i', $nome) === 1 ? $nome : $nome.'.'.$estensione;
     }
 
     /**
@@ -115,7 +124,7 @@ final class Scaricamento
     public function intestazioni(): array
     {
         return [
-            'Content-Type' => $this->tipo.'; charset=utf-8',
+            'Content-Type' => str_starts_with($this->tipo, 'text/') ? $this->tipo.'; charset=utf-8' : $this->tipo,
             'Content-Disposition' => 'attachment; filename="'.$this->nome.'"',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'no-store',

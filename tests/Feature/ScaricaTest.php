@@ -29,7 +29,7 @@ function problemaJson(int $stato, string $codice, array $header = []): Closure
     return fn () => Http::response(json_encode(['type' => "https://docs.zeiras.com/v1/errori/{$codice}", 'title' => 'T', 'status' => $stato, 'detail' => 'D', 'codice' => $codice]), $stato, ['Content-Type' => 'application/problem+json', ...$header]);
 }
 
-it('scarica un file dello stesso host, col gettone del workspace e Accept text/csv, e dà il tipo, il nome e il corpo a pezzi (S.1, S.2)', function () {
+it('scarica un file dello stesso host, col gettone del workspace e Accept dei tipi ammessi, e dà il tipo, il nome e il corpo a pezzi (S.1, S.2)', function () {
     Http::fake([API.'/*' => fileCsv()()]);
     apriSessione();
 
@@ -42,7 +42,7 @@ it('scarica un file dello stesso host, col gettone del workspace e Accept text/c
     Http::assertSent(fn (Request $r) => $r->url() === API.SCARICA_CSV.'?stato=lead'
         && $r->method() === 'GET'
         && $r->header('Authorization') === ['Bearer '.GETTONE_WORKSPACE]
-        && $r->header('Accept') === ['text/csv']);
+        && $r->header('Accept') === ['text/csv, application/zip']);
 });
 
 it('accetta solo un percorso dentro /v1 senza query: un indirizzo intero, un percorso fuori da /v1, una query nel percorso non partono (S.1)', function (string $percorso) {
@@ -396,3 +396,42 @@ it('un errore dopo il primo byte non accoda la pagina d\'errore al file: finisce
 
     expect($uscito)->toBe('')->and($segnalati)->toHaveCount(1)->and($segnalati[0])->toBeInstanceOf(BackofficeNonRisponde::class);
 });
+
+// #1959 (zr-home): lo ZIP di «Esporta i miei dati» passa come il CSV; il nome prende l'estensione dal tipo.
+
+it('scarica uno ZIP: il tipo, il nome con .zip e le intestazioni per il browser senza charset (#1959)', function () {
+    Http::fake(['*' => Http::response("PK\x05\x06".str_repeat("\0", 18), 200, ['Content-Type' => 'application/zip', 'Content-Disposition' => 'attachment; filename=zeiras-i-miei-dati.zip'])]);
+    apriSessione();
+
+    $file = Api::persona()->scarica('/v1/io/esportazioni/01k7n4r6t8v0x2z4b6d8f0h2j4/archivio');
+    $risposta = $file->comeRisposta();
+
+    expect($file->tipo)->toBe('application/zip')
+        ->and($file->nome)->toBe('zeiras-i-miei-dati.zip')
+        ->and($risposta->headers->get('Content-Type'))->toBe('application/zip')
+        ->and($risposta->headers->get('Content-Disposition'))->toBe('attachment; filename="zeiras-i-miei-dati.zip"')
+        ->and($risposta->headers->get('X-Content-Type-Options'))->toBe('nosniff');
+});
+
+it('il nome di uno ZIP prende .zip, e senza un nome che valga è zeiras-i-miei-dati.zip; un CSV resta .csv (#1959)', function () {
+    expect(Scaricamento::nomeDi('attachment; filename="../x"', 'application/zip'))->toBe('x.zip')
+        ->and(Scaricamento::nomeDi('attachment; filename=a.csv', 'application/zip'))->toBe('a.csv.zip')
+        ->and(Scaricamento::nomeDi('attachment', 'application/zip'))->toBe('zeiras-i-miei-dati.zip')
+        ->and(Scaricamento::nomeDi('attachment; filename="../x"'))->toBe('x.csv')
+        ->and(Scaricamento::nomeDi('attachment'))->toBe(Scaricamento::NOME_PREDEFINITO);
+});
+
+it('un 403 conferma_richiesta e un 404 non_trovato dello scaricamento sono ErroreApi col loro codice (#1959)', function (int $stato, string $codice) {
+    Http::fake(['*' => problemaJson($stato, $codice)()]);
+    apriSessione();
+
+    try {
+        Api::persona()->scarica('/v1/io/esportazioni/01k7n4r6t8v0x2z4b6d8f0h2j4/archivio');
+        $preso = null;
+    } catch (ErroreApi $errore) {
+        $preso = $errore;
+    }
+
+    expect($preso)->toBeInstanceOf(ErroreApi::class)
+        ->and($preso->codice)->toBe($codice);
+})->with([[403, 'conferma_richiesta'], [404, 'non_trovato']]);
