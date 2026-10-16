@@ -147,7 +147,7 @@ Api::persona()->get('/v1/accessi');
 Api::persona()->post('/v1/io/email/cambio', ['email' => $nuova]);
 Api::persona()->post('/v1/io/email/cambio/verifica', ['codice' => $codice]);
 
-// «Esporta i miei dati» (io.esportazioni.crea, .mostra, .archivio.mostra, GDPR art. 20): vuole la conferma recente. La richiesta (202) si
+// «Esporta i miei dati» (io.esportazioni.crea, .mostra, .archivio.mostra, GDPR art. 20): vuole la conferma recente, anche per scaricare (403 `conferma_richiesta`, il file non si consuma: la pagina chiede la password e riprova). La richiesta (202) si
 // segue con lo stato (`in_preparazione`, `pronta`, `scaduta`, `fallita`); la mail porta alla pagina `?esportazione=<id>`, che scarica lo ZIP una
 // volta sola entro 7 giorni (un secondo scaricamento è 404, come un id mai esistito). Al più 3 richieste in 24 ore. Nel finto lo stato resta
 // `in_preparazione` finché il test non chiama `$finto->preparaLeEsportazioni($email)` (o `fallisciLeEsportazioni`), e l'archivio è uno ZIP vuoto.

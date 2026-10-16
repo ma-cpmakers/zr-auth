@@ -3524,7 +3524,7 @@ final class BackofficeFinto
     }
 
     /**
-     * io.esportazioni.archivio.mostra (IoEsportazioniController::archivioMostra, #1959): lo ZIP, una volta sola. Il finto dà uno ZIP vuoto
+     * io.esportazioni.archivio.mostra (IoEsportazioniController::archivioMostra, #1959): con la conferma recente (403 `conferma_richiesta` senza), lo ZIP, una volta sola. Il finto dà uno ZIP vuoto
      * (22 byte validi): serve a provare il gesto di scaricare, non il contenuto. Dopo l'uso, alla scadenza, per un'altra persona e per un id
      * mai esistito è lo stesso 404.
      *
@@ -3533,6 +3533,12 @@ final class BackofficeFinto
     private function scaricaEsportazione(Request $richiesta, string $id): array
     {
         $chi = $this->autentica($richiesta);
+        $fino = $this->accessi[$chi['accesso']]['confermato_fino'] ?? null;
+
+        // La conferma recente prima di consumare l'archivio (zr-pm, 16/10): il 403 non lo brucia.
+        if ($fino === null || $fino->lte(now())) {
+            throw new Problema('conferma_richiesta');
+        }
         $voce = $this->esportazioni[$id] ?? null;
 
         if ($voce === null || $voce['persona'] !== $chi['persona'] || $this->formaEsportazione($id)['stato'] !== 'pronta') {

@@ -380,6 +380,11 @@ it('io.esportazioni.*: conferma, una sola richiesta aperta, al più 3 in 24 ore,
         ->and(alFinto('GET', "/v1/io/esportazioni/{$id}/archivio", gettone: $gettone)->status())->toBe(404);
 
     $finto->preparaLeEsportazioni('anna@example.com');
+    $this->travel(601)->seconds();
+    $senzaConferma = alFinto('GET', "/v1/io/esportazioni/{$id}/archivio", gettone: $gettone);
+    expect($senzaConferma->status())->toBe(403)->and($senzaConferma->json('codice'))->toBe('conferma_richiesta');
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettone);
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettoneBruno);
     $pronta = alFinto('GET', "/v1/io/esportazioni/{$id}", gettone: $gettone);
 
     expect($pronta->json('data.stato'))->toBe('pronta')
