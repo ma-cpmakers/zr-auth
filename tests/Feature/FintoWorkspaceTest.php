@@ -192,6 +192,24 @@ it('workspace.uscita.crea risponde nell\'ordine del backoffice: il gettone del w
         ->and(collect(alFinto('GET', '/v1/workspace/membri', gettone: $gettone('anna@example.com'))->json('data'))->pluck('id')->all())->not->toContain($persone['bruno']['id']);
 });
 
+it('chi esce dal workspace, con workspace.uscita.crea o toccato da membri.elimina, non è più assegnato a nessuna scheda (#2013)', function () {
+    [$finto, $studio, $persone, $gettone] = squadra();
+    $finto->attivaApp($studio, 'pm');
+    $scheda = $finto->scheda($studio, 'Da fare', assegnatari: [$persone['carla'], $persone['bruno']]);
+    $anna = $gettone('anna@example.com');
+    $assegnatari = fn () => alFinto('GET', "/v1/board/schede/{$scheda['id']}", gettone: $anna)->json('data.assegnatari');
+
+    expect($assegnatari())->toBe([$persone['carla']['id'], $persone['bruno']['id']]);
+
+    alFinto('POST', '/v1/workspace/uscita', gettone: $gettone('carla@example.com'));
+
+    expect($assegnatari())->toBe([$persone['bruno']['id']]);
+
+    alFinto('DELETE', "/v1/workspace/membri/{$persone['bruno']['id']}", gettone: $anna);
+
+    expect($assegnatari())->toBe([]);
+});
+
 // T4.4
 
 it('workspace.inviti.crea dà 201 con l\'invito, senza il codice, che si legge solo da ultimoInvito() (T4.4)', function () {

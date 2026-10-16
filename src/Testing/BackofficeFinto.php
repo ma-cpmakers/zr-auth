@@ -4418,10 +4418,17 @@ final class BackofficeFinto
         return [204, null];
     }
 
-    /** Toglie il membro dal workspace, con i suoi gettoni di quel workspace (MembriController::archiviaIlMembro). */
+    /** Toglie il membro dal workspace, con le sue assegnazioni e i suoi gettoni di quel workspace (MembriController::archiviaIlMembro). */
     private function togliIlMembro(string $workspace, string $persona): void
     {
         unset($this->membri[$workspace][$persona], $this->entrati[$workspace][$persona]);
+
+        // Le sue assegnazioni alle schede del workspace si archiviano: la scheda non lo ha più fra gli assegnatari.
+        foreach ($this->schede as $id => $scheda) {
+            if ($scheda['workspace'] === $workspace) {
+                $this->schede[$id]['assegnatari'] = array_values(array_diff($scheda['assegnatari'], [$persona]));
+            }
+        }
 
         // I gettoni di quel workspace non tornano se la persona rientra: nel backoffice sono archiviati.
         foreach ($this->gettoni as $gettone => $riga) {
