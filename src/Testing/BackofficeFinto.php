@@ -111,6 +111,9 @@ final class BackofficeFinto
         ['POST', '#^/v1/accessi/conferma$#', 'accessi.conferma.crea'],
         ['POST', '#^/v1/io/email/cambio$#', 'io.email.cambio.crea'],
         ['POST', '#^/v1/io/email/cambio/verifica$#', 'io.email.cambio.verifica.crea'],
+        ['POST', '#^/v1/io/esportazioni$#', 'io.esportazioni.crea'],
+        ['GET', '#^/v1/io/esportazioni/([^/]+)$#', 'io.esportazioni.mostra'],
+        ['GET', '#^/v1/io/esportazioni/([^/]+)/archivio$#', 'io.esportazioni.archivio.mostra'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
         ['GET', '#^/v1/ricerca$#', 'ricerca.elenca'],
         ['POST', '#^/v1/ricerca$#', 'ricerca.crea'],
@@ -333,6 +336,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{codice: string, email: string, scade: CarbonImmutable, tentativi: int}> per id della persona: il cambio di email in attesa */
     private array $cambiEmail = [];
+
+    /** @var array<string, array{persona: string, stato: string, creata: CarbonImmutable, scade: ?CarbonImmutable}> per id: le richieste «Esporta i miei dati» */
+    private array $esportazioni = [];
 
     /** @var array<string, array{utente: string, creato_il: CarbonImmutable, chiuso: bool, via?: string}> per id */
     private array $accessi = [];
@@ -1108,6 +1114,9 @@ final class BackofficeFinto
                 'accessi.conferma.crea' => $this->confermaAccesso($richiesta, $corpo),
                 'io.email.cambio.crea' => $this->chiediCambioEmail($richiesta, $corpo),
                 'io.email.cambio.verifica.crea' => $this->verificaCambioEmail($richiesta, $corpo),
+                'io.esportazioni.crea' => $this->chiediEsportazione($richiesta),
+                'io.esportazioni.mostra' => $this->mostraEsportazione($richiesta, $parametri[0]),
+                'io.esportazioni.archivio.mostra' => $this->scaricaEsportazione($richiesta, $parametri[0]),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
@@ -3426,6 +3435,127 @@ final class BackofficeFinto
         $this->accessi[$chi['accesso']]['confermato_fino'] = $fino;
 
         return [200, ['data' => ['confermato_fino' => self::iso($fino)]]];
+    }
+
+    /**
+     * Fa finire le richieste «Esporta i miei dati» ancora in preparazione della persona con quell'email: da qui sono `pronta`, con la
+     * scadenza a sette giorni. Il lavoro del backoffice è in coda e il finto non ne ha una: un test della pagina che segue lo stato sta
+     * in `in_preparazione` finché non chiama questo, o `fallisciLeEsportazioni()`.
+     */
+    public function preparaLeEsportazioni(string $email): void
+    {
+        $persona = $this->conEmail(self::normalizza($email));
+
+        foreach ($this->esportazioni as $id => $voce) {
+            if ($voce['persona'] === $persona && $voce['stato'] === 'in_preparazione') {
+                $this->esportazioni[$id]['stato'] = 'pronta';
+                $this->esportazioni[$id]['scade'] = now()->toImmutable()->startOfMillisecond()->addDays(7);
+            }
+        }
+    }
+
+    /** Fa fallire le richieste «Esporta i miei dati» ancora in preparazione della persona con quell'email (l'archivio non si è potuto preparare). */
+    public function fallisciLeEsportazioni(string $email): void
+    {
+        $persona = $this->conEmail(self::normalizza($email));
+
+        foreach ($this->esportazioni as $id => $voce) {
+            if ($voce['persona'] === $persona && $voce['stato'] === 'in_preparazione') {
+                $this->esportazioni[$id]['stato'] = 'fallita';
+            }
+        }
+    }
+
+    /**
+     * io.esportazioni.crea (IoEsportazioniController::crea, #1959): la conferma recente dell'accesso (403 `conferma_richiesta`), poi, se la
+     * persona ne ha già una in preparazione, la stessa (202, senza contare nel tetto); oltre 3 richieste in 24 ore 429 con `Retry-After`; altrimenti
+     * ne nasce una `in_preparazione`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function chiediEsportazione(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $fino = $this->accessi[$chi['accesso']]['confermato_fino'] ?? null;
+
+        if ($fino === null || $fino->lte(now())) {
+            throw new Problema('conferma_richiesta');
+        }
+
+        $sue = array_filter($this->esportazioni, fn (array $voce) => $voce['persona'] === $chi['persona']);
+
+        foreach ($sue as $id => $voce) {
+            if ($voce['stato'] === 'in_preparazione') {
+                return [202, ['data' => $this->formaEsportazione($id)]];
+            }
+        }
+
+        $adesso = now()->toImmutable()->startOfMillisecond();
+        $ultime = array_values(array_filter(array_column($sue, 'creata'), fn (CarbonImmutable $creata) => $creata->gt($adesso->subDay())));
+        sort($ultime);
+
+        if (count($ultime) >= 3) {
+            $libera = $ultime[count($ultime) - 3]->addDay();
+
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, (int) ceil($adesso->diffInSeconds($libera, true)))]);
+        }
+
+        $id = self::id();
+        $this->esportazioni[$id] = ['persona' => $chi['persona'], 'stato' => 'in_preparazione', 'creata' => $adesso, 'scade' => null];
+
+        return [202, ['data' => $this->formaEsportazione($id)]];
+    }
+
+    /**
+     * io.esportazioni.mostra (IoEsportazioniController::mostra, #1959): la richiesta della persona; l'id di un'altra e uno mai esistito sono
+     * lo stesso 404. Una `pronta` oltre la scadenza si legge `scaduta`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraEsportazione(Request $richiesta, string $id): array
+    {
+        $chi = $this->autentica($richiesta);
+
+        if (($this->esportazioni[$id]['persona'] ?? null) !== $chi['persona']) {
+            throw new Problema('non_trovato');
+        }
+
+        return [200, ['data' => $this->formaEsportazione($id)]];
+    }
+
+    /**
+     * io.esportazioni.archivio.mostra (IoEsportazioniController::archivioMostra, #1959): lo ZIP, una volta sola. Il finto dà uno ZIP vuoto
+     * (22 byte validi): serve a provare il gesto di scaricare, non il contenuto. Dopo l'uso, alla scadenza, per un'altra persona e per un id
+     * mai esistito è lo stesso 404.
+     *
+     * @return array{int, string, array<string, string>}
+     */
+    private function scaricaEsportazione(Request $richiesta, string $id): array
+    {
+        $chi = $this->autentica($richiesta);
+        $voce = $this->esportazioni[$id] ?? null;
+
+        if ($voce === null || $voce['persona'] !== $chi['persona'] || $this->formaEsportazione($id)['stato'] !== 'pronta') {
+            throw new Problema('non_trovato');
+        }
+
+        $this->esportazioni[$id]['stato'] = 'scaduta';
+
+        return [200, "PK\x05\x06".str_repeat("\0", 18), [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename=zeiras-i-miei-dati.zip',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'no-store, private',
+        ]];
+    }
+
+    /** @return array{id: string, stato: string, creata_il: string, scade_il: ?string} */
+    private function formaEsportazione(string $id): array
+    {
+        $voce = $this->esportazioni[$id];
+        $stato = $voce['stato'] === 'pronta' && $voce['scade'] !== null && $voce['scade']->lte(now()) ? 'scaduta' : $voce['stato'];
+
+        return ['id' => $id, 'stato' => $stato, 'creata_il' => self::iso($voce['creata']), 'scade_il' => $voce['scade'] === null ? null : self::iso($voce['scade'])];
     }
 
     /**
