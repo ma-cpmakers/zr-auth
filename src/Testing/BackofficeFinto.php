@@ -250,6 +250,9 @@ final class BackofficeFinto
 
     private const LIMITE_MASSIMO = 100;
 
+    /** La regola di `ordina` di board.board.elenca e board.cartelle.elenca (ElencoBoardRequest::ORDINI, #1574): vuoto o altro è 422. */
+    private const REGOLA_ORDINA_BOARD = ['ordina' => ['sometimes', 'filled', 'string', 'in:nome,aggiornata_il,-aggiornata_il']];
+
     /** Il tetto del `limite` della lettura di una board con board.schede.elenca (#1940); con `assegnatario_id`, come gli altri elenchi, resta 100. */
     private const LIMITE_MASSIMO_SCHEDE = 1000;
 
@@ -1462,7 +1465,7 @@ final class BackofficeFinto
 
     /**
      * board.cartelle.elenca (CartelleController::elenca): le cartelle del workspace del gettone, in ordine di nome (maiuscole e
-     * accenti non contano) e poi di id, a cursore.
+     * accenti non contano) e poi di id, o con `ordina` per `aggiornata_il` (#1574), a cursore.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -1471,6 +1474,7 @@ final class BackofficeFinto
         $chi = $this->conPm($richiesta);
         $query = $this->testi->validaQuery(self::query($richiesta), ['stato' => ['sometimes', 'string', 'in:attiva,cestino']]);
         $stato = (string) ($query['stato'] ?? 'attiva');
+        $ordina = self::ordinaBoard($richiesta);
         $voci = [];
 
         foreach ($this->cartelle as $cartella) {
@@ -1484,8 +1488,8 @@ final class BackofficeFinto
             }
         }
 
-        return $this->pagina($richiesta, 'board.cartelle.elenca:'.$stato, 'id', $voci, self::perNomeEId(...),
-            fn (string $id) => isset($this->cartelle[$id]) ? self::perNomeEId($this->cartelle[$id]) : null);
+        return $this->pagina($richiesta, 'board.cartelle.elenca:'.$stato.self::listaDelCursoreBoard($ordina), 'id', $voci, self::posizioneBoard($ordina),
+            fn (string $id) => isset($this->cartelle[$id]) ? self::posizioneBoard($ordina)($this->cartelle[$id]) : null, $ordina === '-aggiornata_il', regole: self::REGOLA_ORDINA_BOARD);
     }
 
     /** Le schede non archiviate di una board: il `numero_schede` che la board dà (CS8). */
@@ -1495,7 +1499,8 @@ final class BackofficeFinto
     }
 
     /**
-     * board.board.elenca (BoardController::elenca): le board del workspace, di tutte le cartelle, in ordine di nome e poi di id.
+     * board.board.elenca (BoardController::elenca): le board del workspace, di tutte le cartelle, in ordine di nome e poi di id, o con
+     * `ordina` per `aggiornata_il` (#1574).
      * `stato` (`attiva` se manca, `chiusa` o `cestino`) ne sceglie uno; le altre non compaiono.
      *
      * @return array{int, array<string, mixed>}
@@ -1505,6 +1510,7 @@ final class BackofficeFinto
         $chi = $this->conPm($richiesta);
         $query = $this->testi->validaQuery(self::query($richiesta), ['stato' => ['sometimes', 'string', 'in:attiva,chiusa,cestino']]);
         $stato = (string) ($query['stato'] ?? 'attiva');
+        $ordina = self::ordinaBoard($richiesta);
         $voci = [];
 
         foreach ($this->boards as $board) {
@@ -1520,8 +1526,43 @@ final class BackofficeFinto
             }
         }
 
-        return $this->pagina($richiesta, 'board.board.elenca:'.$stato, 'id', $voci, self::perNomeEId(...),
-            fn (string $id) => isset($this->boards[$id]) ? self::perNomeEId($this->boards[$id]) : null);
+        return $this->pagina($richiesta, 'board.board.elenca:'.$stato.self::listaDelCursoreBoard($ordina), 'id', $voci, self::posizioneBoard($ordina),
+            fn (string $id) => isset($this->boards[$id]) ? self::posizioneBoard($ordina)($this->boards[$id]) : null, $ordina === '-aggiornata_il', regole: self::REGOLA_ORDINA_BOARD);
+    }
+
+    /**
+     * L'ordine che si chiede (ElencoBoardRequest::ordinaChiesto): quello della query se è uno dei tre, altrimenti `nome`. Un valore che non
+     * va è già il suo 422, validato con `limite` e `cursore`, e il cursore resta quello del nome.
+     */
+    private static function ordinaBoard(Request $richiesta): string
+    {
+        $ordina = self::query($richiesta)['ordina'] ?? null;
+
+        return in_array($ordina, ['aggiornata_il', '-aggiornata_il'], true) ? $ordina : 'nome';
+    }
+
+    /**
+     * La lista del cursore di board.board.elenca e board.cartelle.elenca (ElencoBoardRequest::lista): quella di sempre per l'ordine di
+     * nome, con l'ordine in coda per gli altri, così il cursore di un ordine non vale con un altro.
+     */
+    private static function listaDelCursoreBoard(string $ordina): string
+    {
+        return $ordina === 'nome' ? '' : ':'.$ordina;
+    }
+
+    /**
+     * La posizione di una riga nell'ordine che si chiede: per nome e poi id, o per `aggiornata_il` e poi id (nello stesso verso: il
+     * `-` rovescia la lista intera). La riga è quella del finto, con un istante, o quella già resa, con il testo ISO. Il cursore porta
+     * il solo id e la posizione si rilegge dalla riga: il backoffice firma l'istante, ma il finto non cambia `aggiornata_il` di una
+     * board o di una cartella dopo la nascita, e la differenza non si vede. Se un giorno lo farà, il cursore dovrà portarlo.
+     *
+     * @return Closure(array<string, mixed>): list<string>
+     */
+    private static function posizioneBoard(string $ordina): Closure
+    {
+        return $ordina === 'nome'
+            ? self::perNomeEId(...)
+            : fn (array $voce): array => [$voce['aggiornata_il'] instanceof CarbonInterface ? self::iso($voce['aggiornata_il']) : $voce['aggiornata_il'], $voce['id']];
     }
 
     /**
@@ -4665,9 +4706,10 @@ final class BackofficeFinto
      * @param  Closure(string): (list<string>|null)  $posizioneDelCursore  la posizione dalla chiave di un cursore
      * @param  bool  $dalPiuRecente  l'ordine al contrario, dalla posizione più alta (gli inviti: gli id sono ULID, in ordine di nascita)
      * @param  int  $limiteMassimo  il tetto di `limite`, 100 salvo la lettura di una board con board.schede.elenca (#1940)
+     * @param  array<string, mixed>  $regole  altri parametri da validare con `limite` e `cursore`, in un solo 422 (`ordina` degli elenchi della board)
      * @return array{int, array<string, mixed>}
      */
-    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, int $limiteMassimo = self::LIMITE_MASSIMO, ?string $versione = null): array
+    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, int $limiteMassimo = self::LIMITE_MASSIMO, ?string $versione = null, array $regole = []): array
     {
         $query = $this->testi->validaQuery(self::query($richiesta), [
             'limite' => ['sometimes', 'integer', 'between:1,'.$limiteMassimo],
@@ -4677,7 +4719,7 @@ final class BackofficeFinto
                     $fail('regole.cursore')->translate();
                 }
             }],
-        ]);
+        ] + $regole);
 
         return $this->impagina($query, $lista, $chiave, $voci instanceof Closure ? $voci() : $voci, $posizione, $posizioneDelCursore, $dalPiuRecente, $versione);
     }
