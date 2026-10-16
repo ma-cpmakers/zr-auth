@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Zeiras\Auth\Api;
 use Zeiras\Auth\Sessione;
 
@@ -43,16 +45,47 @@ it('senza una sessione aperta non fa niente e non lancia (L.2)', function () {
 it('con la sola sessione dell\'accesso resta com\'è, ma con un id nuovo (L.2)', function () {
     apriSessione(conWorkspace: false);
     $prima = session(Sessione::CHIAVE);
+    $id = session()->getId();
 
     Sessione::lascia();
 
-    expect(session(Sessione::CHIAVE))->toBe($prima);
+    expect(session(Sessione::CHIAVE))->toBe($prima)
+        ->and(session()->getId())->not->toBe($id)
+        ->and(Sessione::eChiusa($id))->toBeTrue();
 });
 
 it('dopo, Api::workspace() è come senza workspace: nessun gettone del workspace, e non manda quello lasciato (L.3)', function () {
     apriSessione();
     Sessione::lascia();
 
+    Http::fake(['*' => Http::response(['data' => []])]);
+
     expect(fn () => Api::workspace())->toThrow(LogicException::class, 'Nessun workspace nella sessione');
-    expect(Api::persona())->toBeInstanceOf(Api::class);
+
+    Api::persona()->get('/v1/io');
+
+    // Chiama col gettone dell'accesso, mai con quello del workspace lasciato.
+    Http::assertSent(fn (Request $r) => $r->header('Authorization') === ['Bearer '.GETTONE_ACCESSO]);
+    Http::assertNotSent(fn (Request $r) => $r->header('Authorization') === ['Bearer '.GETTONE_WORKSPACE]);
+});
+
+it('una sessione nata dal ricevitore, senza gettone dell\'accesso, si chiude: non c\'è un accesso a cui tornare (L.1)', function () {
+    Sessione::entra(gettoneDelWorkspace());
+    $id = session()->getId();
+
+    Sessione::lascia();
+
+    expect(session()->has(Sessione::CHIAVE))->toBeFalse()
+        ->and(Sessione::aperta())->toBeFalse()
+        ->and(session()->getId())->not->toBe($id)
+        ->and(Sessione::eChiusa($id))->toBeTrue();
+});
+
+it('con la sessione scaduta non fa niente (L.2)', function () {
+    apriSessione(scadeIl: now()->subMinute()->toJSON());
+    $prima = session(Sessione::CHIAVE);
+
+    Sessione::lascia();
+
+    expect(session(Sessione::CHIAVE))->toBe($prima);
 });

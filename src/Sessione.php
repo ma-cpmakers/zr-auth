@@ -100,13 +100,22 @@ final class Sessione
      * gettone, la persona e la scadenza, come subito dopo `apri()`. Serve dopo `workspace.uscita.crea` (o quando il workspace è
      * sparito) a chi non ha un altro workspace in cui far entrare la persona: da qui `Api::persona()` chiama col gettone
      * dell'accesso e `Api::workspace()` è come senza workspace. L'id della sessione è nuovo e quella di prima è distrutta, come
-     * per `entra()`. Senza una sessione aperta non fa niente e non lancia.
+     * per `entra()`. Senza una sessione aperta non fa niente e non lancia; se la sessione non ha un gettone dell'accesso (è nata dal
+     * ricevitore dell'ingresso) non c'è dove tornare, e si chiude come `chiudi()`.
      */
     public static function lascia(): void
     {
         $stato = self::stato();
 
         if ($stato === null || ! self::aperta()) {
+            return;
+        }
+
+        // Entrata solo dal ricevitore dell'ingresso (`entra()` senza `apri()`): non c'è un gettone dell'accesso da tenere, e togliere
+        // quello del workspace lascerebbe una sessione senza gettoni. Allora si chiude, come `chiudi()`.
+        if (! isset($stato['gettoni']['accesso'])) {
+            self::chiudi();
+
             return;
         }
 
