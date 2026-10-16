@@ -89,4 +89,5 @@ return [
     'campo_predefinito_membro' => 'Un campo membro non ha un valore predefinito.',
     'campo_predefinito_dopo_le_opzioni' => 'Le opzioni nascono con questa richiesta e non hanno ancora un id: il predefinito si dice dopo, con crm.campi.modifica.',
     'campo_testo_lungo_non_in_elenco' => "I testi lunghi non vanno nell'elenco.",
+    'codice_cambio_email' => 'Il codice non è giusto, è scaduto o non è stato chiesto: chiedi un codice nuovo per cambiare l\'email.',
 ];
