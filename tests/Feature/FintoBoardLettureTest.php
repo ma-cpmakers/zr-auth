@@ -194,3 +194,85 @@ it('board.schede.elenca ammette un limite fino a 1.000, come il backoffice (#194
         ->and(alFinto('GET', '/v1/board/board?limite=101', null, $gettone)->status())->toBe(422)
         ->and(alFinto('GET', '/v1/board/schede?assegnatario_id=x&limite=101', null, $gettone)->json('errors.0.detail'))->toBe('Il campo limite deve essere fra 1 e 100.');
 });
+
+// #2218 (FI.1-FI.2): `ordina` di board.cartelle.elenca e board.board.elenca (#1574): `nome` (se manca), `aggiornata_il`, `-aggiornata_il`.
+// Il verso vale per l'istante e per l'id insieme; il cursore vale solo per l'ordine che l'ha dato.
+
+/** Tre cartelle e tre board con istanti diversi (più un pari istante): per nome vanno in un ordine, per aggiornamento in un altro. */
+function conGliOrdini(): array
+{
+    [$finto, $studio, , , $gettone] = conLeBoard();
+    $cartelle = $board = [];
+
+    foreach ([['Zeta', '10:00:00'], ['Alfa', '10:01:00'], ['Beta', '10:02:00'], ['Gamma', '10:02:00']] as [$nome, $ora]) {
+        Carbon\Carbon::setTestNow("2026-10-16 {$ora}");
+        $cartelle[$nome] = $finto->cartella($studio, $nome);
+        $board[$nome] = $finto->board($studio, $nome, $cartelle[$nome]);
+    }
+
+    Carbon\Carbon::setTestNow();
+
+    // A pari istante (Beta e Gamma) decide l'id, nello stesso verso dell'istante.
+    $pari = [$board['Beta']['id'], $board['Gamma']['id']];
+    sort($pari);
+    $pariCartelle = [$cartelle['Beta']['id'], $cartelle['Gamma']['id']];
+    sort($pariCartelle);
+
+    return [$gettone, $pariCartelle, $pari, array_column($cartelle, 'id', 'nome'), array_column($board, 'id', 'nome')];
+}
+
+it('board.cartelle.elenca e board.board.elenca ordinano per aggiornata_il, a pari istante per id nello stesso verso (FI.1)', function (string $percorso, int $dove) {
+    $uso = conGliOrdini();
+    $gettone = $uso[0];
+    $pari = $uso[$dove];
+    $ids = $uso[$dove + 2];
+    $dopo = [$ids['Zeta'], $ids['Alfa']];
+
+    $crescente = array_column(alFinto('GET', "{$percorso}?ordina=aggiornata_il", null, $gettone)->json('data'), 'id');
+    $decrescente = array_column(alFinto('GET', "{$percorso}?ordina=-aggiornata_il", null, $gettone)->json('data'), 'id');
+
+    expect($crescente)->toBe([...$dopo, ...$pari])
+        ->and($decrescente)->toBe(array_reverse([...$dopo, ...$pari]));
+})->with([
+    'cartelle' => ['/v1/board/cartelle', 1],
+    'board' => ['/v1/board/board', 2],
+]);
+
+it('senza ordina o con ordina=nome l\'ordine è quello di sempre; il cursore di un ordine per aggiornata_il riprende da dove era (FI.1)', function (string $percorso) {
+    [$gettone] = conGliOrdini();
+
+    $nomi = fn (string $query) => array_column(alFinto('GET', $percorso.$query, null, $gettone)->json('data'), 'nome');
+
+    expect($nomi(''))->toBe(['Alfa', 'Beta', 'Gamma', 'Zeta'])
+        ->and($nomi('?ordina=nome'))->toBe(['Alfa', 'Beta', 'Gamma', 'Zeta']);
+
+    $prima = alFinto('GET', "{$percorso}?ordina=-aggiornata_il&limite=3", null, $gettone);
+    $seconda = alFinto('GET', "{$percorso}?ordina=-aggiornata_il&limite=3&cursore=".urlencode($prima->json('successivo')), null, $gettone);
+
+    expect($prima->json('data'))->toHaveCount(3)
+        ->and($seconda->json('data'))->toHaveCount(1)
+        ->and($seconda->json('data.0.nome'))->toBe('Zeta')
+        ->and($seconda->json('successivo'))->toBeNull();
+})->with(['/v1/board/cartelle', '/v1/board/board']);
+
+it('un ordina fuori dai tre valori è 422 sul parametro; il cursore di un ordine con un altro è 422 sul cursore (FI.2)', function (string $percorso) {
+    [$gettone] = conGliOrdini();
+
+    foreach (['?ordina=creata_il', '?ordina=', '?ordina=-nome', '?ordina=AGGIORNATA_IL'] as $query) {
+        $risposta = alFinto('GET', $percorso.$query, null, $gettone);
+
+        expect($risposta->status())->toBe(422, $query)
+            ->and($risposta->json('codice'))->toBe('dati_non_validi')
+            ->and(collect($risposta->json('errors'))->pluck('parameter')->all())->toContain('ordina');
+    }
+
+    $perNome = alFinto('GET', "{$percorso}?limite=2", null, $gettone)->json('successivo');
+    $perData = alFinto('GET', "{$percorso}?ordina=aggiornata_il&limite=2", null, $gettone)->json('successivo');
+
+    foreach ([["?ordina=aggiornata_il&cursore=", $perNome], ["?ordina=-aggiornata_il&cursore=", $perData], ["?cursore=", $perData]] as [$query, $cursore]) {
+        $risposta = alFinto('GET', $percorso.$query.urlencode($cursore), null, $gettone);
+
+        expect($risposta->status())->toBe(422, $query)
+            ->and(collect($risposta->json('errors'))->pluck('parameter')->all())->toContain('cursore');
+    }
+})->with(['/v1/board/cartelle', '/v1/board/board']);
