@@ -385,8 +385,8 @@ it('io.email.cambio.verifica.crea col codice giusto cambia l\'email e risponde c
     foreach ([$nessuna, $sbagliato, $riusato] as $rifiutato) {
         expect($rifiutato->status())->toBe(422)
             ->and($rifiutato->json('codice'))->toBe('dati_non_validi')
-            ->and($rifiutato->json('errori.0.pointer'))->toBe('#/codice')
-            ->and($rifiutato->json('errori.0.regola'))->toBe('valore_non_ammesso');
+            ->and($rifiutato->json('errors.0.pointer'))->toBe('#/codice')
+            ->and($rifiutato->json('errors.0.regola'))->toBe('valore_non_ammesso');
     }
     expect($giusto->status())->toBe(200)
         ->and($giusto->header('Link'))->toBe(linkDi('io.email.cambio.verifica.crea'))
