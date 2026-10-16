@@ -249,10 +249,28 @@ it('senza ordina o con ordina=nome l\'ordine è quello di sempre; il cursore di 
     $prima = alFinto('GET', "{$percorso}?ordina=-aggiornata_il&limite=3", null, $gettone);
     $seconda = alFinto('GET', "{$percorso}?ordina=-aggiornata_il&limite=3&cursore=".urlencode($prima->json('successivo')), null, $gettone);
 
-    expect($prima->json('data'))->toHaveCount(3)
+    expect(array_column($prima->json('data'), 'nome'))->toBe(array_slice($nomi('?ordina=-aggiornata_il'), 0, 3))
+        ->and(array_column($prima->json('data'), 'nome')[2])->toBe('Alfa')
         ->and($seconda->json('data'))->toHaveCount(1)
         ->and($seconda->json('data.0.nome'))->toBe('Zeta')
         ->and($seconda->json('successivo'))->toBeNull();
+
+    // Un cursore che cade fra due righe dello stesso istante (Beta e Gamma): dopo l'id più alto viene il più basso, poi le altre.
+    $cursore = null;
+    $ids = [];
+
+    do {
+        $pagina = alFinto('GET', "{$percorso}?ordina=-aggiornata_il&limite=1".($cursore === null ? '' : '&cursore='.urlencode($cursore)), null, $gettone);
+        $ids[] = $pagina->json('data.0.nome');
+        $cursore = $pagina->json('successivo');
+    } while ($cursore !== null);
+
+    $pari = array_slice($ids, 0, 2);
+    $dalLista = array_column(alFinto('GET', "{$percorso}?ordina=-aggiornata_il", null, $gettone)->json('data'), 'nome');
+
+    expect($ids)->toBe($dalLista)
+        ->and($pari)->toEqualCanonicalizing(['Beta', 'Gamma'])
+        ->and(array_slice($ids, 2))->toBe(['Alfa', 'Zeta']);
 })->with(['/v1/board/cartelle', '/v1/board/board']);
 
 it('un ordina fuori dai tre valori è 422 sul parametro; il cursore di un ordine con un altro è 422 sul cursore (FI.2)', function (string $percorso) {
@@ -265,6 +283,12 @@ it('un ordina fuori dai tre valori è 422 sul parametro; il cursore di un ordine
             ->and($risposta->json('codice'))->toBe('dati_non_validi')
             ->and(collect($risposta->json('errors'))->pluck('parameter')->all())->toContain('ordina');
     }
+
+    // Come nel backoffice, `limite`, `cursore` e `ordina` si guardano insieme: un solo 422 con gli errori di tutti.
+    $insieme = alFinto('GET', "{$percorso}?ordina=creata_il&limite=0", null, $gettone);
+
+    expect($insieme->status())->toBe(422)
+        ->and(collect($insieme->json('errors'))->pluck('parameter')->sort()->values()->all())->toBe(['limite', 'ordina']);
 
     $perNome = alFinto('GET', "{$percorso}?limite=2", null, $gettone)->json('successivo');
     $perData = alFinto('GET', "{$percorso}?ordina=aggiornata_il&limite=2", null, $gettone)->json('successivo');
