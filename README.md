@@ -138,6 +138,10 @@ try {
 // anche se non ce n'erano.
 Api::persona()->delete('/v1/accessi/altri');
 
+// «Dove hai fatto l'accesso» (accessi.elenca): gli accessi aperti della persona, dal più recente, a pagine; `provider` è come è nato
+// (`password` o il provider; `null` per uno di prima) e `corrente` dice quello della sessione.
+Api::persona()->get('/v1/accessi');
+
 // «Conferma che sei tu» (accessi.conferma.crea): la password di nuovo, e per dieci minuti l'accesso è confermato. I metodi che la
 // chiederanno (cambio email, esportazione, eliminazione dell'account) rispondono 403 conferma_richiesta senza di lei.
 $confermato = Api::persona()->post('/v1/accessi/conferma', ['password' => $password])['data']['confermato_fino'];
@@ -615,7 +619,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
-- Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.altri.elimina`, `accessi.conferma.crea`, `accessi.elimina`, `accessi.provider.elenca`,
+- Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.altri.elimina`, `accessi.conferma.crea`, `accessi.elenca`, `accessi.elimina`, `accessi.provider.elenca`,
   `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
   `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
