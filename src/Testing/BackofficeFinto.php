@@ -176,6 +176,7 @@ final class BackofficeFinto
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
         ['PATCH', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.modifica'],
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
+        ['POST', '#^/v1/workspace/uscita$#', 'workspace.uscita.crea'],
     ];
 
     /**
@@ -1182,6 +1183,7 @@ final class BackofficeFinto
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
+                'workspace.uscita.crea' => $this->esceDalWorkspace($richiesta, $corpo),
                 default => $this->eseguiCrm($operazione, $richiesta, $corpo, $parametri),
             };
             // Le intestazioni di una risposta riuscita (la Location di una creazione) sono il terzo elemento, se c'è.
@@ -4389,7 +4391,44 @@ final class BackofficeFinto
         $this->membroDi($workspace, $persona);
         $this->controllaIlBersaglio($this->membri[$workspace][$chi['persona']], $this->membri[$workspace][$persona]);
 
+        $this->togliIlMembro($workspace, $persona);
+
+        return [204, null];
+    }
+
+    /**
+     * workspace.uscita.crea (MembriController::uscita): la persona del gettone lascia il workspace del gettone, come se la
+     * togliesse un amministratore. Nell'ordine del backoffice: il gettone del workspace (403 senza), il corpo (422, nessun
+     * campo: esce sempre chi chiama), il proprietario (409). Anche il gettone con cui chiama smette di valere (401).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, null}
+     */
+    private function esceDalWorkspace(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $this->testi->validaStretta($corpo, []);
+
+        if ($this->membri[$chi['workspace']][$chi['persona']] === 'proprietario') {
+            throw new Problema('proprietario_intoccabile');
+        }
+
+        $this->togliIlMembro($chi['workspace'], $chi['persona']);
+
+        return [204, null];
+    }
+
+    /** Toglie il membro dal workspace, con le sue assegnazioni e i suoi gettoni di quel workspace (MembriController::archiviaIlMembro). */
+    private function togliIlMembro(string $workspace, string $persona): void
+    {
         unset($this->membri[$workspace][$persona], $this->entrati[$workspace][$persona]);
+
+        // Le sue assegnazioni alle schede del workspace si archiviano: la scheda non lo ha più fra gli assegnatari.
+        foreach ($this->schede as $id => $scheda) {
+            if ($scheda['workspace'] === $workspace) {
+                $this->schede[$id]['assegnatari'] = array_values(array_diff($scheda['assegnatari'], [$persona]));
+            }
+        }
 
         // I gettoni di quel workspace non tornano se la persona rientra: nel backoffice sono archiviati.
         foreach ($this->gettoni as $gettone => $riga) {
@@ -4397,8 +4436,6 @@ final class BackofficeFinto
                 unset($this->gettoni[$gettone]);
             }
         }
-
-        return [204, null];
     }
 
     /** Il membro del workspace con quell'id di persona (MembriController::membroDi): 404 se non c'è, o è di un altro workspace. */
