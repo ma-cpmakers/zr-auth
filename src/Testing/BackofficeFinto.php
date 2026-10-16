@@ -335,7 +335,7 @@ final class BackofficeFinto
     /** Quanti caratteri può avere la risposta del widget (Turnstile::LUNGHEZZA). */
     private const LUNGHEZZA_TURNSTILE = 2048;
 
-    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
+    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, formato_data: ?string, inizio_settimana: ?string, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
     private array $persone = [];
 
     /** @var array<string, array{codice: string, email: string, scade: CarbonImmutable, tentativi: int}> per id della persona: il cambio di email in attesa */
@@ -534,6 +534,8 @@ final class BackofficeFinto
             'cognome' => null,
             'mansione' => null,
             'telefono' => null,
+            'formato_data' => null,
+            'inizio_settimana' => null,
             'email' => $email,
             'email_verificata_il' => $verificata ? now()->toImmutable() : null,
             'lingua' => $lingua,
@@ -2483,6 +2485,8 @@ final class BackofficeFinto
                     'cognome' => null,
                     'mansione' => null,
                     'telefono' => null,
+                    'formato_data' => null,
+                    'inizio_settimana' => null,
                     'email' => $email,
                     'email_verificata_il' => now()->toImmutable(),
                     'lingua' => 'it',
@@ -3053,6 +3057,8 @@ final class BackofficeFinto
                 'cognome' => null,
                 'mansione' => null,
                 'telefono' => null,
+                'formato_data' => null,
+                'inizio_settimana' => null,
                 'email' => $email,
                 // L'invito è arrivato a quell'indirizzo: la persona che lo accetta ha già verificato l'email.
                 'email_verificata_il' => $invito === null ? null : now()->toImmutable(),
@@ -3350,6 +3356,9 @@ final class BackofficeFinto
             'utente.cognome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
             'utente.mansione' => ['sometimes', 'nullable', 'string', 'max:100', new NomeScritto],
             'utente.telefono' => ['sometimes', 'nullable', 'bail', 'string', 'max:32', 'regex:/^(?=(?:\\D*\\d){5})[0-9+().\\- ]+$/'],
+            // Le preferenze di data (#2228): `null` torna a quello della lingua.
+            'utente.formato_data' => ['sometimes', 'nullable', 'string', Rule::in(['gg/mm/aaaa', 'mm/gg/aaaa', 'aaaa-mm-gg'])],
+            'utente.inizio_settimana' => ['sometimes', 'nullable', 'string', Rule::in(['lunedi', 'domenica', 'sabato'])],
             'primi_passi_nascosti' => $conWorkspace ? ['filled', 'boolean:strict'] : [function (string $attributo, mixed $valore, Closure $rifiuta) {
                 $this->testi->dichiara($attributo, 'campo_vietato');
                 $rifiuta('regole.campo_del_workspace')->translate(['attribute' => $this->testi->nome($attributo)]);
@@ -3384,7 +3393,7 @@ final class BackofficeFinto
 
         if (! is_array($utente) || $utente === []) {
             throw new Problema('dati_non_validi', [[
-                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.cognome, utente.mansione, utente.telefono, utente.lingua, utente.fuso_orario']),
+                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.cognome, utente.mansione, utente.telefono, utente.lingua, utente.fuso_orario, utente.formato_data, utente.inizio_settimana']),
                 'regola' => 'obbligatorio',
                 'pointer' => array_key_exists('utente', $campi) ? '#/utente' : '#',
             ]]);
@@ -5026,6 +5035,8 @@ final class BackofficeFinto
             'email_verificata_il' => $persona['email_verificata_il'] === null ? null : self::iso($persona['email_verificata_il']),
             'lingua' => $persona['lingua'],
             'fuso_orario' => $persona['fuso_orario'],
+            'formato_data' => $persona['formato_data'],
+            'inizio_settimana' => $persona['inizio_settimana'],
             'cognome' => $persona['cognome'],
             'mansione' => $persona['mansione'],
             'telefono' => $persona['telefono'],
