@@ -213,7 +213,7 @@ final class BackofficeFinto
      */
     private const ALTRI_CAMPI_DI_IO = [
         'utente.id' => null,
-        'utente.email' => null,
+        'utente.email' => 'io.email.cambio.crea',
         'utente.email_verificata_il' => null,
         'workspace' => 'workspace.modifica',
         'ruolo' => 'workspace.membri.modifica',
@@ -3454,6 +3454,10 @@ final class BackofficeFinto
         $this->frena('cambio-email-ora:'.$chi['persona'], 5, self::ORA);
         $this->frena('cambio-email-giorno:'.$chi['persona'], 10, 86400);
 
+        // Come il backoffice: una richiesta nuova sostituisce SEMPRE la precedente, anche con un indirizzo già usato o proprio (allora non
+        // ha un codice): se il ramo «usato» lasciasse viva la richiesta di prima, il suo codice direbbe che l'indirizzo era già di qualcuno.
+        unset($this->cambiEmail[$chi['persona']]);
+
         if ($nuova !== $this->persone[$chi['persona']]['email'] && $this->conEmail($nuova) === null) {
             $codice = str_pad((string) random_int(0, 999_999), 6, '0', STR_PAD_LEFT);
             $this->cambiEmail[$chi['persona']] = ['codice' => $codice, 'email' => $nuova, 'scade' => now()->toImmutable()->addMinutes(10), 'tentativi' => 0];
@@ -3482,15 +3486,24 @@ final class BackofficeFinto
         $dati = $this->testi->validaCorpo($corpo, ['codice' => ['required', 'string', 'digits:6', new SenzaCarattereNullo]]);
         $stato = $this->cambiEmail[$chi['persona']] ?? null;
 
-        $giusto = $stato !== null && $stato['scade']->gt(now()) && $stato['tentativi'] < 5;
+        // Oltre 10 codici sbagliati in un giorno per persona, nemmeno quello giusto (CambioEmail::ERRORI_AL_GIORNO).
+        $giusto = $stato !== null && $stato['scade']->gt(now()) && $stato['tentativi'] < 5 && $this->freni->attempts('cambio-email-errori:'.$chi['persona']) < 10;
 
         if ($giusto) {
             $this->cambiEmail[$chi['persona']]['tentativi']++;
             $giusto = hash_equals($stato['codice'], (string) $dati['codice']);
+
+            if (! $giusto) {
+                $this->freni->hit('cambio-email-errori:'.$chi['persona'], 86400);
+            }
+        }
+
+        if ($giusto) {
+            // Giusto: la richiesta si consuma, anche se l'indirizzo nel frattempo è stato preso (allora è il solito 422).
+            unset($this->cambiEmail[$chi['persona']]);
         }
 
         if ($giusto && $this->conEmail($stato['email']) === null) {
-            unset($this->cambiEmail[$chi['persona']]);
             $this->persone[$chi['persona']]['email'] = $stato['email'];
             $this->persone[$chi['persona']]['email_verificata_il'] = now()->toImmutable()->startOfMillisecond();
 

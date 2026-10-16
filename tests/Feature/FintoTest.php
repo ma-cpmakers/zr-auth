@@ -368,6 +368,43 @@ it('io.email.cambio.crea frena per persona: il secondo in un minuto è 429, anch
     expect($frenata->status())->toBe(429)->and($frenata->json('codice'))->toBe('troppe_richieste')->and($frenata->header('Retry-After'))->not->toBeNull();
 });
 
+it('io.email.cambio.crea: una richiesta verso un indirizzo già usato sostituisce comunque quella di prima, e il suo codice non vale più (#1960, nessun oracolo)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $finto->persona('bruno@example.com', PASSWORD);
+    $gettone = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettone);
+    alFinto('POST', '/v1/io/email/cambio', ['email' => 'prima@example.com'], $gettone);
+    $codice = $finto->ultimoCodice('prima@example.com');
+    $this->travel(61)->seconds();
+
+    alFinto('POST', '/v1/io/email/cambio', ['email' => 'bruno@example.com'], $gettone);
+
+    expect(alFinto('POST', '/v1/io/email/cambio/verifica', ['codice' => $codice], $gettone)->status())->toBe(422)
+        ->and(alFinto('GET', '/v1/io', gettone: $gettone)->json('data.utente.email'))->toBe('anna@example.com');
+});
+
+it('io.email.cambio.verifica.crea: dopo dieci codici sbagliati in un giorno nemmeno quello giusto vale (#1960)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $gettone = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettone);
+
+    foreach (range(1, 2) as $_) {
+        alFinto('POST', '/v1/io/email/cambio', ['email' => 'nuova@example.com'], $gettone);
+        $codice = $finto->ultimoCodice('nuova@example.com');
+        $sbagliato = $codice === '000000' ? '000001' : '000000';
+        foreach (range(1, 5) as $__) {
+            alFinto('POST', '/v1/io/email/cambio/verifica', ['codice' => $sbagliato], $gettone);
+        }
+        $this->travel(61)->seconds();
+        alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettone);
+    }
+    alFinto('POST', '/v1/io/email/cambio', ['email' => 'nuova@example.com'], $gettone);
+
+    expect(alFinto('POST', '/v1/io/email/cambio/verifica', ['codice' => $finto->ultimoCodice('nuova@example.com')], $gettone)->status())->toBe(422);
+});
+
 it('io.email.cambio.verifica.crea col codice giusto cambia l\'email e risponde con io; sbagliato, scaduto o mai chiesto è lo stesso 422 su #/codice; gli altri accessi restano (#1960)', function () {
     $finto = BackofficeFinto::attiva();
     $finto->persona('anna@example.com', PASSWORD);
