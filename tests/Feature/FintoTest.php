@@ -392,7 +392,7 @@ it('io.email.cambio.verifica.crea col codice giusto cambia l\'email e risponde c
         ->and($giusto->header('Link'))->toBe(linkDi('io.email.cambio.verifica.crea'))
         ->and($giusto->json('data.utente.email'))->toBe('nuova@example.com')
         ->and(alFinto('GET', '/v1/io', gettone: $altro)->json('data.utente.email'))->toBe('nuova@example.com')
-        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->status())->toBe(401)
+        ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->status())->toBe(422)
         ->and(alFinto('POST', '/v1/accessi', ['email' => 'nuova@example.com', 'password' => PASSWORD])->status())->toBe(201);
 });
 
