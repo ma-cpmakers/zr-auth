@@ -120,6 +120,7 @@ Sessione::apri($accesso['data']);            // il gettone dell'accesso; l'id de
 $gettone = Api::persona()->post('/v1/gettoni', ['workspace_id' => $id]);
 Sessione::entra($gettone['data']);           // da qui Api::workspace() manda il gettone di quel workspace
 
+Sessione::lascia();     // dopo workspace.uscita.crea, se non c'è un altro workspace: toglie workspace, ruolo e gettone del workspace e tiene l'accesso; senza sessione non fa niente
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
 Sessione::workspace();  // {id, nome, slug}; null prima di entra()
 Sessione::ruolo();      // proprietario, amministratore o membro
