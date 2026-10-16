@@ -212,6 +212,8 @@ return [
         'lingua' => 'lingua',
         'lingua_contenuti' => 'lingua dei contenuti',
         'fuso_orario' => 'fuso orario',
+        'formato_data' => 'formato data',
+        'inizio_settimana' => 'inizio settimana',
         'azienda.partita_iva' => 'partita IVA',
         'azienda.settore' => 'settore',
         'azienda.persone' => 'numero di persone',
@@ -226,5 +228,7 @@ return [
         'utente.nome' => 'nome',
         'utente.lingua' => 'lingua',
         'utente.fuso_orario' => 'fuso orario',
+        'utente.formato_data' => 'formato data',
+        'utente.inizio_settimana' => 'inizio settimana',
     ],
 ];

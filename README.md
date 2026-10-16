@@ -687,7 +687,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   una programmata): il finto non archivia alla scadenza. `workspace.membri.modifica` (`{"ruolo"}`, `amministratore` o `membro`) e
   `workspace.membri.elimina` rispondono nell'ordine del backoffice: il ruolo di chi chiama `403`, il membro `404`, il corpo
   `422`, il proprietario `409` `proprietario_intoccabile`, e un amministratore che tocca un amministratore, o ne fa uno, `403`.
-  Togliere un membro toglie i suoi gettoni **di quel workspace** (`401`, anche se rientra); quello dell'accesso e gli altri
+  `io.modifica` accetta anche `utente.formato_data` (`gg/mm/aaaa`, `mm/gg/aaaa`, `aaaa-mm-gg`) e `utente.inizio_settimana` (`lunedi`, `domenica`, `sabato`): `null` li azzera, un valore fuori elenco è `422` `valore_non_ammesso` sul loro pointer, e `io.mostra` li dà sempre (`null` finché non scelti). Togliere un membro toglie i suoi gettoni **di quel workspace** (`401`, anche se rientra); quello dell'accesso e gli altri
   workspace restano. `workspace.uscita.crea` (`204`, senza corpo) fa uscire chi chiama allo stesso modo, anche col gettone con cui
   chiama; il gettone dell'accesso è `403` `gettone_senza_workspace`, un campo `422`, il proprietario `409` `proprietario_intoccabile`.
   Ogni membro (`workspace.membri.elenca`, `.modifica` e le due accettazioni) porta `entrato_il`: l'istante in cui la
