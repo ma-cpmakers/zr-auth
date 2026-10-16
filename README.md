@@ -635,7 +635,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.altri.elimina`, `accessi.conferma.crea`, `accessi.elenca`, `io.email.cambio.crea`, `io.email.cambio.verifica.crea`, `io.esportazioni.crea`, `io.esportazioni.mostra`, `io.esportazioni.archivio.mostra`, `accessi.elimina`, `accessi.provider.elenca`,
   `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
   `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
-  `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
+  `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`, `workspace.uscita.crea`,
   `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
   `io.workspace.elenca`, `io.aziende.elenca`, `io.notifiche.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
   `io.workspace.crea` (vedi «Il workspace»). Una chiamata
@@ -688,7 +688,8 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `workspace.membri.elimina` rispondono nell'ordine del backoffice: il ruolo di chi chiama `403`, il membro `404`, il corpo
   `422`, il proprietario `409` `proprietario_intoccabile`, e un amministratore che tocca un amministratore, o ne fa uno, `403`.
   Togliere un membro toglie i suoi gettoni **di quel workspace** (`401`, anche se rientra); quello dell'accesso e gli altri
-  workspace restano.
+  workspace restano. `workspace.uscita.crea` (`204`, senza corpo) fa uscire chi chiama allo stesso modo, anche col gettone con cui
+  chiama; il gettone dell'accesso è `403` `gettone_senza_workspace`, un campo `422`, il proprietario `409` `proprietario_intoccabile`.
   Ogni membro (`workspace.membri.elenca`, `.modifica` e le due accettazioni) porta `entrato_il`: l'istante in cui la
   persona è entrata in quel workspace (`workspace()`, `membro()` o un'accettazione), ISO 8601 UTC coi millisecondi; una
   persona che è in due workspace ha due istanti, e cambiare il ruolo non lo cambia.

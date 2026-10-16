@@ -151,6 +151,47 @@ it('workspace.membri.elimina non tocca il proprietario (409), né un amministrat
         ->and($toglie($bruno, $persone['carla']['id'])[0])->toBe(204);
 });
 
+// #2013
+
+it('workspace.uscita.crea fa uscire chi chiama: 204, il suo gettone di quel workspace è 401, quello dell\'accesso e degli altri workspace restano (#2013)', function () {
+    [$finto, $studio, $persone, $gettone] = squadra();
+    $altro = $finto->workspace('Altro', $persone['carla']);
+    $anna = $gettone('anna@example.com');
+    $accessoDiCarla = entraNelFinto('carla@example.com')['gettone']['gettone'];
+    $carlaQui = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accessoDiCarla)->json('data.gettone');
+    $carlaLi = alFinto('POST', '/v1/gettoni', ['workspace_id' => $altro['id']], $accessoDiCarla)->json('data.gettone');
+
+    $risposta = alFinto('POST', '/v1/workspace/uscita', gettone: $carlaQui);
+
+    expect($risposta->status())->toBe(204)
+        ->and($risposta->body())->toBe('')
+        ->and(collect(alFinto('GET', '/v1/workspace/membri', gettone: $anna)->json('data'))->pluck('id')->all())->not->toContain($persone['carla']['id'])
+        ->and(esito(alFinto('GET', '/v1/io', gettone: $carlaQui)))->toBe([401, 'gettone_non_valido'])
+        ->and(alFinto('GET', '/v1/io', gettone: $accessoDiCarla)->status())->toBe(200)
+        ->and(alFinto('GET', '/v1/io', gettone: $carlaLi)->json('data.workspace.id'))->toBe($altro['id'])
+        // Un secondo POST con lo stesso gettone non trova più niente.
+        ->and(esito(alFinto('POST', '/v1/workspace/uscita', gettone: $carlaQui)))->toBe([401, 'gettone_non_valido']);
+
+    // Se rientra, il gettone di prima non risorge.
+    $finto->membro($studio, $persone['carla'], 'membro');
+
+    expect(esito(alFinto('GET', '/v1/io', gettone: $carlaQui)))->toBe([401, 'gettone_non_valido']);
+});
+
+it('workspace.uscita.crea risponde nell\'ordine del backoffice: il gettone del workspace (403), il corpo (422), il proprietario (409); l\'amministratore esce (#2013)', function () {
+    [, , $persone, $gettone] = squadra();
+    $esce = fn (string $gettone, array $corpo = []) => esito(alFinto('POST', '/v1/workspace/uscita', $corpo, $gettone));
+
+    expect($esce(entraNelFinto('carla@example.com')['gettone']['gettone']))->toBe([403, 'gettone_senza_workspace'])
+        // Nessun campo: l'uscita è sempre di chi chiama, mai di un id del corpo.
+        ->and($esce($gettone('carla@example.com'), ['utente' => $persone['bruno']['id']]))->toBe([422, 'dati_non_validi'])
+        ->and($esce($gettone('anna@example.com')))->toBe([409, 'proprietario_intoccabile'])
+        ->and($esce($gettone('anna@example.com'), ['utente' => 'x']))->toBe([422, 'dati_non_validi'])
+        ->and(esito(alFinto('GET', '/v1/io', gettone: $gettone('anna@example.com')))[0])->toBe(200)
+        ->and($esce($gettone('bruno@example.com'))[0])->toBe(204)
+        ->and(collect(alFinto('GET', '/v1/workspace/membri', gettone: $gettone('anna@example.com'))->json('data'))->pluck('id')->all())->not->toContain($persone['bruno']['id']);
+});
+
 // T4.4
 
 it('workspace.inviti.crea dà 201 con l\'invito, senza il codice, che si legge solo da ultimoInvito() (T4.4)', function () {
