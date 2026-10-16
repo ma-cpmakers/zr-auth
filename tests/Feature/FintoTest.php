@@ -461,7 +461,7 @@ it('una richiesta di /v1 che il finto non conosce lancia; una che non è del bac
     BackofficeFinto::attiva();
 
     expect(fn () => alFinto('GET', '/v1/sconosciuto'))->toThrow(RichiestaSconosciuta::class, 'GET /v1/sconosciuto')
-        ->and(fn () => alFinto('GET', '/v1/accessi'))->toThrow(RichiestaSconosciuta::class, 'GET /v1/accessi')
+        ->and(fn () => alFinto('PUT', '/v1/accessi'))->toThrow(RichiestaSconosciuta::class, 'PUT /v1/accessi')
         ->and(fn () => Http::get('https://altrove.example/v1/accessi'))->toThrow(StrayRequestException::class);
 });
 
