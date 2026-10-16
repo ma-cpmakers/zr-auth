@@ -189,6 +189,10 @@ return [
         'title' => 'Aceptación requerida',
         'detail' => 'Para usar Zeiras debes aceptar el aviso de privacidad y las condiciones de uso en su versión vigente. El problema lleva junto al código `mancanti`, los documentos por aceptar: acéptalos con legale.accettazioni.crea (los lista legale.documenti.elenca) y repite la solicitud.',
     ],
+    'conferma_richiesta' => [
+        'title' => 'Confirmación requerida',
+        'detail' => 'Esta acción requiere que confirmes que eres tú: vuelve a dar tu contraseña con accessi.conferma.crea (vale diez minutos en este acceso) y repite la solicitud.',
+    ],
     'precondizione_fallita' => [
         'title' => 'Precondición fallida',
         'detail' => 'El recurso ya no es el que leíste: alguien más lo modificó después de tu lectura (o el `ETag` de `If-Match` no es el suyo). No se escribió nada. Vuelve a leerlo (su método `mostra` da el `ETag` actual), revisa qué cambió y, si aún quieres tu cambio, repite la solicitud con el nuevo `ETag`.',

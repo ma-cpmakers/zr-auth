@@ -189,6 +189,10 @@ return [
         'title' => 'Acceptance required',
         'detail' => 'To use Zeiras you must accept the privacy notice and the terms of use in their current version. The problem carries `mancanti` next to the code, the documents still to accept: accept them with legale.accettazioni.crea (legale.documenti.elenca lists them) and repeat the request.',
     ],
+    'conferma_richiesta' => [
+        'title' => 'Confirmation required',
+        'detail' => 'This action needs you to confirm it is you: give your password again with accessi.conferma.crea (it holds for ten minutes on this access) and repeat the request.',
+    ],
     'precondizione_fallita' => [
         'title' => 'Precondition failed',
         'detail' => 'The resource is no longer the one you read: someone else changed it after you read it (or the `ETag` in `If-Match` is not its own). Nothing was written. Read it again (its `mostra` method gives the current `ETag`), check what changed and, if you still want your change, repeat the request with the new `ETag`.',

@@ -41,6 +41,7 @@ return [
     'versione_futura' => 'La versione è dopo l\'ultima della board: usa quella che board.schede.elenca ha dato.',
     'numero_senza_archiviate' => 'Con numero la scheda arriva in qualunque stato, anche archiviata: il parametro archiviate non serve.',
     'password_attuale' => 'La password attuale non è giusta: la nuova password si dà solo con quella di adesso.',
+    'conferma_password' => 'La password non è giusta: per confermare che sei tu serve quella con cui entri in Zeiras.',
     'contatto_vuoto' => 'Un contatto vuole almeno uno fra nome, cognome ed email.',
     'responsabile_del_workspace' => 'Questa persona non è un membro del workspace: gli id dei membri li dà workspace.membri.elenca.',
     'organizzazione_non_esiste' => "L'azienda del contatto non esiste in questo workspace.",
