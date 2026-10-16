@@ -96,11 +96,12 @@ final class Sessione
     }
 
     /**
-     * Rimette la lingua e il nome della sessione uguali a quelli di io.mostra (#1473): la lingua scelta nel profilo non
-     * arriva ai moduli da sola, perché la sessione la prende all'ingresso e non la rilegge. Una cornice che legge io.mostra a
-     * ogni pagina la chiama con i suoi `data` quando sono diversi da `Sessione::utente()`. Cambia solo `lingua` e `nome`, e
-     * solo se la lingua è una di `LINGUE` e il nome una stringa non vuota, diversi da quelli che ci sono: l'id della persona, il gettone, il workspace, il
-     * ruolo e ogni altro campo restano, e a valori uguali non cambia niente. Se i dati non portano l'`utente.id` della sessione
+     * Rimette la lingua, il nome e l'email della sessione uguali a quelli di io.mostra (#1473, #2214): la lingua scelta nel
+     * profilo e l'email cambiata con io.email.cambio.verifica.crea non arrivano ai moduli da soli, perché la sessione li prende
+     * all'ingresso e non li rilegge. Una cornice che legge io.mostra a ogni pagina la chiama con i suoi `data` quando sono
+     * diversi da `Sessione::utente()`. Cambia solo `lingua`, `nome` ed `email` (e `email_verificata_il`, se la sessione lo tiene),
+     * e solo se la lingua è una di `LINGUE` e il resto una stringa non vuota, diversi da quelli che ci sono: l'id della persona,
+     * il gettone, il workspace, il ruolo e ogni altro campo restano, e a valori uguali non cambia niente. Se i dati non portano l'`utente.id` della sessione
      * (mancante o di un'altra persona) non li prende. Senza una sessione aperta non fa niente e non lancia.
      * Torna se ha cambiato qualcosa.
      *
@@ -121,7 +122,13 @@ final class Sessione
 
         $cambiato = false;
 
-        foreach (['lingua', 'nome'] as $campo) {
+        $campi = ['lingua', 'nome', 'email'];
+
+        if (array_key_exists('email_verificata_il', self::stato()['utente'] ?? [])) {
+            $campi[] = 'email_verificata_il';
+        }
+
+        foreach ($campi as $campo) {
             $valore = $persona[$campo] ?? null;
             $valido = $campo === 'lingua' ? in_array($valore, self::LINGUE, true) : is_string($valore) && trim($valore) !== '';
 
