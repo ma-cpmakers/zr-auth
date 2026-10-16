@@ -355,6 +355,81 @@ it('io.email.cambio.crea vuole la conferma recente, poi risponde 202 uguale per 
         ->and($finto->ultimoCodice('bruno@example.com'))->toBeNull();
 });
 
+it('io.esportazioni.*: conferma, una sola richiesta aperta, al più 3 in 24 ore, stato che segue la preparazione e archivio che si scarica una volta (#1959)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $finto->persona('bruno@example.com', PASSWORD);
+    $gettone = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $gettoneBruno = entraNelFinto('bruno@example.com')['gettone']['gettone'];
+
+    $senza = alFinto('POST', '/v1/io/esportazioni', [], $gettone);
+    expect($senza->status())->toBe(403)->and($senza->json('codice'))->toBe('conferma_richiesta');
+
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettone);
+    $prima = alFinto('POST', '/v1/io/esportazioni', [], $gettone);
+    $seconda = alFinto('POST', '/v1/io/esportazioni', [], $gettone);
+    $id = $prima->json('data.id');
+
+    expect($prima->status())->toBe(202)
+        ->and($prima->header('Link'))->toBe(linkDi('io.esportazioni.crea'))
+        ->and(array_keys($prima->json('data')))->toBe(['id', 'stato', 'creata_il', 'scade_il'])
+        ->and($prima->json('data.stato'))->toBe('in_preparazione')
+        ->and($prima->json('data.scade_il'))->toBeNull()
+        ->and($seconda->json('data.id'))->toBe($id)
+        ->and(alFinto('GET', "/v1/io/esportazioni/{$id}", gettone: $gettone)->json('data.stato'))->toBe('in_preparazione')
+        ->and(alFinto('GET', "/v1/io/esportazioni/{$id}/archivio", gettone: $gettone)->status())->toBe(404);
+
+    $finto->preparaLeEsportazioni('anna@example.com');
+    $this->travel(601)->seconds();
+    $senzaConferma = alFinto('GET', "/v1/io/esportazioni/{$id}/archivio", gettone: $gettone);
+    expect($senzaConferma->status())->toBe(403)->and($senzaConferma->json('codice'))->toBe('conferma_richiesta');
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettone);
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettoneBruno);
+    $pronta = alFinto('GET', "/v1/io/esportazioni/{$id}", gettone: $gettone);
+
+    expect($pronta->json('data.stato'))->toBe('pronta')
+        ->and($pronta->json('data.scade_il'))->toMatch('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/')
+        ->and(alFinto('GET', "/v1/io/esportazioni/{$id}", gettone: $gettoneBruno)->status())->toBe(404)
+        ->and(alFinto('GET', "/v1/io/esportazioni/{$id}/archivio", gettone: $gettoneBruno)->status())->toBe(404);
+
+    $zip = alFinto('GET', "/v1/io/esportazioni/{$id}/archivio", gettone: $gettone);
+    $ancora = alFinto('GET', "/v1/io/esportazioni/{$id}/archivio", gettone: $gettone);
+    $mai = alFinto('GET', '/v1/io/esportazioni/01k6r2t5b9d3f7h1k5m9n3q7r1/archivio', gettone: $gettone);
+
+    expect($zip->status())->toBe(200)
+        ->and($zip->header('Content-Type'))->toBe('application/zip')
+        ->and(substr($zip->body(), 0, 2))->toBe('PK')
+        ->and($ancora->status())->toBe(404)
+        ->and($ancora->json('codice'))->toBe($mai->json('codice'))->toBe('non_trovato')
+        ->and(alFinto('GET', "/v1/io/esportazioni/{$id}", gettone: $gettone)->json('data.stato'))->toBe('scaduta');
+});
+
+it('io.esportazioni.crea: la quarta richiesta in 24 ore è 429 con Retry-After, e passa a 24 ore dalla prima; una fallita si legge fallita (#1959)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $gettone = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettone);
+
+    foreach ([1, 2, 3] as $n) {
+        $id = alFinto('POST', '/v1/io/esportazioni', [], $gettone)->json('data.id');
+        $n === 3 ? $finto->fallisciLeEsportazioni('anna@example.com') : $finto->preparaLeEsportazioni('anna@example.com');
+        $this->travel(60)->seconds();
+    }
+
+    $quarta = alFinto('POST', '/v1/io/esportazioni', [], $gettone);
+
+    expect(alFinto('GET', "/v1/io/esportazioni/{$id}", gettone: $gettone)->json('data.stato'))->toBe('fallita')
+        ->and($quarta->status())->toBe(429)
+        ->and($quarta->json('codice'))->toBe('troppe_richieste')
+        ->and((int) $quarta->header('Retry-After'))->toBe(86400 - 180);
+
+    $this->travel(86400)->seconds();
+    $gettone = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $gettone);
+
+    expect(alFinto('POST', '/v1/io/esportazioni', [], $gettone)->status())->toBe(202);
+});
+
 it('io.email.cambio.crea frena per persona: il secondo in un minuto è 429, anche per un indirizzo già usato (#1960)', function () {
     $finto = BackofficeFinto::attiva();
     $finto->persona('anna@example.com', PASSWORD);
