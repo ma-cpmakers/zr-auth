@@ -120,6 +120,7 @@ Sessione::apri($accesso['data']);            // il gettone dell'accesso; l'id de
 $gettone = Api::persona()->post('/v1/gettoni', ['workspace_id' => $id]);
 Sessione::entra($gettone['data']);           // da qui Api::workspace() manda il gettone di quel workspace
 
+Sessione::lascia();     // dopo workspace.uscita.crea, se non c'è un altro workspace: toglie workspace, ruolo e gettone del workspace e tiene l'accesso; senza sessione non fa niente
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
 Sessione::workspace();  // {id, nome, slug}; null prima di entra()
 Sessione::ruolo();      // proprietario, amministratore o membro
@@ -187,12 +188,12 @@ Route::get('report', ReportController::class)->bloccaSessione();               /
   lock della sessione fino a 10 secondi e ne aspetta un altro per al più **3 secondi**. Un processo PHP che aspetta manca a tutti
   i siti del server (il pool è uno solo): per questo l'attesa è corta.
 - **Dove lo mette zr-auth.** Sul ricevitore del codice (`zr-auth.ricevitore`). Le rotte dei moduli lo mettono i moduli: quelle
-  che chiamano `Sessione::apri()`, `Sessione::entra()` o `Sessione::chiudi()` **e** le loro rotte lente. Non va su tutto: due
+  che chiamano `Sessione::apri()`, `Sessione::entra()`, `Sessione::lascia()` o `Sessione::chiudi()` **e** le loro rotte lente. Non va su tutto: due
   pagine della stessa persona caricate insieme si metterebbero in fila.
 - **Oltre l'attesa** la risposta è **503** con `Retry-After: 1`, mai un 500 e mai «prosegui senza il blocco» (riaprirebbe la
   gara). Il corpo non dice di chi è il blocco. Vale solo per una rotta con il blocco: il timeout di un altro lock del modulo
   resta com'è.
-- **Chi aspetta dietro un ingresso.** `Sessione::apri()` e `Sessione::entra()` rigenerano l'id della sessione. Una richiesta di
+- **Chi aspetta dietro un ingresso.** `Sessione::apri()`, `Sessione::entra()` e `Sessione::lascia()` rigenerano l'id della sessione. Una richiesta di
   un'altra scheda che aspettava il lock dell'id di prima riparte, dopo l'attesa, da una sessione vuota: risponde come a una
   persona non entrata e può rimandare il cookie con l'id di prima. Il blocco evita che la sessione di prima torni, non che
   quella richiesta sia inutile: la pagina dopo un ingresso si ricarica dalla scheda in cui si è entrati.
@@ -203,7 +204,7 @@ Route::get('report', ReportController::class)->bloccaSessione();               /
 ### La sessione chiusa: da v0.12.31 vale per ogni pagina (#2044)
 
 `->bloccaSessione()` protegge solo le rotte che lo dichiarano; una pagina qualunque (la richiesta rimandata di Inertia) no.
-Da v0.12.31 zr-auth chiude anche quella strada, **senza nulla da fare nei moduli**: `Sessione::apri()`, `entra()` e `chiudi()`
+Da v0.12.31 zr-auth chiude anche quella strada, **senza nulla da fare nei moduli**: `Sessione::apri()`, `entra()`, `lascia()` e `chiudi()`
 segnano la sessione di prima come chiusa, e una risposta tardiva che la riscrive non rimette nel browser né il suo cookie né
 quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrato dopo.
 

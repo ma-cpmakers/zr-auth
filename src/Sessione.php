@@ -96,6 +96,43 @@ final class Sessione
     }
 
     /**
+     * Lascia il workspace: toglie dalla sessione il workspace, il ruolo e il gettone del workspace, e tiene l'accesso, il suo
+     * gettone, la persona e la scadenza, come subito dopo `apri()`. Serve dopo `workspace.uscita.crea` (o quando il workspace è
+     * sparito) a chi non ha un altro workspace in cui far entrare la persona: da qui `Api::persona()` chiama col gettone
+     * dell'accesso e `Api::workspace()` è come senza workspace. L'id della sessione è nuovo e quella di prima è distrutta, come
+     * per `entra()`. Senza una sessione aperta non fa niente e non lancia; se la sessione non ha un gettone dell'accesso (è nata dal
+     * ricevitore dell'ingresso) non c'è dove tornare, e si chiude come `chiudi()`.
+     */
+    public static function lascia(): void
+    {
+        $stato = self::stato();
+
+        if ($stato === null || ! self::aperta()) {
+            return;
+        }
+
+        // Entrata solo dal ricevitore dell'ingresso (`entra()` senza `apri()`): non c'è un gettone dell'accesso da tenere, e togliere
+        // quello del workspace lascerebbe una sessione senza gettoni. Allora si chiude, come `chiudi()`.
+        if (! isset($stato['gettoni']['accesso'])) {
+            self::chiudi();
+
+            return;
+        }
+
+        self::controllaIlDriver();
+        // Il segno prima del cambio: se la cache non risponde, la sessione resta com'era.
+        self::segnaLaVecchia();
+
+        session()->regenerate(true);
+        session()->put(self::CHIAVE, [
+            ...$stato,
+            'gettoni' => array_intersect_key($stato['gettoni'], ['accesso' => true]),
+            'workspace' => null,
+            'ruolo' => null,
+        ]);
+    }
+
+    /**
      * Rimette la lingua, il nome e l'email della sessione uguali a quelli di io.mostra (#1473, #2214): la lingua scelta nel
      * profilo e l'email cambiata con io.email.cambio.verifica.crea non arrivano ai moduli da soli, perché la sessione li prende
      * all'ingresso e non li rilegge. Una cornice che legge io.mostra a ogni pagina la chiama con i suoi `data` quando sono
