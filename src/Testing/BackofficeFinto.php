@@ -106,6 +106,7 @@ final class BackofficeFinto
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
+        ['DELETE', '#^/v1/accessi/altri$#', 'accessi.altri.elimina'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
         ['GET', '#^/v1/ricerca$#', 'ricerca.elenca'],
         ['POST', '#^/v1/ricerca$#', 'ricerca.crea'],
@@ -1088,6 +1089,7 @@ final class BackofficeFinto
             $esito = match ($operazione) {
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
+                'accessi.altri.elimina' => $this->eliminaAltriAccessi($richiesta),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
@@ -2827,6 +2829,26 @@ final class BackofficeFinto
         $chi = $this->autentica($richiesta);
 
         $this->accessi[$chi['accesso']]['chiuso'] = true;
+
+        return [204, null];
+    }
+
+    /**
+     * accessi.altri.elimina (AccessiController::eliminaAltri, #1957): «Esci ovunque». Chiude ogni accesso aperto della persona del
+     * gettone tranne quello da cui discende il gettone che chiama; nessun altro accesso aperto è 204 lo stesso. Gli accessi di
+     * un'altra persona non si toccano.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaAltriAccessi(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+
+        foreach ($this->accessi as $id => $riga) {
+            if ($riga['utente'] === $chi['persona'] && $id !== $chi['accesso']) {
+                $this->accessi[$id]['chiuso'] = true;
+            }
+        }
 
         return [204, null];
     }

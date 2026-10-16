@@ -133,6 +133,10 @@ try {
 } finally {
     Sessione::chiudi();
 }
+
+// «Esci ovunque» (accessi.altri.elimina): chiude ogni altro accesso aperto della persona e tiene quello della sessione; 204
+// anche se non ce n'erano.
+Api::persona()->delete('/v1/accessi/altri');
 ```
 
 `Sessione::aggiorna()` non chiama il backoffice: riceve i `data` di `io.mostra` che la pagina ha già letto (la cornice di zr-core
@@ -607,7 +611,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - `persona($email, $password, $nome = 'Anna', $lingua = 'it', $verificata = true)`. Con `verificata: false` l'email è da
   verificare, e alla persona parte il primo codice, come alla registrazione. `ultimoCodice($email)` fa da casella di
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
-- Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.elimina`, `accessi.provider.elenca`,
+- Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.altri.elimina`, `accessi.elimina`, `accessi.provider.elenca`,
   `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
   `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`,
