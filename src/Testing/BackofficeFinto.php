@@ -105,6 +105,7 @@ final class BackofficeFinto
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
+        ['GET', '#^/v1/accessi$#', 'accessi.elenca'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/altri$#', 'accessi.altri.elimina'],
         ['POST', '#^/v1/accessi/conferma$#', 'accessi.conferma.crea'],
@@ -328,7 +329,7 @@ final class BackofficeFinto
     /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
     private array $persone = [];
 
-    /** @var array<string, array{utente: string, creato_il: CarbonImmutable, chiuso: bool}> per id */
+    /** @var array<string, array{utente: string, creato_il: CarbonImmutable, chiuso: bool, via?: string}> per id */
     private array $accessi = [];
 
     /** @var array<string, array{accesso: string, workspace: ?string}> per gettone, in chiaro: il finto vive nella memoria del test */
@@ -1096,6 +1097,7 @@ final class BackofficeFinto
 
             $esito = match ($operazione) {
                 'accessi.crea' => $this->creaAccesso($corpo),
+                'accessi.elenca' => $this->elencaAccessi($richiesta),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
                 'accessi.altri.elimina' => $this->eliminaAltriAccessi($richiesta),
                 'accessi.conferma.crea' => $this->confermaAccesso($richiesta, $corpo),
@@ -2282,7 +2284,7 @@ final class BackofficeFinto
         $this->freni->clear($coppia);
         $accesso = self::id();
         // Al millesimo, come il backoffice (datetime(3)): la scadenza scritta nella risposta è quella vera.
-        $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false];
+        $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'password'];
 
         return [201, ['data' => [
             'id' => $accesso,
@@ -2449,7 +2451,7 @@ final class BackofficeFinto
         $workspace = $invito !== null ? $this->accettaCodice($invito, $persona, 'provider') : null;
 
         $accesso = self::id();
-        $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false];
+        $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => $provider];
 
         return [201, ['data' => [
             'id' => $accesso,
@@ -2840,6 +2842,33 @@ final class BackofficeFinto
         $this->accessi[$chi['accesso']]['chiuso'] = true;
 
         return [204, null];
+    }
+
+    /**
+     * accessi.elenca (AccessiController::elenca, #1956): gli accessi aperti della persona del gettone, dal più recente, a pagine
+     * col solo id. Aperto è non chiuso e non scaduto (12 ore dalla nascita, come i gettoni). `provider` è la via con cui è nato
+     * l'accesso (`password` o lo slug del provider), `corrente` quello del gettone che chiama. Vale ogni gettone della persona.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaAccessi(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $voci = [];
+
+        foreach ($this->accessi as $id => $riga) {
+            if ($riga['utente'] === $chi['persona'] && ! $riga['chiuso'] && $this->scadenza($riga)->gt(now()->startOfMillisecond())) {
+                $voci[] = [
+                    'id' => $id,
+                    'creato_il' => self::iso($riga['creato_il']),
+                    'provider' => $riga['via'] ?? null,
+                    'corrente' => $id === $chi['accesso'],
+                ];
+            }
+        }
+
+        // Il cursore porta l'id dell'ultimo accesso, che nel frattempo può essersi chiuso: la posizione è l'id stesso.
+        return $this->pagina($richiesta, 'accessi.elenca', 'id', $voci, fn (array $accesso) => [$accesso['id']], fn (string $id) => [$id], dalPiuRecente: true);
     }
 
     /**

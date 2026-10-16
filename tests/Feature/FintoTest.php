@@ -276,6 +276,61 @@ it('accessi.conferma.crea: 200 con confermato_fino a dieci minuti, 422 su #/pass
     expect($fermato->status())->toBe(429)->and($fermato->json('codice'))->toBe('troppe_richieste');
 });
 
+it('accessi.elenca dà gli accessi aperti della persona, dal più recente, con provider e corrente: 200 col Link, a pagine, e un accesso chiuso o scaduto non c\'è (#1956)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $finto->persona('bruno@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio Anna', $anna);
+    $primo = entraNelFinto('anna@example.com');
+    $secondo = entraNelFinto('anna@example.com');
+    $delWorkspace = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $secondo['gettone']['gettone'])->json('data.gettone');
+    entraNelFinto('bruno@example.com');
+
+    $elenco = alFinto('GET', '/v1/accessi', gettone: $delWorkspace);
+
+    expect($elenco->status())->toBe(200)
+        ->and($elenco->header('Link'))->toBe(linkDi('accessi.elenca'))
+        ->and(array_keys($elenco->json()))->toBe(['data', 'successivo'])
+        ->and($elenco->json('successivo'))->toBeNull()
+        ->and(array_column($elenco->json('data'), 'id'))->toBe([$secondo['id'], $primo['id']])
+        ->and(array_keys($elenco->json('data.0')))->toBe(['id', 'creato_il', 'provider', 'corrente'])
+        ->and(array_column($elenco->json('data'), 'provider'))->toBe(['password', 'password'])
+        ->and(array_column($elenco->json('data'), 'corrente'))->toBe([true, false])
+        ->and($elenco->json('data.1.creato_il'))->toBe($primo['creato_il']);
+
+    $prima = alFinto('GET', '/v1/accessi?limite=1', gettone: $delWorkspace);
+    $seconda = alFinto('GET', '/v1/accessi?limite=1&cursore='.urlencode((string) $prima->json('successivo')), gettone: $delWorkspace);
+    expect(array_column($prima->json('data'), 'id'))->toBe([$secondo['id']])
+        ->and($prima->json('successivo'))->toBeString()
+        ->and(array_column($seconda->json('data'), 'id'))->toBe([$primo['id']])
+        ->and($seconda->json('successivo'))->toBeNull()
+        ->and(alFinto('GET', '/v1/accessi?limite=0', gettone: $delWorkspace)->json('codice'))->toBe('dati_non_validi')
+        ->and(alFinto('GET', '/v1/accessi?cursore=inventato', gettone: $delWorkspace)->status())->toBe(422);
+
+    alFinto('DELETE', "/v1/accessi/{$primo['id']}", gettone: $delWorkspace);
+    expect(array_column(alFinto('GET', '/v1/accessi', gettone: $delWorkspace)->json('data'), 'id'))->toBe([$secondo['id']])
+        ->and(alFinto('GET', '/v1/accessi', gettone: $primo['gettone']['gettone'])->json('codice'))->toBe('gettone_non_valido')
+        ->and(alFinto('GET', '/v1/accessi')->json('codice'))->toBe('gettone_assente');
+});
+
+it('accessi.elenca dà il provider con cui è nato l\'accesso, e non dà un accesso scaduto, vecchio di 12 ore (#1956)', function () {
+    [$finto, $stato] = fintoConPartenza('google');
+    $finto->persona('anna@example.com', PASSWORD);
+    $finto->identitaDelProvider('google', 'codice-anna', 'anna@example.com');
+    $dalProvider = arrivo('google', 'codice-anna', $stato)->json('data');
+    $conPassword = entraNelFinto('anna@example.com');
+
+    $elenco = alFinto('GET', '/v1/accessi', gettone: $conPassword['gettone']['gettone']);
+    expect(array_column($elenco->json('data'), 'provider', 'id'))->toBe([$conPassword['id'] => 'password', $dalProvider['id'] => 'google']);
+
+    $this->travel(11)->hours();
+    $recente = entraNelFinto('anna@example.com');
+    $this->travel(2)->hours();
+
+    expect(array_column(alFinto('GET', '/v1/accessi', gettone: $recente['gettone']['gettone'])->json('data'), 'id'))->toBe([$recente['id']])
+        ->and(alFinto('GET', '/v1/accessi', gettone: $conPassword['gettone']['gettone'])->json('codice'))->toBe('gettone_non_valido');
+});
+
 it('si esce da un accesso con il gettone di un altro accesso della stessa persona, che resta aperto (T2.3)', function () {
     $finto = BackofficeFinto::attiva();
     $finto->persona('anna@example.com', PASSWORD);
