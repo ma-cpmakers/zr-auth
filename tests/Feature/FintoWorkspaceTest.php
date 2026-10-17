@@ -224,7 +224,7 @@ it('workspace.inviti.crea dà 201 con l\'invito, senza il codice, che si legge s
     $codice = $finto->ultimoInvito('DORA@example.com');
 
     expect($risposta->status())->toBe(201)
-        ->and(array_keys($invito))->toBe(['id', 'email', 'ruolo', 'scade_il', 'creato_il'])
+        ->and(array_keys($invito))->toBe(['id', 'email', 'ruolo', 'reinvii', 'scade_il', 'creato_il'])
         ->and($invito['email'])->toBe('dora@example.com')
         ->and($invito['ruolo'])->toBe('membro')
         ->and($invito['scade_il'])->toBe(iso(now()->addDays(7)->startOfMillisecond()))
@@ -457,6 +457,68 @@ it('workspace.inviti.elimina revoca l\'invito (204, poi 404) e il suo codice non
         ->and(alFinto('DELETE', "/v1/workspace/inviti/{$daAmministratore}", gettone: $anna)->status())->toBe(204)
         ->and(alFinto('GET', '/v1/workspace/inviti', gettone: $anna)->json('data'))->toBe([])
         ->and(esito(alFinto('POST', '/v1/inviti/accettazione', ['codice' => $codice], $accesso)))->toBe([422, 'verifica_non_riuscita']);
+});
+
+it('workspace.inviti.reinvio.crea dà 202 con reinvii più uno, la scadenza rinnovata e un codice nuovo che sostituisce il vecchio; il quarto è 409 con limite 3 (#2229)', function () {
+    [$finto, , , $gettone] = squadra();
+    $this->freezeTime();
+    $anna = $gettone('anna@example.com');
+    $id = alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $anna)->json('data.id');
+    $primo = $finto->ultimoInvito('dora@example.com');
+    $this->travel(3)->days();
+
+    $risposta = alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna);
+    $codice = $finto->ultimoInvito('dora@example.com');
+
+    expect($risposta->status())->toBe(202)
+        ->and($risposta->json('data.reinvii'))->toBe(1)
+        ->and($risposta->json('data.scade_il'))->toBe(iso(now()->addDays(7)->startOfMillisecond()))
+        ->and($codice)->not->toBe($primo)
+        ->and($risposta->body())->not->toContain($codice);
+
+    alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna);
+    alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna);
+    $quarto = alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna);
+    $ultimo = $finto->ultimoInvito('dora@example.com');
+
+    expect(esito($quarto))->toBe([409, 'limite_raggiunto'])
+        ->and($quarto->json('limite'))->toBe(3)
+        ->and(alFinto('GET', '/v1/workspace/inviti', gettone: $anna)->json('data.0.reinvii'))->toBe(3)
+        ->and($finto->ultimoInvito('dora@example.com'))->toBe($ultimo);
+});
+
+it('workspace.inviti.reinvio.crea: scaduto, revocato o di un altro workspace è 404; il membro è 403; l\'amministratore non reinvia un invito a un amministratore; un campo è 422 (#2229)', function () {
+    [$finto, , , $gettone] = squadra();
+    $anna = $gettone('anna@example.com');
+    $bruno = $gettone('bruno@example.com');
+    $aMembro = alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $anna)->json('data.id');
+    $aAmministratore = alFinto('POST', '/v1/workspace/inviti', ['email' => 'ettore@example.com', 'ruolo' => 'amministratore'], $anna)->json('data.id');
+    $revocato = alFinto('POST', '/v1/workspace/inviti', ['email' => 'franco@example.com', 'ruolo' => 'membro'], $anna)->json('data.id');
+    alFinto('DELETE', "/v1/workspace/inviti/{$revocato}", gettone: $anna);
+
+    expect(esito(alFinto('POST', "/v1/workspace/inviti/{$aMembro}/reinvio", [], $gettone('carla@example.com'))))->toBe([403, 'permesso_negato'])
+        ->and(esito(alFinto('POST', "/v1/workspace/inviti/{$aAmministratore}/reinvio", [], $bruno)))->toBe([403, 'permesso_negato'])
+        ->and(esito(alFinto('POST', "/v1/workspace/inviti/{$revocato}/reinvio", [], $anna)))->toBe([404, 'non_trovato'])
+        ->and(esito(alFinto('POST', '/v1/workspace/inviti/01k6z4e7g9j1m3p5r7t9w1y3b5/reinvio', [], $anna)))->toBe([404, 'non_trovato'])
+        ->and(alFinto('POST', "/v1/workspace/inviti/{$aMembro}/reinvio", ['email' => 'x@example.com'], $anna)->status())->toBe(422)
+        ->and(alFinto('POST', "/v1/workspace/inviti/{$aAmministratore}/reinvio", [], $anna)->status())->toBe(202)
+        ->and(alFinto('POST', "/v1/workspace/inviti/{$aMembro}/reinvio", [], $bruno)->status())->toBe(202);
+
+    $this->travel(8)->days();
+    expect(esito(alFinto('POST', "/v1/workspace/inviti/{$aMembro}/reinvio", [], $anna)))->toBe([404, 'non_trovato']);
+});
+
+it('workspace.inviti.reinvio.crea con la stessa Idempotency-Key non rifà il reinvio (#2229)', function () {
+    [, , , $gettone] = squadra();
+    $anna = $gettone('anna@example.com');
+    $id = alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $anna)->json('data.id');
+
+    $prima = alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna, intestazioni: conChiave('reinvio-1'));
+    $seconda = alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna, intestazioni: conChiave('reinvio-1'));
+
+    expect($seconda->json())->toBe($prima->json())
+        ->and($seconda->json('data.reinvii'))->toBe(1)
+        ->and(alFinto('GET', '/v1/workspace/inviti', gettone: $anna)->json('data.0.reinvii'))->toBe(1);
 });
 
 // T4.5

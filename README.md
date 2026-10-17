@@ -637,7 +637,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
   `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`, `workspace.uscita.crea`,
-  `workspace.inviti.crea`, `workspace.inviti.elimina` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
+  `workspace.inviti.crea`, `workspace.inviti.elimina`, `workspace.inviti.reinvio.crea` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
   `io.workspace.elenca`, `io.aziende.elenca`, `io.notifiche.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
   `io.workspace.crea` (vedi «Il workspace»). Una chiamata
   di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
@@ -701,7 +701,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   più nel corpo si ignora; un'`azienda_id` che non è della persona è `404`; dieci workspace all'ora per persona, poi `429`
   con `Retry-After`. Con `Idempotency-Key` la stessa chiave dà la stessa risposta senza un secondo workspace, con qualunque
   gettone della persona.
-- **Gli inviti.** `workspace.inviti.crea` (`{"email", "ruolo"}`) è `201` con l'invito (`id`, `email`, `ruolo`, `scade_il`,
+- **Gli inviti.** `workspace.inviti.crea` (`{"email", "ruolo"}`) è `201` con l'invito (`id`, `email`, `ruolo`, `reinvii`, `scade_il`,
   `creato_il`) e la `Location`, uguale per un'email con un account e per una senza, e **mai con il codice**: il codice è
   nella mail, e il test lo legge da `ultimoInvito($email)`, la casella di posta degli inviti (l'ultimo partito, `null` se
   nessuno; non è il codice di `ultimoCodice()`). Un amministratore invita solo `membro` (`403`), il proprietario non si
@@ -711,6 +711,9 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   e lo stesso corpo danno la stessa risposta per 24 ore, senza un secondo invito (con un altro corpo `422`
   `chiave_idempotenza_riusata`). `workspace.inviti.elenca` dà i vivi dal più recente, a cursore; `workspace.inviti.elimina`
   è `204` e poi `404`, e il codice non vale più (l'invito a un amministratore lo revoca il proprietario).
+  `workspace.inviti.reinvio.crea` (senza corpo) è `202` con l'invito: `reinvii` più uno, la scadenza rinnovata di 7 giorni e un
+  codice nuovo in `ultimoInvito($email)` che sostituisce il vecchio; il quarto reinvio è `409` `limite_raggiunto` con `limite` 3,
+  un invito scaduto, revocato o di un altro workspace `404`, e l'amministratore non reinvia un invito a un amministratore (`403`).
   `inviti.accettazione.crea` (`{"codice"}`, col gettone dell'accesso: `403` `gettone_con_workspace` a uno di un workspace)
   è `201` nella forma di un membro se l'email dell'invito è la persona del gettone ed è verificata; ogni altro caso è la
   stessa `422` `verifica_non_riuscita`, e chi è già membro `409`. `utenti.crea` accetta `invito`: con un invito vivo per

@@ -173,6 +173,7 @@ final class BackofficeFinto
         ['GET', '#^/v1/workspace/inviti$#', 'workspace.inviti.elenca'],
         ['POST', '#^/v1/workspace/inviti$#', 'workspace.inviti.crea'],
         ['DELETE', '#^/v1/workspace/inviti/([^/]+)$#', 'workspace.inviti.elimina'],
+        ['POST', '#^/v1/workspace/inviti/([^/]+)/reinvio$#', 'workspace.inviti.reinvio.crea'],
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
         ['PATCH', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.modifica'],
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
@@ -318,6 +319,9 @@ final class BackofficeFinto
     /** Quanti giorni vale un invito (Invito::GIORNI). */
     private const GIORNI_DELL_INVITO = 7;
 
+    /** Quante volte si può rimandare la mail di un invito (Invito::REINVII, #2229). */
+    private const REINVII_DELL_INVITO = 3;
+
     /** Quanti giorni vale un link d'invito (LinkInvito::GIORNI) e quante persone fa entrare (LinkInvito::INGRESSI). */
     private const GIORNI_DEL_LINK = 7;
 
@@ -377,7 +381,7 @@ final class BackofficeFinto
     /** @var array<string, string> l'ultimo codice partito, per email */
     private array $posta = [];
 
-    /** @var array<string, array{id: string, workspace: string, email: string, ruolo: string, codice: string, scade: CarbonImmutable, creato_il: CarbonImmutable}> gli inviti che non sono né revocati né accettati, per id */
+    /** @var array<string, array{id: string, workspace: string, email: string, ruolo: string, reinvii: int, codice: string, scade: CarbonImmutable, creato_il: CarbonImmutable}> gli inviti che non sono né revocati né accettati, per id */
     private array $inviti = [];
 
     /** @var array<string, string> gli inviti accettati: l'HMAC del codice => il workspace. Il backoffice li tiene archiviati e li legge solo io.inviti.verifica.crea */
@@ -1182,6 +1186,7 @@ final class BackofficeFinto
                 'workspace.inviti.elenca' => $this->elencaInviti($richiesta),
                 'workspace.inviti.crea' => $this->creaInvito($richiesta, $corpo),
                 'workspace.inviti.elimina' => $this->eliminaInvito($richiesta, $parametri[0]),
+                'workspace.inviti.reinvio.crea' => $this->reinviaInvito($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
@@ -4552,6 +4557,7 @@ final class BackofficeFinto
                 'workspace' => $workspace,
                 'email' => $email,
                 'ruolo' => $campi['ruolo'],
+                'reinvii' => 0,
                 'invitante' => $chi['persona'],
                 'codice' => self::base64url(random_bytes(32)),
                 'scade' => $adesso->addDays(self::GIORNI_DELL_INVITO),
@@ -4586,6 +4592,55 @@ final class BackofficeFinto
         unset($this->inviti[$invito]);
 
         return [204, null];
+    }
+
+    /**
+     * workspace.inviti.reinvio.crea (InvitiController::reinvioCrea, #2229): rimanda la mail di un invito in attesa, al più tre
+     * volte (Invito::REINVII). Nell'ordine del backoffice: il ruolo di chi chiama (403), l'invito del workspace (404: anche uno
+     * di un altro, revocato o accettato), la Idempotency-Key, il corpo (422, nessun campo), un invito scaduto (404), un
+     * invito a un amministratore chiesto da un amministratore (403), i freni degli inviti (429), il quarto reinvio (409
+     * limite_raggiunto con `limite` 3). Risponde 202 con l'invito: `reinvii` più uno, la scadenza rinnovata e un codice nuovo
+     * che sostituisce il vecchio (ultimoInvito() lo legge).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function reinviaInvito(Request $richiesta, array $corpo, string $invito): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
+        $workspace = $chi['workspace'];
+
+        if (($this->inviti[$invito]['workspace'] ?? null) !== $workspace) {
+            throw new Problema('non_trovato');
+        }
+
+        return $this->conIdempotenza($richiesta, 'workspace.inviti.reinvio.crea', $chi, $corpo, function () use ($chi, $workspace, $corpo, $invito) {
+            $this->testi->validaStretta($corpo, []);
+
+            if (! isset($this->inviti[$invito]) || ! $this->inviti[$invito]['scade']->gt(now())) {
+                throw new Problema('non_trovato');
+            }
+
+            if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && $this->inviti[$invito]['ruolo'] !== 'membro') {
+                throw new Problema('permesso_negato');
+            }
+
+            $email = $this->inviti[$invito]['email'];
+            $this->frena('inviti-persona:'.$chi['persona'], self::FRENI['inviti_per_persona_al_giorno'], 86400);
+            $this->frena('inviti:'.$email, self::FRENI['inviti_per_email'], self::ORA);
+            $this->frena('inviti-workspace:'.$workspace, self::FRENI['inviti_per_workspace'], self::ORA);
+
+            if ($this->inviti[$invito]['reinvii'] >= self::REINVII_DELL_INVITO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::REINVII_DELL_INVITO]);
+            }
+
+            $this->inviti[$invito]['reinvii']++;
+            $this->inviti[$invito]['codice'] = self::base64url(random_bytes(32));
+            $this->inviti[$invito]['scade'] = now()->toImmutable()->startOfMillisecond()->addDays(self::GIORNI_DELL_INVITO);
+            $this->postaInviti[$email] = $this->inviti[$invito]['codice'];
+
+            return [202, ['data' => $this->voceInvito($this->inviti[$invito])], []];
+        });
     }
 
     /**
@@ -4683,7 +4738,7 @@ final class BackofficeFinto
      */
     private function voceInvito(array $invito): array
     {
-        return ['id' => $invito['id'], 'email' => $invito['email'], 'ruolo' => $invito['ruolo'], 'scade_il' => self::iso($invito['scade']), 'creato_il' => self::iso($invito['creato_il'])];
+        return ['id' => $invito['id'], 'email' => $invito['email'], 'ruolo' => $invito['ruolo'], 'reinvii' => $invito['reinvii'], 'scade_il' => self::iso($invito['scade']), 'creato_il' => self::iso($invito['creato_il'])];
     }
 
     /**
