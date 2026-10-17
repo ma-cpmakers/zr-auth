@@ -435,7 +435,7 @@ it('workspace.inviti.elenca dà i vivi dal più recente, a cursore, senza il cod
         ->and($prima->json('successivo'))->toBeString()
         ->and($dopo->json('data.*.email'))->toBe(['dora@example.com'])
         ->and($dopo->json('successivo'))->toBeNull()
-        ->and(array_keys($dopo->json('data.0')))->toBe(['id', 'email', 'ruolo', 'scade_il', 'creato_il'])
+        ->and(array_keys($dopo->json('data.0')))->toBe(['id', 'email', 'ruolo', 'reinvii', 'scade_il', 'creato_il'])
         ->and(esito(alFinto('GET', '/v1/workspace/inviti', gettone: $gettone('carla@example.com'))))->toBe([403, 'permesso_negato'])
         ->and(esito(alFinto('GET', '/v1/workspace/inviti?limite=0', gettone: $anna)))->toBe([422, 'dati_non_validi']);
 });
@@ -466,6 +466,8 @@ it('workspace.inviti.reinvio.crea dà 202 con reinvii più uno, la scadenza rinn
     $id = alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $anna)->json('data.id');
     $primo = $finto->ultimoInvito('dora@example.com');
     $this->travel(3)->days();
+    // Il gettone dura meno di tre giorni: si rientra.
+    $anna = $gettone('anna@example.com');
 
     $risposta = alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna);
     $codice = $finto->ultimoInvito('dora@example.com');
@@ -505,6 +507,7 @@ it('workspace.inviti.reinvio.crea: scaduto, revocato o di un altro workspace è 
         ->and(alFinto('POST', "/v1/workspace/inviti/{$aMembro}/reinvio", [], $bruno)->status())->toBe(202);
 
     $this->travel(8)->days();
+    $anna = $gettone('anna@example.com');
     expect(esito(alFinto('POST', "/v1/workspace/inviti/{$aMembro}/reinvio", [], $anna)))->toBe([404, 'non_trovato']);
 });
 
