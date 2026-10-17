@@ -515,13 +515,16 @@ it('workspace.inviti.reinvio.crea con la stessa Idempotency-Key non rifà il rei
     [, , , $gettone] = squadra();
     $anna = $gettone('anna@example.com');
     $id = alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $anna)->json('data.id');
+    $altro = alFinto('POST', '/v1/workspace/inviti', ['email' => 'ettore@example.com', 'ruolo' => 'membro'], $anna)->json('data.id');
 
     $prima = alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna, intestazioni: conChiave('reinvio-1'));
     $seconda = alFinto('POST', "/v1/workspace/inviti/{$id}/reinvio", [], $anna, intestazioni: conChiave('reinvio-1'));
 
     expect($seconda->json())->toBe($prima->json())
         ->and($seconda->json('data.reinvii'))->toBe(1)
-        ->and(alFinto('GET', '/v1/workspace/inviti', gettone: $anna)->json('data.0.reinvii'))->toBe(1);
+        ->and(alFinto('GET', '/v1/workspace/inviti', gettone: $anna)->json('data.0.reinvii'))->toBe(1)
+        // La stessa chiave su un altro invito non è la stessa richiesta.
+        ->and(esito(alFinto('POST', "/v1/workspace/inviti/{$altro}/reinvio", [], $anna, intestazioni: conChiave('reinvio-1'))))->toBe([422, 'chiave_idempotenza_riusata']);
 });
 
 // T4.5

@@ -4597,9 +4597,9 @@ final class BackofficeFinto
     /**
      * workspace.inviti.reinvio.crea (InvitiController::reinvioCrea, #2229): rimanda la mail di un invito in attesa, al più tre
      * volte (Invito::REINVII). Nell'ordine del backoffice: il ruolo di chi chiama (403), l'invito del workspace (404: anche uno
-     * di un altro, revocato o accettato), la Idempotency-Key, il corpo (422, nessun campo), un invito scaduto (404), un
-     * invito a un amministratore chiesto da un amministratore (403), i freni degli inviti (429), il quarto reinvio (409
-     * limite_raggiunto con `limite` 3). Risponde 202 con l'invito: `reinvii` più uno, la scadenza rinnovata e un codice nuovo
+     * di un altro, revocato o accettato), la Idempotency-Key, un invito scaduto (404), il corpo (422, nessun campo), un
+     * invito a un amministratore chiesto da un amministratore (403), il quarto reinvio (409
+     * limite_raggiunto con `limite` 3), i freni degli inviti (429). Risponde 202 con l'invito: `reinvii` più uno, la scadenza rinnovata e un codice nuovo
      * che sostituisce il vecchio (ultimoInvito() lo legge).
      *
      * @param  array<mixed>  $corpo
@@ -4614,25 +4614,26 @@ final class BackofficeFinto
             throw new Problema('non_trovato');
         }
 
-        return $this->conIdempotenza($richiesta, 'workspace.inviti.reinvio.crea', $chi, $corpo, function () use ($chi, $workspace, $corpo, $invito) {
-            $this->testi->validaStretta($corpo, []);
-
+        return $this->conIdempotenza($richiesta, 'workspace.inviti.reinvio.crea', $chi, ['corpo' => $corpo, 'percorso' => ['invito' => $invito]], function () use ($chi, $workspace, $corpo, $invito) {
             if (! isset($this->inviti[$invito]) || ! $this->inviti[$invito]['scade']->gt(now())) {
                 throw new Problema('non_trovato');
             }
 
+            $this->testi->validaStretta($corpo, []);
+
             if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && $this->inviti[$invito]['ruolo'] !== 'membro') {
                 throw new Problema('permesso_negato');
+            }
+
+            // Il tetto prima dei freni, come il backoffice: il quarto reinvio è 409 e non consuma i conti.
+            if ($this->inviti[$invito]['reinvii'] >= self::REINVII_DELL_INVITO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::REINVII_DELL_INVITO]);
             }
 
             $email = $this->inviti[$invito]['email'];
             $this->frena('inviti-persona:'.$chi['persona'], self::FRENI['inviti_per_persona_al_giorno'], 86400);
             $this->frena('inviti:'.$email, self::FRENI['inviti_per_email'], self::ORA);
             $this->frena('inviti-workspace:'.$workspace, self::FRENI['inviti_per_workspace'], self::ORA);
-
-            if ($this->inviti[$invito]['reinvii'] >= self::REINVII_DELL_INVITO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::REINVII_DELL_INVITO]);
-            }
 
             $this->inviti[$invito]['reinvii']++;
             $this->inviti[$invito]['codice'] = self::base64url(random_bytes(32));
