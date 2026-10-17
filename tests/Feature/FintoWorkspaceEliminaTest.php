@@ -120,18 +120,18 @@ it('un invito a un workspace in eliminazione è 409 anche per una persona nuova,
         'email' => 'edoardo@example.com', 'password' => PASSWORD, 'termini_accettati' => true, 'invito' => $inviti['edoardo@example.com'],
     ]);
     $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
-    $arrivo = alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato, 'invito' => $inviti['erika@example.com']]);
+    $arrivo = alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato, 'termini_accettati' => true, 'invito' => $inviti['erika@example.com']]);
 
     foreach ([$registrazione, $arrivo] as $esito) {
         expect($esito->status())->toBe(409)->and($esito->json('codice'))->toBe('workspace_in_eliminazione');
     }
 
-    // Né l'una né l'altra persona è nata: con l'invito (email già verificata) la password di Edoardo entrerebbe, e l'arrivo di
-    // Erika senza invito, fuori dalla lista dei consentiti, non è un'ammissione nuova ma un accesso a un account che c'è.
+    // Né l'una né l'altra persona è nata: con l'invito (email già verificata) la password di Edoardo entrerebbe, e l'arrivo di Erika
+    // senza i termini è 422 solo per una persona nuova (una che c'è entrerebbe: 201).
     $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
 
     expect(alFinto('POST', '/v1/accessi', ['email' => 'edoardo@example.com', 'password' => PASSWORD])->status())->not->toBe(201)
-        ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato])->status())->not->toBe(201);
+        ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato])->status())->toBe(422);
 
     // Annullata l'eliminazione, gli stessi inviti valgono.
     alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
@@ -140,6 +140,6 @@ it('un invito a un workspace in eliminazione è 409 anche per una persona nuova,
     expect(alFinto('POST', '/v1/utenti', [
         'email' => 'edoardo@example.com', 'password' => PASSWORD, 'termini_accettati' => true, 'invito' => $inviti['edoardo@example.com'],
     ])->status())->toBe(202)
-        ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato, 'invito' => $inviti['erika@example.com']])->status())->toBe(201)
+        ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato, 'termini_accettati' => true, 'invito' => $inviti['erika@example.com']])->status())->toBe(201)
         ->and($studio['id'])->not->toBeEmpty();
 });
