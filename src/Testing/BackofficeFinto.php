@@ -2626,6 +2626,8 @@ final class BackofficeFinto
         $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
         $this->testi->validaStretta($corpo, []);
 
+        $this->rifiutaSeInEliminazione($chi['workspace']);
+
         $this->frena('link-persona:'.$chi['persona'], self::FRENI['link_per_persona_al_giorno'], 86400);
         $this->frena('link-workspace:'.$chi['workspace'], self::FRENI['link_per_workspace'], self::ORA);
 
@@ -2774,6 +2776,8 @@ final class BackofficeFinto
         if ($workspace === null || $persona['email_verificata_il'] === null) {
             throw new Problema('verifica_non_riuscita', verifica: 'link');
         }
+
+        $this->rifiutaSeInEliminazione($workspace);
 
         if (isset($this->membri[$workspace][$chi['persona']])) {
             throw new Problema('gia_membro');
@@ -4594,6 +4598,8 @@ final class BackofficeFinto
 
             $email = self::normalizza($campi['email']);
 
+            $this->rifiutaSeInEliminazione($workspace);
+
             // Ogni invito è una mail che parte da Zeiras: si conta prima di ogni lavoro, per persona in 24 ore (in tutti i suoi
             // workspace, #1413), per email e per workspace, mai per IP.
             $this->frena('inviti-persona:'.$chi['persona'], self::FRENI['inviti_per_persona_al_giorno'], 86400);
@@ -4698,6 +4704,8 @@ final class BackofficeFinto
                 throw new Problema('permesso_negato');
             }
 
+            $this->rifiutaSeInEliminazione($workspace);
+
             // Il tetto prima dei freni, come il backoffice: il quarto reinvio è 409 e non consuma i conti.
             if ($this->inviti[$invito]['reinvii'] >= self::REINVII_DELL_INVITO) {
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::REINVII_DELL_INVITO]);
@@ -4780,6 +4788,14 @@ final class BackofficeFinto
      *
      * @return string il workspace dell'invito
      */
+    /** Un workspace con l'eliminazione programmata non accoglie inviti (#2259, WorkspaceEliminazione::rifiutaSeViva): 409 workspace_in_eliminazione. */
+    private function rifiutaSeInEliminazione(string $workspace): void
+    {
+        if (isset($this->eliminazioni[$workspace])) {
+            throw new Problema('workspace_in_eliminazione');
+        }
+    }
+
     private function accettaCodice(#[SensitiveParameter] string $codice, string $persona, string $verifica = 'invito'): string
     {
         $id = $this->invitoDelCodice($codice);
@@ -4790,6 +4806,8 @@ final class BackofficeFinto
         }
 
         $invito = $this->inviti[$id];
+
+        $this->rifiutaSeInEliminazione($invito['workspace']);
 
         if (isset($this->membri[$invito['workspace']][$persona])) {
             throw new Problema('gia_membro');
