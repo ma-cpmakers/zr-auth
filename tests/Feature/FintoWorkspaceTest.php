@@ -46,9 +46,9 @@ it('workspace.modifica cambia il nome del workspace del gettone, senza gli spazi
     $risposta = alFinto('PATCH', '/v1/workspace', ['nome' => '  Studio Rossi  '], $anna);
 
     expect($risposta->status())->toBe(200)
-        ->and($risposta->json('data'))->toBe([...$studio, 'nome' => 'Studio Rossi', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
+        ->and($risposta->json('data'))->toBe([...$studio, 'nome' => 'Studio Rossi', 'colore' => 'neutral', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
         ->and(alFinto('GET', '/v1/io', gettone: $anna)->json('data.workspace.nome'))->toBe('Studio Rossi')
-        ->and(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data.0'))->toBe([...$studio, 'nome' => 'Studio Rossi', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
+        ->and(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data.0'))->toBe([...$studio, 'nome' => 'Studio Rossi', 'colore' => 'neutral', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
         // Lo stesso nome di prima è un 200 che non cambia niente; l'amministratore lo cambia come il proprietario.
         ->and(alFinto('PATCH', '/v1/workspace', ['nome' => 'Studio Rossi'], $anna)->status())->toBe(200)
         ->and(alFinto('PATCH', '/v1/workspace', ['nome' => 'Studio Bianchi'], $gettone('bruno@example.com'))->json('data.ruolo'))->toBe('amministratore');
@@ -65,10 +65,33 @@ it('workspace.modifica non è di un membro (403 prima del corpo), e il nome vuot
     foreach ([[], ['nome' => ''], ['nome' => '   '], ['nome' => str_repeat('a', 256)]] as $corpo) {
         $risposta = alFinto('PATCH', '/v1/workspace', $corpo, $anna);
 
-        expect(esito($risposta))->toBe([422, 'dati_non_validi'])->and($risposta->json('errors.0.pointer'))->toBe('#/nome');
+        // Un corpo senza campi è un errore sul corpo intero (#2010); gli altri sono sul nome.
+        expect(esito($risposta))->toBe([422, 'dati_non_validi'])->and($risposta->json('errors.0.pointer'))->toBe($corpo === [] ? '#' : '#/nome');
     }
 
     expect(alFinto('PATCH', '/v1/workspace', ['nome' => str_repeat('a', 255)], $anna)->status())->toBe(200);
+});
+
+// #2010
+
+it('workspace.modifica cambia anche settore, lingua dei contenuti e colore come JSON Merge Patch: null toglie il settore e non cambia né lingua né colore (#2010)', function () {
+    [, $studio, , $gettone] = squadra();
+    $anna = $gettone('anna@example.com');
+    $chiama = fn (array $corpo) => alFinto('PATCH', '/v1/workspace', $corpo, $anna);
+
+    expect($chiama(['settore' => 'consulenza', 'lingua_contenuti' => 'en', 'colore' => 'coral'])->json('data'))
+        ->toBe([...$studio, 'settore' => 'consulenza', 'lingua_contenuti' => 'en', 'colore' => 'coral', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
+        ->and($chiama(['nome' => 'Altro nome'])->json('data'))->toMatchArray(['settore' => 'consulenza', 'lingua_contenuti' => 'en', 'colore' => 'coral'])
+        ->and($chiama(['settore' => null, 'lingua_contenuti' => null, 'colore' => null])->json('data'))->toMatchArray(['settore' => null, 'lingua_contenuti' => 'en', 'colore' => 'coral'])
+        ->and(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data.0.colore'))->toBe('coral');
+
+    foreach ([['settore' => 'pasticceria'], ['lingua_contenuti' => 'fr'], ['colore' => 'rosso']] as $corpo) {
+        $risposta = $chiama($corpo);
+
+        expect(esito($risposta))->toBe([422, 'dati_non_validi'])
+            ->and($risposta->json('errors.0.pointer'))->toBe('#/'.array_key_first($corpo))
+            ->and($risposta->json('errors.0.regola'))->toBe('valore_non_ammesso');
+    }
 });
 
 // T4.2

@@ -133,8 +133,8 @@ it('io.workspace.elenca dà i workspace della persona, col ruolo e lo slug, in o
     $alfaDiBruno = $finto->workspace('alfa', $bruno);
     $finto->membro($alfaDiBruno, $anna, 'membro');
     $finto->workspace('Studio Bruno', $bruno);
-    [$primoAlfa, $secondoAlfa] = perId([...$alfa, 'ruolo' => 'proprietario', 'eliminazione_il' => null], [...$alfaDiBruno, 'ruolo' => 'membro', 'eliminazione_il' => null]);
-    $attese = [[...$albero, 'ruolo' => 'amministratore', 'eliminazione_il' => null], $primoAlfa, $secondoAlfa, [...$beta, 'ruolo' => 'proprietario', 'eliminazione_il' => null]];
+    [$primoAlfa, $secondoAlfa] = perId([...$alfa, 'colore' => 'neutral', 'ruolo' => 'proprietario', 'eliminazione_il' => null], [...$alfaDiBruno, 'colore' => 'neutral', 'ruolo' => 'membro', 'eliminazione_il' => null]);
+    $attese = [[...$albero, 'colore' => 'neutral', 'ruolo' => 'amministratore', 'eliminazione_il' => null], $primoAlfa, $secondoAlfa, [...$beta, 'colore' => 'neutral', 'ruolo' => 'proprietario', 'eliminazione_il' => null]];
 
     $coiGettoni = array_map(
         fn (string $gettone) => alFinto('GET', '/v1/io/workspace', gettone: $gettone),

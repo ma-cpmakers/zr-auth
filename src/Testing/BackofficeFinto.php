@@ -276,6 +276,9 @@ final class BackofficeFinto
      */
     private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
+    /** La palette del colore del workspace (Workspace::COLORI, #2010). */
+    private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
+
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
 
@@ -358,6 +361,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{id: string, nome: string, slug: string, azienda_id: string, settore: ?string, lingua_contenuti: ?string}> per id */
     private array $workspace = [];
+
+    /** @var array<string, string> il colore scelto per workspace (#2010): senza una scelta il workspace è `neutral` (Forme::workspaceConRuolo) */
+    private array $colori = [];
 
     /** @var array<string, CarbonImmutable> quando si archivia ogni workspace di cui il proprietario ha chiesto l'eliminazione, per id: il finto non archivia alla scadenza */
     private array $eliminazioni = [];
@@ -4299,9 +4305,9 @@ final class BackofficeFinto
     }
 
     /**
-     * workspace.modifica (WorkspaceController::modifica): il nome del workspace del gettone, a proprietario e
-     * amministratore (403 prima del corpo). Il nome va da 1 a 255 caratteri, senza gli spazi ai bordi; lo slug nasce col
-     * workspace e non cambia; lo stesso nome di prima non scrive niente. Risponde con un elemento di io.workspace.elenca.
+     * workspace.modifica (WorkspaceController::modifica): nome, settore, lingua dei contenuti e colore del workspace del gettone, come
+     * JSON Merge Patch, a proprietario e amministratore (403 prima del corpo). Almeno un campo (422 sul corpo intero, `#`). Il nome va da 1
+     * a 255 caratteri, senza gli spazi ai bordi; `null` toglie il settore e non cambia né la lingua né il colore; lo slug nasce col workspace e non cambia. Risponde con un elemento di io.workspace.elenca.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -4310,7 +4316,31 @@ final class BackofficeFinto
     {
         $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
         $workspace = $chi['workspace'];
-        $this->workspace[$workspace]['nome'] = (string) $this->testi->validaStretta($corpo, ['nome' => ['required', 'string', 'max:255', new NomeScritto]])['nome'];
+        $regole = [
+            'nome' => ['filled', 'string', 'max:255', new NomeScritto],
+            'settore' => ['nullable', 'bail', 'string', Rule::in(self::SETTORI)],
+            'lingua_contenuti' => ['nullable', 'bail', 'string', Rule::in(Testi::LINGUE)],
+            'colore' => ['nullable', 'bail', 'string', Rule::in(self::COLORI)],
+        ];
+        $campi = $this->testi->validaStretta($corpo, $regole);
+
+        if ($campi === []) {
+            throw new Problema('dati_non_validi', [[
+                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => implode(', ', array_keys($regole))]),
+                'regola' => 'obbligatorio',
+                'pointer' => '#',
+            ]]);
+        }
+
+        foreach (['nome', 'settore', 'lingua_contenuti'] as $campo) {
+            if (array_key_exists($campo, $campi) && ($campo === 'settore' || $campi[$campo] !== null)) {
+                $this->workspace[$workspace][$campo] = $campi[$campo];
+            }
+        }
+
+        if (isset($campi['colore'])) {
+            $this->colori[$workspace] = (string) $campi['colore'];
+        }
 
         return [200, ['data' => $this->conRuolo($workspace, $this->membri[$workspace][$chi['persona']])]];
     }
@@ -4318,7 +4348,7 @@ final class BackofficeFinto
     /** Un workspace con il ruolo di chi chiama e la data in cui si archivia, se il proprietario ne ha chiesto l'eliminazione (Forme::workspaceConRuolo). */
     private function conRuolo(string $workspace, string $ruolo): array
     {
-        return [...$this->workspace[$workspace], 'ruolo' => $ruolo, 'eliminazione_il' => isset($this->eliminazioni[$workspace]) ? self::iso($this->eliminazioni[$workspace]) : null];
+        return [...$this->workspace[$workspace], 'colore' => $this->colori[$workspace] ?? 'neutral', 'ruolo' => $ruolo, 'eliminazione_il' => isset($this->eliminazioni[$workspace]) ? self::iso($this->eliminazioni[$workspace]) : null];
     }
 
     /**
