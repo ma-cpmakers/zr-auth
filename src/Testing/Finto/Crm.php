@@ -1123,7 +1123,7 @@ trait Crm
                 && ($cambio['tipo'] === 'creata' || ($cambio['tipo'] === 'modificata' && in_array(self::esitoCrm($cambio), ['vinta', 'persa'], true))))];
         }
 
-        $voce = function (array $cambio) use ($tipo): array {
+        $voce = function (array $cambio) use ($tipo, $chi): array {
             if ($tipo === 'persone' && $cambio['tipo_risorsa'] === 'trattative') {
                 return [
                     'id' => $cambio['id'], 'tipo' => $cambio['tipo'] === 'creata' ? 'trattativa.creata' : 'trattativa.'.self::esitoCrm($cambio),
@@ -1133,6 +1133,14 @@ trait Crm
             }
 
             $voce = ['id' => $cambio['id'], 'tipo' => $cambio['tipo'], 'autore_id' => $cambio['autore_id'], 'istante' => self::iso($cambio['istante']), 'campi' => $cambio['campi']];
+
+            // TrattativeController::cronologiaElenca (#1964): le righe di `fase_id` portano il nome della fase, anche tolta; null se non è di questo workspace.
+            if ($tipo === 'trattative') {
+                $voce['campi'] = array_map(fn (array $campo) => $campo['campo'] === 'fase_id' ? $campo + [
+                    'prima_nome' => $this->nomeDellaFaseCrm($chi['workspace'], $campo['prima'] ?? null),
+                    'dopo_nome' => $this->nomeDellaFaseCrm($chi['workspace'], $campo['dopo'] ?? null),
+                ] : $campo, $voce['campi']);
+            }
 
             return $voce + ($tipo === 'trattative' ? [] : ['importazione_id' => $cambio['importazione_id']]) + ['attivita_id' => $cambio['attivita_id']];
         };
@@ -1146,6 +1154,14 @@ trait Crm
         }
 
         return $esito;
+    }
+
+    /** Il nome di una fase del workspace, anche tolta (`eliminata`), o null se l'id non c'è o è di un altro workspace. */
+    private function nomeDellaFaseCrm(string $workspace, mixed $id): ?string
+    {
+        $fase = is_string($id) ? ($this->crm['fasi'][strtolower($id)] ?? null) : null;
+
+        return $fase !== null && $fase['workspace'] === $workspace ? $fase['nome'] : null;
     }
 
     /** Lo stato a cui passa una trattativa in una riga `modificata` della sua cronologia, o null. */
