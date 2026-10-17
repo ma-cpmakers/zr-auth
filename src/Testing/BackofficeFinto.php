@@ -1378,6 +1378,7 @@ final class BackofficeFinto
             'archiviata_il' => $scheda['archiviata_il'] === null ? null : self::iso($scheda['archiviata_il']),
             'creata_il' => self::iso($scheda['creata_il']),
             'aggiornata_il' => self::iso($scheda['aggiornata_il']),
+            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 1])).'"',
         ];
     }
 
@@ -1780,15 +1781,17 @@ final class BackofficeFinto
     }
 
     /**
-     * board.schede.mostra (SchedeController::mostra): la scheda intera, anche archiviata, con le sue `attese_aperte`.
+     * board.schede.mostra (SchedeController::mostra): la scheda intera, anche archiviata, con le sue `attese_aperte`; l'header `ETag` dice
+     * la sua versione (il campo `etag`).
      *
-     * @return array{int, array<string, mixed>}
+     * @return array{int, array<string, mixed>, array<string, string>}
      */
     private function mostraScheda(Request $richiesta, string $scheda): array
     {
         $chi = $this->conPm($richiesta);
+        $voce = $this->voceScheda($this->schedaDelPercorso($chi['workspace'], $scheda));
 
-        return [200, ['data' => $this->voceScheda($this->schedaDelPercorso($chi['workspace'], $scheda))]];
+        return [200, ['data' => $voce], ['ETag' => $voce['etag']]];
     }
 
     /** Le schede della «lista» di una board del finto (una per board), non archiviate, nell'ordine di `posizione`. @return list<array<string, mixed>> */

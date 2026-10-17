@@ -174,3 +174,15 @@ it('mostra e completamento con l\'app pm spenta sono 403 app_non_attiva (T4.6)',
     expect(alFinto('GET', "/v1/board/schede/{$b['id']}", null, $gettoneSpento)->json('codice'))->toBe('app_non_attiva')
         ->and(alFinto('POST', "/v1/board/schede/{$b['id']}/completamento", null, $gettoneSpento)->json('codice'))->toBe('app_non_attiva');
 });
+
+// #1819: l'ETag di una scheda. Che sia quello del backoffice (stessa regola, id diversi) lo prova il FintoTest.
+
+it('mostra dà l\'ETag di una scheda nell\'header e nel campo etag, e l\'elenco ha lo stesso etag della scheda (#1819)', function () {
+    [, [$a], $gettone] = conLeSchede(1);
+
+    $mostra = alFinto('GET', "/v1/board/schede/{$a['id']}", null, $gettone);
+    $etag = $mostra->header('ETag');
+
+    expect($etag)->toMatch('/^"[0-9a-f]{32}"$/')
+        ->and($mostra->json('data.etag'))->toBe($etag);
+});
