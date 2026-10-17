@@ -74,7 +74,7 @@ return [
     'motivo_archiviato_senza_posto' => 'An archived reason has no place in the list: restore it with archiviato false, together with the position.',
     'motivo_non_esiste' => 'The workspace has no loss reason with this id: crm.motivi.elenca gives the reason ids.',
     'esito_duplicato' => 'There is already an outcome with this name for this activity type, ignoring case and accents (archived ones included): choose another name.',
-    'esito_archiviato_senza_posto' => 'An archived outcome has no place in the list: restore it with archived false, together with the position.',
+    'esito_archiviato_senza_posto' => 'An archived outcome has no place in the list: restore it with archiviato false, together with the position.',
     'esito_tipo_fisso' => 'The type of an outcome does not change: create a new outcome in the type you need.',
     'campi_estranei_della_riga' => 'The row has fields the method does not know: the fields of a row are those of the single creation.',
     'campo_numero' => 'The value must be a JSON number (not a string), at most 10^10 in absolute value and with at most 4 decimals.',
