@@ -211,6 +211,8 @@ return [
         'board_id' => 'board',
         'assegnatario_id' => 'assignee',
         'lingua' => 'language',
+        'paese' => 'country',
+        'valuta' => 'currency',
         'lingua_contenuti' => 'content language',
         'fuso_orario' => 'time zone',
         'formato_data' => 'date format',

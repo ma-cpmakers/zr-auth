@@ -210,6 +210,8 @@ return [
         'board_id' => 'board',
         'assegnatario_id' => 'assegnatario',
         'lingua' => 'lingua',
+        'paese' => 'paese',
+        'valuta' => 'valuta',
         'lingua_contenuti' => 'lingua dei contenuti',
         'fuso_orario' => 'fuso orario',
         'formato_data' => 'formato data',
