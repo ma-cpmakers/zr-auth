@@ -3,7 +3,7 @@
 // Sprint 36, PR G (#2014): workspace.elimina e workspace.eliminazione.elimina nel finto. Qui ciò che un frontend vede dal suo lato;
 // che le risposte e gli errori siano quelli del backoffice, byte per byte, lo prova il FintoTest del backoffice.
 
-/** Un proprietario con due workspace, e un amministratore del primo: [studio, altro, gettone del proprietario, gettone dell'amministratore, gettone dell'altro]. */
+/** Un proprietario con due workspace, e un amministratore del primo: [studio, altro, gettone del proprietario, gettone dell'amministratore, gettone dell'altro, il finto]. */
 function conDueWorkspace(): array
 {
     $finto = Zeiras\Auth\Testing\BackofficeFinto::attiva();
@@ -15,7 +15,7 @@ function conDueWorkspace(): array
     $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
     $gettone = fn (string $workspace) => alFinto('POST', '/v1/gettoni', ['workspace_id' => $workspace], $accesso)->json('data.gettone');
 
-    return [$studio, $altro, $gettone($studio['id']), alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('bruno@example.com')['gettone']['gettone'])->json('data.gettone'), $gettone($altro['id'])];
+    return [$studio, $altro, $gettone($studio['id']), alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('bruno@example.com')['gettone']['gettone'])->json('data.gettone'), $gettone($altro['id']), $finto];
 }
 
 it('il proprietario programma l\'eliminazione fra 30 giorni, l\'elenco la mostra e il workspace lavora come prima (#2014)', function () {
@@ -63,4 +63,41 @@ it('annullare toglie la data (204), e senza un\'eliminazione programmata è 404 
 
     expect($annullata->status())->toBe(204)
         ->and(collect(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data'))->firstWhere('id', $studio['id'])['eliminazione_il'])->toBeNull();
+});
+
+it('con l\'eliminazione programmata gli inviti e il link sono 409 workspace_in_eliminazione, e annullata tornano a valere (#2259)', function () {
+    [$studio, , $anna, $bruno, , $finto] = conDueWorkspace();
+    $finto->persona('carla@example.com', PASSWORD, nome: 'Carla');
+    $finto->persona('dario@example.com', PASSWORD, nome: 'Dario');
+    $accessoCarla = entraNelFinto('carla@example.com')['gettone']['gettone'];
+    $accessoDario = entraNelFinto('dario@example.com')['gettone']['gettone'];
+
+    $invito = alFinto('POST', '/v1/workspace/inviti', ['email' => 'carla@example.com', 'ruolo' => 'membro'], $anna)->json('data.id');
+    $codice = $finto->ultimoInvito('carla@example.com');
+    $codiceLink = alFinto('POST', '/v1/workspace/link', gettone: $anna)->json('data.codice');
+
+    alFinto('DELETE', '/v1/workspace', gettone: $anna);
+
+    $esiti = [
+        alFinto('POST', '/v1/workspace/inviti', ['email' => 'nuovo@example.com', 'ruolo' => 'membro'], $bruno),
+        alFinto('POST', "/v1/workspace/inviti/{$invito}/reinvio", gettone: $anna),
+        alFinto('POST', '/v1/workspace/link', gettone: $bruno),
+        alFinto('POST', '/v1/inviti/accettazione', ['codice' => $codice], $accessoCarla),
+        alFinto('POST', '/v1/link/accettazione', ['codice' => $codiceLink], $accessoDario),
+    ];
+
+    foreach ($esiti as $esito) {
+        expect($esito->status())->toBe(409)->and($esito->json('codice'))->toBe('workspace_in_eliminazione');
+    }
+
+    // Elencare e revocare restano ammessi; un codice che non vale è la stessa 422 di sempre.
+    expect(alFinto('GET', '/v1/workspace/inviti', gettone: $bruno)->status())->toBe(200)
+        ->and(alFinto('POST', '/v1/inviti/accettazione', ['codice' => str_repeat('a', 43)], $accessoDario)->json('codice'))->toBe('verifica_non_riuscita');
+
+    alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
+
+    expect(alFinto('POST', '/v1/inviti/accettazione', ['codice' => $codice], $accessoCarla)->status())->toBe(201)
+        ->and(alFinto('POST', '/v1/link/accettazione', ['codice' => $codiceLink], $accessoDario)->status())->toBe(201)
+        ->and(alFinto('POST', '/v1/workspace/link', gettone: $bruno)->status())->toBe(201)
+        ->and($studio['id'])->not->toBeEmpty();
 });

@@ -177,6 +177,10 @@ return [
         'title' => 'Último workspace',
         'detail' => 'Este es el último workspace vivo de la persona que llama y no se elimina: una persona siempre tiene al menos un workspace. Crea otro con io.workspace.crea, o cancela la eliminación del otro con workspace.eliminazione.elimina. El método no escribió nada.',
     ],
+    'workspace_in_eliminazione' => [
+        'title' => 'Workspace en eliminación',
+        'detail' => 'Este workspace tiene la eliminación programada y ya no admite invitaciones: ni nuevas, ni reenviadas, ni por el enlace, ni las ya enviadas. Pide al propietario (proprietario) del workspace que la cancele con workspace.eliminazione.elimina y vuelve a intentarlo: las invitaciones ya enviadas vuelven a valer hasta su caducidad. El método no escribió nada.',
+    ],
     'ultima_fase' => [
         'title' => 'Última fase',
         'detail' => 'Esta es la última fase del pipeline y no se elimina: un pipeline siempre tiene al menos una fase. Añade otra con crm.fasi.crea, o archiva el pipeline con crm.pipeline.modifica.',
