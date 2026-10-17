@@ -45,7 +45,7 @@ it('aziende.mostra dà id, nome e il ruolo più alto della persona nei workspace
 
     // Bruno è membro nel primo workspace e amministratore nel secondo: l'azienda lo vede amministratore.
     expect($bruno->status())->toBe(200)
-        ->and($bruno->json('data'))->toBe(['id' => $studio['azienda_id'], 'nome' => 'Studio', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'ruolo' => 'amministratore', 'accordo_trattamento_dati_da_accettare' => false])
+        ->and($bruno->json('data'))->toBe(['id' => $studio['azienda_id'], 'nome' => 'Studio', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null, 'ruolo' => 'amministratore', 'accordo_trattamento_dati_da_accettare' => false])
         ->and($carla->json('data.ruolo'))->toBe('membro')
         ->and($anna->json('data.ruolo'))->toBe('proprietario');
 });
@@ -236,7 +236,7 @@ it('aziende.modifica: il proprietario cambia il nome e i dati, e li vede aziende
     $risposta = alFinto('PATCH', "/v1/aziende/{$id}", ['nome' => ' Studio Verdi ', 'partita_iva' => 'it 012.345.678 90', 'settore' => 'consulenza', 'persone' => '2-10', 'sito' => 'https://verdi.example.com'], $anna);
 
     expect($risposta->status())->toBe(200)
-        ->and($risposta->json('data'))->toBe(['id' => $id, 'nome' => 'Studio Verdi', 'partita_iva' => 'IT01234567890', 'settore' => 'consulenza', 'persone' => '2-10', 'sito' => 'https://verdi.example.com', 'ruolo' => 'proprietario', 'accordo_trattamento_dati_da_accettare' => false])
+        ->and($risposta->json('data'))->toBe(['id' => $id, 'nome' => 'Studio Verdi', 'partita_iva' => 'IT01234567890', 'settore' => 'consulenza', 'persone' => '2-10', 'sito' => 'https://verdi.example.com', 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null, 'ruolo' => 'proprietario', 'accordo_trattamento_dati_da_accettare' => false])
         ->and(alFinto('GET', "/v1/aziende/{$id}", gettone: $anna)->json('data.nome'))->toBe('Studio Verdi')
         ->and(collect(alFinto('GET', '/v1/io/aziende', gettone: $anna)->json('data'))->firstWhere('id', $id)['nome'])->toBe('Studio Verdi');
 
@@ -312,4 +312,30 @@ it('aziende.modifica: 20 in un\'ora per persona, poi 429 con Retry-After; i 404 
     expect($oltre->status())->toBe(429)
         ->and($oltre->json('codice'))->toBe('troppe_richieste')
         ->and((int) $oltre->header('Retry-After'))->toBeGreaterThan(0);
+});
+
+it('aziende.modifica: paese, valuta, fuso orario e lingua si cambiano e si tolgono con null, e un codice fuori elenco è valore_non_ammesso (#2011)', function () {
+    [, $studio, , , $accesso] = conLeAziende();
+    $anna = $accesso('anna@example.com');
+    $id = $studio['azienda_id'];
+    $nuovi = ['paese' => 'CH', 'valuta' => 'CHF', 'fuso_orario' => 'Europe/Zurich', 'lingua' => 'it'];
+
+    $risposta = alFinto('PATCH', "/v1/aziende/{$id}", $nuovi, $anna);
+
+    expect($risposta->status())->toBe(200)
+        ->and(array_intersect_key($risposta->json('data'), $nuovi))->toBe($nuovi)
+        ->and(array_intersect_key(alFinto('GET', "/v1/aziende/{$id}", gettone: $anna)->json('data'), $nuovi))->toBe($nuovi)
+        ->and(array_intersect_key(collect(alFinto('GET', '/v1/io/aziende', gettone: $anna)->json('data'))->firstWhere('id', $id), $nuovi))->toBe($nuovi);
+
+    $tolto = alFinto('PATCH', "/v1/aziende/{$id}", ['valuta' => null], $anna);
+
+    expect($tolto->json('data'))->toMatchArray(['paese' => 'CH', 'valuta' => null, 'fuso_orario' => 'Europe/Zurich', 'lingua' => 'it']);
+
+    foreach ([['paese' => 'it'], ['paese' => 'XX'], ['valuta' => 'eur'], ['valuta' => 'ZZZ'], ['fuso_orario' => 'Europe/Roma'], ['lingua' => 'fr']] as $corpo) {
+        $campo = array_key_first($corpo);
+        $sbagliato = alFinto('PATCH', "/v1/aziende/{$id}", $corpo, $anna);
+
+        expect($sbagliato->status())->toBe(422)
+            ->and(collect($sbagliato->json('errors'))->firstWhere('pointer', "#/{$campo}")['regola'])->toBe('valore_non_ammesso');
+    }
 });
