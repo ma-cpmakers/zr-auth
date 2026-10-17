@@ -4444,7 +4444,8 @@ final class BackofficeFinto
 
         unset($this->eliminazioni[$workspace]);
 
-        return [204, [], []];
+        // Una 204 non ha corpo (gate 2 del backoffice: il FintoTest di #2044 la prova per la prima volta).
+        return [204, null];
     }
 
     /**

@@ -62,6 +62,7 @@ it('annullare toglie la data (204), e senza un\'eliminazione programmata è 404 
     $annullata = alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
 
     expect($annullata->status())->toBe(204)
+        ->and($annullata->body())->toBe('')
         ->and(collect(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data'))->firstWhere('id', $studio['id'])['eliminazione_il'])->toBeNull();
 });
 
