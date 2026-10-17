@@ -233,6 +233,24 @@ quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrat
 - **Cosa provare** in un modulo: una richiesta lenta della persona A in volo, entra B dallo stesso browser, la risposta di A
   arriva → il browser resta B.
 
+### Dopo un ingresso, il gettone CSRF è nuovo: cosa diventa un invio vecchio (CS.1, CS.2, CS.4-CS.6, #2044)
+
+`Sessione::apri()`, `entra()` e `lascia()` rinnovano l'id della sessione **e** il gettone CSRF (`regenerate(true)` di Laravel; il test
+`apri() ed entra() rinnovano il gettone CSRF` lo tiene fermo). Un invio (POST, PUT, PATCH, DELETE) col gettone preso prima dell'ingresso
+è **419** quando il suo `_token` è nel corpo. Laravel accetta però anche l'header `X-XSRF-TOKEN`, letto dal cookie `XSRF-TOKEN`,
+che è del browser e non della scheda: la scheda di Anna, premendo «Salva» dopo l'ingresso di Bruno, manda il cookie nuovo e il server
+vede un invio valido di Bruno. Il 419 da solo non chiude questo caso: lo chiude «Resta poi Salva» (la sezione che segue: 409).
+
+- **Cosa diventa un 419 su una visita Inertia** (letto nel codice dei tre moduli il 17/10, non provato in un browser): il pacchetto non
+  lo gestisce, e non ha Inertia. Senza una gestione del modulo il client mostra la pagina 419 di Laravel in una finestra. **zr-home**
+  risponde con la sua pagina d'errore 419, che ricarica la pagina da cui veniva il modulo (`PagineErrore`); **zr-crm** manda a
+  `/w/<slug>/` un 419 di sessione finita (da una richiesta JSON resta 419, e i giri si fermano); **zr-board** non ha una gestione
+  sua: tiene la pagina di Laravel. È una scelta del modulo; il pacchetto non la cambia.
+- **Da quale versione**: il gettone nuovo all'ingresso c'è da sempre (`regenerate(true)`); la sessione chiusa, da v0.12.31;
+  «Resta poi Salva», da v0.12.41.
+- **Cosa provare** in un modulo: «Resta poi Salva» (Anna lascia una scheda con modifiche non salvate, entra Bruno, Anna preme «Salva»:
+  409 e nessuna scrittura nel profilo di Bruno), e cosa vede la persona davanti a un 419 di una visita Inertia.
+
 ## La stessa persona: «Resta poi Salva» (da v0.12.41, #2136; acceso di default da #2146; sessione senza impronta = 409 da v0.12.58, #2201)
 
 Il cookie di sessione è uno per browser. Se A lascia una scheda aperta e B entra da un'altra, una scrittura dalla scheda di A parte

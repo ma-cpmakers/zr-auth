@@ -2576,7 +2576,7 @@ final class BackofficeFinto
     /**
      * L'invito di un arrivo dal provider (AccessoConProvider::collega, Inviti::accetta), controllato prima di scrivere: nel
      * backoffice è una transazione, qui il controllo viene prima dello stato. Un invito sconosciuto, scaduto, revocato o di
-     * un'altra email dà 422 verifica_non_riuscita; chi è già membro 409 gia_membro; un workspace pieno 409 limite_raggiunto.
+     * un'altra email dà 422 verifica_non_riuscita; chi è già membro 409 gia_membro; un workspace pieno 409 limite_raggiunto; uno in eliminazione 409 workspace_in_eliminazione.
      * Senza invito non fa niente.
      */
     private function controllaInvitoDelProvider(?string $invito, string $email, ?string $persona): void
@@ -2597,6 +2597,8 @@ final class BackofficeFinto
             throw new Problema('gia_membro');
         }
 
+        // Prima di far nascere la persona (#2044): come accettaCodice(), ma qui nessuno stato è ancora scritto.
+        $this->rifiutaSeInEliminazione($workspace);
         $this->tettoDeiMembri($workspace);
     }
 
@@ -3101,7 +3103,10 @@ final class BackofficeFinto
         if ($this->conEmail($email) === null) {
             // Nel backoffice è una transazione: un workspace al tetto dà 409 e la persona non nasce.
             if ($invito !== null) {
-                $this->tettoDeiMembri($this->inviti[$this->invitoDelCodice($invito) ?? '']['workspace'] ?? '');
+                $workspace = $this->inviti[$this->invitoDelCodice($invito) ?? '']['workspace'] ?? '';
+                // Un workspace in eliminazione non accoglie nessuno (#2259), nemmeno una persona che nasce con l'invito (#2044).
+                $this->rifiutaSeInEliminazione($workspace);
+                $this->tettoDeiMembri($workspace);
             }
 
             $id = self::id();

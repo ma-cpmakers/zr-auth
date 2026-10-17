@@ -101,3 +101,45 @@ it('con l\'eliminazione programmata gli inviti e il link sono 409 workspace_in_e
         ->and(alFinto('POST', '/v1/workspace/link', gettone: $bruno)->status())->toBe(201)
         ->and($studio['id'])->not->toBeEmpty();
 });
+
+it('un invito a un workspace in eliminazione è 409 anche per una persona nuova, da utenti.crea e da accessi.provider.crea, e la persona non nasce (#2044, zr-pm 17/10)', function () {
+    [$studio, , $anna, , , $finto] = conDueWorkspace();
+    $finto->provider('google');
+    $finto->identitaDelProvider('google', 'codice-di-erika', 'erika@example.com');
+
+    $inviti = [];
+
+    foreach (['edoardo@example.com', 'erika@example.com'] as $email) {
+        expect(alFinto('POST', '/v1/workspace/inviti', ['email' => $email, 'ruolo' => 'membro'], $anna)->status())->toBe(201);
+        $inviti[$email] = $finto->ultimoInvito($email);
+    }
+
+    alFinto('DELETE', '/v1/workspace', gettone: $anna);
+
+    $registrazione = alFinto('POST', '/v1/utenti', [
+        'email' => 'edoardo@example.com', 'password' => PASSWORD, 'termini_accettati' => true, 'invito' => $inviti['edoardo@example.com'],
+    ]);
+    $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
+    $arrivo = alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato, 'invito' => $inviti['erika@example.com']]);
+
+    foreach ([$registrazione, $arrivo] as $esito) {
+        expect($esito->status())->toBe(409)->and($esito->json('codice'))->toBe('workspace_in_eliminazione');
+    }
+
+    // Né l'una né l'altra persona è nata: con l'invito (email già verificata) la password di Edoardo entrerebbe, e l'arrivo di
+    // Erika senza invito, fuori dalla lista dei consentiti, non è un'ammissione nuova ma un accesso a un account che c'è.
+    $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
+
+    expect(alFinto('POST', '/v1/accessi', ['email' => 'edoardo@example.com', 'password' => PASSWORD])->status())->not->toBe(201)
+        ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato])->status())->not->toBe(201);
+
+    // Annullata l'eliminazione, gli stessi inviti valgono.
+    alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
+    $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
+
+    expect(alFinto('POST', '/v1/utenti', [
+        'email' => 'edoardo@example.com', 'password' => PASSWORD, 'termini_accettati' => true, 'invito' => $inviti['edoardo@example.com'],
+    ])->status())->toBe(202)
+        ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato, 'invito' => $inviti['erika@example.com']])->status())->toBe(201)
+        ->and($studio['id'])->not->toBeEmpty();
+});
