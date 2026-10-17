@@ -341,12 +341,7 @@ it('`prova` è vero se è di prova la persona che si chiude o quella che la rich
 ]);
 
 // P.2 (#2241)
-it('gli account condivisi di prova stanno in `zr-auth.prova.email`: indirizzo intero, senza maiuscole né spazi ai bordi, mai una parte', function (string $email, bool $prova) {
-    config(['zr-auth.prova.email' => ['uat@esempio.test', ' Prova.Condivisa@Esempio.test ']]);
-
-    expect(contestoDiUnIngressoTardivo('anna@example.com', $email)['prova'])->toBe($prova)
-        ->and(contestoDiUnIngressoTardivo($email, null)['prova'])->toBe($prova);
-})->with([
+dataset('account condivisi di prova', [
     'nell\'elenco' => ['uat@esempio.test', true],
     'maiuscole' => ['UAT@Esempio.TEST', true],
     'voce con spazi e maiuscole' => ['prova.condivisa@esempio.test', true],
@@ -354,6 +349,18 @@ it('gli account condivisi di prova stanno in `zr-auth.prova.email`: indirizzo in
     'l\'indirizzo con un suffisso' => ['uat@esempio.test.evil', false],
     'un altro dominio' => ['uat@altro.test', false],
 ]);
+
+it('gli account condivisi di prova stanno in `zr-auth.prova.email`: la persona che si chiude, indirizzo intero, senza maiuscole né spazi ai bordi, mai una parte', function (string $email, bool $prova) {
+    config(['zr-auth.prova.email' => ['uat@esempio.test', ' Prova.Condivisa@Esempio.test ']]);
+
+    expect(contestoDiUnIngressoTardivo($email, null)['prova'])->toBe($prova);
+})->with('account condivisi di prova');
+
+it('gli account condivisi di prova contano anche quando sono quelli che la richiesta fa entrare', function (string $email, bool $prova) {
+    config(['zr-auth.prova.email' => ['uat@esempio.test', ' Prova.Condivisa@Esempio.test ']]);
+
+    expect(contestoDiUnIngressoTardivo('anna@example.com', $email)['prova'])->toBe($prova);
+})->with('account condivisi di prova');
 
 it('senza elenco in configurazione nessun indirizzo senza prefisso conta come prova, e il default è vuoto', function () {
     expect(config('zr-auth.prova.email'))->toBe([])
