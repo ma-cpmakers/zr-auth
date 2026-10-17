@@ -235,21 +235,30 @@ quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrat
 
 ### Dopo un ingresso, il gettone CSRF è nuovo: cosa diventa un invio vecchio (CS.1, CS.2, CS.4-CS.6, #2044)
 
-`Sessione::apri()`, `entra()` e `lascia()` rinnovano l'id della sessione **e** il gettone CSRF (`regenerate(true)` di Laravel; il test
-`apri() ed entra() rinnovano il gettone CSRF` lo tiene fermo). Un invio (POST, PUT, PATCH, DELETE) col gettone preso prima dell'ingresso
-è **419** quando il suo `_token` è nel corpo. Laravel accetta però anche l'header `X-XSRF-TOKEN`, letto dal cookie `XSRF-TOKEN`,
-che è del browser e non della scheda: la scheda di Anna, premendo «Salva» dopo l'ingresso di Bruno, manda il cookie nuovo e il server
-vede un invio valido di Bruno. Il 419 da solo non chiude questo caso: lo chiude «Resta poi Salva» (la sezione che segue: 409).
+`Sessione::apri()`, `entra()`, `lascia()` e `chiudi()` rinnovano l'id della sessione **e** il gettone CSRF (`regenerate()` di Laravel lo
+rinnova sempre, anche senza distruggere la sessione vecchia; `invalidate()` + `regenerateToken()` in `chiudi()`). Il test
+`apri(), entra(), lascia() e chiudi() rinnovano il gettone CSRF` lo tiene fermo: se un ingresso lasciasse il gettone di prima, è rosso.
+
+**Il 419 non è la difesa.** Con Laravel 13 (`PreventRequestForgery`) un invio con `Sec-Fetch-Site: same-origin` passa **senza guardare il
+gettone**: un browser moderno non dà 419 a un modulo preso prima dell'ingresso, né col `_token` nel corpo né con `X-CSRF-TOKEN`. Il 419 resta per i
+browser che non mandano quell'header (Safari prima della 16.4) e per le richieste che non sono dello stesso sito. Quando il gettone si
+controlla, Laravel accetta anche `X-XSRF-TOKEN`, letto dal cookie `XSRF-TOKEN`, che è del browser e non della scheda. Quindi la scheda di
+Anna, premendo «Salva» dopo l'ingresso di Bruno, manda un invio valido di Bruno: a chiuderlo è «Resta poi Salva» (la sezione che segue: 409),
+non un gettone nuovo.
 
 - **Cosa diventa un 419 su una visita Inertia** (letto nel codice dei tre moduli il 17/10, non provato in un browser): il pacchetto non
-  lo gestisce, e non ha Inertia. Senza una gestione del modulo il client mostra la pagina 419 di Laravel in una finestra. **zr-home**
-  risponde con la sua pagina d'errore 419, che ricarica la pagina da cui veniva il modulo (`PagineErrore`); **zr-crm** manda a
-  `/w/<slug>/` un 419 di sessione finita (da una richiesta JSON resta 419, e i giri si fermano); **zr-board** non ha una gestione
-  sua: tiene la pagina di Laravel. È una scelta del modulo; il pacchetto non la cambia.
-- **Da quale versione**: il gettone nuovo all'ingresso c'è da sempre (`regenerate(true)`); la sessione chiusa, da v0.12.31;
+  lo gestisce, e non ha Inertia. Senza una gestione del modulo il client mostra la pagina 419 di Laravel in una finestra.
+  **zr-home**: con `app.debug` spento e una richiesta che non chiede JSON risponde con la sua pagina d'errore 419, che offre «ricarica» con
+  l'indirizzo di provenienza (`PagineErrore`); non ricarica da sola. **zr-crm** (`bootstrap/app.php`): se lo slug del workspace della sessione
+  è diverso da quello della pagina, risponde 409 con `X-Inertia-Location` verso l'ingresso di zr-home e si torna alla pagina di partenza; con
+  la sessione dello stesso workspace resta il 419 di Laravel, e da una richiesta JSON i giri si fermano sul 419. **zr-board** non ha una
+  gestione sua: tiene la pagina di Laravel (le sue `onHttpException` stanno su ricariche GET, che un 419 non lo prendono). È una scelta del
+  modulo; il pacchetto non la cambia.
+- **Da quale versione**: il gettone nuovo all'ingresso c'è da sempre (`regenerate(true)` dalla v0.2.0); la sessione chiusa, da v0.12.31;
   «Resta poi Salva», da v0.12.41.
 - **Cosa provare** in un modulo: «Resta poi Salva» (Anna lascia una scheda con modifiche non salvate, entra Bruno, Anna preme «Salva»:
-  409 e nessuna scrittura nel profilo di Bruno), e cosa vede la persona davanti a un 419 di una visita Inertia.
+  409 e nessuna scrittura nel profilo di Bruno), e cosa vede la persona davanti a un 419 di una visita Inertia (un browser senza
+  `Sec-Fetch-Site`, o un invio da un altro sito).
 
 ## La stessa persona: «Resta poi Salva» (da v0.12.41, #2136; acceso di default da #2146; sessione senza impronta = 409 da v0.12.58, #2201)
 

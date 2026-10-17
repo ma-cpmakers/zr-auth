@@ -130,7 +130,9 @@ it('un invito a un workspace in eliminazione è 409 anche per una persona nuova,
     // senza i termini è 422 solo per una persona nuova (una che c'è entrerebbe: 201).
     $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
 
-    expect(alFinto('POST', '/v1/accessi', ['email' => 'edoardo@example.com', 'password' => PASSWORD])->status())->not->toBe(201)
+    $edoardo = alFinto('POST', '/v1/accessi', ['email' => 'edoardo@example.com', 'password' => PASSWORD]);
+
+    expect($edoardo->status())->toBe(422)->and($edoardo->json('codice'))->toBe('credenziali_non_valide')
         ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato])->status())->toBe(422);
 
     // Annullata l'eliminazione, gli stessi inviti valgono.
@@ -140,6 +142,13 @@ it('un invito a un workspace in eliminazione è 409 anche per una persona nuova,
     expect(alFinto('POST', '/v1/utenti', [
         'email' => 'edoardo@example.com', 'password' => PASSWORD, 'termini_accettati' => true, 'invito' => $inviti['edoardo@example.com'],
     ])->status())->toBe(202)
-        ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato, 'termini_accettati' => true, 'invito' => $inviti['erika@example.com']])->status())->toBe(201)
-        ->and($studio['id'])->not->toBeEmpty();
+        ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato, 'termini_accettati' => true, 'invito' => $inviti['erika@example.com']])->status())->toBe(201);
+
+    // Edoardo è nato con l'email verificata, e il suo invito lo ha messo in Studio.
+    $accesso = entraNelFinto('edoardo@example.com');
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso['gettone']['gettone']);
+
+    expect($accesso['gettone']['utente']['email_verificata_il'])->toBeString()
+        ->and($gettone->status())->toBe(201)
+        ->and($gettone->json('data.ruolo'))->toBe('membro');
 });

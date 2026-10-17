@@ -49,18 +49,24 @@ it('apri() ed entra() danno un id nuovo e distruggono la sessione di prima: nien
         ->and(session()->getId())->not->toBe($accesso);
 });
 
-it('apri() ed entra() rinnovano il gettone CSRF, anche per la stessa persona e per un\'altra nella stessa sessione del browser (CS.1, #2044)', function () {
+it('apri(), entra(), lascia() e chiudi() rinnovano il gettone CSRF, anche per la stessa persona e per un\'altra nella stessa sessione del browser (CS.1, #2044)', function () {
     $ospite = session()->token();
 
     Sessione::apri(accesso());
     $dopoApri = session()->token();
     Sessione::entra(gettoneDelWorkspace());
     $dopoEntra = session()->token();
+    Sessione::lascia();
+    $dopoLascia = session()->token();
     Sessione::entra([...gettoneDelWorkspace(), 'utente' => [...utente(), 'id' => '01k6r3a7c2e6g0j4m8p2s6v0z9']]);
+    $altraPersona = session()->token();
+    Sessione::chiudi();
 
     expect($dopoApri)->not->toBe($ospite)
         ->and($dopoEntra)->not->toBe($dopoApri)
-        ->and(session()->token())->not->toBe($dopoEntra);
+        ->and($dopoLascia)->not->toBe($dopoEntra)
+        ->and($altraPersona)->not->toBe($dopoLascia)
+        ->and(session()->token())->not->toBe($altraPersona);
 });
 
 it('chiude la sessione: i gettoni escono, l\'id è nuovo e la sessione di prima è distrutta', function () {
