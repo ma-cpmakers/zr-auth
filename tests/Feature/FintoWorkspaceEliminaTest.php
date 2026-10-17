@@ -3,7 +3,7 @@
 // Sprint 36, PR G (#2014): workspace.elimina e workspace.eliminazione.elimina nel finto. Qui ciò che un frontend vede dal suo lato;
 // che le risposte e gli errori siano quelli del backoffice, byte per byte, lo prova il FintoTest del backoffice.
 
-/** Un proprietario con due workspace, e un amministratore del primo: [studio, altro, gettone del proprietario, gettone dell'amministratore, gettone dell'altro]. */
+/** Un proprietario con due workspace, e un amministratore del primo: [studio, altro, gettone del proprietario, gettone dell'amministratore, gettone dell'altro, il finto]. */
 function conDueWorkspace(): array
 {
     $finto = Zeiras\Auth\Testing\BackofficeFinto::attiva();
@@ -15,7 +15,7 @@ function conDueWorkspace(): array
     $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
     $gettone = fn (string $workspace) => alFinto('POST', '/v1/gettoni', ['workspace_id' => $workspace], $accesso)->json('data.gettone');
 
-    return [$studio, $altro, $gettone($studio['id']), alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('bruno@example.com')['gettone']['gettone'])->json('data.gettone'), $gettone($altro['id'])];
+    return [$studio, $altro, $gettone($studio['id']), alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('bruno@example.com')['gettone']['gettone'])->json('data.gettone'), $gettone($altro['id']), $finto];
 }
 
 it('il proprietario programma l\'eliminazione fra 30 giorni, l\'elenco la mostra e il workspace lavora come prima (#2014)', function () {
@@ -66,8 +66,7 @@ it('annullare toglie la data (204), e senza un\'eliminazione programmata è 404 
 });
 
 it('con l\'eliminazione programmata gli inviti e il link sono 409 workspace_in_eliminazione, e annullata tornano a valere (#2259)', function () {
-    [$studio, , $anna, $bruno] = conDueWorkspace();
-    $finto = Zeiras\Auth\Testing\BackofficeFinto::attiva();
+    [$studio, , $anna, $bruno, , $finto] = conDueWorkspace();
     $finto->persona('carla@example.com', PASSWORD, nome: 'Carla');
     $finto->persona('dario@example.com', PASSWORD, nome: 'Dario');
     $accessoCarla = entraNelFinto('carla@example.com')['gettone']['gettone'];
