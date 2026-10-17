@@ -13,7 +13,7 @@ use Zeiras\Auth\Sessione;
  * anche se la richiesta ha cambiato id da sé (`Sessione::entra`, o un `session()->regenerate()` del modulo). Sta nel gruppo `web`
  * dopo StartSession (ZrAuthServiceProvider lo mette da sé). Ricorda anche, a inizio richiesta, se la persona della sessione è
  * un'identità di prova (#2157): a fine corsa la richiesta può aver chiuso la sessione o cambiato persona, e la riga di log di
- * SessioneChiusa parla della persona della sessione che si chiude.
+ * SessioneChiusa parla della persona della sessione che si chiude, o di quella che la richiesta ha fatto entrare (#2241).
  */
 final class RicordaLIdDellaSessione
 {
@@ -26,14 +26,19 @@ final class RicordaLIdDellaSessione
     {
         if ($richiesta->hasSession()) {
             $richiesta->attributes->set(self::ATTRIBUTO, $richiesta->session()->getId());
-            $richiesta->attributes->set(self::PROVA, self::eUnaProva());
+            $richiesta->attributes->set(self::PROVA, self::personaDiProva());
         }
 
         return $next($richiesta);
     }
 
-    /** Vero se l'email della persona della sessione comincia per uno dei prefissi di prova (`zr-auth.prova.email_prefissi`). */
-    private static function eUnaProva(): bool
+    /**
+     * Vero se la persona della sessione di adesso è un'identità di prova: l'email comincia per uno dei prefissi
+     * (`zr-auth.prova.email_prefissi`) oppure è, intera, una di quelle di `zr-auth.prova.email` (gli account condivisi senza «+»), senza
+     * distinguere le maiuscole né gli spazi ai bordi. Lo chiede a inizio richiesta questo middleware e a fine corsa SessioneChiusa: la
+     * persona che la richiesta ha fatto entrare conta quanto quella di partenza (#2241).
+     */
+    public static function personaDiProva(): bool
     {
         try {
             $email = Sessione::utente()['email'] ?? null;
@@ -45,9 +50,15 @@ final class RicordaLIdDellaSessione
             return false;
         }
 
-        $email = strtolower($email);
+        $email = strtolower(trim($email));
         foreach ((array) config('zr-auth.prova.email_prefissi', ['uat+', 'uat-']) as $prefisso) {
             if (is_string($prefisso) && $prefisso !== '' && str_starts_with($email, strtolower($prefisso))) {
+                return true;
+            }
+        }
+
+        foreach ((array) config('zr-auth.prova.email', []) as $condiviso) {
+            if (is_string($condiviso) && trim($condiviso) !== '' && $email === strtolower(trim($condiviso))) {
                 return true;
             }
         }

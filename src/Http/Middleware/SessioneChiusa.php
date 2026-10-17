@@ -51,8 +51,10 @@ final class SessioneChiusa
             return $risposta;
         }
 
-        // La persona della sessione che si chiude, com'era a inizio richiesta (#2157): a fine corsa la richiesta può averla cambiata.
-        $prova = $richiesta->attributes->get(RicordaLIdDellaSessione::PROVA) === true;
+        // La persona della sessione che si chiude, com'era a inizio richiesta (#2157), o quella che la richiesta ha fatto entrare (#2241):
+        // sulle rotte d'ingresso la sessione di partenza è anonima, e senza la seconda nessuna prova si riconoscerebbe. Va guardata prima
+        // di distruggere le sessioni: dopo non c'è più nessuna persona.
+        $prova = $richiesta->attributes->get(RicordaLIdDellaSessione::PROVA) === true || RicordaLIdDellaSessione::personaDiProva();
 
         // Anche la sessione nuova di una richiesta tardiva che ha cambiato id da sé: nessun cookie la porta al browser.
         foreach ($ids as $id) {

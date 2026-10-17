@@ -69,11 +69,14 @@ return [
         'senza_query' => ['q', 'scelta'],
     ],
 
-    // Le identità di prova (#2157): la riga di log «scartata la risposta tardiva» porta `prova: true` se l'email della persona della
-    // sessione chiusa comincia per uno di questi prefissi (senza distinguere le maiuscole), `false` altrimenti. Né l'email né altro
-    // di personale esce: serve a separare le prove a due persone degli agenti dai casi veri.
+    // Le identità di prova (#2157, #2241): la riga di log «scartata la risposta tardiva» porta `prova: true` se la persona della sessione che
+    // si chiude, o quella che la richiesta fa entrare, è un'identità di prova, `false` altrimenti. Lo è se l'email comincia per uno dei
+    // prefissi di `email_prefissi`, o è per intero una di `email` (gli account condivisi senza «+»; in `.env`, `ZR_AUTH_PROVA_EMAIL`, indirizzi
+    // separati da virgole; vuoto di default: nessun indirizzo sta nel repo). Senza distinguere le maiuscole né gli spazi ai bordi. Né
+    // l'email né altro di personale esce: serve a separare le prove degli agenti dai casi veri.
     'prova' => [
         'email_prefissi' => ['uat+', 'uat-'],
+        'email' => array_values(array_filter(array_map('trim', explode(',', (string) env('ZR_AUTH_PROVA_EMAIL', ''))), fn (string $email) => $email !== '')),
     ],
 
     // «Resta poi Salva» (SoloDallaPersona, #2136, #2146): `zr-auth.persona.controllo` è acceso di default. Ogni scrittura (non GET, HEAD, OPTIONS) deve
