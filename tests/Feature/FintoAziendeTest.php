@@ -73,11 +73,11 @@ it('aziende.workspace.elenca dà solo i workspace dell\'azienda di cui la person
     $prima = alFinto('GET', "/v1/aziende/{$studio['azienda_id']}/workspace?limite=1", gettone: $bruno);
     $dopo = alFinto('GET', "/v1/aziende/{$studio['azienda_id']}/workspace?limite=1&cursore=".urlencode($prima->json('successivo')), gettone: $bruno);
 
-    expect($intero->json('data'))->toBe([[...$secondo, 'ruolo' => 'amministratore', 'eliminazione_il' => null], [...$studio, 'ruolo' => 'membro', 'eliminazione_il' => null]])
+    expect($intero->json('data'))->toBe([[...$secondo, 'colore' => 'neutral', 'ruolo' => 'amministratore', 'eliminazione_il' => null], [...$studio, 'colore' => 'neutral', 'ruolo' => 'membro', 'eliminazione_il' => null]])
         ->and($intero->json('successivo'))->toBeNull()
-        ->and($prima->json('data'))->toBe([[...$secondo, 'ruolo' => 'amministratore', 'eliminazione_il' => null]])
+        ->and($prima->json('data'))->toBe([[...$secondo, 'colore' => 'neutral', 'ruolo' => 'amministratore', 'eliminazione_il' => null]])
         ->and($prima->json('successivo'))->not->toBeNull()
-        ->and($dopo->json('data'))->toBe([[...$studio, 'ruolo' => 'membro', 'eliminazione_il' => null]])
+        ->and($dopo->json('data'))->toBe([[...$studio, 'colore' => 'neutral', 'ruolo' => 'membro', 'eliminazione_il' => null]])
         ->and($dopo->json('successivo'))->toBeNull();
 
 });
