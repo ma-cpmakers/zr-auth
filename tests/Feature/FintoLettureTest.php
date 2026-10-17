@@ -324,9 +324,9 @@ it("io.aziende.elenca dà le aziende dei workspace della persona, una volta sola
     expect(alFinto('PATCH', '/v1/workspace', ['nome' => 'Tutt’altro nome'], gettoneDelFinto('anna@example.com', $beta))->status())->toBe(200);
 
     $attese = [
-        ['id' => $albero['azienda_id'], 'nome' => 'Àlbero', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null],
-        ['id' => $alfa['azienda_id'], 'nome' => 'Alfa', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null],
-        ['id' => $beta['azienda_id'], 'nome' => 'beta', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null],
+        ['id' => $albero['azienda_id'], 'nome' => 'Àlbero', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null],
+        ['id' => $alfa['azienda_id'], 'nome' => 'Alfa', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null],
+        ['id' => $beta['azienda_id'], 'nome' => 'beta', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null],
     ];
 
     foreach ([gettoneDelFinto('anna@example.com'), gettoneDelFinto('anna@example.com', $beta)] as $gettone) {

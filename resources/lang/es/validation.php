@@ -209,6 +209,8 @@ return [
         'board_id' => 'tablero',
         'assegnatario_id' => 'asignado',
         'lingua' => 'idioma',
+        'paese' => 'país',
+        'valuta' => 'moneda',
         'lingua_contenuti' => 'idioma de los contenidos',
         'fuso_orario' => 'zona horaria',
         'formato_data' => 'formato de fecha',

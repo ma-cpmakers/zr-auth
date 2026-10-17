@@ -5,6 +5,7 @@ namespace Zeiras\Auth\Testing;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Closure;
+use DateTimeZone;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Cache\ArrayStore;
 use Illuminate\Cache\RateLimiter;
@@ -285,6 +286,38 @@ final class BackofficeFinto
     /** Le fasce di persone di un'azienda (Azienda::PERSONE del backoffice). */
     private const PERSONE = ['solo_io', '2-10', '11-50', 'oltre_50'];
 
+    /** I paesi di un'azienda: i codici ISO 3166-1 alpha-2 (resources/dati/paesi-iso-3166-1.txt del backoffice). */
+    private const PAESI = [
+        'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ', 'BA', 'BB',
+        'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS', 'BT', 'BV', 'BW', 'BY',
+        'BZ', 'CA', 'CC', 'CD', 'CF', 'CG', 'CH', 'CI', 'CK', 'CL', 'CM', 'CN', 'CO', 'CR', 'CU', 'CV', 'CW', 'CX',
+        'CY', 'CZ', 'DE', 'DJ', 'DK', 'DM', 'DO', 'DZ', 'EC', 'EE', 'EG', 'EH', 'ER', 'ES', 'ET', 'FI', 'FJ', 'FK',
+        'FM', 'FO', 'FR', 'GA', 'GB', 'GD', 'GE', 'GF', 'GG', 'GH', 'GI', 'GL', 'GM', 'GN', 'GP', 'GQ', 'GR', 'GS',
+        'GT', 'GU', 'GW', 'GY', 'HK', 'HM', 'HN', 'HR', 'HT', 'HU', 'ID', 'IE', 'IL', 'IM', 'IN', 'IO', 'IQ', 'IR',
+        'IS', 'IT', 'JE', 'JM', 'JO', 'JP', 'KE', 'KG', 'KH', 'KI', 'KM', 'KN', 'KP', 'KR', 'KW', 'KY', 'KZ', 'LA',
+        'LB', 'LC', 'LI', 'LK', 'LR', 'LS', 'LT', 'LU', 'LV', 'LY', 'MA', 'MC', 'MD', 'ME', 'MF', 'MG', 'MH', 'MK',
+        'ML', 'MM', 'MN', 'MO', 'MP', 'MQ', 'MR', 'MS', 'MT', 'MU', 'MV', 'MW', 'MX', 'MY', 'MZ', 'NA', 'NC', 'NE',
+        'NF', 'NG', 'NI', 'NL', 'NO', 'NP', 'NR', 'NU', 'NZ', 'OM', 'PA', 'PE', 'PF', 'PG', 'PH', 'PK', 'PL', 'PM',
+        'PN', 'PR', 'PS', 'PT', 'PW', 'PY', 'QA', 'RE', 'RO', 'RS', 'RU', 'RW', 'SA', 'SB', 'SC', 'SD', 'SE', 'SG',
+        'SH', 'SI', 'SJ', 'SK', 'SL', 'SM', 'SN', 'SO', 'SR', 'SS', 'ST', 'SV', 'SX', 'SY', 'SZ', 'TC', 'TD', 'TF',
+        'TG', 'TH', 'TJ', 'TK', 'TL', 'TM', 'TN', 'TO', 'TR', 'TT', 'TV', 'TW', 'TZ', 'UA', 'UG', 'UM', 'US', 'UY',
+        'UZ', 'VA', 'VC', 'VE', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'YT', 'ZA', 'ZM', 'ZW',
+    ];
+
+    /** Le valute di un'azienda: le monete in uso del backoffice (config zeiras.crm.valute, ISO 4217). */
+    private const VALUTE = [
+        'AED', 'AFN', 'ALL', 'AMD', 'AOA', 'ARS', 'AUD', 'AWG', 'AZN', 'BAM', 'BBD', 'BDT', 'BHD', 'BIF', 'BMD', 'BND',
+        'BOB', 'BRL', 'BSD', 'BTN', 'BWP', 'BYN', 'BZD', 'CAD', 'CDF', 'CHF', 'CLP', 'CNY', 'COP', 'CRC', 'CUP', 'CVE',
+        'CZK', 'DJF', 'DKK', 'DOP', 'DZD', 'EGP', 'ERN', 'ETB', 'EUR', 'FJD', 'FKP', 'GBP', 'GEL', 'GHS', 'GIP', 'GMD',
+        'GNF', 'GTQ', 'GYD', 'HKD', 'HNL', 'HTG', 'HUF', 'IDR', 'ILS', 'INR', 'IQD', 'IRR', 'ISK', 'JMD', 'JOD', 'JPY',
+        'KES', 'KGS', 'KHR', 'KMF', 'KPW', 'KRW', 'KWD', 'KYD', 'KZT', 'LAK', 'LBP', 'LKR', 'LRD', 'LSL', 'LYD', 'MAD',
+        'MDL', 'MGA', 'MKD', 'MMK', 'MNT', 'MOP', 'MRU', 'MUR', 'MVR', 'MWK', 'MXN', 'MYR', 'MZN', 'NAD', 'NGN', 'NIO',
+        'NOK', 'NPR', 'NZD', 'OMR', 'PAB', 'PEN', 'PGK', 'PHP', 'PKR', 'PLN', 'PYG', 'QAR', 'RON', 'RSD', 'RUB', 'RWF',
+        'SAR', 'SBD', 'SCR', 'SDG', 'SEK', 'SGD', 'SHP', 'SLE', 'SOS', 'SRD', 'SSP', 'STN', 'SYP', 'SZL', 'THB', 'TJS',
+        'TMT', 'TND', 'TOP', 'TRY', 'TTD', 'TWD', 'TZS', 'UAH', 'UGX', 'USD', 'UYU', 'UZS', 'VES', 'VND', 'VUV', 'WST',
+        'XAF', 'XCD', 'XCG', 'XOF', 'XPF', 'YER', 'ZAR', 'ZMW', 'ZWG',
+    ];
+
     private const ORA = 3600;
 
     private const MINUTO = 60;
@@ -371,7 +404,7 @@ final class BackofficeFinto
     /** @var array<string, string> il nome di ogni azienda, per id: quello del primo workspace che l'ha fatta nascere, mai aggiornato */
     private array $aziende = [];
 
-    /** @var array<string, array{partita_iva: ?string, settore: ?string, persone: ?string, sito: ?string}> i dati di ogni azienda, per id: `null` se non dati */
+    /** @var array<string, array{partita_iva: ?string, settore: ?string, persone: ?string, sito: ?string, paese: ?string, valuta: ?string, fuso_orario: ?string, lingua: ?string}> i dati di ogni azienda, per id: `null` se non dati */
     private array $datiAziende = [];
 
     /** @var array<string, array<string, string>> il ruolo, per workspace e per persona */
@@ -3814,6 +3847,11 @@ final class BackofficeFinto
             'settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
             'persone' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PERSONE)],
             'sito' => ['sometimes', 'nullable', 'bail', 'string', 'max:255', 'url:http,https'],
+            // Le impostazioni (#2011): un codice fuori elenco, in minuscolo compreso, è `valore_non_ammesso`; null toglie.
+            'paese' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PAESI)],
+            'valuta' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::VALUTE)],
+            'fuso_orario' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(DateTimeZone::listIdentifiers())],
+            'lingua' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(Testi::LINGUE)],
         ];
         $campi = $this->testi->validaStretta($corpo, $regole + ['accordo_trattamento_dati_accettato' => ['sometimes', 'nullable', 'boolean:strict']]);
         $accordo = $this->richiediAccordo($azienda, $campi['accordo_trattamento_dati_accettato'] ?? null);
@@ -3901,7 +3939,7 @@ final class BackofficeFinto
     {
         $id = self::id();
         $this->aziende[$id] = $nome;
-        $this->datiAziende[$id] = ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, ...$dati];
+        $this->datiAziende[$id] = ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null, ...$dati];
 
         return $id;
     }
@@ -3913,7 +3951,7 @@ final class BackofficeFinto
      */
     private function voceAzienda(string $id): array
     {
-        return ['id' => $id, 'nome' => $this->aziende[$id], ...($this->datiAziende[$id] ?? ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null])];
+        return ['id' => $id, 'nome' => $this->aziende[$id], ...($this->datiAziende[$id] ?? ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null])];
     }
 
     /**
