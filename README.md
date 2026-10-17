@@ -222,9 +222,12 @@ quello del gettone CSRF (`XSRF-TOKEN`): al browser resta quello di chi è entrat
   Lo store del blocco deve essere condiviso fra i processi (non `array`), o la protezione si spegne in silenzio.
 - **Il log.** Una risposta scartata scrive un `Log::info` («zr-auth: scartata la risposta tardiva di una sessione chiusa») col
   metodo, il disegno della rotta e `prova` (da #2157), mai l'id né i valori, nel log di default del modulo (`storage/logs/laravel-*.log`;
-  non Slack). `prova` è un booleano, vero se l'email della persona della sessione chiusa comincia per uno dei prefissi di
-  `zr-auth.prova.email_prefissi` (default `uat+` e `uat-`, senza distinguere le maiuscole): serve a contare a parte le prove a due
-  persone degli agenti. Né email, né id, né workspace nel contesto.
+  non Slack). `prova` è un booleano, vero se è un'identità di prova la persona della sessione che si chiude (com'era a inizio richiesta) **o**
+  quella che la richiesta fa entrare (da #2241: sulle rotte d'ingresso la sessione di partenza è anonima). Lo è chi ha l'email che comincia
+  per uno dei prefissi di `zr-auth.prova.email_prefissi` (default `uat+` e `uat-`) o uguale, per intero, a uno degli indirizzi di
+  `zr-auth.prova.email` (gli account condivisi senza «+»; in `.env` `ZR_AUTH_PROVA_EMAIL`, indirizzi separati da virgole; vuoto di default),
+  senza distinguere le maiuscole né gli spazi ai bordi: serve a contare a parte le prove a due persone degli agenti. Né email, né id, né
+  workspace nel contesto.
 - **Dove sta il middleware.** `SessioneChiusa` è il primo del gruppo `web`, fuori da StartSession; `RicordaLIdDellaSessione`
   viene dopo. Un modulo che riordina i middleware del gruppo `web` deve tenere il primo al suo posto.
 - **Cosa provare** in un modulo: una richiesta lenta della persona A in volo, entra B dallo stesso browser, la risposta di A

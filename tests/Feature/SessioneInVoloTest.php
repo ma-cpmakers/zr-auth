@@ -300,6 +300,73 @@ it('la persona è quella con cui la richiesta è partita: una lenta che chiude l
     expect($righe)->toHaveCount(1)->and($righe[0]->context['prova'])->toBe($atteso);
 })->with(['la lenta chiude la sessione' => ['chiude', true], 'la lenta non fa altro' => ['niente', true]]);
 
+/**
+ * La riga della risposta scartata di una richiesta lenta partita dalla persona `$iniziale` che, a fine corsa, fa entrare `$entra` (se c'è):
+ * come un POST d'ingresso, dove la sessione di partenza è un'altra e la persona che conta è quella che entra (#2241).
+ */
+function contestoDiUnIngressoTardivo(string $iniziale, ?string $entra): array
+{
+    $cookie = cookieDellaSessione(test()->post('/entra-persona-email', ['email' => $iniziale]));
+    $grace = ['id' => null, 'cookie' => null];
+    registraLaRichiestaLenta($cookie, $grace, function () use ($entra) {
+        if ($entra !== null) {
+            $accesso = accesso();
+            $accesso['gettone']['utente']['email'] = $entra;
+            Sessione::apri($accesso);
+        }
+
+        return ['lenta' => true];
+    });
+    $gestore = Illuminate\Support\Facades\Log::channel('prova')->getLogger()->getHandlers()[0];
+    $gestore->clear();
+
+    test()->withUnencryptedCookie(config('session.cookie'), $cookie)->get('/lenta')->assertOk();
+
+    $righe = array_values(array_filter($gestore->getRecords(), fn ($riga) => str_contains($riga->message, 'scartata la risposta tardiva')));
+
+    expect($righe)->toHaveCount(1);
+
+    return $righe[0]->context;
+}
+
+// P.1 (#2241)
+it('`prova` è vero se è di prova la persona che si chiude o quella che la richiesta fa entrare: basta una delle due', function (string $iniziale, ?string $entra, bool $prova) {
+    expect(contestoDiUnIngressoTardivo($iniziale, $entra))->toBe(['metodo' => 'GET', 'rotta' => 'lenta', 'prova' => $prova]);
+})->with([
+    'entra una prova, partiva una persona vera' => ['anna@example.com', 'uat+zr-home-1@example.com', true],
+    'entra una persona vera, partiva una prova' => ['uat+ada@example.com', 'anna@example.com', true],
+    'entrano e partono due prove' => ['uat-a@example.com', 'uat+b@example.com', true],
+    'né l\'una né l\'altra' => ['anna@example.com', 'bruno@example.com', false],
+    'nessuno entra, parte una persona vera' => ['anna@example.com', null, false],
+]);
+
+// P.2 (#2241)
+dataset('account condivisi di prova', [
+    'nell\'elenco' => ['uat@esempio.test', true],
+    'maiuscole' => ['UAT@Esempio.TEST', true],
+    'voce con spazi e maiuscole' => ['prova.condivisa@esempio.test', true],
+    'una parte dell\'indirizzo' => ['xuat@esempio.test', false],
+    'l\'indirizzo con un suffisso' => ['uat@esempio.test.evil', false],
+    'un altro dominio' => ['uat@altro.test', false],
+]);
+
+it('gli account condivisi di prova stanno in `zr-auth.prova.email`: la persona che si chiude, indirizzo intero, senza maiuscole né spazi ai bordi, mai una parte', function (string $email, bool $prova) {
+    config(['zr-auth.prova.email' => ['uat@esempio.test', ' Prova.Condivisa@Esempio.test ']]);
+
+    expect(contestoDiUnIngressoTardivo($email, null)['prova'])->toBe($prova);
+})->with('account condivisi di prova');
+
+it('gli account condivisi di prova contano anche quando sono quelli che la richiesta fa entrare', function (string $email, bool $prova) {
+    config(['zr-auth.prova.email' => ['uat@esempio.test', ' Prova.Condivisa@Esempio.test ']]);
+
+    expect(contestoDiUnIngressoTardivo('anna@example.com', $email)['prova'])->toBe($prova);
+})->with('account condivisi di prova');
+
+it('senza elenco in configurazione nessun indirizzo senza prefisso conta come prova, e il default è vuoto', function () {
+    expect(config('zr-auth.prova.email'))->toBe([])
+        ->and(contestoDiUnIngressoTardivo('anna@example.com', 'uat@castroandpartners.com')['prova'])->toBeFalse();
+});
+
 // LP.4
 it('il README e la config dicono `prova` e i prefissi; la riga di log ha i soli tre nomi', function () {
     $readme = file_get_contents(__DIR__.'/../../README.md');
@@ -307,5 +374,7 @@ it('il README e la config dicono `prova` e i prefissi; la riga di log ha i soli 
 
     expect($readme)->toContain('zr-auth.prova.email_prefissi')->toContain('`prova`')
         ->and($config)->toContain('email_prefissi')->toContain('uat+')->toContain('uat-')
-        ->and(require __DIR__.'/../../config/zr-auth.php')->toHaveKey('prova.email_prefissi', ['uat+', 'uat-']);
+        ->and(require __DIR__.'/../../config/zr-auth.php')->toHaveKey('prova.email_prefissi', ['uat+', 'uat-'])->toHaveKey('prova.email')
+        ->and($readme)->toContain('ZR_AUTH_PROVA_EMAIL')->toContain('zr-auth.prova.email`')
+        ->and($config)->toContain('ZR_AUTH_PROVA_EMAIL')->not->toContain('castroandpartners');
 });
