@@ -276,10 +276,10 @@ final class BackofficeFinto
      */
     private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
 
-    /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
 
+    /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
 
     /** Le fasce di persone di un'azienda (Azienda::PERSONE del backoffice). */
@@ -4307,8 +4307,7 @@ final class BackofficeFinto
     /**
      * workspace.modifica (WorkspaceController::modifica): nome, settore, lingua dei contenuti e colore del workspace del gettone, come
      * JSON Merge Patch, a proprietario e amministratore (403 prima del corpo). Almeno un campo (422 sul corpo intero, `#`). Il nome va da 1
-     * a 255 caratteri, senza gli spazi ai bordi; `null` toglie il settore e non cambia né la lingua né il colore (un workspace li ha
-     * sempre); lo slug nasce col workspace e non cambia. Risponde con un elemento di io.workspace.elenca.
+     * a 255 caratteri, senza gli spazi ai bordi; `null` toglie il settore e non cambia né la lingua né il colore; lo slug nasce col workspace e non cambia. Risponde con un elemento di io.workspace.elenca.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
