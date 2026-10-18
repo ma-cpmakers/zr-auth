@@ -4001,6 +4001,7 @@ final class BackofficeFinto
                 'azienda_id' => ['sometimes', 'string'],
                 'settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
                 'lingua_contenuti' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(Testi::LINGUE)],
+                'colore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::COLORI)],
                 'azienda' => ['sometimes', 'nullable', 'array', 'prohibits:azienda_id'],
                 'accordo_trattamento_dati_accettato' => ['sometimes', 'nullable', 'boolean:strict'],
                 'azienda.partita_iva' => ['sometimes', 'nullable', 'bail', 'string', 'max:40', 'regex:/^(?=[A-Za-z0-9 .]*$)(?:[ .]*[A-Za-z0-9]){8,14}[ .]*$/'],
@@ -4039,6 +4040,11 @@ final class BackofficeFinto
                 'settore' => $campi['settore'] ?? null,
                 'lingua_contenuti' => $campi['lingua_contenuti'] ?? $this->persone[$persona]['lingua'],
             ];
+
+            // Il colore (#2012, C.1): uno della palette; senza, o null, il workspace è neutral (nessuna riga in `colori`).
+            if (isset($campi['colore'])) {
+                $this->colori[$id] = (string) $campi['colore'];
+            }
 
             if ($accordo && $this->accordoLegale !== null) {
                 $this->accordiAccettati[$this->workspace[$id]['azienda_id']][$this->accordoLegale['versione']] = true;
