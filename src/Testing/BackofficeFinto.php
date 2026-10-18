@@ -117,6 +117,9 @@ final class BackofficeFinto
         ['POST', '#^/v1/io/esportazioni$#', 'io.esportazioni.crea'],
         ['GET', '#^/v1/io/esportazioni/([^/]+)$#', 'io.esportazioni.mostra'],
         ['GET', '#^/v1/io/esportazioni/([^/]+)/archivio$#', 'io.esportazioni.archivio.mostra'],
+        ['POST', '#^/v1/workspace/esportazioni$#', 'workspace.esportazioni.crea'],
+        ['GET', '#^/v1/workspace/esportazioni/([^/]+)$#', 'workspace.esportazioni.mostra'],
+        ['POST', '#^/v1/workspace/esportazioni/([^/]+)/scaricamento$#', 'workspace.esportazioni.scaricamento.crea'],
         ['DELETE', '#^/v1/accessi/([^/]+)$#', 'accessi.elimina'],
         ['GET', '#^/v1/ricerca$#', 'ricerca.elenca'],
         ['POST', '#^/v1/ricerca$#', 'ricerca.crea'],
@@ -385,6 +388,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{persona: string, stato: string, creata: CarbonImmutable, scade: ?CarbonImmutable}> per id: le richieste «Esporta i miei dati» */
     private array $esportazioni = [];
+
+    /** @var array<string, array{workspace: string, persona: string, stato: string, creata: CarbonImmutable, scade: ?CarbonImmutable}> per id: le esportazioni dei dati di un workspace (#2015) */
+    private array $esportazioniWorkspace = [];
 
     /** @var array<string, array{utente: string, creato_il: CarbonImmutable, chiuso: bool, via?: string}> per id */
     private array $accessi = [];
@@ -1168,6 +1174,9 @@ final class BackofficeFinto
                 'io.esportazioni.crea' => $this->chiediEsportazione($richiesta),
                 'io.esportazioni.mostra' => $this->mostraEsportazione($richiesta, $parametri[0]),
                 'io.esportazioni.archivio.mostra' => $this->scaricaEsportazione($richiesta, $parametri[0]),
+                'workspace.esportazioni.crea' => $this->chiediEsportazioneWorkspace($richiesta, $corpo),
+                'workspace.esportazioni.mostra' => $this->mostraEsportazioneWorkspace($richiesta, $parametri[0]),
+                'workspace.esportazioni.scaricamento.crea' => $this->scaricaEsportazioneWorkspace($richiesta, $parametri[0]),
                 'accessi.elimina' => $this->eliminaAccesso($richiesta, $parametri[0]),
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
@@ -3670,6 +3679,132 @@ final class BackofficeFinto
     private function formaEsportazione(string $id): array
     {
         $voce = $this->esportazioni[$id];
+        $stato = $voce['stato'] === 'pronta' && $voce['scade'] !== null && $voce['scade']->lte(now()) ? 'scaduta' : $voce['stato'];
+
+        return ['id' => $id, 'stato' => $stato, 'creata_il' => self::iso($voce['creata']), 'scade_il' => $voce['scade'] === null ? null : self::iso($voce['scade'])];
+    }
+
+    /**
+     * Fa finire le esportazioni dei dati del workspace ancora in preparazione: da qui sono `pronta`, con la scadenza a sette giorni. Il lavoro
+     * del backoffice è in coda e il finto non ne ha una: un test della pagina che segue lo stato sta in `in_preparazione` finché non chiama
+     * questo, o `fallisciLeEsportazioniDelWorkspace()`.
+     */
+    public function preparaLeEsportazioniDelWorkspace(string $workspace): void
+    {
+        foreach ($this->esportazioniWorkspace as $id => $voce) {
+            if ($voce['workspace'] === $workspace && $voce['stato'] === 'in_preparazione') {
+                $this->esportazioniWorkspace[$id]['stato'] = 'pronta';
+                $this->esportazioniWorkspace[$id]['scade'] = now()->toImmutable()->startOfMillisecond()->addDays(7);
+            }
+        }
+    }
+
+    /** Fa fallire le esportazioni del workspace ancora in preparazione (lo ZIP non si è potuto preparare). */
+    public function fallisciLeEsportazioniDelWorkspace(string $workspace): void
+    {
+        foreach ($this->esportazioniWorkspace as $id => $voce) {
+            if ($voce['workspace'] === $workspace && $voce['stato'] === 'in_preparazione') {
+                $this->esportazioniWorkspace[$id]['stato'] = 'fallita';
+            }
+        }
+    }
+
+    /**
+     * workspace.esportazioni.crea (WorkspaceEsportazioniController::crea, #2015): proprietario e amministratore (403 `permesso_negato`), la
+     * conferma recente dell'accesso (403 `conferma_richiesta`), poi, se il workspace ne ha già una in preparazione, 409 `limite_raggiunto`
+     * con `limite` 1; oltre 3 richieste in 24 ore (le fallite non contano) 429 con `Retry-After`; altrimenti ne nasce una `in_preparazione`.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function chiediEsportazioneWorkspace(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
+        $fino = $this->accessi[$chi['accesso']]['confermato_fino'] ?? null;
+
+        if ($fino === null || $fino->lte(now())) {
+            throw new Problema('conferma_richiesta');
+        }
+
+        $sue = array_filter($this->esportazioniWorkspace, fn (array $voce) => $voce['workspace'] === $chi['workspace']);
+
+        foreach ($sue as $voce) {
+            if ($voce['stato'] === 'in_preparazione') {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => 1]);
+            }
+        }
+
+        $adesso = now()->toImmutable()->startOfMillisecond();
+        $ultime = array_values(array_filter(
+            array_column(array_filter($sue, fn (array $voce) => $voce['stato'] !== 'fallita'), 'creata'),
+            fn (CarbonImmutable $creata) => $creata->gt($adesso->subDay()),
+        ));
+        sort($ultime);
+
+        if (count($ultime) >= 3) {
+            $libera = $ultime[count($ultime) - 3]->addDay();
+
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, (int) ceil($adesso->diffInSeconds($libera, true)))]);
+        }
+
+        $id = self::id();
+        $this->esportazioniWorkspace[$id] = ['workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'stato' => 'in_preparazione', 'creata' => $adesso, 'scade' => null];
+
+        return [202, ['data' => $this->formaEsportazioneWorkspace($id)]];
+    }
+
+    /**
+     * workspace.esportazioni.mostra (WorkspaceEsportazioniController::mostra, #2015): la richiesta del workspace del gettone, per proprietario e
+     * amministratore; l'id di un altro workspace e uno mai esistito sono lo stesso 404. Una `pronta` oltre la scadenza si legge `scaduta`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraEsportazioneWorkspace(Request $richiesta, string $id): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
+
+        if (($this->esportazioniWorkspace[$id]['workspace'] ?? null) !== $chi['workspace']) {
+            throw new Problema('non_trovato');
+        }
+
+        return [200, ['data' => $this->formaEsportazioneWorkspace($id)]];
+    }
+
+    /**
+     * workspace.esportazioni.scaricamento.crea (WorkspaceEsportazioniController::scaricamentoCrea, #2015): con la conferma recente (403
+     * `conferma_richiesta` senza, prima di consumare), lo ZIP, una volta sola, anche a un altro amministratore. Il finto dà uno ZIP vuoto (22
+     * byte validi): serve a provare il gesto di scaricare, non il contenuto. Dopo l'uso, alla scadenza, per una fallita, per un altro workspace e
+     * per un id mai esistito è lo stesso 404.
+     *
+     * @return array{int, string, array<string, string>}
+     */
+    private function scaricaEsportazioneWorkspace(Request $richiesta, string $id): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
+        $fino = $this->accessi[$chi['accesso']]['confermato_fino'] ?? null;
+
+        if ($fino === null || $fino->lte(now())) {
+            throw new Problema('conferma_richiesta');
+        }
+
+        if (($this->esportazioniWorkspace[$id]['workspace'] ?? null) !== $chi['workspace'] || $this->formaEsportazioneWorkspace($id)['stato'] !== 'pronta') {
+            throw new Problema('non_trovato');
+        }
+
+        $this->esportazioniWorkspace[$id]['stato'] = 'scaduta';
+
+        return [200, "PK\x05\x06".str_repeat("\0", 18), [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename=zeiras-workspace-dati.zip',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'no-store, private',
+        ]];
+    }
+
+    /** @return array{id: string, stato: string, creata_il: string, scade_il: ?string} */
+    private function formaEsportazioneWorkspace(string $id): array
+    {
+        $voce = $this->esportazioniWorkspace[$id];
         $stato = $voce['stato'] === 'pronta' && $voce['scade'] !== null && $voce['scade']->lte(now()) ? 'scaduta' : $voce['stato'];
 
         return ['id' => $id, 'stato' => $stato, 'creata_il' => self::iso($voce['creata']), 'scade_il' => $voce['scade'] === null ? null : self::iso($voce['scade'])];

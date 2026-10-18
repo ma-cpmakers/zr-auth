@@ -563,6 +563,82 @@ it('l\'accesso di un\'altra persona è 404 non_trovato, come uno che non esiste,
 
 // T2.4
 
+it('workspace.esportazioni.*: ruoli, conferma, una sola in preparazione (409), al più 3 in 24 ore, stato che segue la preparazione e ZIP che si scarica una volta (#2015)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $bruno = $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
+    $carla = $finto->persona('carla@example.com', PASSWORD, nome: 'Carla');
+    $studio = $finto->workspace('Studio Anna', $anna);
+    $altro = $finto->workspace('Altro studio', $bruno);
+    $finto->membro($studio, $bruno, 'amministratore');
+    $finto->membro($studio, $carla, 'membro');
+    $gettone = function (string $email, array $workspace): string {
+        $solo = entraNelFinto($email)['gettone']['gettone'];
+        alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $solo);
+
+        return alFinto('POST', '/v1/gettoni', ['workspace_id' => $workspace['id']], $solo)->json('data.gettone');
+    };
+    $gettoneAnna = $gettone('anna@example.com', $studio);
+    $gettoneBruno = $gettone('bruno@example.com', $studio);
+    $gettoneCarla = $gettone('carla@example.com', $studio);
+    $gettoneBrunoAltro = $gettone('bruno@example.com', $altro);
+    $soloAnna = entraNelFinto('anna@example.com')['gettone']['gettone'];
+
+    expect(alFinto('POST', '/v1/workspace/esportazioni', [], $gettoneCarla)->json('codice'))->toBe('permesso_negato')
+        ->and(alFinto('POST', '/v1/workspace/esportazioni', [], $soloAnna)->json('codice'))->toBe('gettone_senza_workspace');
+
+    $prima = alFinto('POST', '/v1/workspace/esportazioni', [], $gettoneAnna);
+    $seconda = alFinto('POST', '/v1/workspace/esportazioni', [], $gettoneBruno);
+    $id = $prima->json('data.id');
+
+    expect($prima->status())->toBe(202)
+        ->and($prima->header('Link'))->toBe(linkDi('workspace.esportazioni.crea'))
+        ->and(array_keys($prima->json('data')))->toBe(['id', 'stato', 'creata_il', 'scade_il'])
+        ->and($prima->json('data.stato'))->toBe('in_preparazione')
+        ->and($seconda->status())->toBe(409)->and($seconda->json('codice'))->toBe('limite_raggiunto')->and($seconda->json('limite'))->toBe(1)
+        ->and(alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneBruno)->json('data.stato'))->toBe('in_preparazione')
+        ->and(alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneBrunoAltro)->status())->toBe(404)
+        ->and(alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneCarla)->json('codice'))->toBe('permesso_negato')
+        ->and(alFinto('POST', "/v1/workspace/esportazioni/{$id}/scaricamento", gettone: $gettoneAnna)->status())->toBe(404);
+
+    $finto->preparaLeEsportazioniDelWorkspace($studio['id']);
+    $this->travel(601)->seconds();
+    $senza = alFinto('POST', "/v1/workspace/esportazioni/{$id}/scaricamento", gettone: $gettoneBruno);
+    expect($senza->status())->toBe(403)->and($senza->json('codice'))->toBe('conferma_richiesta');
+    $solo = entraNelFinto('bruno@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $solo);
+    $gettoneBruno = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $solo)->json('data.gettone');
+    $pronta = alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneBruno);
+
+    expect($pronta->json('data.stato'))->toBe('pronta')
+        ->and($pronta->json('data.scade_il'))->toMatch('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/');
+
+    $zip = alFinto('POST', "/v1/workspace/esportazioni/{$id}/scaricamento", gettone: $gettoneBruno);
+    $ancora = alFinto('POST', "/v1/workspace/esportazioni/{$id}/scaricamento", gettone: $gettoneBruno);
+
+    expect($zip->status())->toBe(200)
+        ->and($zip->header('Content-Type'))->toBe('application/zip')
+        ->and($zip->header('Content-Disposition'))->toBe('attachment; filename=zeiras-workspace-dati.zip')
+        ->and($ancora->status())->toBe(404)
+        ->and(alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneBruno)->json('data.stato'))->toBe('scaduta');
+
+    // Una fallita non conta nel tetto di 3 in 24 ore: con la prima e altre due non fallite il tetto è pieno, e la quarta ha Retry-After.
+    $conferma = fn () => alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $solo);
+    $conferma();
+    $fallita = alFinto('POST', '/v1/workspace/esportazioni', [], $gettoneBruno)->json('data.id');
+    $finto->fallisciLeEsportazioniDelWorkspace($studio['id']);
+
+    alFinto('POST', '/v1/workspace/esportazioni', [], $gettoneBruno);
+    $finto->preparaLeEsportazioniDelWorkspace($studio['id']);
+    $terza = alFinto('POST', '/v1/workspace/esportazioni', [], $gettoneBruno);
+    $finto->preparaLeEsportazioniDelWorkspace($studio['id']);
+    $quarta = alFinto('POST', '/v1/workspace/esportazioni', [], $gettoneBruno);
+
+    expect(alFinto('GET', "/v1/workspace/esportazioni/{$fallita}", gettone: $gettoneBruno)->json('data.stato'))->toBe('fallita')
+        ->and($terza->status())->toBe(202)
+        ->and($quarta->status())->toBe(429)->and($quarta->json('codice'))->toBe('troppe_richieste')->and((int) $quarta->header('Retry-After'))->toBeGreaterThan(0);
+});
+
 it('gettoni.crea dà il gettone di un workspace della persona, col suo ruolo, che scade con l\'accesso (T2.4)', function () {
     $finto = BackofficeFinto::attiva();
     $anna = $finto->persona('anna@example.com', PASSWORD);
