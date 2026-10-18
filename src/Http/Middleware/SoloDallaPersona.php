@@ -18,6 +18,11 @@ use Zeiras\Auth\Sessione;
  * aperta prima del deploy è una scheda ferma anche lei) → 409 `persona_diversa`, e nient'altro: la scheda ferma non legge né chi
  * è entrato né la sua impronta. Se l'intestazione è ripetuta valgono tutte.
  *
+ * Un modulo HTML nativo (`<form method="post">`, per uno scaricamento che il browser salva man mano che arriva) non porta intestazioni: se
+ * l'intestazione manca del tutto, l'impronta si legge dal campo `_zr_persona` del corpo (Persona::CAMPO), solo se è una stringa, e si
+ * confronta nello stesso modo. Con l'intestazione presente, anche vuota, vale lei e il campo si ignora; mai la query: l'impronta non
+ * sta in un indirizzo. Il CSRF resta quello di Laravel: l'impronta è un controllo di scheda ferma, non un segreto.
+ *
  * Gira dopo ConGettone, e salvo `zr-auth.persona.controllo` spento (ZR_AUTH_PERSONA_CONTROLLO=false): un modulo che ha la sua
  * copia la spegne finché non passa a questa. GET, HEAD e OPTIONS passano (il metodo vero della richiesta: un POST con `_method=OPTIONS` non è un OPTIONS). Controlla
  * le rotte con la guardia: una pagina pubblica (`withoutMiddleware(ConGettone::class)`, l'accesso, la registrazione) è la strada
@@ -52,6 +57,15 @@ final class SoloDallaPersona
             // Due intestazioni dello stesso nome arrivano unite da una virgola: ognuna deve essere quella giusta.
             foreach (explode(',', (string) $valore) as $detta) {
                 $dette[] = trim($detta);
+            }
+        }
+
+        // Un modulo nativo non ha intestazioni: senza l'intestazione, il campo del corpo (una stringa sola, mai un elenco).
+        if (! $richiesta->headers->has(Persona::INTESTAZIONE)) {
+            $campo = $richiesta->request->all()[Persona::CAMPO] ?? null;
+
+            if (is_string($campo)) {
+                $dette[] = trim($campo);
             }
         }
 

@@ -291,6 +291,9 @@ la manda, e il server lo confronta con la persona della sessione prima della rot
   sue scritture sono 409; lo riaccende quando passa alla comune. Acceso, una scrittura (non GET, HEAD, OPTIONS) con l'impronta
   diversa, vuota o assente è **409 `{"errore":"persona_diversa"}`**: la rotta non gira, nessuna chiamata al backoffice, e il corpo
   non porta né l'impronta, né l'email, né l'id di nessuno. Un'intestazione ripetuta vale per tutte; il confronto è a tempo costante.
+  Un **modulo HTML nativo** (`<form method="post">`, per uno scaricamento che il browser salva man mano che arriva: nessuna intestazione) porta
+  la stessa impronta nel campo `_zr_persona` del corpo (`Persona::CAMPO`): vale **solo se l'intestazione manca**, solo come stringa, e mai dalla
+  query; con l'intestazione presente, anche vuota, vale lei. Senza né l'una né l'altro è 409 come prima. Il CSRF resta quello di Laravel (`@csrf`).
   Senza sessione passa: la strada è quella della guardia. Con la sessione aperta e l'impronta che manca (`utente.id` assente, vuoto o
   non stringa) è 409 `persona_diversa` anche sulle rotte `:sempre`: non c'è una persona da confrontare (#2201).
 - **«Esci» è esente**: chiudere la sessione è il lato sicuro, anche da una scheda rimasta su un'altra persona.
