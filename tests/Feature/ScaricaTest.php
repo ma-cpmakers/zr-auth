@@ -435,3 +435,61 @@ it('un 403 conferma_richiesta e un 404 non_trovato dello scaricamento sono Error
     expect($preso)->toBeInstanceOf(ErroreApi::class)
         ->and($preso->codice)->toBe($codice);
 })->with([[403, 'conferma_richiesta'], [404, 'non_trovato']]);
+
+// #2015: Api::scaricaConPost, la POST senza corpo a flusso (workspace.esportazioni.scaricamento.crea).
+
+const SCARICA_ZIP_POST = '/v1/workspace/esportazioni/01k7n4r6t8v0x2z4b6d8f0h2j4/scaricamento';
+
+it('scaricaConPost: una POST senza query, col gettone e Accept dei tipi ammessi, dà il tipo zip, il nome del backoffice e il corpo a pezzi', function () {
+    Http::fake([API.'/*' => Http::response("PK\x05\x06".str_repeat("\0", 18), 200, ['Content-Type' => 'application/zip', 'Content-Disposition' => 'attachment; filename=zeiras-workspace-dati.zip'])]);
+    apriSessione();
+
+    $file = Api::workspace()->scaricaConPost(SCARICA_ZIP_POST);
+
+    expect($file)->toBeInstanceOf(Scaricamento::class)
+        ->and($file->tipo)->toBe('application/zip')
+        ->and($file->nome)->toBe('zeiras-workspace-dati.zip')
+        ->and(strlen(implode('', iterator_to_array($file->blocchi(5), false))))->toBe(22);
+    Http::assertSent(fn (Request $r) => $r->url() === API.SCARICA_ZIP_POST
+        && $r->method() === 'POST'
+        && $r->header('Authorization') === ['Bearer '.GETTONE_WORKSPACE]
+        && $r->header('Accept') === ['text/csv, application/zip']);
+});
+
+it('scaricaConPost: un percorso fuori da /v1, con una query o con un segmento .. non parte', function (string $percorso) {
+    Http::fake();
+    apriSessione();
+
+    expect(fn () => Api::workspace()->scaricaConPost($percorso))->toThrow(InvalidArgumentException::class);
+    Http::assertNothingSent();
+})->with(['/up', 'https://altrove.example/v1/x', SCARICA_ZIP_POST.'?x=1', '/v1/../up']);
+
+it('scaricaConPost: gli errori sono quelli di ogni chiamata, il 403 conferma_richiesta compreso', function (int $stato, string $codice) {
+    Http::fake(['*' => problemaJson($stato, $codice)()]);
+    apriSessione();
+
+    try {
+        Api::workspace()->scaricaConPost(SCARICA_ZIP_POST);
+        $errore = null;
+    } catch (ErroreApi $e) {
+        $errore = $e;
+    }
+
+    expect($errore)->toBeInstanceOf(ErroreApi::class)->and($errore->stato)->toBe($stato)->and($errore->codice)->toBe($codice);
+})->with([[403, 'conferma_richiesta'], [404, 'non_trovato'], [429, 'troppe_richieste']]);
+
+it('scaricaConPost: un 401 è il gettone rifiutato; un JSON con un 200 e un 5xx senza JSON non sono un file', function () {
+    apriSessione();
+
+    Http::fake(['*' => problemaJson(401, 'gettone_non_valido')()]);
+    expect(fn () => Api::workspace()->scaricaConPost(SCARICA_ZIP_POST))->toThrow(GettoneRifiutato::class);
+
+    Http::swap(new Factory);
+    Http::fake(['*' => Http::response(['data' => []], 200)]);
+    expect(fn () => Api::workspace()->scaricaConPost(SCARICA_ZIP_POST))->toThrow(BackofficeNonRisponde::class);
+
+    Http::swap(new Factory);
+    Http::fake(['*' => Http::response('<html>Bad Gateway</html>', 502, ['Content-Type' => 'text/html'])]);
+    expect(fn () => Api::workspace()->scaricaConPost(SCARICA_ZIP_POST))->toThrow(BackofficeNonRisponde::class);
+});
+

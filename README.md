@@ -158,12 +158,15 @@ Api::persona()->get("/v1/io/esportazioni/{$id}/archivio");
 
 // L'esportazione dei dati di un workspace (workspace.esportazioni.crea, .mostra, .scaricamento.crea, #2015): per il proprietario e l'amministratore del
 // workspace del gettone, con la conferma recente (403 `conferma_richiesta`, anche per scaricare: il file non si consuma). Una sola in preparazione
-// per workspace (409 `limite_raggiunto`, `limite` 1) e al più 3 in 24 ore (429, le fallite non contano). Lo ZIP si scarica una volta sola entro 7
-// giorni con un POST (il secondo è 404, come un id mai esistito o di un altro workspace). Nel finto lo stato resta `in_preparazione` finché il test non
-// chiama `$finto->preparaLeEsportazioniDelWorkspace($idDelWorkspace)` (o `fallisciLeEsportazioniDelWorkspace`), e lo ZIP è vuoto.
+// per workspace (409 `limite_raggiunto`, `limite` 1), al più 3 in 24 ore (429, le fallite non contano) e al più 10 fallite in 24 ore (429 uguale). Lo ZIP si scarica
+// una volta sola entro 7 giorni con un POST (il secondo è 404, come un id mai esistito o di un altro workspace). La risposta porta `dimensione` (i byte, quando è
+// pronta) e, per una `fallita`, `errore` (`non_riuscita` o `troppo_grande`) e, con `troppo_grande`, `limite` (`byte` e `secondi`). Nel finto lo stato resta
+// `in_preparazione` finché il test non chiama `$finto->preparaLeEsportazioniDelWorkspace($idDelWorkspace)` (o `fallisciLeEsportazioniDelWorkspace($idDelWorkspace,
+// 'troppo_grande')`), e lo ZIP è vuoto (22 byte).
 Api::workspace()->post('/v1/workspace/esportazioni');
 Api::workspace()->get("/v1/workspace/esportazioni/{$id}");
-Api::workspace()->post("/v1/workspace/esportazioni/{$id}/scaricamento");
+// Lo ZIP è una risposta a flusso, non JSON: si scarica con scaricaConPost (vedi «Scaricare un file»), mai con post().
+return Api::workspace()->scaricaConPost("/v1/workspace/esportazioni/{$id}/scaricamento")->comeRisposta();
 
 // «Conferma che sei tu» (accessi.conferma.crea): la password di nuovo, e per dieci minuti l'accesso è confermato. I metodi che la
 // chiederanno (cambio email, esportazione, eliminazione dell'account) rispondono 403 conferma_richiesta senza di lei.
@@ -460,14 +463,17 @@ con `limite` 25 il taglio arriva a 2.500.
   hanno un `getPrevious()`.
 - Un redirect non si segue: un 307 rimanderebbe il corpo, una password compresa, al `Location`.
 
-### Scaricare un file: `Api::scarica`
+### Scaricare un file: `Api::scarica` e `Api::scaricaConPost`
 
-Le risposte di `/v1` sono JSON, salvo l'esportazione CSV del CRM (`crm.persone.esportazione.mostra`, `crm.organizzazioni.esportazione.mostra`).
-`scarica` è la GET che le passa a flusso: stesso gettone, stessa firma, stessi errori delle altre chiamate (`ErroreApi`, col `riprovaFra` di un
-429; `GettoneRifiutato`; `BackofficeNonRisponde`), e restituisce uno `Scaricamento`.
+Le risposte di `/v1` sono JSON, salvo l'esportazione CSV del CRM (`crm.persone.esportazione.mostra`, `crm.organizzazioni.esportazione.mostra`) e gli ZIP
+delle esportazioni dei dati. `scarica` è la GET che le passa a flusso: stesso gettone, stessa firma, stessi errori delle altre chiamate (`ErroreApi`,
+col `riprovaFra` di un 429; `GettoneRifiutato`; `BackofficeNonRisponde`), e restituisce uno `Scaricamento`. `scaricaConPost` è la stessa cosa con una
+POST senza corpo, per il file che il backoffice dà una volta sola e il cui metodo è una POST perché consuma (`workspace.esportazioni.scaricamento.crea`):
+nessuna query, stesso percorso dentro `/v1`, stessi errori (un 403 `conferma_richiesta` arriva prima del primo byte, e il file non si consuma).
 
 ```php
 return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'lead'])->comeRisposta();
+return Api::workspace()->scaricaConPost("/v1/workspace/esportazioni/{$id}/scaricamento")->comeRisposta();
 ```
 
 - Il backoffice tiene un tetto alle esportazioni che scorrono nello stesso momento (1 per persona, 2 per workspace, 2 su tutta l'istanza): oltre,
@@ -477,7 +483,7 @@ return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'le
   `zr-auth.scarico` (60 secondi) e ogni lettura non aspetta più di `zr-auth.letture` (10 secondi): oltre, o se la connessione cade a
   metà, `BackofficeNonRisponde`. `comeRisposta()` non rilancia un errore dopo il primo byte (accoderebbe la pagina d'errore al file): lo
   scrive nel log e il file finisce lì, troncato.
-- Il tipo è uno di `Scaricamento::TIPI` (oggi `text/csv`); un `text/html`, un JSON o una risposta senza tipo non sono un file.
+- Il tipo è uno di `Scaricamento::TIPI` (oggi `text/csv` e `application/zip`); un `text/html`, un JSON o una risposta senza tipo non sono un file.
 - Il nome del file è ripulito (niente cartelle, caratteri di controllo, a capo; sempre `.csv`), e `comeRisposta()` aggiunge
   `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.
 - Il finto (`BackofficeFinto`) risponde ai due metodi con il CSV dei suoi contatti e delle sue aziende, a proprietario e amministratore.
