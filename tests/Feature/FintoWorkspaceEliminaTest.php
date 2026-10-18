@@ -167,7 +167,7 @@ it('io.workspace.crea accetta il colore (#2012, C.1): uno della palette, senza o
         ->and($senza->json('data.colore'))->toBe('neutral')
         ->and($nullo->json('data.colore'))->toBe('neutral')
         ->and(collect(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->pluck('colore', 'nome')->all())
-        ->toBe(['Studio sky' => 'sky', 'Senza colore' => 'neutral', 'Colore null' => 'neutral']);
+        ->toEqual(['Studio sky' => 'sky', 'Senza colore' => 'neutral', 'Colore null' => 'neutral']);
 
     foreach (['rosso', '#ff0000', 'PINE'] as $fuori) {
         $rifiuto = alFinto('POST', '/v1/io/workspace', ['nome' => 'Fuori', 'colore' => $fuori], $accesso);
