@@ -156,6 +156,15 @@ Api::persona()->post('/v1/io/esportazioni');
 Api::persona()->get("/v1/io/esportazioni/{$id}");
 Api::persona()->get("/v1/io/esportazioni/{$id}/archivio");
 
+// L'esportazione dei dati di un workspace (workspace.esportazioni.crea, .mostra, .scaricamento.crea, #2015): per il proprietario e l'amministratore del
+// workspace del gettone, con la conferma recente (403 `conferma_richiesta`, anche per scaricare: il file non si consuma). Una sola in preparazione
+// per workspace (409 `limite_raggiunto`, `limite` 1) e al più 3 in 24 ore (429, le fallite non contano). Lo ZIP si scarica una volta sola entro 7
+// giorni con un POST (il secondo è 404, come un id mai esistito o di un altro workspace). Nel finto lo stato resta `in_preparazione` finché il test non
+// chiama `$finto->preparaLeEsportazioniDelWorkspace($idDelWorkspace)` (o `fallisciLeEsportazioniDelWorkspace`), e lo ZIP è vuoto.
+Api::workspace()->post('/v1/workspace/esportazioni');
+Api::workspace()->get("/v1/workspace/esportazioni/{$id}");
+Api::workspace()->post("/v1/workspace/esportazioni/{$id}/scaricamento");
+
 // «Conferma che sei tu» (accessi.conferma.crea): la password di nuovo, e per dieci minuti l'accesso è confermato. I metodi che la
 // chiederanno (cambio email, esportazione, eliminazione dell'account) rispondono 403 conferma_richiesta senza di lei.
 $confermato = Api::persona()->post('/v1/accessi/conferma', ['password' => $password])['data']['confermato_fino'];
