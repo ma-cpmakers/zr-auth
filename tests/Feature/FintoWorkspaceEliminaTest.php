@@ -153,3 +153,29 @@ it('un invito a un workspace in eliminazione è 409 anche per una persona nuova,
         ->and($gettone->status())->toBe(201)
         ->and($gettone->json('data.ruolo'))->toBe('membro');
 });
+
+it('io.workspace.crea accetta il colore (#2012, C.1): uno della palette, senza o null è neutral, fuori palette 422 su #/colore e non nasce niente', function () {
+    $finto = Zeiras\Auth\Testing\BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+
+    $sky = alFinto('POST', '/v1/io/workspace', ['nome' => 'Studio sky', 'colore' => 'sky'], $accesso);
+    $senza = alFinto('POST', '/v1/io/workspace', ['nome' => 'Senza colore'], $accesso);
+    $nullo = alFinto('POST', '/v1/io/workspace', ['nome' => 'Colore null', 'colore' => null], $accesso);
+
+    expect($sky->status())->toBe(201)->and($sky->json('data.colore'))->toBe('sky')
+        ->and($senza->json('data.colore'))->toBe('neutral')
+        ->and($nullo->json('data.colore'))->toBe('neutral')
+        ->and(collect(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->pluck('colore', 'nome')->all())
+        ->toBe(['Studio sky' => 'sky', 'Senza colore' => 'neutral', 'Colore null' => 'neutral']);
+
+    foreach (['rosso', '#ff0000', 'PINE'] as $fuori) {
+        $rifiuto = alFinto('POST', '/v1/io/workspace', ['nome' => 'Fuori', 'colore' => $fuori], $accesso);
+
+        expect($rifiuto->status())->toBe(422)
+            ->and($rifiuto->json('errors.0.pointer'))->toBe('#/colore')
+            ->and($rifiuto->json('errors.0.regola'))->toBe('valore_non_ammesso');
+    }
+
+    expect(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->toHaveCount(3);
+});
