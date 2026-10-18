@@ -365,3 +365,41 @@ it('il README dice come passa ciascun modulo alla comune e che «Esci» è esent
         ->toContain('zr-crm')
         ->toContain('Esci');
 });
+
+// #2015 (zr-home #2275): il modulo HTML nativo, senza intestazioni, porta l'impronta nel campo `_zr_persona`.
+it('un modulo nativo: senza intestazione l\'impronta nel campo `_zr_persona` vale e la rotta gira', function () {
+    apriSessione();
+
+    $this->call('POST', '/persona/scrive', [Persona::CAMPO => Persona::impronta()])->assertOk();
+
+    expect(scritture())->toBe(1);
+});
+
+it('un modulo nativo: il campo con l\'impronta di un\'altra persona, vuoto, assente o non stringa è 409, e la rotta non gira', function (mixed $campo) {
+    apriSessione();
+    $diAnna = Persona::impronta();
+    entraAltraPersona();
+    $corpo = $campo === 'di-anna' ? [Persona::CAMPO => $diAnna] : ($campo === 'assente' ? [] : [Persona::CAMPO => $campo]);
+
+    $this->call('POST', '/persona/scrive', $corpo)->assertStatus(409)->assertExactJson(['errore' => 'persona_diversa']);
+
+    expect(scritture())->toBe(0);
+})->with(['di-anna', 'assente', '', [['x']], [true]]);
+
+it('con l\'intestazione presente vale lei e il campo si ignora: intestazione sbagliata o vuota con il campo giusto è 409', function (?string $intestazione) {
+    apriSessione();
+    $giusta = Persona::impronta();
+
+    $this->call('POST', '/persona/scrive', [Persona::CAMPO => $giusta], [], [], ['HTTP_X_ZR_PERSONA' => $intestazione ?? ''])->assertStatus(409);
+
+    expect(scritture())->toBe(0);
+})->with([str_repeat('0', 32), '']);
+
+it('l\'impronta nella query non vale: mai un dato nell\'indirizzo', function () {
+    apriSessione();
+
+    $this->call('POST', '/persona/scrive?'.Persona::CAMPO.'='.Persona::impronta())->assertStatus(409);
+
+    expect(scritture())->toBe(0);
+});
+

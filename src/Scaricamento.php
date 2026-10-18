@@ -41,8 +41,11 @@ final class Scaricamento
         private readonly int $secondi,
     ) {}
 
-    /** Lo scaricamento di una risposta 200, o BackofficeNonRisponde se il suo tipo non è un file ammesso. */
-    public static function da(Response $risposta): self
+    /**
+     * Lo scaricamento di una risposta 200, o BackofficeNonRisponde se il suo tipo non è un file ammesso. `$predefinito` è il nome che resta se
+     * il backoffice non ne dà uno che vale (ripulito come ogni nome): senza, quello del tipo (`NOMI_PREDEFINITI`).
+     */
+    public static function da(Response $risposta, ?string $predefinito = null): self
     {
         $tipo = strtolower(trim(explode(';', (string) $risposta->header('Content-Type'))[0]));
 
@@ -50,30 +53,42 @@ final class Scaricamento
             throw new BackofficeNonRisponde('Il backoffice ha risposto con un tipo che non è un file ammesso ('.implode(', ', self::TIPI).').');
         }
 
-        return new self($tipo, self::nomeDi((string) $risposta->header('Content-Disposition'), $tipo), $risposta->toPsrResponse()->getBody(), max(1, (int) config('zr-auth.scarico')));
+        return new self($tipo, self::nomeDi((string) $risposta->header('Content-Disposition'), $tipo, $predefinito), $risposta->toPsrResponse()->getBody(), max(1, (int) config('zr-auth.scarico')));
     }
 
     /**
      * Il nome del file da `Content-Disposition`, ripulito: senza cartelle, solo lettere, cifre, punto, trattino e trattino basso, mai
-     * più di 100 caratteri, sempre con l'estensione del tipo (`.csv`, `.zip`). Senza un nome che valga, quello predefinito del tipo.
+     * più di 100 caratteri, sempre con l'estensione del tipo (`.csv`, `.zip`). Senza un nome che valga, `$predefinito` (ripulito allo
+     * stesso modo) o quello predefinito del tipo.
      */
-    public static function nomeDi(string $intestazione, string $tipo = 'text/csv'): string
+    public static function nomeDi(string $intestazione, string $tipo = 'text/csv', ?string $predefinito = null): string
     {
-        $predefinito = self::NOMI_PREDEFINITI[$tipo] ?? self::NOME_PREDEFINITO;
-        $estensione = self::ESTENSIONI[$tipo] ?? 'csv';
+        $nome = '';
 
-        if (preg_match('/filename\*?=\s*(?:"([^"]*)"|([^;]*))/i', $intestazione, $parti) !== 1) {
-            return $predefinito;
+        if (preg_match('/filename\*?=\s*(?:"([^"]*)"|([^;]*))/i', $intestazione, $parti) === 1) {
+            $nome = self::ripulito(($parti[1] ?? '') !== '' ? $parti[1] : trim($parti[2] ?? ''), $tipo);
         }
 
-        $grezzo = ($parti[1] ?? '') !== '' ? $parti[1] : trim($parti[2] ?? '');
+        if ($nome !== '') {
+            return $nome;
+        }
+
+        $proprio = $predefinito === null ? '' : self::ripulito($predefinito, $tipo);
+
+        return $proprio !== '' ? $proprio : (self::NOMI_PREDEFINITI[$tipo] ?? self::NOME_PREDEFINITO);
+    }
+
+    /** Un nome grezzo ripulito, con l'estensione del tipo; vuoto se non resta niente. */
+    private static function ripulito(string $grezzo, string $tipo): string
+    {
+        $estensione = self::ESTENSIONI[$tipo] ?? 'csv';
         $nome = basename(str_replace('\\', '/', $grezzo));
         $nome = preg_replace('/[\x00-\x1F\x7F]/u', '', $nome) ?? '';
         $nome = trim((string) preg_replace('/[^A-Za-z0-9._-]+/', '-', $nome), '.-');
         $nome = substr($nome, 0, self::NOME_MASSIMO);
 
         if ($nome === '') {
-            return $predefinito;
+            return '';
         }
 
         return preg_match('/\.'.$estensione.'$/i', $nome) === 1 ? $nome : $nome.'.'.$estensione;

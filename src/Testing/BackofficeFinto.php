@@ -389,7 +389,7 @@ final class BackofficeFinto
     /** @var array<string, array{persona: string, stato: string, creata: CarbonImmutable, scade: ?CarbonImmutable}> per id: le richieste «Esporta i miei dati» */
     private array $esportazioni = [];
 
-    /** @var array<string, array{workspace: string, persona: string, stato: string, creata: CarbonImmutable, scade: ?CarbonImmutable}> per id: le esportazioni dei dati di un workspace (#2015) */
+    /** @var array<string, array{workspace: string, persona: string, stato: string, creata: CarbonImmutable, scade: ?CarbonImmutable, byte: ?int, errore: ?string, fallita: ?CarbonImmutable}> per id: le esportazioni dei dati di un workspace (#2015) */
     private array $esportazioniWorkspace = [];
 
     /** @var array<string, array{utente: string, creato_il: CarbonImmutable, chiuso: bool, via?: string}> per id */
@@ -3694,17 +3694,28 @@ final class BackofficeFinto
         foreach ($this->esportazioniWorkspace as $id => $voce) {
             if ($voce['workspace'] === $workspace && $voce['stato'] === 'in_preparazione') {
                 $this->esportazioniWorkspace[$id]['stato'] = 'pronta';
+                // Uno ZIP vuoto: 22 byte, quelli che dà lo scaricamento del finto.
+                $this->esportazioniWorkspace[$id]['byte'] = 22;
                 $this->esportazioniWorkspace[$id]['scade'] = now()->toImmutable()->startOfMillisecond()->addDays(7);
             }
         }
     }
 
-    /** Fa fallire le esportazioni del workspace ancora in preparazione (lo ZIP non si è potuto preparare). */
-    public function fallisciLeEsportazioniDelWorkspace(string $workspace): void
+    /**
+     * Fa fallire le esportazioni del workspace ancora in preparazione (lo ZIP non si è potuto preparare). `$errore` è il perché che dà
+     * `mostra`: `non_riuscita` (un guasto) o `troppo_grande` (oltre il tetto di byte o di tempo: `limite` dice 50 MiB e 300 secondi).
+     */
+    public function fallisciLeEsportazioniDelWorkspace(string $workspace, string $errore = 'non_riuscita'): void
     {
+        if (! in_array($errore, ['non_riuscita', 'troppo_grande'], true)) {
+            throw new \InvalidArgumentException("L'errore di una esportazione fallita è `non_riuscita` o `troppo_grande`, non «{$errore}».");
+        }
+
         foreach ($this->esportazioniWorkspace as $id => $voce) {
             if ($voce['workspace'] === $workspace && $voce['stato'] === 'in_preparazione') {
                 $this->esportazioniWorkspace[$id]['stato'] = 'fallita';
+                $this->esportazioniWorkspace[$id]['errore'] = $errore;
+                $this->esportazioniWorkspace[$id]['fallita'] = now()->toImmutable()->startOfMillisecond();
             }
         }
     }
@@ -3712,7 +3723,8 @@ final class BackofficeFinto
     /**
      * workspace.esportazioni.crea (WorkspaceEsportazioniController::crea, #2015): proprietario e amministratore (403 `permesso_negato`), la
      * conferma recente dell'accesso (403 `conferma_richiesta`), poi, se il workspace ne ha già una in preparazione, 409 `limite_raggiunto`
-     * con `limite` 1; oltre 3 richieste in 24 ore (le fallite non contano) 429 con `Retry-After`; altrimenti ne nasce una `in_preparazione`.
+     * con `limite` 1; 10 richieste fallite in 24 ore, o oltre 3 richieste in 24 ore (le fallite non contano), 429 con `Retry-After`; altrimenti
+     * ne nasce una `in_preparazione`.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -3735,6 +3747,18 @@ final class BackofficeFinto
         }
 
         $adesso = now()->toImmutable()->startOfMillisecond();
+        $fallite = array_values(array_filter(
+            array_column(array_filter($sue, fn (array $voce) => $voce['stato'] === 'fallita'), 'fallita'),
+            fn (?CarbonImmutable $quando) => $quando !== null && $quando->gt($adesso->subDay()),
+        ));
+        sort($fallite);
+
+        if (count($fallite) >= 10) {
+            $libera = $fallite[count($fallite) - 10]->addDay();
+
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, (int) ceil($adesso->diffInSeconds($libera, true)))]);
+        }
+
         $ultime = array_values(array_filter(
             array_column(array_filter($sue, fn (array $voce) => $voce['stato'] !== 'fallita'), 'creata'),
             fn (CarbonImmutable $creata) => $creata->gt($adesso->subDay()),
@@ -3748,7 +3772,7 @@ final class BackofficeFinto
         }
 
         $id = self::id();
-        $this->esportazioniWorkspace[$id] = ['workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'stato' => 'in_preparazione', 'creata' => $adesso, 'scade' => null];
+        $this->esportazioniWorkspace[$id] = ['workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'stato' => 'in_preparazione', 'creata' => $adesso, 'scade' => null, 'byte' => null, 'errore' => null, 'fallita' => null];
 
         return [202, ['data' => $this->formaEsportazioneWorkspace($id)]];
     }
@@ -3801,13 +3825,23 @@ final class BackofficeFinto
         ]];
     }
 
-    /** @return array{id: string, stato: string, creata_il: string, scade_il: ?string} */
+    /** @return array{id: string, stato: string, creata_il: string, scade_il: ?string, dimensione: ?int, errore: ?string, limite: ?array{byte: int, secondi: int}} */
     private function formaEsportazioneWorkspace(string $id): array
     {
         $voce = $this->esportazioniWorkspace[$id];
         $stato = $voce['stato'] === 'pronta' && $voce['scade'] !== null && $voce['scade']->lte(now()) ? 'scaduta' : $voce['stato'];
+        $fallita = $stato === 'fallita';
 
-        return ['id' => $id, 'stato' => $stato, 'creata_il' => self::iso($voce['creata']), 'scade_il' => $voce['scade'] === null ? null : self::iso($voce['scade'])];
+        return [
+            'id' => $id,
+            'stato' => $stato,
+            'creata_il' => self::iso($voce['creata']),
+            'scade_il' => $voce['scade'] === null ? null : self::iso($voce['scade']),
+            'dimensione' => $voce['byte'],
+            'errore' => $fallita ? ($voce['errore'] ?? 'non_riuscita') : null,
+            // I tetti del backoffice (zeiras.esportazioni.max_byte e i secondi del lavoro): 50 MiB e 300 secondi.
+            'limite' => $fallita && $voce['errore'] === 'troppo_grande' ? ['byte' => 52_428_800, 'secondi' => 300] : null,
+        ];
     }
 
     /**

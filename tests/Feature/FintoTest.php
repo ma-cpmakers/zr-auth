@@ -593,7 +593,7 @@ it('workspace.esportazioni.*: ruoli, conferma, una sola in preparazione (409), a
 
     expect($prima->status())->toBe(202)
         ->and($prima->header('Link'))->toBe(linkDi('workspace.esportazioni.crea'))
-        ->and(array_keys($prima->json('data')))->toBe(['id', 'stato', 'creata_il', 'scade_il'])
+        ->and(array_keys($prima->json('data')))->toBe(['id', 'stato', 'creata_il', 'scade_il', 'dimensione', 'errore', 'limite'])
         ->and($prima->json('data.stato'))->toBe('in_preparazione')
         ->and($seconda->status())->toBe(409)->and($seconda->json('codice'))->toBe('limite_raggiunto')->and($seconda->json('limite'))->toBe(1)
         ->and(alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneBruno)->json('data.stato'))->toBe('in_preparazione')
@@ -611,7 +611,8 @@ it('workspace.esportazioni.*: ruoli, conferma, una sola in preparazione (409), a
     $pronta = alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneBruno);
 
     expect($pronta->json('data.stato'))->toBe('pronta')
-        ->and($pronta->json('data.scade_il'))->toMatch('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/');
+        ->and($pronta->json('data.scade_il'))->toMatch('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/')
+        ->and($pronta->json('data.dimensione'))->toBe(22)->and($pronta->json('data.errore'))->toBeNull()->and($pronta->json('data.limite'))->toBeNull();
 
     $zip = alFinto('POST', "/v1/workspace/esportazioni/{$id}/scaricamento", gettone: $gettoneBruno);
     $ancora = alFinto('POST', "/v1/workspace/esportazioni/{$id}/scaricamento", gettone: $gettoneBruno);
@@ -809,4 +810,46 @@ it('un gettone non vale più all\'istante del suo scade_il, al millesimo (T2.1)'
 
     $this->travelTo($scade);
     expect(alFinto('DELETE', '/v1/accessi/01k6r2v8x4c7n3m9p5q1s6t2w8', gettone: $gettone['gettone'])->status())->toBe(401);
+});
+
+it('workspace.esportazioni.*: una fallita dice perché (errore, e limite se troppo_grande), la dimensione è della pronta, e dieci fallite in 24 ore chiudono le richieste (#2015)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio Anna', $anna);
+    $this->freezeTime();
+    $solo = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $solo);
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $solo)->json('data.gettone');
+    $crea = fn () => alFinto('POST', '/v1/workspace/esportazioni', [], $gettone);
+    $mostra = fn (string $id) => alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettone)->json('data');
+
+    $pronta = $crea()->json('data.id');
+    $finto->preparaLeEsportazioniDelWorkspace($studio['id']);
+    $grande = $crea()->json('data.id');
+    $finto->fallisciLeEsportazioniDelWorkspace($studio['id'], 'troppo_grande');
+    $guasto = $crea()->json('data.id');
+    $finto->fallisciLeEsportazioniDelWorkspace($studio['id']);
+
+    expect($mostra($pronta))->toMatchArray(['stato' => 'pronta', 'dimensione' => 22, 'errore' => null, 'limite' => null])
+        ->and($mostra($grande))->toMatchArray(['stato' => 'fallita', 'dimensione' => null, 'errore' => 'troppo_grande', 'limite' => ['byte' => 52_428_800, 'secondi' => 300]])
+        ->and($mostra($guasto))->toMatchArray(['stato' => 'fallita', 'dimensione' => null, 'errore' => 'non_riuscita', 'limite' => null]);
+    expect(fn () => $finto->fallisciLeEsportazioniDelWorkspace($studio['id'], 'strano'))->toThrow(InvalidArgumentException::class);
+
+    // Due fallite finora: otto in più, e la richiesta dopo la decima è 429 col posto che si libera fra 24 ore.
+    for ($i = 0; $i < 8; $i++) {
+        expect($crea()->status())->toBe(202);
+        $finto->fallisciLeEsportazioniDelWorkspace($studio['id']);
+    }
+
+    $decima = $crea();
+
+    expect($decima->status())->toBe(429)->and($decima->json('codice'))->toBe('troppe_richieste')->and($decima->header('Retry-After'))->toBe('86400');
+    // Passate le 24 ore le fallite non contano più. L'accesso di prima è scaduto: se ne apre uno nuovo, con la sua conferma.
+    $this->travel(24)->hours();
+    $this->travel(1)->seconds();
+    $nuovo = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $nuovo);
+    $gettoneNuovo = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $nuovo)->json('data.gettone');
+
+    expect(alFinto('POST', '/v1/workspace/esportazioni', [], $gettoneNuovo)->status())->toBe(202);
 });

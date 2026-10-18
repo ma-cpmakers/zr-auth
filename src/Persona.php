@@ -5,10 +5,14 @@ namespace Zeiras\Auth;
 /**
  * Di chi è la sessione, nella forma che una pagina può portare nel browser (#2136). Una scheda rimasta ferma su A, dopo
  * che B è entrato nello stesso browser, scriverebbe col gettone di B: la pagina dice di chi è con questa impronta
- * (intestazione `X-Zr-Persona`), e SoloDallaPersona la confronta con quella della sessione.
+ * (intestazione `X-Zr-Persona`), e SoloDallaPersona la confronta con quella della sessione. Un modulo HTML nativo non porta intestazioni: la
+ * stessa impronta può stare nel campo `_zr_persona` del corpo (`CAMPO`), che vale solo se l'intestazione manca.
  */
 final class Persona
 {
+    /** Il campo del corpo che porta l'impronta quando la richiesta è un modulo nativo (senza intestazioni): solo una stringa, mai nell'indirizzo. */
+    public const CAMPO = '_zr_persona';
+
     /** L'intestazione con cui la pagina dice di chi è. */
     public const INTESTAZIONE = 'X-Zr-Persona';
 

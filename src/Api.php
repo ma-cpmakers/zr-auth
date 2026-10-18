@@ -253,13 +253,32 @@ final class Api
      */
     public function scarica(string $percorso, array $query = []): Scaricamento
     {
-        $risposta = $this->controllata(
-            fn (PendingRequest $richiesta) => $richiesta->withOptions(['stream' => true, 'read_timeout' => max(1, (int) config('zr-auth.letture'))])->withQueryParameters($query)->get($percorso),
-            $percorso,
-            false,
-            null,
-            true,
-        );
+        return $this->scaricamento($percorso, fn (PendingRequest $richiesta) => $richiesta->withOptions($this->aFlusso())->withQueryParameters($query)->get($percorso));
+    }
+
+    /**
+     * Lo stesso scaricamento a flusso, ma con una POST senza corpo: per un file che il backoffice dà una volta sola (`workspace.esportazioni.scaricamento.crea`,
+     * #2015), dove il metodo è una POST perché ha un effetto (consuma lo ZIP). Stesso gettone, stessi errori, stesso `Scaricamento` di `scarica`; il
+     * percorso è dentro /v1 senza query, e un 403 `conferma_richiesta` arriva come `ErroreApi` prima del primo byte. `$nome` è il nome del file
+     * che resta se il backoffice non ne manda uno che vale (ripulito come ogni nome), per esempio `zeiras-workspace-dati.zip`: senza, quello del tipo.
+     *
+     *     return Api::workspace()->scaricaConPost("/v1/workspace/esportazioni/{$id}/scaricamento")->comeRisposta();
+     */
+    public function scaricaConPost(string $percorso, ?string $nome = null): Scaricamento
+    {
+        return $this->scaricamento($percorso, fn (PendingRequest $richiesta) => $richiesta->withOptions($this->aFlusso())->post($percorso), $nome);
+    }
+
+    /** @return array{stream: true, read_timeout: int<1, max>} */
+    private function aFlusso(): array
+    {
+        return ['stream' => true, 'read_timeout' => max(1, (int) config('zr-auth.letture'))];
+    }
+
+    /** @param  \Closure(PendingRequest): Response  $invia */
+    private function scaricamento(string $percorso, \Closure $invia, ?string $nome = null): Scaricamento
+    {
+        $risposta = $this->controllata($invia, $percorso, false, null, true);
 
         if (! $risposta instanceof Response) {
             throw new LogicException('Una chiamata a flusso torna una risposta.');
@@ -269,7 +288,7 @@ final class Api
             throw new BackofficeNonRisponde("Il backoffice ha risposto {$risposta->status()} a uno scaricamento, non un 200.");
         }
 
-        return Scaricamento::da($risposta);
+        return Scaricamento::da($risposta, $nome);
     }
 
     /**
