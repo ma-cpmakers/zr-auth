@@ -190,6 +190,128 @@ it('tutti() si ferma oltre 100 pagine', function () {
     Http::assertSentCount(100);
 });
 
+// #2021 (zr-board, Decisione 12527 di zr-pm): elenco() è tutti() col segno del taglio al posto dell'eccezione per il tetto.
+
+it('elenco() scorre successivo fino a null, mette limite 100 e dice che non è tagliato (#2021)', function () {
+    Http::fake(function (Request $r) {
+        return isset($r->data()['cursore'])
+            ? Http::response(['data' => [['id' => 'c']], 'successivo' => null])
+            : Http::response(['data' => [['id' => 'a'], ['id' => 'b']], 'successivo' => 'pagina-2']);
+    });
+    apriSessione();
+
+    $elenco = Api::workspace()->elenco('/v1/workspace/membri');
+
+    expect($elenco->elementi)->toBe([['id' => 'a'], ['id' => 'b'], ['id' => 'c']])
+        ->and($elenco->tagliato)->toBeFalse()
+        ->and($elenco->successivo)->toBeNull();
+    Http::assertSent(fn (Request $r) => $r->url() === API.'/v1/workspace/membri?limite=100');
+    Http::assertSent(fn (Request $r) => $r->url() === API.'/v1/workspace/membri?limite=100&cursore=pagina-2');
+});
+
+it('elenco() con la lista che finisce proprio all\'ultima pagina del tetto non è tagliato (#2021)', function () {
+    Http::fake(function (Request $r) {
+        return isset($r->data()['cursore'])
+            ? Http::response(['data' => [['id' => 'b']], 'successivo' => null])
+            : Http::response(['data' => [['id' => 'a']], 'successivo' => 'pagina-2']);
+    });
+    apriSessione();
+
+    $elenco = Api::workspace()->elenco('/v1/workspace/membri', [], 2);
+
+    expect($elenco->elementi)->toBe([['id' => 'a'], ['id' => 'b']])
+        ->and($elenco->tagliato)->toBeFalse()
+        ->and($elenco->successivo)->toBeNull();
+    Http::assertSentCount(2);
+});
+
+it('elenco() lancia se il backoffice ripete il cursore da cui si riparte (#2021)', function () {
+    Http::fake(['*' => Http::response(['data' => [['id' => 'a']], 'successivo' => 'pagina-7'])]);
+    apriSessione();
+
+    expect(fn () => Api::workspace()->elenco('/v1/workspace/membri', ['cursore' => 'pagina-7']))->toThrow(BackofficeNonRisponde::class);
+    Http::assertSentCount(1);
+});
+
+it('elenco() rispetta il limite della query (#2021)', function () {
+    Http::fake(['*' => Http::response(['data' => [], 'successivo' => null])]);
+    apriSessione();
+
+    Api::workspace()->elenco('/v1/workspace/membri', ['limite' => 25]);
+
+    Http::assertSent(fn (Request $r) => $r->url() === API.'/v1/workspace/membri?limite=25');
+});
+
+it('elenco() oltre il tetto di pagine torna i primi elementi col segno e il cursore, senza lanciare (#2021)', function () {
+    $n = 0;
+    Http::fake(function () use (&$n) {
+        $n++;
+
+        return Http::response(['data' => [['id' => "e{$n}"]], 'successivo' => "pagina-{$n}"]);
+    });
+    apriSessione();
+
+    $elenco = Api::workspace()->elenco('/v1/workspace/membri', [], 3);
+
+    expect($elenco->elementi)->toBe([['id' => 'e1'], ['id' => 'e2'], ['id' => 'e3']])
+        ->and($elenco->tagliato)->toBeTrue()
+        ->and($elenco->successivo)->toBe('pagina-3');
+    Http::assertSentCount(3);
+});
+
+it('elenco() ha per tetto predefinito le 100 pagine di tutti() (#2021)', function () {
+    $n = 0;
+    Http::fake(function () use (&$n) {
+        $n++;
+
+        return Http::response(['data' => [['id' => $n]], 'successivo' => "p{$n}"]);
+    });
+    apriSessione();
+
+    $elenco = Api::workspace()->elenco('/v1/workspace/membri');
+
+    expect($elenco->tagliato)->toBeTrue()->and($elenco->elementi)->toHaveCount(100);
+    Http::assertSentCount(100);
+});
+
+it('elenco() lancia su un errore a metà, mai una lista a metà senza il segno (#2021)', function () {
+    Http::fake(function (Request $r) {
+        return isset($r->data()['cursore'])
+            ? Http::response('<html>502</html>', 502, ['Content-Type' => 'text/html'])
+            : Http::response(['data' => [['id' => 'a']], 'successivo' => 'pagina-2']);
+    });
+    apriSessione();
+
+    expect(fn () => Api::workspace()->elenco('/v1/workspace/membri'))->toThrow(BackofficeNonRisponde::class);
+});
+
+it('elenco() lancia su un successivo che non è testo e su una risposta che non è una lista di /v1 (#2021)', function (array $corpo) {
+    Http::fake(['*' => Http::response($corpo)]);
+    apriSessione();
+
+    expect(fn () => Api::workspace()->elenco('/v1/workspace/membri'))->toThrow(BackofficeNonRisponde::class);
+})->with([
+    'successivo numero' => [['data' => [['id' => 'a']], 'successivo' => 7]],
+    'successivo vuoto' => [['data' => [['id' => 'a']], 'successivo' => '']],
+    'senza successivo' => [['data' => [['id' => 'a']]]],
+    'senza data' => [['successivo' => null]],
+    'data non lista' => [['data' => ['x' => 1], 'successivo' => null]],
+]);
+
+it('elenco() lancia su un cursore già dato alla seconda pagina, senza rileggere le stesse pagine fino al tetto (#2021)', function () {
+    Http::fake(['*' => Http::response(['data' => [], 'successivo' => 'ancora'])]);
+    apriSessione();
+
+    expect(fn () => Api::workspace()->elenco('/v1/workspace/membri'))->toThrow(BackofficeNonRisponde::class);
+    Http::assertSentCount(2);
+});
+
+it('elenco() vuole un tetto di almeno una pagina (#2021)', function () {
+    apriSessione();
+
+    expect(fn () => Api::workspace()->elenco('/v1/workspace/membri', [], 0))->toThrow(InvalidArgumentException::class);
+});
+
 // #1364 (T5): la GET condizionale. Il 304 non è un errore; l'ETag di un 200 si legge e si rimanda com'è.
 
 it('condizionale() manda If-None-Match e torna 200 con l\'ETag e il corpo', function () {
