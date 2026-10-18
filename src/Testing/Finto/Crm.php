@@ -1178,21 +1178,100 @@ trait Crm
 
     /**
      * La lettura di una riga (`mostra`): un'azienda, un contatto, una trattativa o un'attività anche archiviati, una pipeline con le fasi.
+     * L'header `ETag` ne dice la versione; con un `If-None-Match` che la contiene, 304 senza corpo.
      *
-     * @return array{int, array<string, mixed>}
+     * @return array{int, array<string, mixed>|null, array<string, string>}
      */
     private function mostraCrm(Request $richiesta, string $tipo, string $id): array
     {
         $chi = $this->conCrm($richiesta);
-        $riga = $this->rigaCrm($tipo, $chi['workspace'], $id);
+        $voce = $this->voceMostrataCrm($tipo, $this->rigaCrm($tipo, $chi['workspace'], $id));
+        $etag = self::etagCrm($voce);
 
-        return [200, ['data' => match ($tipo) {
+        // Una GET condizionale (RFC 9110 §13.1.2): un If-None-Match che contiene l'ETag (confronto debole) dà 304 senza corpo.
+        if (self::trovaEtagCrm($richiesta->toPsrRequest()->getHeaderLine('If-None-Match'), $etag, true)) {
+            return [304, null, ['ETag' => $etag]];
+        }
+
+        return [200, ['data' => $voce], ['ETag' => $etag]];
+    }
+
+    /**
+     * La scheda intera di un oggetto del CRM, com'è in `mostra`.
+     *
+     * @return array<string, mixed>
+     */
+    private function voceMostrataCrm(string $tipo, array $riga): array
+    {
+        return match ($tipo) {
             'organizzazioni' => $this->voceOrganizzazione($riga, true),
             'persone' => $this->vocePersona($riga, true),
             'trattative' => $this->voceTrattativa($riga, true),
             'pipeline' => $this->vocePipeline($riga),
             default => $this->voceAttivita($riga),
-        }]];
+        };
+    }
+
+    /**
+     * L'ETag di una risorsa del CRM: forte, fra virgolette, opaco (un'impronta della scheda). Cambia a ogni modifica di ciò che la
+     * risposta dice. Non è lo stesso valore del backoffice, che lo calcola dall'id e dall'istante di modifica: del tag conta la
+     * forma, e che sia lo stesso finché la risorsa non cambia.
+     *
+     * @param  array<string, mixed>  $voce
+     */
+    private static function etagCrm(array $voce): string
+    {
+        return '"'.hash('xxh128', json_encode($voce, JSON_THROW_ON_ERROR)).'"';
+    }
+
+    /**
+     * Il valore di un header `If-None-Match` o `If-Match` contiene l'ETag? `*` vale per ogni risorsa che c'è. Il confronto di
+     * If-None-Match è debole (`W/` non conta), quello di If-Match forte (un tag debole non vale mai), RFC 9110 §8.8.3.2.
+     */
+    private static function trovaEtagCrm(string $valore, string $etag, bool $debole): bool
+    {
+        $valore = trim($valore);
+
+        if ($valore === '*') {
+            return true;
+        }
+
+        // Come Symfony: gli elementi sono divisi sulle virgole e confrontati interi; `*` come elemento vale solo per If-None-Match.
+        foreach (explode(',', $valore) as $tag) {
+            $tag = trim($tag);
+
+            if ($tag === $etag || ($debole && ($tag === '*' || (str_starts_with($tag, 'W/') && substr($tag, 2) === $etag)))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * L'`If-Match` di una scrittura (Precondizione::daRichiesta): letto prima del corpo, così una versione vecchia è 412 anche con un
+     * corpo non valido. Un valore che non è né `*` né una lista di entity-tag è 422 sull'header; senza header, niente.
+     *
+     * @param  array<string, mixed>  $voce  la risorsa com'è adesso
+     */
+    private function pretendiLaVersioneCrm(Request $richiesta, array $voce): void
+    {
+        $psr = $richiesta->toPsrRequest();
+
+        if (! $psr->hasHeader('If-Match')) {
+            return;
+        }
+
+        $valore = trim($psr->getHeaderLine('If-Match'));
+        $tag = '(?:W/)?"[\x21\x23-\x7E\x80-\xFF]*"';
+
+        if ($valore !== '*' && preg_match('~^'.$tag.'(?:\s*,\s*'.$tag.')*$~D', $valore) !== 1) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.if_match'), 'regola' => Regola::FORMATO, 'header' => 'If-Match']]);
+        }
+
+        if (! self::trovaEtagCrm($valore, self::etagCrm($voce), false)) {
+            throw new Problema('precondizione_fallita');
+        }
     }
 
     // ———————————————————————————————————————— Aziende
@@ -3416,11 +3495,12 @@ trait Crm
         return $scadenze === [] ? null : min($scadenze);
     }
 
-    /** @return array{int, array<string, mixed>} */
+    /** @return array{int, array<string, mixed>, array<string, string>} */
     private function modificaAttivitaCrm(Request $richiesta, array $corpo, string $id): array
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('attivita', $chi['workspace'], $id);
+        $this->pretendiLaVersioneCrm($richiesta, $this->voceAttivita($riga));
         $pulito = Testi::pulisci($corpo);
         $soloSeFatta = $this->soloSeFattaCrm(fn () => ($pulito['fatta'] ?? null) === false || (($pulito['fatta'] ?? null) !== true && ! $riga['fatta']));
         $campi = $this->modificaCrm($corpo, [
@@ -3462,8 +3542,9 @@ trait Crm
 
         $this->verificaAttivitaCrm($campi, $riga);
         $this->applicaAttivitaCrm($riga, $campi, $chi);
+        $voce = $this->voceAttivita($this->crm['attivita'][$riga['id']]);
 
-        return [200, ['data' => $this->voceAttivita($this->crm['attivita'][$riga['id']])]];
+        return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
     }
 
     /** AttivitaModifica::verifica: l'orario e almeno un collegamento, sullo stato che ne esce. */
