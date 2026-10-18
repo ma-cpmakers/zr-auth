@@ -182,8 +182,10 @@ final class Api
      * Una lista a cursore letta a pagine fino a un tetto (#2021): come `tutti()`, ma oltre `$pagine` pagine non lancia. Torna gli
      * elementi letti e il segno `tagliato`, così una pagina li mostra e dice che ce ne sono altri (mai «Zeiras non risponde» per una
      * lista lunga). `limite` è 100, il massimo di /v1, se la query non lo porta; quello della query vale. Un errore a metà, una
-     * risposta che non è una lista di /v1 (senza `data` lista o senza `successivo`), un `successivo` che non è testo e un cursore già
-     * dato (rileggerebbe le stesse pagine fino al tetto, con i doppioni) lanciano: mai una lista a metà senza il segno.
+     * risposta che non è una lista di /v1 (senza `data` lista o senza `successivo`), un `successivo` che non è testo (o è vuoto) e un
+     * cursore già dato (rileggerebbe le stesse pagine fino al tetto, con i doppioni) lanciano `BackofficeNonRisponde`; gli errori di
+     * /v1 escono come da `get()` (`ErroreApi`, `GettoneRifiutato`: il 429 di un freno a pagina 37 sale a chi chiama, com'è per
+     * `tutti()`). Mai una lista a metà senza il segno.
      *
      * @param  array<string, mixed>  $query
      * @param  positive-int  $pagine  il tetto di pagine; con `limite` 100 sono al più `$pagine` × 100 elementi
@@ -197,7 +199,8 @@ final class Api
         $query['limite'] ??= self::LIMITE;
         $elementi = [];
         $cursore = null;
-        $visti = [];
+        // Il cursore da cui chi chiama riparte è già dato: se il backoffice lo ripete, si scopre alla prima risposta.
+        $visti = isset($query['cursore']) && is_string($query['cursore']) ? [$query['cursore'] => true] : [];
 
         for ($pagina = 0; $pagina < $pagine; $pagina++) {
             $risposta = $this->get($percorso, $cursore === null ? $query : [...$query, 'cursore' => $cursore]);
@@ -214,7 +217,7 @@ final class Api
                 return new Elenco($elementi, false, null);
             }
 
-            if (! is_string($cursore)) {
+            if (! is_string($cursore) || $cursore === '') {
                 throw new BackofficeNonRisponde("Il successivo di GET {$percorso} non è un cursore.");
             }
 

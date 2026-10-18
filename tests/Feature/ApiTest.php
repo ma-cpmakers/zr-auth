@@ -209,6 +209,30 @@ it('elenco() scorre successivo fino a null, mette limite 100 e dice che non è t
     Http::assertSent(fn (Request $r) => $r->url() === API.'/v1/workspace/membri?limite=100&cursore=pagina-2');
 });
 
+it('elenco() con la lista che finisce proprio all\'ultima pagina del tetto non è tagliato (#2021)', function () {
+    Http::fake(function (Request $r) {
+        return isset($r->data()['cursore'])
+            ? Http::response(['data' => [['id' => 'b']], 'successivo' => null])
+            : Http::response(['data' => [['id' => 'a']], 'successivo' => 'pagina-2']);
+    });
+    apriSessione();
+
+    $elenco = Api::workspace()->elenco('/v1/workspace/membri', [], 2);
+
+    expect($elenco->elementi)->toBe([['id' => 'a'], ['id' => 'b']])
+        ->and($elenco->tagliato)->toBeFalse()
+        ->and($elenco->successivo)->toBeNull();
+    Http::assertSentCount(2);
+});
+
+it('elenco() lancia se il backoffice ripete il cursore da cui si riparte (#2021)', function () {
+    Http::fake(['*' => Http::response(['data' => [['id' => 'a']], 'successivo' => 'pagina-7'])]);
+    apriSessione();
+
+    expect(fn () => Api::workspace()->elenco('/v1/workspace/membri', ['cursore' => 'pagina-7']))->toThrow(BackofficeNonRisponde::class);
+    Http::assertSentCount(1);
+});
+
 it('elenco() rispetta il limite della query (#2021)', function () {
     Http::fake(['*' => Http::response(['data' => [], 'successivo' => null])]);
     apriSessione();
@@ -268,6 +292,7 @@ it('elenco() lancia su un successivo che non è testo e su una risposta che non 
     expect(fn () => Api::workspace()->elenco('/v1/workspace/membri'))->toThrow(BackofficeNonRisponde::class);
 })->with([
     'successivo numero' => [['data' => [['id' => 'a']], 'successivo' => 7]],
+    'successivo vuoto' => [['data' => [['id' => 'a']], 'successivo' => '']],
     'senza successivo' => [['data' => [['id' => 'a']]]],
     'senza data' => [['successivo' => null]],
     'data non lista' => [['data' => ['x' => 1], 'successivo' => null]],

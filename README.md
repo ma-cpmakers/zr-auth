@@ -375,7 +375,10 @@ risposta (`[]` per un 204). `tutti($percorso)` scorre le pagine di una lista a c
 `elenco($percorso, $query = [], $pagine = 100)`: legge a pagine da `limite` 100 (o quello della query) fino al tetto e torna un
 `Elenco` con `elementi`, `tagliato` (la lista continuava oltre il tetto: la pagina dice «Mostrati i primi N elementi» invece
 di «Zeiras non risponde») e `successivo` (il cursore da cui riprendere). Lancia ancora su un errore a metà, su una risposta
-che non è una lista di /v1, su un `successivo` che non è testo e su un cursore già dato.
+che non è una lista di /v1, su un `successivo` che non è testo o è vuoto e su un cursore già dato (anche quello da cui si
+riparte): sono `BackofficeNonRisponde`. Gli errori di /v1 escono come da `get()` (`ErroreApi`, `GettoneRifiutato`): il 429 di
+un freno a pagina 37 sale a chi chiama, com'è per `tutti()`. Il conto da mostrare è `count($elenco->elementi)`, non una costante:
+con `limite` 25 il taglio arriva a 2.500.
 
 - Ogni chiamata porta `Authorization: Bearer <gettone>`, `Accept: application/json` e `Accept-Language` = la lingua
   dell'app: senza gettone i testi degli errori arrivano in quella lingua. Timeout 5 secondi, connessione 2.
