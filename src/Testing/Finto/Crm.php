@@ -1197,7 +1197,7 @@ trait Crm
     }
 
     /**
-     * La scheda intera di un oggetto del CRM, com'è in `mostra`, `crea` e `modifica`.
+     * La scheda intera di un oggetto del CRM, com'è in `mostra`.
      *
      * @return array<string, mixed>
      */
@@ -1236,10 +1236,11 @@ trait Crm
             return true;
         }
 
-        preg_match_all('~(?:W/)?"[^"]*"~', $valore, $trovati);
+        // Come Symfony: gli elementi sono divisi sulle virgole e confrontati interi; `*` come elemento vale solo per If-None-Match.
+        foreach (explode(',', $valore) as $tag) {
+            $tag = trim($tag);
 
-        foreach ($trovati[0] as $tag) {
-            if ($tag === $etag || ($debole && str_starts_with($tag, 'W/') && substr($tag, 2) === $etag)) {
+            if ($tag === $etag || ($debole && ($tag === '*' || (str_starts_with($tag, 'W/') && substr($tag, 2) === $etag)))) {
                 return true;
             }
         }
@@ -3494,7 +3495,7 @@ trait Crm
         return $scadenze === [] ? null : min($scadenze);
     }
 
-    /** @return array{int, array<string, mixed>} */
+    /** @return array{int, array<string, mixed>, array<string, string>} */
     private function modificaAttivitaCrm(Request $richiesta, array $corpo, string $id): array
     {
         $chi = $this->conCrm($richiesta);

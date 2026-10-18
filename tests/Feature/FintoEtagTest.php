@@ -61,11 +61,15 @@ it('If-None-Match con l\'ETag dà 304 senza corpo e con l\'ETag; con un altro, 2
         $uguale = alFinto('GET', $percorso, null, $anna, null, ['If-None-Match' => $etag]);
         $debole = alFinto('GET', $percorso, null, $anna, null, ['If-None-Match' => 'W/'.$etag]);
         $altro = alFinto('GET', $percorso, null, $anna, null, ['If-None-Match' => '"0000"']);
+        $stella = alFinto('GET', $percorso, null, $anna, null, ['If-None-Match' => '*']);
+        $lista = alFinto('GET', $percorso, null, $anna, null, ['If-None-Match' => '"0000", '.$etag]);
 
         expect($uguale->status())->toBe(304)
             ->and($uguale->body())->toBe('')
             ->and($uguale->header('ETag'))->toBe($etag)
             ->and($debole->status())->toBe(304)
+            ->and($stella->status())->toBe(304)
+            ->and($lista->status())->toBe(304)
             ->and($altro->status())->toBe(200)
             ->and($altro->header('ETag'))->toBe($etag);
     }
@@ -84,6 +88,8 @@ it('crm.attivita.modifica con If-Match: la versione giusta passa, una vecchia è
     $debole = alFinto('PATCH', $percorso, ['titolo' => 'Due'], $anna, null, ['If-Match' => 'W/'.$nuova]);
     // Una versione vecchia è 412 anche con un corpo non valido: l'header si guarda prima del corpo.
     $primaDelCorpo = alFinto('PATCH', $percorso, ['titolo' => ''], $anna, null, ['If-Match' => $letta]);
+    // La 412 non scrive: l'attività è ancora quella di prima.
+    $dopo = alFinto('GET', $percorso, null, $anna);
     $stella = alFinto('PATCH', $percorso, ['titolo' => 'Tre'], $anna, null, ['If-Match' => '*']);
 
     expect($giusta->status())->toBe(200)
@@ -93,6 +99,8 @@ it('crm.attivita.modifica con If-Match: la versione giusta passa, una vecchia è
         ->and($vecchia->json('codice'))->toBe('precondizione_fallita')
         ->and($debole->status())->toBe(412)
         ->and($primaDelCorpo->status())->toBe(412)
+        ->and($dopo->json('data.titolo'))->toBe('Uno')
+        ->and($dopo->header('ETag'))->toBe($nuova)
         ->and($stella->status())->toBe(200)
         ->and($stella->json('data.titolo'))->toBe('Tre');
 });
@@ -107,4 +115,18 @@ it('un If-Match che non è né * né una lista di entity-tag è 422 sull\'header
     expect($risposta->status())->toBe(422)
         ->and($risposta->json('errors.0.header'))->toBe('If-Match')
         ->and($risposta->json('errors.0.regola'))->toBe('formato');
+});
+
+it('un\'attività che non c\'è è 404 con qualunque If-Match o If-None-Match, prima di guardare l\'header (ET.1)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    $assente = '/v1/crm/attivita/01m4jsakdxa3nk697es3kgpvjw';
+
+    foreach ([
+        alFinto('PATCH', $assente, ['titolo' => 'Uno'], $anna, null, ['If-Match' => '*']),
+        alFinto('PATCH', $assente, ['titolo' => 'Uno'], $anna, null, ['If-Match' => 'senza-virgolette']),
+        alFinto('GET', $assente, null, $anna, null, ['If-None-Match' => '*']),
+    ] as $risposta) {
+        expect($risposta->status())->toBe(404)->and($risposta->json('codice'))->toBe('non_trovato');
+    }
 });
