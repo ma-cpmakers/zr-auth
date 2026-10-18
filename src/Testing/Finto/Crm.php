@@ -1236,10 +1236,10 @@ trait Crm
             return true;
         }
 
-        preg_match_all('~(W/)?"[^"]*"~', $valore, $trovati, PREG_SET_ORDER);
+        preg_match_all('~(?:W/)?"[^"]*"~', $valore, $trovati);
 
-        foreach ($trovati as $tag) {
-            if ($tag[0] === $etag || ($debole && substr($tag[0], strlen($tag[1])) === $etag)) {
+        foreach ($trovati[0] as $tag) {
+            if ($tag === $etag || ($debole && str_starts_with($tag, 'W/') && substr($tag, 2) === $etag)) {
                 return true;
             }
         }
