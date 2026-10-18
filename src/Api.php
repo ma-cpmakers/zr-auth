@@ -35,6 +35,9 @@ final class Api
     /** Quante pagine scorre al più tutti(): oltre, la lista non finisce, e non è una lista. */
     public const PAGINE = 100;
 
+    /** Gli elementi per pagina di `elenco()` quando la query non dice `limite`: il massimo di /v1. */
+    public const LIMITE = 100;
+
     /** I freni dell'ultima risposta di questa istanza (#1911): `null` prima della prima, o se non ne diceva nessuno. */
     private ?Freni $freni = null;
 
@@ -173,6 +176,56 @@ final class Api
         }
 
         throw new BackofficeNonRisponde("GET {$percorso} ha più di ".self::PAGINE.' pagine.');
+    }
+
+    /**
+     * Una lista a cursore letta a pagine fino a un tetto (#2021): come `tutti()`, ma oltre `$pagine` pagine non lancia. Torna gli
+     * elementi letti e il segno `tagliato`, così una pagina li mostra e dice che ce ne sono altri (mai «Zeiras non risponde» per una
+     * lista lunga). `limite` è 100, il massimo di /v1, se la query non lo porta; quello della query vale. Un errore a metà, una
+     * risposta che non è una lista di /v1 (senza `data` lista o senza `successivo`), un `successivo` che non è testo e un cursore già
+     * dato (rileggerebbe le stesse pagine fino al tetto, con i doppioni) lanciano: mai una lista a metà senza il segno.
+     *
+     * @param  array<string, mixed>  $query
+     * @param  positive-int  $pagine  il tetto di pagine; con `limite` 100 sono al più `$pagine` × 100 elementi
+     */
+    public function elenco(string $percorso, array $query = [], int $pagine = self::PAGINE): Elenco
+    {
+        if ($pagine < 1) {
+            throw new InvalidArgumentException('Il tetto dev\'essere di almeno una pagina.');
+        }
+
+        $query['limite'] ??= self::LIMITE;
+        $elementi = [];
+        $cursore = null;
+        $visti = [];
+
+        for ($pagina = 0; $pagina < $pagine; $pagina++) {
+            $risposta = $this->get($percorso, $cursore === null ? $query : [...$query, 'cursore' => $cursore]);
+
+            if (! isset($risposta['data']) || ! is_array($risposta['data']) || ! array_is_list($risposta['data'])
+                || ! array_key_exists('successivo', $risposta)) {
+                throw new BackofficeNonRisponde("La risposta di GET {$percorso} non è una lista di /v1.");
+            }
+
+            array_push($elementi, ...$risposta['data']);
+            $cursore = $risposta['successivo'];
+
+            if ($cursore === null) {
+                return new Elenco($elementi, false, null);
+            }
+
+            if (! is_string($cursore)) {
+                throw new BackofficeNonRisponde("Il successivo di GET {$percorso} non è un cursore.");
+            }
+
+            if (isset($visti[$cursore])) {
+                throw new BackofficeNonRisponde("Il successivo di GET {$percorso} ripete un cursore già dato.");
+            }
+
+            $visti[$cursore] = true;
+        }
+
+        return new Elenco($elementi, true, $cursore);
     }
 
     /**
