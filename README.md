@@ -476,8 +476,11 @@ nessuna query, stesso percorso dentro `/v1`, stessi errori (un 403 `conferma_ric
 
 ```php
 return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'lead'])->comeRisposta();
-return Api::workspace()->scaricaConPost("/v1/workspace/esportazioni/{$id}/scaricamento")->comeRisposta();
+return Api::workspace()->scaricaConPost("/v1/workspace/esportazioni/{$id}/scaricamento", 'zeiras-workspace-dati.zip')->comeRisposta();
 ```
+
+Il secondo argomento di `scaricaConPost` è il nome del file che resta se il backoffice non ne manda uno che vale (ripulito come ogni nome: senza
+cartelle, caratteri di controllo né a capo); senza, quello del tipo (`Scaricamento::NOMI_PREDEFINITI`, per uno ZIP `zeiras-i-miei-dati.zip`).
 
 - Il backoffice tiene un tetto alle esportazioni che scorrono nello stesso momento (1 per persona, 2 per workspace, 2 su tutta l'istanza): oltre,
   `429` `troppe_richieste` con `riprovaFra`. Nei test `BackofficeFinto::attiva()->occupaEsportazioni()` lo simula; ruolo, app e filtri vengono prima.

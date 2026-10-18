@@ -493,3 +493,23 @@ it('scaricaConPost: un 401 è il gettone rifiutato; un JSON con un 200 e un 5xx 
     expect(fn () => Api::workspace()->scaricaConPost(SCARICA_ZIP_POST))->toThrow(BackofficeNonRisponde::class);
 });
 
+it('scaricaConPost: senza un nome dal backoffice resta quello passato, ripulito; con un nome del backoffice vale lui', function () {
+    apriSessione();
+    $zip = fn (array $header) => Http::response('PK', 200, ['Content-Type' => 'application/zip', ...$header]);
+
+    Http::fake(['*' => $zip([])]);
+    expect(Api::workspace()->scaricaConPost(SCARICA_ZIP_POST, 'zeiras-workspace-dati.zip')->nome)->toBe('zeiras-workspace-dati.zip');
+
+    Http::swap(new Factory);
+    Http::fake(['*' => $zip([])]);
+    expect(Api::workspace()->scaricaConPost(SCARICA_ZIP_POST)->nome)->toBe(Scaricamento::NOMI_PREDEFINITI['application/zip']);
+
+    Http::swap(new Factory);
+    Http::fake(['*' => $zip([])]);
+    expect(Api::workspace()->scaricaConPost(SCARICA_ZIP_POST, "../../etc/pass wd\r\n")->nome)->toBe('pass-wd.zip');
+
+    Http::swap(new Factory);
+    Http::fake(['*' => $zip(['Content-Disposition' => 'attachment; filename=dal-backoffice.zip'])]);
+    expect(Api::workspace()->scaricaConPost(SCARICA_ZIP_POST, 'zeiras-workspace-dati.zip')->nome)->toBe('dal-backoffice.zip');
+});
+
