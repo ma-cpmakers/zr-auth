@@ -595,7 +595,7 @@ it('workspace.esportazioni.*: ruoli, conferma, una sola in preparazione (409), a
         ->and($prima->header('Link'))->toBe(linkDi('workspace.esportazioni.crea'))
         ->and(array_keys($prima->json('data')))->toBe(['id', 'stato', 'creata_il', 'scade_il', 'dimensione', 'errore', 'limite'])
         ->and($prima->json('data.stato'))->toBe('in_preparazione')
-        ->and($seconda->status())->toBe(409)->and($seconda->json('codice'))->toBe('limite_raggiunto')->and($seconda->json('limite'))->toBe(1)
+        ->and($seconda->status())->toBe(409)->and($seconda->json('codice'))->toBe('esportazione_in_corso')->and($seconda->json('limite'))->toBeNull()
         ->and(alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneBruno)->json('data.stato'))->toBe('in_preparazione')
         ->and(alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneBrunoAltro)->status())->toBe(404)
         ->and(alFinto('GET', "/v1/workspace/esportazioni/{$id}", gettone: $gettoneCarla)->json('codice'))->toBe('permesso_negato')
