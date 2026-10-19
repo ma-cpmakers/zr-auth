@@ -3722,8 +3722,8 @@ final class BackofficeFinto
 
     /**
      * workspace.esportazioni.crea (WorkspaceEsportazioniController::crea, #2015): proprietario e amministratore (403 `permesso_negato`), la
-     * conferma recente dell'accesso (403 `conferma_richiesta`), poi, se il workspace ne ha già una in preparazione, 409 `limite_raggiunto`
-     * con `limite` 1; 10 richieste fallite in 24 ore, o oltre 3 richieste in 24 ore (le fallite non contano), 429 con `Retry-After`; altrimenti
+     * conferma recente dell'accesso (403 `conferma_richiesta`), poi, se il workspace ne ha già una in preparazione, 409 `esportazione_in_corso`
+     * (senza `limite`); 10 richieste fallite in 24 ore, o oltre 3 richieste in 24 ore (le fallite non contano), 429 con `Retry-After`; altrimenti
      * ne nasce una `in_preparazione`.
      *
      * @param  array<mixed>  $corpo
@@ -3742,7 +3742,7 @@ final class BackofficeFinto
 
         foreach ($sue as $voce) {
             if ($voce['stato'] === 'in_preparazione') {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => 1]);
+                throw new Problema('esportazione_in_corso');
             }
         }
 
