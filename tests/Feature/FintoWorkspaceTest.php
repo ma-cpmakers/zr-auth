@@ -802,7 +802,7 @@ it('link.verifica.crea: un link vivo è valido, uno spento o inventato no, la fo
 
 // #1573 (PP.1-PP.2): i primi passi del workspace, derivati come fa il backoffice. Che la risposta sia quella del contratto, byte per byte, lo prova il
 // FintoTest del backoffice.
-it('workspace.primipassi.mostra dice quali primi passi sono fatti: ordine fisso, cartella e board solo con pm, team solo a chi amministra (#1573)', function () {
+it('workspace.primi-passi.mostra dice quali primi passi sono fatti: ordine fisso, cartella e board solo con pm, team solo a chi amministra (#1573)', function () {
     $finto = BackofficeFinto::attiva();
     $anna = $finto->persona('anna@example.com', PASSWORD);
     $studio = $finto->workspace('Studio', $anna);
@@ -829,7 +829,7 @@ it('workspace.primipassi.mostra dice quali primi passi sono fatti: ordine fisso,
         ->and(alFinto('GET', '/v1/workspace/primi-passi', gettone: $gettoneAnna)->json())->toHaveKey('data.passi.0', ['codice' => 'account', 'fatto' => true]);
 });
 
-it('workspace.primipassi.mostra non conta le cartelle e le board nel cestino né quelle di un altro workspace, e il gettone dell\'accesso è 403 (#1573)', function () {
+it('workspace.primi-passi.mostra non conta le cartelle e le board nel cestino né quelle di un altro workspace, e il gettone dell\'accesso è 403 (#1573)', function () {
     $finto = BackofficeFinto::attiva();
     $anna = $finto->persona('anna@example.com', PASSWORD);
     $studio = $finto->workspace('Studio', $anna);
@@ -846,7 +846,7 @@ it('workspace.primipassi.mostra non conta le cartelle e le board nel cestino né
         ->and(esito(alFinto('GET', '/v1/workspace/primi-passi', gettone: entraNelFinto('anna@example.com')['gettone']['gettone'])))->toBe([403, 'gettone_senza_workspace']);
 });
 
-it('workspace.primipassi.mostra: `azienda` è fatto con il settore e le persone dell\'azienda del workspace, non con uno solo dei due (#1573)', function () {
+it('workspace.primi-passi.mostra: `azienda` è fatto con il settore e le persone dell\'azienda del workspace, non con uno solo dei due (#1573)', function () {
     $finto = BackofficeFinto::attiva();
     $anna = $finto->persona('anna@example.com', PASSWORD);
     $studio = $finto->workspace('Studio', $anna);
