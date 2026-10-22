@@ -101,4 +101,10 @@ return [
     'acquisto_da_pagare' => 'Con el método «da_pagare» (por pagar) lo pagado es cero.',
     'acquisto_senza_crediti' => 'Esta compra no tiene créditos que consumir: solo un paquete o una suscripción los tiene.',
     'consumo_nel_futuro' => 'Un consumo no puede ser posterior a ahora.',
+    'rate_somma_diversa' => 'Las cuotas deben sumar el precio de la compra.',
+    'rate_senza_prezzo' => 'Esta compra no tiene precio, y sin precio no tiene cuotas.',
+    'rate_troppe' => 'Un plan tiene de 1 a :massimo cuotas.',
+    'rate_con_pagato' => 'Con cuotas el pagado no se da al crear: los pagos se registran después en las cuotas, uno por llamada.',
+    'pagamento_oltre_il_residuo' => 'El importe supera lo que queda por cobrar de esta cuota.',
+    'pagamento_data_futura' => 'La fecha del pago no puede ser posterior a hoy.',
 ];

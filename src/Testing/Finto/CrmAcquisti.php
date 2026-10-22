@@ -90,6 +90,20 @@ trait CrmAcquisti
                 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
             ];
 
+            // Il piano nasce con l'acquisto (CRM-08): le rate date, o la rata unica del prezzo con il pagato come primo pagamento. Un errore
+            // del piano annulla anche l'acquisto.
+            try {
+                if (isset($campi['rate'])) {
+                    $this->scriviIlPianoCrm($this->crm['acquisti'][$id], $campi['rate']);
+                } else {
+                    $this->creaLaRataUnicaCrm($this->crm['acquisti'][$id], $chi['persona']);
+                }
+            } catch (Problema $problema) {
+                unset($this->crm['acquisti'][$id]);
+
+                throw $problema;
+            }
+
             // Il primo acquisto fa «cliente» il contatto (D10): la cronologia è quella di una modifica a mano. Dal secondo non cambia più.
             if ($primo && in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
                 $this->applicaPersona($persona['id'], ['stato' => 'cliente'], $chi['persona']);
@@ -314,7 +328,7 @@ trait CrmAcquisti
             'persona_id' => ['bail', 'required', 'string', 'max:64'],
             'voce_id' => ['bail', 'required', 'string', 'max:64'],
             'acquistato_il' => ['bail', 'required', 'string', 'date_format:Y-m-d'],
-            'pagato' => ['bail', 'sometimes', 'array', function (string $campo, mixed $pagato, Closure $fail) {
+            'pagato' => ['bail', 'sometimes', 'array', 'prohibits:rate', function (string $campo, mixed $pagato, Closure $fail) {
                 if ($pagato === []) {
                     $this->rifiutaCrm($fail, $campo, Regola::OBBLIGATORIO, 'validation.required', ['attribute' => $campo]);
                 }
@@ -327,7 +341,7 @@ trait CrmAcquisti
             }],
             'metodo_pagamento' => ['bail', 'required', 'string', Rule::in(self::CRM_ACQUISTI_METODI)],
             'documento' => ['bail', 'sometimes', 'string', Rule::in(self::CRM_ACQUISTI_DOCUMENTI)],
-        ];
+        ] + $this->regoleDelPianoCrm($workspace, false);
     }
 
     /**

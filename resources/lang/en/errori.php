@@ -173,6 +173,18 @@ return [
         'title' => 'Purchase expired',
         'detail' => 'This purchase has expired, and a use cannot be recorded on an expired purchase. Nothing was written.',
     ],
+    'rata_pagata' => [
+        'title' => 'Installment already paid',
+        'detail' => 'This installment is already paid in full and has nothing left to collect. Nothing was written: read it again with crm.rate.mostra.',
+    ],
+    'rate_con_pagamenti' => [
+        'title' => 'Installments with payments',
+        'detail' => 'This purchase already has a payment that is not cancelled, and its plan cannot be replaced. Cancel the payments first with crm.pagamenti.annullamento.crea, then try again. Nothing was written.',
+    ],
+    'pagamento_annullato' => [
+        'title' => 'Payment already cancelled',
+        'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',
+    ],
     'ultima_opzione' => [
         'title' => 'Last option',
         'detail' => 'This is the field\'s last live option, and a list or multiple-choice field always has at least one. Add another with crm.campi.opzioni.crea and then remove this one. Nothing was written.',

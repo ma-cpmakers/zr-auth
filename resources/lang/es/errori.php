@@ -173,6 +173,18 @@ return [
         'title' => 'Compra caducada',
         'detail' => 'Esta compra ha caducado, y no se registra un consumo sobre una compra caducada. No se escribió nada.',
     ],
+    'rata_pagata' => [
+        'title' => 'Cuota ya pagada',
+        'detail' => 'Esta cuota ya está pagada por completo y no tiene nada que cobrar. No se escribió nada: léela de nuevo con crm.rate.mostra.',
+    ],
+    'rate_con_pagamenti' => [
+        'title' => 'Cuotas con pagos',
+        'detail' => 'Esta compra ya tiene un pago no anulado y su plan no se puede sustituir. Anula antes los pagos con crm.pagamenti.annullamento.crea y repite. No se escribió nada.',
+    ],
+    'pagamento_annullato' => [
+        'title' => 'Pago ya anulado',
+        'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',
+    ],
     'ultima_opzione' => [
         'title' => 'Última opción',
         'detail' => 'Esta es la última opción viva del campo, y un campo de lista o de selección múltiple siempre tiene al menos una. Añade otra con crm.campi.opzioni.crea y luego quita esta. No se escribió nada.',

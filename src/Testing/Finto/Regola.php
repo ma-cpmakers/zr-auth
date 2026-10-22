@@ -39,6 +39,14 @@ final class Regola
 
     public const CAMPO_INDISPENSABILE = 'campo_indispensabile';
 
+    public const SOMMA_DIVERSA = 'somma_diversa';
+
+    public const SENZA_PREZZO = 'senza_prezzo';
+
+    public const TROPPE_RATE = 'troppe_rate';
+
+    public const OLTRE_IL_RESIDUO = 'oltre_il_residuo';
+
     private const DI_TIPO = ['String', 'Integer', 'Boolean', 'Array', 'List', 'Numeric', 'Decimal', 'Json'];
 
     private const DI_OBBLIGO = ['Required', 'RequiredWith', 'RequiredWithAll', 'RequiredWithout', 'RequiredWithoutAll', 'RequiredIf', 'RequiredUnless', 'Filled', 'Present'];
