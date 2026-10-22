@@ -479,7 +479,7 @@ final class BackofficeFinto
     /** @var array<string, int> il numero della versione di ogni board (#1941), che sale a ogni scrittura che cambia delle sue schede */
     private array $versioni = [];
 
-    /** @var array<string, array{id: string, workspace: string, nome: string, colore: string, stato: string, nel_cestino_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le cartelle (cartella()), per id */
+    /** @var array<string, array{id: string, workspace: string, nome: string, colore: string, settore: ?string, metodo: ?string, stato: string, nel_cestino_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable}> le cartelle (cartella()), per id */
     private array $cartelle = [];
 
     /** @var array<string, array{id: string, workspace: string, nome: string, cartella: string, stato: string, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable, chiusa_il: ?CarbonImmutable, nel_cestino_il: ?CarbonImmutable}> le board (board()), per id */
@@ -638,12 +638,24 @@ final class BackofficeFinto
     /**
      * Una cartella delle board del workspace, per provare `board.cartelle.elenca` e il selettore di cartelle di un frontend.
      *
+     * Il `settore` e il `metodo` (#2348) vengono insieme o non vengono, come in `board.cartelle.crea`: `edilizia` con `waterfall`,
+     * `digitale` con `scrum` o `scrumban`; una coppia che il backoffice rifiuta con 422 qui è un `InvalidArgumentException`.
+     *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
-     * @return array{id: string, nome: string, colore: string}
+     * @return array{id: string, nome: string, colore: string, settore: ?string, metodo: ?string, stato: string}
      */
-    public function cartella(array $workspace, string $nome, string $colore = 'pine', string $stato = 'attiva'): array
+    public function cartella(array $workspace, string $nome, string $colore = 'pine', string $stato = 'attiva', ?string $settore = null, ?string $metodo = null): array
     {
         $idWorkspace = $this->workspaceDelFinto($workspace);
+        $metodiDelSettore = ['edilizia' => ['waterfall'], 'digitale' => ['scrum', 'scrumban']];
+
+        if (($settore === null) !== ($metodo === null)) {
+            throw new InvalidArgumentException('Il settore e il metodo di una cartella vengono insieme o non vengono.');
+        }
+
+        if ($settore !== null && ! in_array($metodo, $metodiDelSettore[$settore] ?? [], true)) {
+            throw new InvalidArgumentException("Il metodo «{$metodo}» non va con il settore «{$settore}»: edilizia vuole waterfall, digitale scrum o scrumban.");
+        }
 
         if (! in_array($colore, ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'], true)) {
             throw new InvalidArgumentException("Il colore «{$colore}» non c'è: sono pine, citrus, coral, sky, plum e neutral.");
@@ -655,9 +667,9 @@ final class BackofficeFinto
 
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
-        $this->cartelle[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'colore' => $colore, 'stato' => $stato, 'nel_cestino_il' => $stato === 'cestino' ? $ora : null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $this->cartelle[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'colore' => $colore, 'settore' => $settore, 'metodo' => $metodo, 'stato' => $stato, 'nel_cestino_il' => $stato === 'cestino' ? $ora : null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
-        return ['id' => $id, 'nome' => $nome, 'colore' => $colore, 'stato' => $stato];
+        return ['id' => $id, 'nome' => $nome, 'colore' => $colore, 'settore' => $settore, 'metodo' => $metodo, 'stato' => $stato];
     }
 
     /**
@@ -1544,7 +1556,7 @@ final class BackofficeFinto
         foreach ($this->cartelle as $cartella) {
             if ($cartella['workspace'] === $chi['workspace'] && $cartella['stato'] === $stato) {
                 $voci[] = [
-                    'id' => $cartella['id'], 'nome' => $cartella['nome'], 'colore' => $cartella['colore'], 'creata_il' => self::iso($cartella['creata_il']), 'aggiornata_il' => self::iso($cartella['aggiornata_il']),
+                    'id' => $cartella['id'], 'nome' => $cartella['nome'], 'colore' => $cartella['colore'], 'settore' => $cartella['settore'], 'metodo' => $cartella['metodo'], 'creata_il' => self::iso($cartella['creata_il']), 'aggiornata_il' => self::iso($cartella['aggiornata_il']),
                     'stato' => $cartella['stato'],
                     'nel_cestino_il' => $cartella['nel_cestino_il'] === null ? null : self::iso($cartella['nel_cestino_il']),
                     'cancellata_il' => $cartella['nel_cestino_il'] === null ? null : self::iso($cartella['nel_cestino_il']->addDays(30)),
