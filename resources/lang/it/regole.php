@@ -102,4 +102,10 @@ return [
     'acquisto_da_pagare' => 'Con il metodo «da_pagare» il pagato è zero.',
     'acquisto_senza_crediti' => 'Questo acquisto non ha crediti da consumare: solo un pacchetto o un abbonamento ne ha.',
     'consumo_nel_futuro' => 'Un consumo non può essere dopo adesso.',
+    'rate_somma_diversa' => "La somma delle rate deve essere uguale al prezzo dell'acquisto.",
+    'rate_senza_prezzo' => 'Questo acquisto non ha un prezzo, e senza prezzo non ha rate.',
+    'rate_troppe' => 'Un piano ha da 1 a :massimo rate.',
+    'rate_con_pagato' => 'Con le rate il pagato non si dà alla creazione: i pagamenti si registrano dopo sulle rate, uno per chiamata.',
+    'pagamento_oltre_il_residuo' => "L'importo supera quello che resta da incassare su questa rata.",
+    'pagamento_data_futura' => 'La data del pagamento non può essere dopo oggi.',
 ];

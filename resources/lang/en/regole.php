@@ -101,4 +101,10 @@ return [
     'acquisto_da_pagare' => 'With the method “da_pagare” (to be paid) the amount paid is zero.',
     'acquisto_senza_crediti' => 'This purchase has no credits to use: only a package or a subscription has them.',
     'consumo_nel_futuro' => 'A use cannot be later than now.',
+    'rate_somma_diversa' => 'The installments must add up to the purchase price.',
+    'rate_senza_prezzo' => 'This purchase has no price, and without a price it has no installments.',
+    'rate_troppe' => 'A plan has from 1 to :massimo installments.',
+    'rate_con_pagato' => 'With installments the paid amount is not given when creating: payments are recorded afterwards on the installments, one per call.',
+    'pagamento_oltre_il_residuo' => 'The amount is more than what is left to collect on this installment.',
+    'pagamento_data_futura' => 'The payment date cannot be after today.',
 ];

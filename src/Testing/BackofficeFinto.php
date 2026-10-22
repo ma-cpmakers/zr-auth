@@ -25,6 +25,7 @@ use Zeiras\Auth\Testing\Finto\CrmAcquisti;
 use Zeiras\Auth\Testing\Finto\CrmAvanzate;
 use Zeiras\Auth\Testing\Finto\CrmCampi;
 use Zeiras\Auth\Testing\Finto\CrmCatalogo;
+use Zeiras\Auth\Testing\Finto\CrmRate;
 use Zeiras\Auth\Testing\Finto\CrmEsiti;
 use Zeiras\Auth\Testing\Finto\CrmValori;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
@@ -59,6 +60,7 @@ final class BackofficeFinto
     use CrmAvanzate;
     use CrmCampi;
     use CrmCatalogo;
+    use CrmRate;
     use CrmEsiti;
     use CrmValori;
 

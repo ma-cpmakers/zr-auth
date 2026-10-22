@@ -173,6 +173,18 @@ return [
         'title' => 'Acquisto scaduto',
         'detail' => 'Questo acquisto è scaduto, e un consumo non si registra su un acquisto scaduto. Il metodo non ha scritto niente.',
     ],
+    'rata_pagata' => [
+        'title' => 'Rata già pagata',
+        'detail' => 'Questa rata è già pagata per intero e non ha niente da incassare. Il metodo non ha scritto niente: rileggila con crm.rate.mostra.',
+    ],
+    'rate_con_pagamenti' => [
+        'title' => 'Rate con pagamenti',
+        'detail' => 'Questo acquisto ha già un pagamento non annullato e il suo piano non si sostituisce. Annulla prima i pagamenti con crm.pagamenti.annullamento.crea, poi ripeti. Il metodo non ha scritto niente.',
+    ],
+    'pagamento_annullato' => [
+        'title' => 'Pagamento già annullato',
+        'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',
+    ],
     'ultima_opzione' => [
         'title' => 'Ultima opzione',
         'detail' => 'Questa è l\'ultima opzione viva del campo, e un campo a elenco o a scelta multipla ne ha sempre almeno una. Aggiungine un\'altra con crm.campi.opzioni.crea e poi togli questa. Il metodo non ha scritto niente.',
