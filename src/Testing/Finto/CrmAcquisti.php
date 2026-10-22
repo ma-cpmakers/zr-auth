@@ -73,6 +73,7 @@ trait CrmAcquisti
             $voce = $voce !== null && $voce['workspace'] === $chi['workspace'] ? $voce : null;
             $this->controllaAcquistoCrm($campi, $persona['archiviata_il'] !== null, $voce);
 
+            $primo = array_filter($this->crm['acquisti'], fn (array $acquisto) => $acquisto['persona_id'] === $persona['id']) === [];
             $id = self::id();
             $ora = self::adessoCrm();
             $giorno = (string) $campi['acquistato_il'];
@@ -89,8 +90,8 @@ trait CrmAcquisti
                 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
             ];
 
-            // Il primo acquisto fa «cliente» il contatto (D10): la cronologia è quella di una modifica a mano.
-            if (in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
+            // Il primo acquisto fa «cliente» il contatto (D10): la cronologia è quella di una modifica a mano. Dal secondo non cambia più.
+            if ($primo && in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
                 $this->applicaPersona($persona['id'], ['stato' => 'cliente'], $chi['persona']);
             }
 
@@ -194,6 +195,11 @@ trait CrmAcquisti
                 'nota' => ['bail', 'sometimes', 'nullable', 'string', 'max:'.self::CRM_CONSUMO_NOTA, new SenzaCarattereNullo],
             ]);
             $quantita = (int) ($campi['quantita'] ?? 1);
+
+            // La nota è testo libero: su un contatto anonimizzato non si scrive (409, come per le note e le attività).
+            if (($this->crm['persone'][$riga['persona_id']]['anonimizzata_il'] ?? null) !== null) {
+                throw new Problema('persona_anonimizzata');
+            }
 
             if (! in_array($riga['voce_tipo'], ['pacchetto', 'abbonamento'], true)) {
                 throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.acquisto_senza_crediti'), 'regola' => Regola::NON_VALIDA, 'pointer' => '#']]);
