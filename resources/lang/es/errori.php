@@ -165,6 +165,14 @@ return [
         'title' => 'Campo del sistema',
         'detail' => 'Este campo es estándar o del sistema: se oculta y se mueve, pero no se elimina. Solo se elimina un campo «tuyo», creado por el espacio de trabajo. No se escribió nada.',
     ],
+    'crediti_esauriti' => [
+        'title' => 'Créditos agotados',
+        'detail' => 'Los créditos disponibles de esta compra no bastan para la cantidad pedida, y un crédito nunca baja de cero. No se escribió nada: vuelve a leer la compra con crm.acquisti.mostra y pide como máximo los créditos disponibles.',
+    ],
+    'acquisto_scaduto' => [
+        'title' => 'Compra caducada',
+        'detail' => 'Esta compra ha caducado, y no se registra un consumo sobre una compra caducada. No se escribió nada.',
+    ],
     'ultima_opzione' => [
         'title' => 'Última opción',
         'detail' => 'Esta es la última opción viva del campo, y un campo de lista o de selección múltiple siempre tiene al menos una. Añade otra con crm.campi.opzioni.crea y luego quita esta. No se escribió nada.',

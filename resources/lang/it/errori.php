@@ -165,6 +165,14 @@ return [
         'title' => 'Campo di sistema',
         'detail' => 'Questo campo è uno standard o di sistema: si nasconde e si sposta, ma non si elimina. Solo un campo «tuo», creato dal workspace, si elimina. Il metodo non ha scritto niente.',
     ],
+    'crediti_esauriti' => [
+        'title' => 'Crediti esauriti',
+        'detail' => "I crediti disponibili di questo acquisto non bastano per la quantità chiesta, e un credito non va mai sotto zero. Il metodo non ha scritto niente: rileggi l'acquisto con crm.acquisti.mostra e chiedi al più i crediti disponibili.",
+    ],
+    'acquisto_scaduto' => [
+        'title' => 'Acquisto scaduto',
+        'detail' => 'Questo acquisto è scaduto, e un consumo non si registra su un acquisto scaduto. Il metodo non ha scritto niente.',
+    ],
     'ultima_opzione' => [
         'title' => 'Ultima opzione',
         'detail' => 'Questa è l\'ultima opzione viva del campo, e un campo a elenco o a scelta multipla ne ha sempre almeno una. Aggiungine un\'altra con crm.campi.opzioni.crea e poi togli questa. Il metodo non ha scritto niente.',

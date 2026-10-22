@@ -31,6 +31,8 @@ final class Problema extends RuntimeException
         'collegamento_esistente' => 409,
         'scheda_archiviata' => 409,
         'limite_raggiunto' => 409,
+        'crediti_esauriti' => 409,
+        'acquisto_scaduto' => 409,
         'esportazione_in_corso' => 409,
         'proprietario_intoccabile' => 409,
         'posizione_cambiata' => 409,
