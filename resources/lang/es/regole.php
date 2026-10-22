@@ -92,4 +92,6 @@ return [
     'campo_predefinito_dopo_le_opzioni' => 'Las opciones nacen con esta petición y aún no tienen id: el valor predeterminado se indica después, con crm.campi.modifica.',
     'campo_testo_lungo_non_in_elenco' => 'Los textos largos no van en la lista.',
     'codice_cambio_email' => 'El código no es correcto, ha caducado o no se ha pedido: pide un código nuevo para cambiar el correo.',
+    'catalogo_campo_del_tipo' => 'El campo :campo no existe en un elemento de tipo :tipo: quítalo o cambia el tipo.',
+    'catalogo_campo_richiesto' => 'Un elemento de tipo :tipo necesita el campo :campo.',
 ];
