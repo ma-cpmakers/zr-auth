@@ -4515,8 +4515,8 @@ final class BackofficeFinto
     /**
      * workspace.primipassi.mostra (WorkspacePrimiPassiController::mostra): quali dei primi passi del workspace sono fatti, a ogni ruolo. `account` è
      * fatto con l'email della persona del gettone verificata; `cartella` e `board` ci sono solo con l'app `pm` attiva e contano le righe del workspace
-     * fuori dal cestino; `team` ci sta solo per il proprietario e l'amministratore ed è fatto con un altro membro o un invito vivo; `azienda` è fatto
-     * con l'azienda del workspace col nome compilato. Nessun id, nome o conto.
+     * fuori dal cestino; `team` e `azienda` ci sono solo per il proprietario e l'amministratore: `team` è fatto con un altro membro o un invito vivo,
+     * `azienda` con l'azienda del workspace che ha il settore e le persone. Nessun id, nome o conto.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -4537,9 +4537,9 @@ final class BackofficeFinto
             $altroMembro = array_diff(array_keys($this->membri[$workspace]), [$chi['persona']]) !== [];
             $invitoVivo = array_filter($this->inviti, fn (array $invito) => $invito['workspace'] === $workspace && $invito['scade']->gt(now())) !== [];
             $passi[] = ['codice' => 'team', 'fatto' => $altroMembro || $invitoVivo];
+            $dati = $this->datiAziende[$this->workspace[$workspace]['azienda_id']] ?? [];
+            $passi[] = ['codice' => 'azienda', 'fatto' => ($dati['settore'] ?? '') !== '' && ($dati['persone'] ?? '') !== ''];
         }
-
-        $passi[] = ['codice' => 'azienda', 'fatto' => ($this->aziende[$this->workspace[$workspace]['azienda_id']] ?? '') !== ''];
 
         return [200, ['data' => ['passi' => $passi]]];
     }

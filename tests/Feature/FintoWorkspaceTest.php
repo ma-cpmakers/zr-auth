@@ -810,21 +810,21 @@ it('workspace.primipassi.mostra dice quali primi passi sono fatti: ordine fisso,
     $fatti = fn (string $token) => array_column(alFinto('GET', '/v1/workspace/primi-passi', gettone: $token)->json('data.passi'), 'fatto', 'codice');
     $gettoneAnna = $gettone('anna@example.com');
 
-    // Senza pm i passi di pm non ci sono; l'azienda ha il nome del workspace; l'email non è verificata.
-    expect($fatti($gettoneAnna))->toBe(['account' => false, 'team' => false, 'azienda' => true]);
+    // Senza pm i passi di pm non ci sono; l'azienda non ha né settore né persone; l'email non è verificata.
+    expect($fatti($gettoneAnna))->toBe(['account' => false, 'team' => false, 'azienda' => false]);
 
     $finto->attivaApp($studio, 'pm');
 
-    expect($fatti($gettoneAnna))->toBe(['account' => false, 'cartella' => false, 'board' => false, 'team' => false, 'azienda' => true]);
+    expect($fatti($gettoneAnna))->toBe(['account' => false, 'cartella' => false, 'board' => false, 'team' => false, 'azienda' => false]);
 
     $cartella = $finto->cartella($studio, 'Lavoro');
     $finto->board($studio, 'Piano', $cartella);
     $carla = $finto->persona('carla@example.com', PASSWORD, nome: 'Carla');
     $finto->membro($studio, $carla, 'membro');
 
-    // Anna vede il team fatto (c'è Carla); Carla, membro, non lo vede e ha l'email verificata.
-    expect($fatti($gettoneAnna))->toBe(['account' => false, 'cartella' => true, 'board' => true, 'team' => true, 'azienda' => true])
-        ->and($fatti($gettone('carla@example.com')))->toBe(['account' => true, 'cartella' => true, 'board' => true, 'azienda' => true])
+    // Anna vede il team fatto (c'è Carla); Carla, membro, non vede né team né azienda e ha l'email verificata.
+    expect($fatti($gettoneAnna))->toBe(['account' => false, 'cartella' => true, 'board' => true, 'team' => true, 'azienda' => false])
+        ->and($fatti($gettone('carla@example.com')))->toBe(['account' => true, 'cartella' => true, 'board' => true])
         ->and(alFinto('GET', '/v1/workspace/primi-passi', gettone: $gettoneAnna)->json())->toHaveKey('data.passi.0', ['codice' => 'account', 'fatto' => false]);
 });
 
@@ -841,6 +841,21 @@ it('workspace.primipassi.mostra non conta le cartelle e le board nel cestino né
     $token = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
 
     expect(array_column(alFinto('GET', '/v1/workspace/primi-passi', gettone: $token)->json('data.passi'), 'fatto', 'codice'))
-        ->toBe(['account' => true, 'cartella' => false, 'board' => false, 'team' => false, 'azienda' => true])
+        ->toBe(['account' => true, 'cartella' => false, 'board' => false, 'team' => false, 'azienda' => false])
         ->and(esito(alFinto('GET', '/v1/workspace/primi-passi', gettone: entraNelFinto('anna@example.com')['gettone']['gettone'])))->toBe([403, 'gettone_senza_workspace']);
+});
+
+it('workspace.primipassi.mostra: `azienda` è fatto con il settore e le persone dell\'azienda del workspace, non con uno solo dei due (#1573)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio', $anna);
+    $token = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
+    $azienda = fn () => array_column(alFinto('GET', '/v1/workspace/primi-passi', gettone: $token)->json('data.passi'), 'fatto', 'codice')['azienda'];
+
+    expect($azienda())->toBeFalse();
+
+    expect(alFinto('PATCH', "/v1/aziende/{$studio['azienda_id']}", ['settore' => 'consulenza'], $token)->status())->toBe(200)
+        ->and($azienda())->toBeFalse()
+        ->and(alFinto('PATCH', "/v1/aziende/{$studio['azienda_id']}", ['persone' => '2-10'], $token)->status())->toBe(200)
+        ->and($azienda())->toBeTrue();
 });
