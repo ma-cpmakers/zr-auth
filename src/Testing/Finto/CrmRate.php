@@ -317,6 +317,7 @@ trait CrmRate
         foreach ($this->crm['rate'] as $id => $vecchia) {
             if ($vecchia['acquisto_id'] === $acquisto['id'] && ! ($vecchia['eliminata'] ?? false)) {
                 $this->crm['rate'][$id]['eliminata'] = true;
+                $this->toccaLAcquistoCrm($acquisto['id']);
             }
         }
 
@@ -329,8 +330,6 @@ trait CrmRate
             $nuove[] = $this->nuovaRataCrm($acquisto, $posizione + 1, (string) $rata['scade_il'], (int) $rata['importo']['importo'], $rata['etichetta'] ?? null, $acquisto['creato_da']);
         }
 
-        $this->salvaCrm('acquisti', $acquisto['id'], ['aggiornato_il' => self::adessoCrm()]);
-
         return $nuove;
     }
 
@@ -342,6 +341,7 @@ trait CrmRate
     {
         $id = self::id();
         $ora = self::adessoCrm();
+        $this->toccaLAcquistoCrm($acquisto['id']);
 
         return $this->crm['rate'][$id] = [
             'id' => $id, 'workspace' => $acquisto['workspace'], 'acquisto_id' => $acquisto['id'], 'persona_id' => $acquisto['persona_id'],
@@ -366,8 +366,15 @@ trait CrmRate
             'annullato_il' => null, 'motivo_annullamento' => null, 'creato_da' => $autore, 'creato_il' => $ora, 'aggiornato_il' => $ora,
         ];
         $this->ricalcolaLaRataCrm($rata['id']);
+        $this->toccaLAcquistoCrm($rata['acquisto_id']);
 
         return $pagamento;
+    }
+
+    /** Una rata o un pagamento scritti toccano l'acquisto (`$touches`): il suo `aggiornato_il` cresce almeno di un millisecondo. */
+    private function toccaLAcquistoCrm(string $id): void
+    {
+        $this->crm['acquisti'][$id]['aggiornato_il'] = self::dopoCrm($this->crm['acquisti'][$id]['aggiornato_il']);
     }
 
     /** Riscrive il pagato della rata dai suoi pagamenti non annullati (Rate::ricalcola), e poi quello dell'acquisto (Rate::allinea). */
