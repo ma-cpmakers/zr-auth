@@ -21,6 +21,7 @@ use SensitiveParameter;
 use stdClass;
 use Zeiras\Auth\Eventi\Firma;
 use Zeiras\Auth\Testing\Finto\Crm;
+use Zeiras\Auth\Testing\Finto\CrmAcquisti;
 use Zeiras\Auth\Testing\Finto\CrmAvanzate;
 use Zeiras\Auth\Testing\Finto\CrmCampi;
 use Zeiras\Auth\Testing\Finto\CrmCatalogo;
@@ -54,6 +55,7 @@ use Zeiras\Auth\Testing\Finto\Testi;
 final class BackofficeFinto
 {
     use Crm;
+    use CrmAcquisti;
     use CrmAvanzate;
     use CrmCampi;
     use CrmCatalogo;

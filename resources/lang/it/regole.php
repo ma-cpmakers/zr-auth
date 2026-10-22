@@ -95,4 +95,11 @@ return [
     'codice_cambio_email' => 'Il codice non è giusto, è scaduto o non è stato chiesto: chiedi un codice nuovo per cambiare l\'email.',
     'catalogo_campo_del_tipo' => 'Il campo :campo non c\'è in una voce di tipo :tipo: toglilo o cambia il tipo.',
     'catalogo_campo_richiesto' => 'Una voce di tipo :tipo vuole il campo :campo.',
+    'acquisto_voce_non_attiva' => 'La voce del catalogo non è attiva: un acquisto si registra solo su una voce attiva.',
+    'acquisto_contatto_archiviato' => 'Il contatto è archiviato: ripristinalo prima di registrargli un acquisto.',
+    'acquisto_data_futura' => "La data dell'acquisto non può essere dopo oggi.",
+    'acquisto_oltre_il_prezzo' => "Il pagato non può superare il prezzo dell'acquisto.",
+    'acquisto_da_pagare' => 'Con il metodo «da_pagare» il pagato è zero.',
+    'acquisto_senza_crediti' => 'Questo acquisto non ha crediti da consumare: solo un pacchetto o un abbonamento ne ha.',
+    'consumo_nel_futuro' => 'Un consumo non può essere dopo adesso.',
 ];

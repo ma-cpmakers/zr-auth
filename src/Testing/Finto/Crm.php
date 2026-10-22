@@ -54,6 +54,12 @@ trait Crm
         ['GET', '#^/v1/crm/catalogo/([^/]+)$#', 'crm.catalogo.mostra'],
         ['PATCH', '#^/v1/crm/catalogo/([^/]+)$#', 'crm.catalogo.modifica'],
         ['GET', '#^/v1/crm/catalogo/([^/]+)/cronologia$#', 'crm.catalogo.cronologia.elenca'],
+        ['GET', '#^/v1/crm/acquisti$#', 'crm.acquisti.elenca'],
+        ['POST', '#^/v1/crm/acquisti$#', 'crm.acquisti.crea'],
+        ['GET', '#^/v1/crm/acquisti/([^/]+)$#', 'crm.acquisti.mostra'],
+        ['PATCH', '#^/v1/crm/acquisti/([^/]+)$#', 'crm.acquisti.modifica'],
+        ['GET', '#^/v1/crm/acquisti/([^/]+)/consumi$#', 'crm.acquisti.consumi.elenca'],
+        ['POST', '#^/v1/crm/acquisti/([^/]+)/consumi$#', 'crm.acquisti.consumi.crea'],
         ['GET', '#^/v1/crm/sezioni$#', 'crm.sezioni.elenca'],
         ['POST', '#^/v1/crm/sezioni$#', 'crm.sezioni.crea'],
         ['PATCH', '#^/v1/crm/sezioni/([^/]+)$#', 'crm.sezioni.modifica'],
@@ -200,9 +206,9 @@ trait Crm
      * Lo stato del CRM, per tipo e per id: ogni riga porta il suo `workspace`. Le righe eliminate (fasi, attività, note) restano con
      * `eliminata`, come nell'archivio di sistema; le `cambi` sono le righe delle cronologie di contatti, aziende e trattative.
      *
-     * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
+     * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -248,6 +254,12 @@ trait Crm
             'crm.catalogo.mostra' => $this->mostraCrm($richiesta, 'catalogo', $parametri[0]),
             'crm.catalogo.modifica' => $this->modificaVoceCatalogoCrm($richiesta, $corpo, $parametri[0]),
             'crm.catalogo.cronologia.elenca' => $this->cronologiaCatalogoCrm($richiesta, $parametri[0]),
+            'crm.acquisti.elenca' => $this->elencaAcquistiCrm($richiesta),
+            'crm.acquisti.crea' => $this->creaAcquistoCrm($richiesta, $corpo),
+            'crm.acquisti.mostra' => $this->mostraCrm($richiesta, 'acquisti', $parametri[0]),
+            'crm.acquisti.modifica' => $this->modificaAcquistoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.acquisti.consumi.elenca' => $this->elencaConsumiCrm($richiesta, $parametri[0]),
+            'crm.acquisti.consumi.crea' => $this->creaConsumoCrm($richiesta, $corpo, $parametri[0]),
             'crm.sezioni.elenca' => $this->elencaSezioniCrm($richiesta),
             'crm.sezioni.crea' => $this->creaSezioneCrm($richiesta, $corpo),
             'crm.sezioni.modifica' => $this->modificaSezioneCrm($richiesta, $corpo, $parametri[0]),
@@ -420,7 +432,7 @@ trait Crm
         }
 
         if ($cambiata) {
-            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti'], true) ? 'aggiornato_il' : 'aggiornata_il';
+            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti'], true) ? 'aggiornato_il' : 'aggiornata_il';
             $riga[$colonna] = self::dopoCrm($riga[$colonna]);
             $this->crm[$tipo][$id] = $riga;
         }
@@ -1221,6 +1233,7 @@ trait Crm
             'trattative' => $this->voceTrattativa($riga, true),
             'pipeline' => $this->vocePipeline($riga),
             'catalogo' => $this->voceCatalogoCrm($riga),
+            'acquisti' => $this->voceAcquistoCrm($riga),
             default => $this->voceAttivita($riga),
         };
     }
@@ -3810,7 +3823,8 @@ trait Crm
 
         if ($nuova !== $corrente) {
             $conValori = array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['workspace'] === $chi['workspace'] && ($trattativa['importo'] ?? 0) > 0)
-                + array_filter($this->crm['catalogo'], fn (array $voce) => $voce['workspace'] === $chi['workspace'] && ($voce['prezzo_importo'] ?? 0) > 0);
+                + array_filter($this->crm['catalogo'], fn (array $voce) => $voce['workspace'] === $chi['workspace'] && ($voce['prezzo_importo'] ?? 0) > 0)
+                + array_filter($this->crm['acquisti'], fn (array $acquisto) => $acquisto['workspace'] === $chi['workspace'] && (($acquisto['prezzo_importo'] ?? 0) > 0 || $acquisto['pagato_importo'] > 0));
 
             if (($campi['senza_conversione'] ?? false) !== true && $conValori !== []) {
                 throw new Problema('valuta_in_uso');

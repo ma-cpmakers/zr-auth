@@ -165,6 +165,14 @@ return [
         'title' => 'System field',
         'detail' => 'This field is a standard or system field: it can be hidden and moved, but not deleted. Only a “yours” field, created by the workspace, can be deleted. Nothing was written.',
     ],
+    'crediti_esauriti' => [
+        'title' => 'Credits used up',
+        'detail' => 'This purchase does not have enough credits left for the requested quantity, and a credit never goes below zero. Nothing was written: read the purchase again with crm.acquisti.mostra and ask for at most the available credits.',
+    ],
+    'acquisto_scaduto' => [
+        'title' => 'Purchase expired',
+        'detail' => 'This purchase has expired, and a use cannot be recorded on an expired purchase. Nothing was written.',
+    ],
     'ultima_opzione' => [
         'title' => 'Last option',
         'detail' => 'This is the field\'s last live option, and a list or multiple-choice field always has at least one. Add another with crm.campi.opzioni.crea and then remove this one. Nothing was written.',

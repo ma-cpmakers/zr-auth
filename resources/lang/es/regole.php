@@ -94,4 +94,11 @@ return [
     'codice_cambio_email' => 'El código no es correcto, ha caducado o no se ha pedido: pide un código nuevo para cambiar el correo.',
     'catalogo_campo_del_tipo' => 'El campo :campo no existe en un elemento de tipo :tipo: quítalo o cambia el tipo.',
     'catalogo_campo_richiesto' => 'Un elemento de tipo :tipo necesita el campo :campo.',
+    'acquisto_voce_non_attiva' => 'El elemento del catálogo no está activo: una compra solo se registra sobre un elemento activo.',
+    'acquisto_contatto_archiviato' => 'El contacto está archivado: restáuralo antes de registrarle una compra.',
+    'acquisto_data_futura' => 'La fecha de la compra no puede ser posterior a hoy.',
+    'acquisto_oltre_il_prezzo' => 'Lo pagado no puede superar el precio de la compra.',
+    'acquisto_da_pagare' => 'Con el método «da_pagare» (por pagar) lo pagado es cero.',
+    'acquisto_senza_crediti' => 'Esta compra no tiene créditos que consumir: solo un paquete o una suscripción los tiene.',
+    'consumo_nel_futuro' => 'Un consumo no puede ser posterior a ahora.',
 ];

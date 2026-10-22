@@ -94,4 +94,11 @@ return [
     'codice_cambio_email' => 'The code is wrong, has expired or was not requested: ask for a new code to change your email.',
     'catalogo_campo_del_tipo' => 'The field :campo does not exist on an item of type :tipo: remove it or change the type.',
     'catalogo_campo_richiesto' => 'An item of type :tipo needs the field :campo.',
+    'acquisto_voce_non_attiva' => 'The catalog item is not active: a purchase is only recorded on an active item.',
+    'acquisto_contatto_archiviato' => 'The contact is archived: restore it before recording a purchase for it.',
+    'acquisto_data_futura' => 'The purchase date cannot be after today.',
+    'acquisto_oltre_il_prezzo' => 'The amount paid cannot exceed the purchase price.',
+    'acquisto_da_pagare' => 'With the method “da_pagare” (to be paid) the amount paid is zero.',
+    'acquisto_senza_crediti' => 'This purchase has no credits to use: only a package or a subscription has them.',
+    'consumo_nel_futuro' => 'A use cannot be later than now.',
 ];
