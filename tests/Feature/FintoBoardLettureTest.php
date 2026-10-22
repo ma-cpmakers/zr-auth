@@ -40,7 +40,7 @@ it('board.cartelle.elenca dà le cartelle del workspace per nome, senza maiuscol
 
     expect($prima->status())->toBe(200)
         ->and(array_column($prima->json('data'), 'nome'))->toBe(['àmbito', 'Marketing'])
-        ->and(array_keys($prima->json('data.0')))->toBe(['id', 'nome', 'colore', 'creata_il', 'aggiornata_il', 'stato', 'nel_cestino_il', 'cancellata_il'])
+        ->and(array_keys($prima->json('data.0')))->toBe(['id', 'nome', 'colore', 'settore', 'metodo', 'creata_il', 'aggiornata_il', 'stato', 'nel_cestino_il', 'cancellata_il'])
         ->and($prima->json('data.0.colore'))->toBe('sky')
         ->and($prima->json('successivo'))->not->toBeNull();
 
@@ -300,3 +300,33 @@ it('un ordina fuori dai tre valori è 422 sul parametro; il cursore di un ordine
             ->and(collect($risposta->json('errors'))->pluck('parameter')->all())->toContain('cursore');
     }
 })->with(['/v1/board/cartelle', '/v1/board/board']);
+
+// #2348 (AR.1, AR.2, AR.5): il settore e il metodo di una cartella, nel finto come nel backoffice: insieme o nessuno dei due, e con le coppie che
+// board.cartelle.crea ammette (le altre là sono 422, qui un'eccezione del fixture).
+it('board.cartelle.elenca dà il settore e il metodo di ogni cartella, null e null per quelle nate senza (#2348)', function () {
+    [$finto, $studio, , , $gettone] = conLeBoard();
+    $finto->cartella($studio, 'Cantiere', 'sky', settore: 'edilizia', metodo: 'waterfall');
+    $finto->cartella($studio, 'Prodotto', 'plum', settore: 'digitale', metodo: 'scrumban');
+    $finto->cartella($studio, 'Vecchia');
+
+    $voci = array_column(alFinto('GET', '/v1/board/cartelle', null, $gettone)->json('data'), null, 'nome');
+
+    expect(array_map(fn (array $voce) => [$voce['settore'], $voce['metodo']], $voci))->toBe([
+        'Cantiere' => ['edilizia', 'waterfall'],
+        'Prodotto' => ['digitale', 'scrumban'],
+        'Vecchia' => [null, null],
+    ]);
+});
+
+it('il fixture di una cartella rifiuta un solo dei due, un valore fuori elenco e una coppia incoerente, come board.cartelle.crea (#2348)', function (?string $settore, ?string $metodo) {
+    [$finto, $studio] = conLeBoard();
+
+    expect(fn () => $finto->cartella($studio, 'Cantiere', settore: $settore, metodo: $metodo))->toThrow(InvalidArgumentException::class);
+})->with([
+    'il solo settore' => ['digitale', null],
+    'il solo metodo' => [null, 'scrum'],
+    'edilizia con scrum' => ['edilizia', 'scrum'],
+    'digitale con waterfall' => ['digitale', 'waterfall'],
+    'un settore fuori elenco' => ['generico', 'scrum'],
+    'un metodo fuori elenco' => ['digitale', 'lean'],
+]);
