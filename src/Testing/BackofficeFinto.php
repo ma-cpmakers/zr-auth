@@ -180,7 +180,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/workspace/inviti$#', 'workspace.inviti.crea'],
         ['DELETE', '#^/v1/workspace/inviti/([^/]+)$#', 'workspace.inviti.elimina'],
         ['POST', '#^/v1/workspace/inviti/([^/]+)/reinvio$#', 'workspace.inviti.reinvio.crea'],
-        ['GET', '#^/v1/workspace/primi-passi$#', 'workspace.primipassi.mostra'],
+        ['GET', '#^/v1/workspace/primi-passi$#', 'workspace.primi-passi.mostra'],
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
         ['PATCH', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.modifica'],
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
@@ -1238,7 +1238,7 @@ final class BackofficeFinto
                 'workspace.inviti.crea' => $this->creaInvito($richiesta, $corpo),
                 'workspace.inviti.elimina' => $this->eliminaInvito($richiesta, $parametri[0]),
                 'workspace.inviti.reinvio.crea' => $this->reinviaInvito($richiesta, $corpo, $parametri[0]),
-                'workspace.primipassi.mostra' => $this->mostraPrimiPassi($richiesta),
+                'workspace.primi-passi.mostra' => $this->mostraPrimiPassi($richiesta),
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
@@ -4513,7 +4513,7 @@ final class BackofficeFinto
     }
 
     /**
-     * workspace.primipassi.mostra (WorkspacePrimiPassiController::mostra): quali dei primi passi del workspace sono fatti, a ogni ruolo. `account` è
+     * workspace.primi-passi.mostra (WorkspacePrimiPassiController::mostra): quali dei primi passi del workspace sono fatti, a ogni ruolo. `account` è
      * fatto con l'email della persona del gettone verificata; `cartella` e `board` ci sono solo con l'app `pm` attiva e contano le righe del workspace
      * fuori dal cestino; `team` e `azienda` ci sono solo per il proprietario e l'amministratore: `team` è fatto con un altro membro o un invito vivo,
      * `azienda` con l'azienda del workspace che ha il settore e le persone. Nessun id, nome o conto.
