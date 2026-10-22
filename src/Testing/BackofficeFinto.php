@@ -180,6 +180,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/workspace/inviti$#', 'workspace.inviti.crea'],
         ['DELETE', '#^/v1/workspace/inviti/([^/]+)$#', 'workspace.inviti.elimina'],
         ['POST', '#^/v1/workspace/inviti/([^/]+)/reinvio$#', 'workspace.inviti.reinvio.crea'],
+        ['GET', '#^/v1/workspace/primi-passi$#', 'workspace.primipassi.mostra'],
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
         ['PATCH', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.modifica'],
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
@@ -1237,6 +1238,7 @@ final class BackofficeFinto
                 'workspace.inviti.crea' => $this->creaInvito($richiesta, $corpo),
                 'workspace.inviti.elimina' => $this->eliminaInvito($richiesta, $parametri[0]),
                 'workspace.inviti.reinvio.crea' => $this->reinviaInvito($richiesta, $corpo, $parametri[0]),
+                'workspace.primipassi.mostra' => $this->mostraPrimiPassi($richiesta),
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
@@ -4508,6 +4510,38 @@ final class BackofficeFinto
         }
 
         return ['codice' => $codice, 'stato' => $stato, 'nome' => $nome];
+    }
+
+    /**
+     * workspace.primipassi.mostra (WorkspacePrimiPassiController::mostra): quali dei primi passi del workspace sono fatti, a ogni ruolo. `account` è
+     * fatto con l'email della persona del gettone verificata; `cartella` e `board` ci sono solo con l'app `pm` attiva e contano le righe del workspace
+     * fuori dal cestino; `team` ci sta solo per il proprietario e l'amministratore ed è fatto con un altro membro o un invito vivo; `azienda` è fatto
+     * con l'azienda del workspace col nome compilato. Nessun id, nome o conto.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraPrimiPassi(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+        $workspace = $chi['workspace'];
+        $ruolo = $this->membri[$workspace][$chi['persona']];
+        $fuoriDalCestino = fn (array $righe): bool => array_filter($righe, fn (array $riga) => $riga['workspace'] === $workspace && $riga['stato'] !== 'cestino') !== [];
+        $passi = [['codice' => 'account', 'fatto' => $this->persone[$chi['persona']]['email_verificata_il'] !== null]];
+
+        if ($this->appAttiva($workspace, 'pm')) {
+            $passi[] = ['codice' => 'cartella', 'fatto' => $fuoriDalCestino($this->cartelle)];
+            $passi[] = ['codice' => 'board', 'fatto' => $fuoriDalCestino($this->boards)];
+        }
+
+        if (in_array($ruolo, ['proprietario', 'amministratore'], true)) {
+            $altroMembro = array_diff(array_keys($this->membri[$workspace]), [$chi['persona']]) !== [];
+            $invitoVivo = array_filter($this->inviti, fn (array $invito) => $invito['workspace'] === $workspace && $invito['scade']->gt(now())) !== [];
+            $passi[] = ['codice' => 'team', 'fatto' => $altroMembro || $invitoVivo];
+        }
+
+        $passi[] = ['codice' => 'azienda', 'fatto' => ($this->aziende[$this->workspace[$workspace]['azienda_id']] ?? '') !== ''];
+
+        return [200, ['data' => ['passi' => $passi]]];
     }
 
     /**

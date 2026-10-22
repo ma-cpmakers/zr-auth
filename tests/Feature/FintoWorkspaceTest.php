@@ -799,3 +799,48 @@ it('link.verifica.crea: un link vivo è valido, uno spento o inventato no, la fo
     expect(esito($verifica($codice)))->toBe([429, 'troppe_richieste'])
         ->and($verifica(str_repeat('b', 43))->status())->toBe(200);
 });
+
+// #1573 (PP.1-PP.2): i primi passi del workspace, derivati come fa il backoffice. Che la risposta sia quella del contratto, byte per byte, lo prova il
+// FintoTest del backoffice.
+it('workspace.primipassi.mostra dice quali primi passi sono fatti: ordine fisso, cartella e board solo con pm, team solo a chi amministra (#1573)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD, verificata: false);
+    $studio = $finto->workspace('Studio', $anna);
+    $gettone = fn (string $email) => alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto($email)['gettone']['gettone'])->json('data.gettone');
+    $fatti = fn (string $token) => array_column(alFinto('GET', '/v1/workspace/primi-passi', gettone: $token)->json('data.passi'), 'fatto', 'codice');
+    $gettoneAnna = $gettone('anna@example.com');
+
+    // Senza pm i passi di pm non ci sono; l'azienda ha il nome del workspace; l'email non è verificata.
+    expect($fatti($gettoneAnna))->toBe(['account' => false, 'team' => false, 'azienda' => true]);
+
+    $finto->attivaApp($studio, 'pm');
+
+    expect($fatti($gettoneAnna))->toBe(['account' => false, 'cartella' => false, 'board' => false, 'team' => false, 'azienda' => true]);
+
+    $cartella = $finto->cartella($studio, 'Lavoro');
+    $finto->board($studio, 'Piano', $cartella);
+    $carla = $finto->persona('carla@example.com', PASSWORD, nome: 'Carla');
+    $finto->membro($studio, $carla, 'membro');
+
+    // Anna vede il team fatto (c'è Carla); Carla, membro, non lo vede e ha l'email verificata.
+    expect($fatti($gettoneAnna))->toBe(['account' => false, 'cartella' => true, 'board' => true, 'team' => true, 'azienda' => true])
+        ->and($fatti($gettone('carla@example.com')))->toBe(['account' => true, 'cartella' => true, 'board' => true, 'azienda' => true])
+        ->and(alFinto('GET', '/v1/workspace/primi-passi', gettone: $gettoneAnna)->json())->toHaveKey('data.passi.0', ['codice' => 'account', 'fatto' => false]);
+});
+
+it('workspace.primipassi.mostra non conta le cartelle e le board nel cestino né quelle di un altro workspace, e il gettone dell\'accesso è 403 (#1573)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio', $anna);
+    $altro = $finto->workspace('Altro', $finto->persona('elena@example.com', PASSWORD, nome: 'Elena'));
+    $finto->attivaApp($studio, 'pm');
+    $finto->cartella($studio, 'Buttata', stato: 'cestino');
+    $finto->board($studio, 'Buttata', stato: 'cestino');
+    $finto->cartella($altro, 'Di Elena');
+    $finto->board($altro, 'Di Elena');
+    $token = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
+
+    expect(array_column(alFinto('GET', '/v1/workspace/primi-passi', gettone: $token)->json('data.passi'), 'fatto', 'codice'))
+        ->toBe(['account' => true, 'cartella' => false, 'board' => false, 'team' => false, 'azienda' => true])
+        ->and(esito(alFinto('GET', '/v1/workspace/primi-passi', gettone: entraNelFinto('anna@example.com')['gettone']['gettone'])))->toBe([403, 'gettone_senza_workspace']);
+});
