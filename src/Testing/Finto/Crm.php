@@ -48,6 +48,12 @@ trait Crm
         ['GET', '#^/v1/crm/esiti$#', 'crm.esiti.elenca'],
         ['POST', '#^/v1/crm/esiti$#', 'crm.esiti.crea'],
         ['PATCH', '#^/v1/crm/esiti/([^/]+)$#', 'crm.esiti.modifica'],
+        ['GET', '#^/v1/crm/catalogo$#', 'crm.catalogo.elenca'],
+        ['POST', '#^/v1/crm/catalogo$#', 'crm.catalogo.crea'],
+        ['GET', '#^/v1/crm/catalogo/categorie$#', 'crm.catalogo.categorie.elenca'],
+        ['GET', '#^/v1/crm/catalogo/([^/]+)$#', 'crm.catalogo.mostra'],
+        ['PATCH', '#^/v1/crm/catalogo/([^/]+)$#', 'crm.catalogo.modifica'],
+        ['GET', '#^/v1/crm/catalogo/([^/]+)/cronologia$#', 'crm.catalogo.cronologia.elenca'],
         ['GET', '#^/v1/crm/sezioni$#', 'crm.sezioni.elenca'],
         ['POST', '#^/v1/crm/sezioni$#', 'crm.sezioni.crea'],
         ['PATCH', '#^/v1/crm/sezioni/([^/]+)$#', 'crm.sezioni.modifica'],
@@ -196,7 +202,7 @@ trait Crm
      *
      * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -236,6 +242,12 @@ trait Crm
             'crm.esiti.elenca' => $this->elencaEsitiCrm($richiesta),
             'crm.esiti.crea' => $this->creaEsitoCrm($richiesta, $corpo),
             'crm.esiti.modifica' => $this->modificaEsitoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.catalogo.elenca' => $this->elencaCatalogoCrm($richiesta),
+            'crm.catalogo.crea' => $this->creaVoceCatalogoCrm($richiesta, $corpo),
+            'crm.catalogo.categorie.elenca' => $this->elencaCategorieCatalogoCrm($richiesta),
+            'crm.catalogo.mostra' => $this->mostraCrm($richiesta, 'catalogo', $parametri[0]),
+            'crm.catalogo.modifica' => $this->modificaVoceCatalogoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.catalogo.cronologia.elenca' => $this->cronologiaCatalogoCrm($richiesta, $parametri[0]),
             'crm.sezioni.elenca' => $this->elencaSezioniCrm($richiesta),
             'crm.sezioni.crea' => $this->creaSezioneCrm($richiesta, $corpo),
             'crm.sezioni.modifica' => $this->modificaSezioneCrm($richiesta, $corpo, $parametri[0]),
@@ -1208,6 +1220,7 @@ trait Crm
             'persone' => $this->vocePersona($riga, true),
             'trattative' => $this->voceTrattativa($riga, true),
             'pipeline' => $this->vocePipeline($riga),
+            'catalogo' => $this->voceCatalogoCrm($riga),
             default => $this->voceAttivita($riga),
         };
     }
@@ -3796,7 +3809,8 @@ trait Crm
         $nuova = $campi['valuta'] ?? $corrente;
 
         if ($nuova !== $corrente) {
-            $conValori = array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['workspace'] === $chi['workspace'] && ($trattativa['importo'] ?? 0) > 0);
+            $conValori = array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['workspace'] === $chi['workspace'] && ($trattativa['importo'] ?? 0) > 0)
+                + array_filter($this->crm['catalogo'], fn (array $voce) => $voce['workspace'] === $chi['workspace'] && ($voce['prezzo_importo'] ?? 0) > 0);
 
             if (($campi['senza_conversione'] ?? false) !== true && $conValori !== []) {
                 throw new Problema('valuta_in_uso');

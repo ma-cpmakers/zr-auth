@@ -92,4 +92,6 @@ return [
     'campo_predefinito_dopo_le_opzioni' => 'The options are born with this request and have no id yet: set the default afterwards, with crm.campi.modifica.',
     'campo_testo_lungo_non_in_elenco' => 'Long texts do not go in the list.',
     'codice_cambio_email' => 'The code is wrong, has expired or was not requested: ask for a new code to change your email.',
+    'catalogo_campo_del_tipo' => 'The field :campo does not exist on an item of type :tipo: remove it or change the type.',
+    'catalogo_campo_richiesto' => 'An item of type :tipo needs the field :campo.',
 ];
