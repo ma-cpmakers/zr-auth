@@ -81,7 +81,10 @@ trait CrmCatalogo
         $prima = $this->valoriDellaVoceCrm($riga);
         $dopo = $this->completaLaVoceCrm($campi, $riga);
         $this->coerenzaDellaVoceCrm($dopo);
-        $cambiati = array_values(array_filter(self::CRM_CATALOGO_CAMPI, fn (string $campo) => $prima[$campo] !== $dopo[$campo]));
+        // Il prezzo cambia se cambia l'importo: la valuta è sempre quella del workspace e l'ordine delle chiavi del corpo non conta.
+        $cambiati = array_values(array_filter(self::CRM_CATALOGO_CAMPI, fn (string $campo) => $campo === 'prezzo'
+            ? ($prima['prezzo']['importo'] ?? null) !== ($dopo['prezzo']['importo'] ?? null)
+            : $prima[$campo] !== $dopo[$campo]));
 
         if ($cambiati !== []) {
             $nuovi = $this->colonneDellaVoceCrm($campi);
