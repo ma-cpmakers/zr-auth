@@ -67,6 +67,11 @@ trait Crm
         ['GET', '#^/v1/crm/rate/([^/]+)/pagamenti$#', 'crm.rate.pagamenti.elenca'],
         ['POST', '#^/v1/crm/rate/([^/]+)/pagamenti$#', 'crm.rate.pagamenti.crea'],
         ['POST', '#^/v1/crm/pagamenti/([^/]+)/annullamento$#', 'crm.pagamenti.annullamento.crea'],
+        ['GET', '#^/v1/crm/preventivi$#', 'crm.preventivi.elenca'],
+        ['POST', '#^/v1/crm/preventivi$#', 'crm.preventivi.crea'],
+        ['GET', '#^/v1/crm/preventivi/([^/]+)$#', 'crm.preventivi.mostra'],
+        ['PATCH', '#^/v1/crm/preventivi/([^/]+)$#', 'crm.preventivi.modifica'],
+        ['DELETE', '#^/v1/crm/preventivi/([^/]+)$#', 'crm.preventivi.elimina'],
         ['GET', '#^/v1/crm/sezioni$#', 'crm.sezioni.elenca'],
         ['POST', '#^/v1/crm/sezioni$#', 'crm.sezioni.crea'],
         ['PATCH', '#^/v1/crm/sezioni/([^/]+)$#', 'crm.sezioni.modifica'],
@@ -215,7 +220,7 @@ trait Crm
      *
      * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -272,6 +277,11 @@ trait Crm
             'crm.rate.riepilogo.mostra' => $this->riepilogoRateCrm($richiesta),
             'crm.rate.mostra' => $this->mostraCrm($richiesta, 'rate', $parametri[0]),
             'crm.rate.pagamenti.elenca' => $this->elencaPagamentiCrm($richiesta, $parametri[0]),
+            'crm.preventivi.elenca' => $this->elencaPreventiviCrm($richiesta),
+            'crm.preventivi.crea' => $this->creaPreventivoCrm($richiesta, $corpo),
+            'crm.preventivi.mostra' => $this->mostraCrm($richiesta, 'preventivi', $parametri[0]),
+            'crm.preventivi.modifica' => $this->modificaPreventivoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.preventivi.elimina' => $this->eliminaPreventivoCrm($richiesta, $parametri[0]),
             'crm.rate.pagamenti.crea' => $this->creaPagamentoCrm($richiesta, $corpo, $parametri[0]),
             'crm.pagamenti.annullamento.crea' => $this->annullaPagamentoCrm($richiesta, $corpo, $parametri[0]),
             'crm.sezioni.elenca' => $this->elencaSezioniCrm($richiesta),
@@ -446,7 +456,7 @@ trait Crm
         }
 
         if ($cambiata) {
-            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti', 'rate', 'pagamenti'], true) ? 'aggiornato_il' : 'aggiornata_il';
+            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti', 'rate', 'pagamenti', 'preventivi'], true) ? 'aggiornato_il' : 'aggiornata_il';
             $riga[$colonna] = self::dopoCrm($riga[$colonna]);
             $this->crm[$tipo][$id] = $riga;
         }
@@ -1249,6 +1259,7 @@ trait Crm
             'catalogo' => $this->voceCatalogoCrm($riga),
             'acquisti' => $this->voceAcquistoCrm($riga),
             'rate' => $this->voceRataCrm($riga),
+            'preventivi' => $this->vocePreventivoCrm($riga),
             default => $this->voceAttivita($riga),
         };
     }
@@ -2297,6 +2308,7 @@ trait Crm
         }
 
         $this->dimenticaIPagamentiCrm($persona['id']);
+        $this->dimenticaIPreventiviCrm($persona['id']);
 
         foreach ($this->crm['note'] as $nota => $riga) {
             if ($riga['persona_id'] === $persona['id']) {

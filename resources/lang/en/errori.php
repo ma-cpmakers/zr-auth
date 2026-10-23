@@ -181,6 +181,10 @@ return [
         'title' => 'Installments with payments',
         'detail' => 'This purchase already has a payment that is not cancelled, and its plan cannot be replaced. Cancel the payments first with crm.pagamenti.annullamento.crea, then try again. Nothing was written.',
     ],
+    'preventivo_non_modificabile' => [
+        'title' => 'Quote cannot be changed',
+        'detail' => 'This quote is no longer a draft and cannot be changed. To change it, make a revision. Nothing was written.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',

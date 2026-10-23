@@ -181,6 +181,10 @@ return [
         'title' => 'Cuotas con pagos',
         'detail' => 'Esta compra ya tiene un pago no anulado y su plan no se puede sustituir. Anula antes los pagos con crm.pagamenti.annullamento.crea y repite. No se escribió nada.',
     ],
+    'preventivo_non_modificabile' => [
+        'title' => 'Presupuesto no modificable',
+        'detail' => 'Este presupuesto ya no es un borrador y no se modifica. Para cambiarlo se hace una revisión. No se escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',
