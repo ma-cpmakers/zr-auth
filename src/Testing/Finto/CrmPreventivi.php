@@ -8,7 +8,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * I preventivi del CRM nel backoffice finto (CRM-06, #2387): `crm.preventivi.elenca`, `crea`, `mostra`, `modifica`, `elimina`, `invio.crea`, `rifiuto.crea` e `accettazione.crea` (#2389), con le
+ * I preventivi del CRM nel backoffice finto (CRM-06, #2387): `crm.preventivi.elenca`, `crea`, `mostra`, `modifica`, `elimina`, `invio.crea`, `rifiuto.crea`, `accettazione.crea` e `revisione.crea` (#2389), con le
  * regole, i pointer e l'ordine di `PreventiviController` e di `App\Crm\Preventivi` del backoffice. Un preventivo nasce in `bozza` col suo
  * numero (`P-2026-001`, il successivo dell'anno, eliminati compresi); ha da 1 a 50 righe e un piano dei pagamenti (`unica`, senza rate;
  * `acconto_saldo`, due; `rate`, da due a 24) la cui somma è il totale. I prezzi sono IVA inclusa: l'imponibile di ogni aliquota si scorpora
@@ -57,7 +57,7 @@ trait CrmPreventivi
             'persona_id' => ['bail', 'sometimes', 'string', 'ulid'],
             'organizzazione_id' => ['bail', 'sometimes', 'string', 'ulid'],
             'trattativa_id' => ['bail', 'sometimes', 'string', 'ulid'],
-            'numero' => ['bail', 'sometimes', 'string', 'regex:/^P-\d{4}-\d{3,}$/'],
+            'numero' => ['bail', 'sometimes', 'string', 'regex:/^P-\d{4}-\d{3,}(\/([2-9]|[1-9]\d+))?$/'],
             'stato' => $this->regolaDelleVociCrm('stato', self::CRM_PREVENTIVI_STATI),
             'ordina' => ['bail', 'sometimes', 'string', Rule::in(self::CRM_PREVENTIVI_ORDINI)],
             'totale' => ['sometimes', 'string', Rule::in(['true', 'false'])],
@@ -457,6 +457,57 @@ trait CrmPreventivi
     }
 
     /**
+     * crm.preventivi.revisione.crea (PreventiviController::revisione, Preventivi::rivedi): nessun campo nel corpo (uno è 422 `campo_estraneo`).
+     * Da `inviato`, `visto`, `rifiutato` o `scaduto` nasce una bozza con lo stesso numero e il suffisso successivo (`P-2026-001/2`), `revisione_di`,
+     * le stesse righe (con id nuovi), lo stesso piano e gli stessi testi, la validità di oggi più 30 giorni e la valuta del preventivo di prima, che
+     * diventa `sostituito`. Una bozza, un accettato o un sostituito: 409 `preventivo_stato_non_ammesso`; contatto anonimizzato: 409
+     * `persona_anonimizzata`; oltre il tetto dei preventivi: 409 `limite_raggiunto`. Risponde 201 con la bozza e la sua `Location`; accetta
+     * Idempotency-Key.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function rivediPreventivoCrm(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $this->rigaCrm('preventivi', $chi['workspace'], $id);
+
+        return $this->conIdempotenza($richiesta, 'crm.preventivi.revisione.crea', $chi, $corpo, function () use ($chi, $corpo, $id) {
+            $this->testi->validaCorpo($corpo, []);
+            $riga = $this->crm['preventivi'][$id];
+            $this->senzaContattoAnonimizzatoPreventivoCrm($riga);
+
+            if (! in_array(self::statoDelPreventivoCrm($riga), ['inviato', 'visto', 'rifiutato', 'scaduto'], true)) {
+                throw new Problema('preventivo_stato_non_ammesso');
+            }
+
+            $tutti = array_filter($this->crm['preventivi'], fn (array $una) => $una['workspace'] === $chi['workspace']);
+
+            if (count($tutti) >= self::CRM_PREVENTIVI_TETTO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_PREVENTIVI_TETTO]);
+            }
+
+            $revisione = 1 + (int) max(array_map(fn (array $una) => $una['anno'] === $riga['anno'] && $una['progressivo'] === $riga['progressivo'] ? ($una['revisione'] ?? 1) : 0, array_values($tutti)));
+            $nuovo = self::id();
+            $ora = self::adessoCrm();
+            $this->crm['preventivi'][$nuovo] = [
+                'id' => $nuovo, 'workspace' => $chi['workspace'], 'anno' => $riga['anno'], 'progressivo' => $riga['progressivo'], 'revisione' => $revisione,
+                'revisione_di' => $id, 'stato' => 'bozza', 'persona_id' => $riga['persona_id'], 'organizzazione_id' => $riga['organizzazione_id'],
+                'trattativa_id' => $riga['trattativa_id'],
+                'valido_fino_al' => CarbonImmutable::parse(self::oggiAcquistoCrm(), 'UTC')->addDays(self::CRM_PREVENTIVI_GIORNI_DI_VALIDITA)->format('Y-m-d'),
+                'valuta' => $riga['valuta'], 'piano_tipo' => $riga['piano_tipo'], 'introduzione' => $riga['introduzione'], 'condizioni' => $riga['condizioni'],
+                'inviato_il' => null, 'rifiutato_il' => null, 'rifiuto_motivo' => null,
+                'righe' => array_map(fn (array $voce) => ['id' => self::id()] + array_diff_key($voce, ['id' => true]), $riga['righe']),
+                'rate' => $riga['rate'],
+                'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
+            ];
+            $this->crm['preventivi'][$id]['stato'] = 'sostituito';
+            $this->crm['preventivi'][$id]['aggiornato_il'] = self::dopoCrm($riga['aggiornato_il']);
+
+            return [201, ['data' => $this->vocePreventivoCrm($this->crm['preventivi'][$nuovo])], ['Location' => "/v1/crm/preventivi/{$nuovo}"]];
+        });
+    }
+
+    /**
      * Il contatto che compra (Preventivi::compratore): quello del preventivo, o per una sola azienda quello dato nel corpo; un contatto dato che
      * non è quello del preventivo, uno che manca, uno che non c'è o è archiviato sono errori di `persona_id`; anonimizzato è 409.
      *
@@ -608,6 +659,7 @@ trait CrmPreventivi
         return [
             'id' => $riga['id'],
             'numero' => self::numeroPreventivoCrm($riga),
+            'revisione_di' => $riga['revisione_di'] ?? null,
             'persona_id' => $riga['persona_id'],
             'organizzazione_id' => $riga['organizzazione_id'],
             'trattativa_id' => $riga['trattativa_id'],
@@ -645,10 +697,12 @@ trait CrmPreventivi
         ];
     }
 
-    /** Il numero com'è nel contratto: `P-2026-001` (tre cifre almeno, di più oltre il 999). */
+    /** Il numero com'è nel contratto: `P-2026-001` (tre cifre almeno, di più oltre il 999), e `P-2026-001/2` per la seconda revisione: l'originale non porta suffisso. */
     private static function numeroPreventivoCrm(array $riga): string
     {
-        return sprintf('P-%04d-%03d', $riga['anno'], $riga['progressivo']);
+        $revisione = $riga['revisione'] ?? 1;
+
+        return sprintf('P-%04d-%03d', $riga['anno'], $riga['progressivo']).($revisione > 1 ? "/{$revisione}" : '');
     }
 
     /** L'importo di una riga: quantità × prezzo unitario meno lo sconto, arrotondato al più vicino (a metà in su). */
