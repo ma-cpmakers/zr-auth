@@ -402,7 +402,7 @@ trait CrmPreventivi
                     'voce_durata_minuti' => $catalogo['durata_minuti'] ?? null, 'voce_unita_incluse' => $catalogo['unita_incluse'] ?? null,
                     'voce_etichetta_unita' => $catalogo['etichetta_unita'] ?? null, 'voce_validita_mesi' => $catalogo['validita_mesi'] ?? null, 'voce_rinnovo' => $catalogo['rinnovo'] ?? null,
                     'prezzo_importo' => self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']),
-                    'acquistato_il' => $giorno, 'pagato_importo' => 0, 'metodo_pagamento' => 'da_pagare', 'documento' => 'da_fare',
+                    'acquistato_il' => $giorno, 'inizio_il' => $giorno, 'pagato_importo' => 0, 'metodo_pagamento' => 'da_pagare', 'documento' => 'da_fare',
                     'valido_fino_al' => ($catalogo['validita_mesi'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, $catalogo['validita_mesi']),
                     'rinnovo_il' => ($catalogo['rinnovo'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, self::CRM_ACQUISTI_MESI_DEL_RINNOVO[$catalogo['rinnovo']]),
                     'crediti_totali' => ($catalogo['tipo'] ?? null) === 'pacchetto' && $catalogo['unita_incluse'] !== null ? $catalogo['unita_incluse'] * $voce['quantita'] : null,
