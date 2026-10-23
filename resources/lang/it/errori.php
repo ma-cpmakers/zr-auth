@@ -197,6 +197,10 @@ return [
         'title' => 'Preventivo già accettato',
         'detail' => 'Questo preventivo è già stato accettato: l\'accettazione si registra una volta sola. Rileggilo con crm.preventivi.mostra per vedere gli acquisti nati. Il metodo non ha scritto niente.',
     ],
+    'proprieta_da_trasferire' => [
+        'title' => 'Proprietà da trasferire',
+        'detail' => "Sei proprietario di uno o più workspace (il problema porta accanto al codice `workspace_da_trasferire`, con id e nome): finché lo sei non puoi eliminare l'account. Elimina quei workspace e ripeti la richiesta. Il metodo non ha scritto niente.",
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',

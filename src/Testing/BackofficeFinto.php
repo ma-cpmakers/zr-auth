@@ -31,6 +31,7 @@ use Zeiras\Auth\Testing\Finto\CrmPreventivi;
 use Zeiras\Auth\Testing\Finto\CrmValori;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
+use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
@@ -167,6 +168,7 @@ final class BackofficeFinto
         ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
         ['POST', '#^/v1/io/inviti/verifica$#', 'io.inviti.verifica.crea'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
+        ['DELETE', '#^/v1/io$#', 'io.elimina'],
         ['POST', '#^/v1/io/email/codice$#', 'io.email.codice.crea'],
         ['POST', '#^/v1/io/email/verifica$#', 'io.email.verifica.crea'],
         ['PATCH', '#^/v1/io/password$#', 'io.password.modifica'],
@@ -287,10 +289,13 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5];
+    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
+
+    /** Quanti membri iniziali al più in io.workspace.crea (#2012, C.2): ognuno è un invito, cioè una mail. */
+    private const MEMBRI_INIZIALI = 20;
 
     /** I settori di un'azienda e di un workspace (App\Settori del backoffice): un elenco solo. */
     private const SETTORI = ['formazione', 'consulenza', 'eventi', 'agenzia_marketing', 'studio_professionale', 'vendite', 'sviluppo_software', 'commercio', 'altro'];
@@ -409,6 +414,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{id: string, nome: string, slug: string, azienda_id: string, settore: ?string, lingua_contenuti: ?string}> per id */
     private array $workspace = [];
+
+    /** @var array<string, CarbonImmutable> quando ogni persona ha chiesto di eliminare l'account (io.elimina, #1961), per id: il finto non anonimizza al trentesimo giorno */
+    private array $eliminazioniPersona = [];
 
     /** @var array<string, string> il colore scelto per workspace (#2010): senza una scelta il workspace è `neutral` (Forme::workspaceConRuolo) */
     private array $colori = [];
@@ -1234,6 +1242,7 @@ final class BackofficeFinto
                 'io.notifiche.letture.crea' => $this->segnaNotificheLette($richiesta, $corpo),
                 'io.notifiche.lettura.modifica' => $this->segnaNotifica($richiesta, $corpo, $parametri[0]),
                 'io.modifica' => $this->modificaIo($richiesta, $corpo),
+                'io.elimina' => $this->eliminaPersona($richiesta),
                 'io.password.modifica' => $this->modificaPassword($richiesta, $corpo),
                 'io.email.codice.crea' => $this->creaCodice($corpo),
                 'io.email.verifica.crea' => $this->verificaEmail($corpo),
@@ -2431,6 +2440,7 @@ final class BackofficeFinto
             'id' => $accesso,
             'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
             'gettone' => $this->emetti($accesso, null),
+            ...($this->annullaLEliminazione($persona) ? ['eliminazione_annullata' => true] : []),
         ]]];
     }
 
@@ -2600,6 +2610,7 @@ final class BackofficeFinto
             'id' => $accesso,
             'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
             'gettone' => $this->emetti($accesso, null),
+            ...($this->annullaLEliminazione($persona) ? ['eliminazione_annullata' => true] : []),
             'workspace_id' => $workspace,
         ]]];
     }
@@ -3415,6 +3426,70 @@ final class BackofficeFinto
     }
 
     /**
+     * io.elimina (IoController::elimina, #1961): «Elimina account» con ripensamento. Nell'ordine del backoffice: il gettone (ogni gettone
+     * della persona, con o senza workspace), la conferma recente dell'accesso (403 `conferma_richiesta`, prima di guardare altro), il freno
+     * di 5 richieste in un'ora per persona (429), poi i workspace di cui è proprietaria (409 `proprieta_da_trasferire`, con `workspace_da_trasferire`,
+     * id e nome in ordine di id, accanto al codice: non cambia niente). Altrimenti 202 con `richiesta_il` e `anonimizzazione_il`, trenta giorni
+     * dopo: gli accessi della persona si chiudono subito, e i loro gettoni, quello che chiama compreso, sono 401; il resto (nome, email, appartenenze)
+     * resta com'è, e un nuovo accesso entro i trenta giorni toglie la richiesta (`eliminazione_annullata` in accessi.crea e accessi.provider.crea).
+     * La seconda richiesta di chi l'ha già fatta non può arrivare con un gettone: dopo il 202 non ce n'è uno che valga.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function eliminaPersona(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $fino = $this->accessi[$chi['accesso']]['confermato_fino'] ?? null;
+
+        if ($fino === null || $fino->lte(now())) {
+            throw new Problema('conferma_richiesta');
+        }
+
+        $persona = $chi['persona'];
+        $this->frena('freni:io.elimina:persona:'.$persona, self::FRENI['eliminazioni_persona'], self::ORA);
+
+        $daTrasferire = [];
+
+        foreach ($this->workspace as $id => $workspace) {
+            if (($this->membri[$id][$persona] ?? null) === 'proprietario') {
+                $daTrasferire[] = ['id' => $id, 'nome' => $workspace['nome']];
+            }
+        }
+
+        if ($daTrasferire !== []) {
+            usort($daTrasferire, fn (array $a, array $b) => strcmp($a['id'], $b['id']));
+
+            throw new Problema('proprieta_da_trasferire', estensioni: ['workspace_da_trasferire' => $daTrasferire]);
+        }
+
+        $adesso = now()->toImmutable()->startOfMillisecond();
+        $quando = $this->eliminazioniPersona[$persona] ??= $adesso;
+
+        foreach ($this->accessi as $id => $accesso) {
+            if ($accesso['utente'] === $persona) {
+                $this->accessi[$id]['chiuso'] = true;
+            }
+        }
+
+        return [202, ['data' => ['richiesta_il' => self::iso($quando), 'anonimizzazione_il' => self::iso($quando->addDays(30))]]];
+    }
+
+    /**
+     * Il ripensamento (Eliminazione::annulla): chi apre un accesso dopo aver chiesto di eliminare l'account toglie la richiesta. Dice se
+     * c'era, e l'accesso lo scrive nella risposta (`eliminazione_annullata: true`, solo allora).
+     */
+    private function annullaLEliminazione(string $persona): bool
+    {
+        if (! isset($this->eliminazioniPersona[$persona])) {
+            return false;
+        }
+
+        unset($this->eliminazioniPersona[$persona]);
+
+        return true;
+    }
+
+    /**
      * io.modifica (IoController::modifica): il nome, la lingua e il fuso orario della persona del gettone, come JSON Merge
      * Patch sotto `utente`. I campi di `utente` valgono col solo gettone dell'accesso (#1412): con uno di un workspace un corpo
      * che ne ha è 403 `gettone_con_workspace`, prima di guardarlo. Col gettone di un workspace il corpo è `primi_passi_nascosti`
@@ -4193,6 +4268,10 @@ final class BackofficeFinto
                 'settore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::SETTORI)],
                 'lingua_contenuti' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(Testi::LINGUE)],
                 'colore' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::COLORI)],
+                'membri' => ['sometimes', 'nullable', 'bail', 'array', 'list', 'max:'.self::MEMBRI_INIZIALI],
+                'membri.*' => ['bail', 'array'],
+                'membri.*.persona' => ['bail', 'required', 'string', 'max:26', 'distinct'],
+                'membri.*.ruolo' => ['bail', 'required', 'string', Rule::in(['amministratore', 'membro'])],
                 'azienda' => ['sometimes', 'nullable', 'array', 'prohibits:azienda_id'],
                 'accordo_trattamento_dati_accettato' => ['sometimes', 'nullable', 'boolean:strict'],
                 'azienda.partita_iva' => ['sometimes', 'nullable', 'bail', 'string', 'max:40', 'regex:/^(?=[A-Za-z0-9 .]*$)(?:[ .]*[A-Za-z0-9]){8,14}[ .]*$/'],
@@ -4217,10 +4296,19 @@ final class BackofficeFinto
                 }
             }
 
+            // I membri iniziali (#2012, C.2): dopo il 404 e il 403 dell'azienda, prima dell'accordo.
+            $membriIniziali = $this->controllaIMembri($persona, $azienda, $corpo['membri'] ?? null, $campi['membri'] ?? []);
+
             // L'accordo sul trattamento dei dati (#1700): dopo il 404 e il 403 dell'azienda, prima del freno e di ogni scrittura.
             $accordo = $this->richiediAccordo($azienda, $campi['accordo_trattamento_dati_accettato'] ?? null);
 
             $this->frena('freni:persona:io.workspace.crea:'.$persona, self::FRENI['workspace'], self::ORA);
+
+            // Ogni membro iniziale è un invito, cioè una mail: gli stessi conti di workspace.inviti.crea, per chi invita e per l'email invitata.
+            foreach ($membriIniziali as [$invitata]) {
+                $this->frena('inviti-persona:'.$persona, self::FRENI['inviti_per_persona_al_giorno'], 86400);
+                $this->frena('inviti:'.$this->persone[$invitata]['email'], self::FRENI['inviti_per_email'], self::ORA);
+            }
 
             $id = self::id();
             $this->workspace[$id] = [
@@ -4245,8 +4333,88 @@ final class BackofficeFinto
             // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
             $this->attive[$id]['pm'] = true;
 
+            // Chi si invita entra con un invito da accettare, mai con un ingresso diretto: la mail parte da ultimoInvito().
+            foreach ($membriIniziali as [$invitata, $ruolo]) {
+                $invito = self::id();
+                $adesso = now()->toImmutable()->startOfMillisecond();
+                $email = $this->persone[$invitata]['email'];
+                $this->inviti[$invito] = [
+                    'id' => $invito,
+                    'workspace' => $id,
+                    'email' => $email,
+                    'ruolo' => $ruolo,
+                    'reinvii' => 0,
+                    'invitante' => $persona,
+                    'codice' => self::base64url(random_bytes(32)),
+                    'scade' => $adesso->addDays(self::GIORNI_DELL_INVITO),
+                    'creato_il' => $adesso,
+                ];
+                $this->postaInviti[$email] = $this->inviti[$invito]['codice'];
+            }
+
             return [201, ['data' => $this->conRuolo($id, 'proprietario')], []];
         });
+    }
+
+    /**
+     * I membri iniziali di io.workspace.crea (IoWorkspaceController::controllaIMembri, #2012 C.2): ognuno entra con un invito, anche se è
+     * della stessa azienda. Si può invitare solo una persona che è già membro di un workspace dell'azienda del workspace nuovo, e non chi lo
+     * crea: tutto il resto (un'altra persona, una che non c'è, un'altra azienda) è 422 `valore_non_ammesso` su `#/membri/N/persona`,
+     * uguale nei casi (G11). Senza `azienda_id` `membri` è 422 `campo_vietato`. Ogni elemento ha solo `persona` e `ruolo`: un altro nome
+     * è 422 `campo_estraneo` su `#/membri/N/<nome>`. Un corpo senza `membri` non cambia.
+     *
+     * @param  mixed  $grezzo  `membri` come è arrivato nel corpo
+     * @param  list<array{persona: string, ruolo: string}>  $membri  quelli validati
+     * @return list<array{0: string, 1: string}> chi invitare e con quale ruolo, nell'ordine del corpo
+     */
+    private function controllaIMembri(string $chi, ?string $azienda, mixed $grezzo, array $membri): array
+    {
+        $errori = [];
+
+        foreach (is_array($grezzo) ? $grezzo : [] as $posto => $membro) {
+            foreach (is_array($membro) ? array_keys($membro) : [] as $nome) {
+                if (! in_array($nome, ['persona', 'ruolo'], true)) {
+                    $errori[] = ['detail' => $this->testi->testo('validation.prohibited', ['attribute' => $this->testi->nome("membri.{$posto}.{$nome}")]), 'regola' => Regola::CAMPO_ESTRANEO, 'pointer' => "#/membri/{$posto}/{$nome}"];
+                }
+            }
+        }
+
+        if ($errori !== []) {
+            throw new Problema('dati_non_validi', $errori);
+        }
+
+        if ($membri === []) {
+            return [];
+        }
+
+        if ($azienda === null) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.prohibited', ['attribute' => $this->testi->nome('membri')]), 'regola' => Regola::CAMPO_VIETATO, 'pointer' => '#/membri']]);
+        }
+
+        $inviti = [];
+
+        foreach (array_values($membri) as $posto => $membro) {
+            $persona = $membro['persona'];
+            $ammessa = $persona !== $chi && isset($this->persone[$persona]) && array_filter(
+                $this->workspace,
+                fn (array $workspace, string $id) => $workspace['azienda_id'] === $azienda && isset($this->membri[$id][$persona]),
+                ARRAY_FILTER_USE_BOTH,
+            ) !== [];
+
+            if (! $ammessa) {
+                $errori[] = ['detail' => $this->testi->testo('validation.in', ['attribute' => $this->testi->nome("membri.{$posto}.persona")]), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => "#/membri/{$posto}/persona"];
+
+                continue;
+            }
+
+            $inviti[] = [$persona, $membro['ruolo']];
+        }
+
+        if ($errori !== []) {
+            throw new Problema('dati_non_validi', $errori);
+        }
+
+        return $inviti;
     }
 
     /**

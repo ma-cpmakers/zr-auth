@@ -695,7 +695,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.altri.elimina`, `accessi.conferma.crea`, `accessi.elenca`, `io.email.cambio.crea`, `io.email.cambio.verifica.crea`, `io.esportazioni.crea`, `io.esportazioni.mostra`, `io.esportazioni.archivio.mostra`, `accessi.elimina`, `accessi.provider.elenca`,
   `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
   `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
-  `io.modifica`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`, `workspace.uscita.crea`,
+  `io.modifica`, `io.elimina`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`, `workspace.uscita.crea`,
   `workspace.inviti.crea`, `workspace.inviti.elimina`, `workspace.inviti.reinvio.crea` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
   `io.workspace.elenca`, `io.aziende.elenca`, `io.notifiche.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
   `io.workspace.crea` (vedi «Il workspace»). Una chiamata
@@ -760,6 +760,17 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   più nel corpo si ignora; un'`azienda_id` che non è della persona è `404`; dieci workspace all'ora per persona, poi `429`
   con `Retry-After`. Con `Idempotency-Key` la stessa chiave dà la stessa risposta senza un secondo workspace, con qualunque
   gettone della persona.
+  `membri` (facoltativo, al più 20, `{persona, ruolo}` con `amministratore` o `membro`) invita nel workspace nuovo chi è già
+  membro di un workspace della stessa azienda: ognuno riceve un invito da accettare (`ultimoInvito()` legge il codice), mai un
+  ingresso diretto. Una persona di un'altra azienda, una che non c'è e chi crea sono lo stesso `422` `valore_non_ammesso` su
+  `#/membri/N/persona`; senza `azienda_id` `membri` è `422` `campo_vietato`; un campo di un membro che non è `persona` o
+  `ruolo` è `422` `campo_estraneo`.
+- **Elimina account.** `io.elimina` (`DELETE /v1/io`, senza corpo) vale con ogni gettone della persona e vuole la conferma
+  recente (`accessi.conferma.crea`, senza `403` `conferma_richiesta`). Una proprietaria è `409` `proprieta_da_trasferire`, con
+  `workspace_da_trasferire` (id e nome) accanto al codice. Altrimenti `202` con `richiesta_il` e `anonimizzazione_il`, trenta
+  giorni dopo: gli accessi si chiudono (ogni gettone è `401`) e un nuovo accesso (`accessi.crea`, `accessi.provider.crea`)
+  toglie la richiesta, con `eliminazione_annullata: true` nella risposta, solo allora. Il finto non anonimizza al trentesimo
+  giorno. Cinque richieste all'ora per persona, poi `429` con `Retry-After`.
 - **Gli inviti.** `workspace.inviti.crea` (`{"email", "ruolo"}`) è `201` con l'invito (`id`, `email`, `ruolo`, `reinvii`, `scade_il`,
   `creato_il`) e la `Location`, uguale per un'email con un account e per una senza, e **mai con il codice**: il codice è
   nella mail, e il test lo legge da `ultimoInvito($email)`, la casella di posta degli inviti (l'ultimo partito, `null` se

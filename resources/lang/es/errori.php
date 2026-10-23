@@ -197,6 +197,10 @@ return [
         'title' => 'Presupuesto ya aceptado',
         'detail' => 'Este presupuesto ya fue aceptado: la aceptación se registra una sola vez. Léelo de nuevo con crm.preventivi.mostra para ver las compras creadas. El método no escribió nada.',
     ],
+    'proprieta_da_trasferire' => [
+        'title' => 'Propiedad por transferir',
+        'detail' => 'Eres propietario de uno o más espacios de trabajo (el problema lleva `workspace_da_trasferire` junto al código, con id y nombre): mientras lo seas no puedes eliminar la cuenta. Elimina esos espacios y repite la petición. No se escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',
