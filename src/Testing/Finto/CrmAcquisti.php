@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
  * `consumi.elenca`, con le regole, i pointer e l'ordine di `AcquistiController` del backoffice. Un acquisto è un contatto che compra una
  * voce del catalogo e ne conserva nome, prezzo e condizioni del momento; il pagato si scrive alla creazione, dopo si cambiano il
  * `documento` e l'`inizio_il` (da cui partono la scadenza e il rinnovo). Il primo acquisto di un contatto `lead`, `qualificato` o `perso` lo fa `cliente`, con la sua riga di cronologia. Un consumo
- * porta i crediti di un pacchetto verso zero senza mai superarli (409 `crediti_esauriti`), e non si registra su un acquisto scaduto (409
+ * porta i crediti di un pacchetto fino a −1 senza mai superarli (409 `crediti_esauriti`), e non si registra su un acquisto scaduto (409
  * `acquisto_scaduto`); un acquisto non si elimina. Lo `stato` non è una colonna: si calcola a ogni risposta. Li chiamano i tre ruoli per leggere e per i consumi; `crea` e `modifica` sono del proprietario e degli amministratori (#2404), un membro è 403 `permesso_negato`.
  * L'`ETag` non è lo stesso valore del backoffice: conta la forma. Il finto non emette gli eventi.
  */
@@ -29,6 +29,9 @@ trait CrmAcquisti
     private const CRM_ACQUISTI_DOCUMENTI = ['da_fare', 'ricevuta_fatta', 'fattura_fatta'];
 
     private const CRM_ACQUISTI_STATI = ['attivo', 'esaurito', 'scaduto'];
+
+    /** Il credito più basso che un pacchetto può toccare (`zeiras.crm.credito_minimo_del_pacchetto`): un consumo non porta i disponibili sotto. */
+    private const CRM_ACQUISTI_CREDITO_MINIMO = -1;
 
     private const CRM_ACQUISTI_ORDINI = ['-acquistato_il', 'acquistato_il', 'valido_fino_al', '-valido_fino_al'];
 
@@ -207,7 +210,7 @@ trait CrmAcquisti
     /**
      * crm.acquisti.consumi.crea (AcquistiController::consumiCrea): 201 con il solo consumo, senza `Location`. `quantita` (1-100, di partenza 1),
      * `svolto_il` (di partenza adesso, non nel futuro) e `nota` (al più 500). Un acquisto senza crediti (servizio, prodotto) è 422; uno
-     * scaduto è 409 `acquisto_scaduto`; un pacchetto con meno crediti della `quantita` è 409 `crediti_esauriti` coi `disponibili`. L'abbonamento
+     * scaduto è 409 `acquisto_scaduto`; un pacchetto che dopo il consumo scenderebbe sotto −1 è 409 `crediti_esauriti` coi `disponibili` (a credito zero passa). L'abbonamento
      * si consuma senza tetto.
      *
      * @return array{int, array<string, mixed>, array<string, string>}
@@ -238,7 +241,8 @@ trait CrmAcquisti
                 throw new Problema('acquisto_scaduto');
             }
 
-            if ($riga['voce_tipo'] === 'pacchetto' && $quantita > self::disponibiliAcquistoCrm($riga)) {
+            // Un pacchetto si consuma anche a credito zero, fino al credito minimo (−1, `zeiras.crm.credito_minimo_del_pacchetto`): il cliente è da pagare (#2399).
+            if ($riga['voce_tipo'] === 'pacchetto' && self::disponibiliAcquistoCrm($riga) - $quantita < self::CRM_ACQUISTI_CREDITO_MINIMO) {
                 throw new Problema('crediti_esauriti', estensioni: ['disponibili' => self::disponibiliAcquistoCrm($riga)]);
             }
 

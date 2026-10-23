@@ -167,7 +167,7 @@ return [
     ],
     'crediti_esauriti' => [
         'title' => 'Crediti esauriti',
-        'detail' => "I crediti disponibili di questo acquisto non bastano per la quantità chiesta, e un credito non va mai sotto zero. Il metodo non ha scritto niente: rileggi l'acquisto con crm.acquisti.mostra e chiedi al più i crediti disponibili.",
+        'detail' => "I crediti disponibili di questo acquisto non bastano per la quantità chiesta, e un pacchetto non scende sotto −1. Il metodo non ha scritto niente: rileggi l'acquisto con crm.acquisti.mostra e chiedi una quantità che lasci i disponibili a −1 o più.",
     ],
     'acquisto_scaduto' => [
         'title' => 'Acquisto scaduto',
