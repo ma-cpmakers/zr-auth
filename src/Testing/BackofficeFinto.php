@@ -62,6 +62,7 @@ final class BackofficeFinto
     use CrmCatalogo;
     use CrmRate;
     use CrmEsiti;
+    use CrmPreventivi;
     use CrmValori;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */

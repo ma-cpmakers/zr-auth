@@ -181,6 +181,10 @@ return [
         'title' => 'Rate con pagamenti',
         'detail' => 'Questo acquisto ha già un pagamento non annullato e il suo piano non si sostituisce. Annulla prima i pagamenti con crm.pagamenti.annullamento.crea, poi ripeti. Il metodo non ha scritto niente.',
     ],
+    'preventivo_non_modificabile' => [
+        'title' => 'Preventivo non modificabile',
+        'detail' => 'Questo preventivo non è più una bozza e non si modifica. Per cambiarlo si fa una revisione. Il metodo non ha scritto niente.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',
