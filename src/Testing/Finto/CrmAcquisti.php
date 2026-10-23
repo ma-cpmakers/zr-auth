@@ -13,7 +13,7 @@ use Illuminate\Validation\Rule;
  * voce del catalogo e ne conserva nome, prezzo e condizioni del momento; il pagato si scrive alla creazione, dopo si cambia il solo
  * `documento`. Il primo acquisto di un contatto `lead`, `qualificato` o `perso` lo fa `cliente`, con la sua riga di cronologia. Un consumo
  * porta i crediti di un pacchetto verso zero senza mai superarli (409 `crediti_esauriti`), e non si registra su un acquisto scaduto (409
- * `acquisto_scaduto`); un acquisto non si elimina. Lo `stato` non è una colonna: si calcola a ogni risposta. Li chiamano i tre ruoli.
+ * `acquisto_scaduto`); un acquisto non si elimina. Lo `stato` non è una colonna: si calcola a ogni risposta. Li chiamano i tre ruoli per leggere e per i consumi; `crea` e `modifica` sono del proprietario e degli amministratori (#2404), un membro è 403 `permesso_negato`.
  * L'`ETag` non è lo stesso valore del backoffice: conta la forma. Il finto non emette gli eventi.
  */
 trait CrmAcquisti
@@ -50,7 +50,7 @@ trait CrmAcquisti
      */
     private function creaAcquistoCrm(Request $richiesta, array $corpo): array
     {
-        $chi = $this->conCrm($richiesta);
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
 
         return $this->conIdempotenza($richiesta, 'crm.acquisti.crea', $chi, $corpo, function () use ($chi, $corpo) {
             $campi = $this->testi->validaCorpo($corpo, $this->regoleDellAcquistoCrm($chi['workspace']));
@@ -124,7 +124,7 @@ trait CrmAcquisti
      */
     private function modificaAcquistoCrm(Request $richiesta, array $corpo, string $id): array
     {
-        $chi = $this->conCrm($richiesta);
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
         $riga = $this->rigaCrm('acquisti', $chi['workspace'], $id);
         $this->pretendiLaVersioneCrm($richiesta, $this->voceAcquistoCrm($riga));
         $vietati = ['id', 'persona_id', 'voce_id', 'voce', 'prezzo', 'acquistato_il', 'pagato', 'metodo_pagamento', 'valido_fino_al', 'rinnovo_il', 'crediti', 'stato', 'creato_il', 'aggiornato_il', 'creato_da'];
