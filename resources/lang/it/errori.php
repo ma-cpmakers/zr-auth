@@ -185,6 +185,14 @@ return [
         'title' => 'Preventivo non modificabile',
         'detail' => 'Questo preventivo non è più una bozza e non si modifica. Per cambiarlo si fa una revisione. Il metodo non ha scritto niente.',
     ],
+    'preventivo_stato_non_ammesso' => [
+        'title' => 'Passaggio non ammesso',
+        'detail' => 'Il preventivo non è in uno stato da cui questo passaggio si può fare. Rileggilo con crm.preventivi.mostra per vedere lo stato. Il metodo non ha scritto niente.',
+    ],
+    'preventivo_scaduto' => [
+        'title' => 'Preventivo scaduto',
+        'detail' => 'La validità di questo preventivo è passata. Per riproporlo si fa una revisione. Il metodo non ha scritto niente.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',

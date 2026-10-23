@@ -185,6 +185,14 @@ return [
         'title' => 'Quote cannot be changed',
         'detail' => 'This quote is no longer a draft and cannot be changed. To change it, make a revision. Nothing was written.',
     ],
+    'preventivo_stato_non_ammesso' => [
+        'title' => 'Change not allowed',
+        'detail' => 'The quote is not in a state this change can be made from. Read it again with crm.preventivi.mostra to see its state. Nothing was written.',
+    ],
+    'preventivo_scaduto' => [
+        'title' => 'Quote expired',
+        'detail' => 'The validity of this quote has passed. To offer it again, make a revision. Nothing was written.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',

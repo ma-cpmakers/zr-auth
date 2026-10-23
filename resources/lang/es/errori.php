@@ -185,6 +185,14 @@ return [
         'title' => 'Presupuesto no modificable',
         'detail' => 'Este presupuesto ya no es un borrador y no se modifica. Para cambiarlo se hace una revisión. No se escribió nada.',
     ],
+    'preventivo_stato_non_ammesso' => [
+        'title' => 'Cambio no permitido',
+        'detail' => 'El presupuesto no está en un estado desde el que se pueda hacer este cambio. Léelo de nuevo con crm.preventivi.mostra para ver su estado. No se escribió nada.',
+    ],
+    'preventivo_scaduto' => [
+        'title' => 'Presupuesto caducado',
+        'detail' => 'La validez de este presupuesto ha pasado. Para proponerlo de nuevo se hace una revisión. No se escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',

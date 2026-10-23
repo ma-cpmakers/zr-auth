@@ -35,6 +35,8 @@ final class Problema extends RuntimeException
         'acquisto_scaduto' => 409,
         'rata_pagata' => 409,
         'preventivo_non_modificabile' => 409,
+        'preventivo_stato_non_ammesso' => 409,
+        'preventivo_scaduto' => 409,
         'rate_con_pagamenti' => 409,
         'pagamento_annullato' => 409,
         'esportazione_in_corso' => 409,
