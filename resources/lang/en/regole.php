@@ -116,6 +116,9 @@ return [
     'preventivo_piano_rate' => 'The plan «:tipo» has from :minimo to :massimo installments.',
     'preventivo_somma_diversa' => 'The installments must add up to the total of the quote.',
     'preventivo_righe_troppe' => 'A quote has from 1 to :massimo lines.',
+    'preventivo_accettazione_data_futura' => 'The acceptance date cannot be after today.',
+    'preventivo_accettazione_contatto' => 'This quote is for a company: give the contact who is buying.',
+    'preventivo_accettazione_altro_contatto' => 'The quote belongs to another contact: the purchases are made on theirs.',
     'opportunita_non_esiste' => 'There is no opportunity with this id in the workspace: crm.trattative.elenca gives their ids.',
     'voce_non_esiste' => 'There is no entry with this id in the workspace catalogue: crm.catalogo.elenca gives their ids.',
 ];

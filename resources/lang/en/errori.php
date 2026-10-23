@@ -193,6 +193,10 @@ return [
         'title' => 'Quote expired',
         'detail' => 'The validity of this quote has passed. To offer it again, make a revision. Nothing was written.',
     ],
+    'gia_accettato' => [
+        'title' => 'Quote already accepted',
+        'detail' => 'This quote has already been accepted: the acceptance is recorded only once. Read it again with crm.preventivi.mostra to see the purchases it created. The method wrote nothing.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',

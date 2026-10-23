@@ -8,14 +8,14 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * I preventivi del CRM nel backoffice finto (CRM-06, #2387): `crm.preventivi.elenca`, `crea`, `mostra`, `modifica`, `elimina`, `invio.crea` e `rifiuto.crea` (#2389), con le
+ * I preventivi del CRM nel backoffice finto (CRM-06, #2387): `crm.preventivi.elenca`, `crea`, `mostra`, `modifica`, `elimina`, `invio.crea`, `rifiuto.crea` e `accettazione.crea` (#2389), con le
  * regole, i pointer e l'ordine di `PreventiviController` e di `App\Crm\Preventivi` del backoffice. Un preventivo nasce in `bozza` col suo
  * numero (`P-2026-001`, il successivo dell'anno, eliminati compresi); ha da 1 a 50 righe e un piano dei pagamenti (`unica`, senza rate;
  * `acconto_saldo`, due; `rate`, da due a 24) la cui somma è il totale. I prezzi sono IVA inclusa: l'imponibile di ogni aliquota si scorpora
  * dalla somma delle sue righe, e ogni divisione arrotonda al più vicino, a metà in su. Le righe e il piano si sostituiscono interi; i totali
  * li calcola il finto. Una bozza inviata (`invio.crea`, modo `manuale`) non si modifica né si elimina più (409 `preventivo_non_modificabile`);
  * `scaduto` è lo stato che si vede di un inviato con la validità passata, calcolato e mai scritto. Il contatto anonimizzato (409
- * `persona_anonimizzata`) perde l'`introduzione`, il motivo del rifiuto e l'etichetta delle rate di ogni suo preventivo. Il finto non emette gli
+ * `persona_anonimizzata`) perde l'`introduzione`, il motivo del rifiuto, il nome e la nota dell'accettazione e l'etichetta delle rate di ogni suo preventivo. Il finto non emette gli
  * eventi, e non ha il freno delle creazioni. L'`ETag` non è lo stesso valore del backoffice: conta la forma. La creazione risponde
  * con la sola `Location`, com'è nel contratto.
  */
@@ -330,6 +330,222 @@ trait CrmPreventivi
         return [200, ['data' => $preventivo], ['ETag' => self::etagCrm($preventivo)]];
     }
 
+    /**
+     * crm.preventivi.accettazione.crea (PreventiviController::accettazione, Preventivi::accetta): `{nome, nota, accettato_il, persona_id}`, il solo
+     * nome obbligatorio. Da `inviato` o `visto` il preventivo diventa `accettato` e nelle stesse mani nasce un acquisto per riga (col prezzo della
+     * riga dopo lo sconto, la voce del catalogo o, per una riga libera, un servizio senza voce), ognuno col suo piano di rate in proporzione
+     * (`ripartisci`), l'opportunità aperta diventa vinta (già chiusa resta com'è e `accettazione.opportunita_gia_chiusa` dice quale) con la riga
+     * `preventivo.accettato` nella sua cronologia, e il primo acquisto fa «cliente» il contatto. Già accettato: 409 `gia_accettato`; scaduto: 409
+     * `preventivo_scaduto`; non inviato: 409 `preventivo_stato_non_ammesso`; contatto anonimizzato: 409 `persona_anonimizzata`; oltre il tetto
+     * degli acquisti: 409 `limite_raggiunto`. Risponde 201 col preventivo e la `Location` del preventivo; accetta Idempotency-Key.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function accettaPreventivoCrm(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $this->rigaCrm('preventivi', $chi['workspace'], $id);
+
+        return $this->conIdempotenza($richiesta, 'crm.preventivi.accettazione.crea', $chi, $corpo, function () use ($chi, $corpo, $id) {
+            $campi = $this->testi->validaCorpo($corpo, [
+                'nome' => ['bail', 'required', 'string', 'max:200'],
+                'nota' => ['bail', 'sometimes', 'nullable', 'string', 'max:500'],
+                'accettato_il' => ['bail', 'sometimes', 'string', 'date_format:Y-m-d'],
+                'persona_id' => ['bail', 'sometimes', 'nullable', 'string', 'max:64'],
+            ]);
+            $riga = $this->crm['preventivi'][$id];
+            $this->senzaContattoAnonimizzatoPreventivoCrm($riga);
+            $stato = self::statoDelPreventivoCrm($riga);
+
+            if ($stato === 'accettato') {
+                throw new Problema('gia_accettato');
+            }
+
+            if ($stato === 'scaduto') {
+                throw new Problema('preventivo_scaduto');
+            }
+
+            if (! in_array($stato, ['inviato', 'visto'], true)) {
+                throw new Problema('preventivo_stato_non_ammesso');
+            }
+
+            $oggi = self::oggiAcquistoCrm();
+            $giorno = (string) ($campi['accettato_il'] ?? $oggi);
+            $errori = [];
+
+            if ($giorno > $oggi) {
+                $errori[] = self::erroreDelPreventivoCrm(['accettato_il'], $this->testi->testo('regole.preventivo_accettazione_data_futura'), Regola::FUORI_INTERVALLO);
+            }
+
+            $compratore = $this->compratoreDelPreventivoCrm($riga, $campi['persona_id'] ?? null, $errori);
+
+            if ($errori !== [] || $compratore === null) {
+                throw new Problema('dati_non_validi', $errori);
+            }
+
+            if (count($this->righeCrm('acquisti', $chi['workspace'])) + count($riga['righe']) > self::CRM_ACQUISTI_TETTO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ACQUISTI_TETTO]);
+            }
+
+            $primo = array_filter($this->crm['acquisti'], fn (array $acquisto) => $acquisto['persona_id'] === $compratore['id']) === [];
+            $trattativa = $riga['trattativa_id'] === null ? null : ($this->crm['trattative'][$riga['trattativa_id']] ?? null);
+            $rate = array_map(fn (array $rata) => ['scade_il' => $rata['scade_il'], 'importo' => $rata['importo'], 'etichetta' => $rata['etichetta'] ?? null], $riga['rate']);
+            $ora = self::adessoCrm();
+            $acquisti = [];
+
+            foreach ($riga['righe'] as $voce) {
+                $catalogo = $voce['voce_id'] === null ? null : ($this->crm['catalogo'][$voce['voce_id']] ?? null);
+                $nuovo = self::id();
+                $this->crm['acquisti'][$nuovo] = [
+                    'id' => $nuovo, 'workspace' => $chi['workspace'], 'persona_id' => $compratore['id'], 'voce_id' => $catalogo['id'] ?? null, 'preventivo_id' => $id,
+                    'voce_tipo' => $catalogo['tipo'] ?? 'servizio', 'voce_nome' => mb_substr($voce['descrizione'], 0, 160),
+                    'voce_durata_minuti' => $catalogo['durata_minuti'] ?? null, 'voce_unita_incluse' => $catalogo['unita_incluse'] ?? null,
+                    'voce_etichetta_unita' => $catalogo['etichetta_unita'] ?? null, 'voce_validita_mesi' => $catalogo['validita_mesi'] ?? null, 'voce_rinnovo' => $catalogo['rinnovo'] ?? null,
+                    'prezzo_importo' => self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']),
+                    'acquistato_il' => $giorno, 'pagato_importo' => 0, 'metodo_pagamento' => 'da_pagare', 'documento' => 'da_fare',
+                    'valido_fino_al' => ($catalogo['validita_mesi'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, $catalogo['validita_mesi']),
+                    'rinnovo_il' => ($catalogo['rinnovo'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, self::CRM_ACQUISTI_MESI_DEL_RINNOVO[$catalogo['rinnovo']]),
+                    'crediti_totali' => ($catalogo['tipo'] ?? null) === 'pacchetto' && $catalogo['unita_incluse'] !== null ? $catalogo['unita_incluse'] * $voce['quantita'] : null,
+                    'crediti_usati' => 0, 'crediti_prenotati' => 0,
+                    'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
+                ];
+                $acquisti[] = $nuovo;
+                $parti = $rate === [] ? [] : self::ripartisciPreventivoCrm((int) $this->crm['acquisti'][$nuovo]['prezzo_importo'], array_column($rate, 'importo'));
+
+                if ($parti === []) {
+                    $this->creaLaRataUnicaCrm($this->crm['acquisti'][$nuovo], $chi['persona']);
+
+                    continue;
+                }
+
+                $numero = 0;
+
+                foreach ($parti as $i => $parte) {
+                    $this->nuovaRataCrm($this->crm['acquisti'][$nuovo], ++$numero, (string) $rate[$i]['scade_il'], $parte, $rate[$i]['etichetta'], $chi['persona']);
+                }
+            }
+
+            $chiusa = null;
+
+            if ($trattativa !== null && ! ($trattativa['eliminata'] ?? false)) {
+                if ($trattativa['stato'] === 'aperta') {
+                    $this->applicaTrattativa($trattativa, ['stato' => 'vinta'], $chi['persona']);
+                } else {
+                    $chiusa = $trattativa['stato'];
+                }
+
+                $this->cambioCrm('trattative', $trattativa['id'], $chi['persona'], 'preventivo.accettato', [['campo' => 'preventivo_id', 'dopo' => $id]]);
+            }
+
+            $persona = $this->crm['persone'][$compratore['id']];
+
+            if ($primo && in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
+                $this->applicaPersona($persona['id'], ['stato' => 'cliente'], $chi['persona']);
+            }
+
+            $adesso = self::dopoCrm($riga['aggiornato_il']);
+            $this->crm['preventivi'][$id]['stato'] = 'accettato';
+            $this->crm['preventivi'][$id]['accettato_il'] = $giorno;
+            $this->crm['preventivi'][$id]['accettazione_nome'] = $campi['nome'];
+            $this->crm['preventivi'][$id]['accettazione_nota'] = ($campi['nota'] ?? '') === '' ? null : $campi['nota'];
+            $this->crm['preventivi'][$id]['accettazione_opportunita'] = $chiusa;
+            $this->crm['preventivi'][$id]['acquisti'] = $acquisti;
+            $this->crm['preventivi'][$id]['aggiornato_il'] = $adesso;
+
+            return [201, ['data' => $this->vocePreventivoCrm($this->crm['preventivi'][$id])], ['Location' => "/v1/crm/preventivi/{$id}"]];
+        });
+    }
+
+    /**
+     * Il contatto che compra (Preventivi::compratore): quello del preventivo, o per una sola azienda quello dato nel corpo; un contatto dato che
+     * non è quello del preventivo, uno che manca, uno che non c'è o è archiviato sono errori di `persona_id`; anonimizzato è 409.
+     *
+     * @param  array<string, mixed>  $riga
+     * @param  list<array{detail: string, regola: string, pointer: string}>  $errori
+     * @return array<string, mixed>|null
+     */
+    private function compratoreDelPreventivoCrm(array $riga, mixed $dato, array &$errori): ?array
+    {
+        $dato = $dato === null ? null : strtolower((string) $dato);
+
+        if ($riga['persona_id'] !== null && $dato !== null && $dato !== $riga['persona_id']) {
+            $errori[] = self::erroreDelPreventivoCrm(['persona_id'], $this->testi->testo('regole.preventivo_accettazione_altro_contatto'), Regola::VALORE_NON_AMMESSO);
+
+            return null;
+        }
+
+        $id = $riga['persona_id'] ?? $dato;
+
+        if ($id === null) {
+            $errori[] = self::erroreDelPreventivoCrm(['persona_id'], $this->testi->testo('regole.preventivo_accettazione_contatto'), Regola::OBBLIGATORIO);
+
+            return null;
+        }
+
+        $contatto = $this->crm['persone'][$id] ?? null;
+
+        if ($contatto === null || ($contatto['eliminata'] ?? false) || $contatto['workspace'] !== $riga['workspace']) {
+            $errori[] = self::erroreDelPreventivoCrm(['persona_id'], $this->testi->testo('validation.exists', ['attribute' => $this->testi->nome('persona_id')]), Regola::NON_TROVATO);
+
+            return null;
+        }
+
+        if ($contatto['anonimizzata_il'] !== null) {
+            throw new Problema('persona_anonimizzata');
+        }
+
+        if ($contatto['archiviata_il'] !== null) {
+            $errori[] = self::erroreDelPreventivoCrm(['persona_id'], $this->testi->testo('regole.acquisto_contatto_archiviato'), Regola::VALORE_NON_AMMESSO);
+
+            return null;
+        }
+
+        return $contatto;
+    }
+
+    /**
+     * Divide il prezzo di un acquisto fra le rate del preventivo (Preventivi::ripartisci): la rata `i` vale `prezzo × rata[i] ÷ totale` arrotondata
+     * al più vicino (a metà in su), l'ultima prende ciò che avanza; una rata che viene zero non nasce.
+     *
+     * @param  list<int>  $rate
+     * @return array<int, int>
+     */
+    private static function ripartisciPreventivoCrm(int $prezzo, array $rate): array
+    {
+        $totale = array_sum($rate);
+        $ultima = count($rate) - 1;
+        $resto = $prezzo;
+        $parti = [];
+
+        foreach ($rate as $i => $importo) {
+            $parte = $i === $ultima ? $resto : min($resto, self::proporzionePreventivoCrm($prezzo, $importo, $totale));
+            $resto -= $parte;
+
+            if ($parte > 0) {
+                $parti[$i] = $parte;
+            }
+        }
+
+        return $parti;
+    }
+
+    /** `a × b ÷ c` arrotondato al più vicino (a metà in su), esatto fino a 10^12 per ogni termine (Preventivi::proporzione). */
+    private static function proporzionePreventivoCrm(int $a, int $b, int $c): int
+    {
+        if ($c <= 0) {
+            return 0;
+        }
+
+        [$alto, $basso] = [intdiv($b, 1_000_000), $b % 1_000_000];
+        $x = $alto * $a;
+        $y = $basso * $a;
+        $resto = (($x % $c) * 1_000_000) % $c + ($y % $c);
+        $intero = intdiv($x, $c) * 1_000_000 + intdiv(($x % $c) * 1_000_000, $c) + intdiv($y, $c) + intdiv($resto, $c);
+        $resto %= $c;
+
+        return $intero + (2 * $resto >= $c ? 1 : 0);
+    }
+
     /** Un preventivo il cui contatto è anonimizzato non cambia più, come in `modifica`: 409 `persona_anonimizzata`. */
     private function senzaContattoAnonimizzatoPreventivoCrm(array $riga): void
     {
@@ -338,13 +554,22 @@ trait CrmPreventivi
         }
     }
 
-    /** Svuota l'introduzione, il motivo del rifiuto e l'etichetta delle rate dei preventivi del contatto (Anonimizzazione::preventivi). */
+    /** Svuota l'introduzione, il motivo del rifiuto, il nome e la nota dell'accettazione e l'etichetta delle rate dei preventivi del contatto, e nome e nota di quelli accettati con lui come compratore (Anonimizzazione::preventivi). */
     private function dimenticaIPreventiviCrm(string $persona): void
     {
+        foreach ($this->crm['acquisti'] as $acquisto) {
+            if ($acquisto['persona_id'] === $persona && ($acquisto['preventivo_id'] ?? null) !== null && isset($this->crm['preventivi'][$acquisto['preventivo_id']])) {
+                $this->crm['preventivi'][$acquisto['preventivo_id']]['accettazione_nome'] = null;
+                $this->crm['preventivi'][$acquisto['preventivo_id']]['accettazione_nota'] = null;
+            }
+        }
+
         foreach ($this->crm['preventivi'] as $id => $preventivo) {
             if ($preventivo['persona_id'] === $persona) {
                 $this->crm['preventivi'][$id]['introduzione'] = null;
                 $this->crm['preventivi'][$id]['rifiuto_motivo'] = null;
+                $this->crm['preventivi'][$id]['accettazione_nome'] = null;
+                $this->crm['preventivi'][$id]['accettazione_nota'] = null;
                 $this->crm['preventivi'][$id]['rate'] = array_map(fn (array $rata) => ['etichetta' => null] + $rata, $preventivo['rate']);
             }
         }
@@ -406,6 +631,14 @@ trait CrmPreventivi
             'inviato_il' => ($riga['inviato_il'] ?? null) === null ? null : self::iso($riga['inviato_il']),
             'rifiutato_il' => ($riga['rifiutato_il'] ?? null) === null ? null : self::iso($riga['rifiutato_il']),
             'rifiuto' => ($riga['rifiutato_il'] ?? null) === null ? null : ['motivo' => $riga['rifiuto_motivo'] ?? null],
+            'accettato_il' => $riga['accettato_il'] ?? null,
+            'accettazione' => ($riga['accettato_il'] ?? null) === null ? null : [
+                'nome' => $riga['accettazione_nome'] ?? null,
+                'modo' => 'manuale',
+                'nota' => $riga['accettazione_nota'] ?? null,
+                'opportunita_gia_chiusa' => $riga['accettazione_opportunita'] ?? null,
+            ],
+            'acquisti' => $riga['acquisti'] ?? [],
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
             'creato_da' => $riga['creato_da'],

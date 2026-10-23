@@ -193,6 +193,10 @@ return [
         'title' => 'Presupuesto caducado',
         'detail' => 'La validez de este presupuesto ha pasado. Para proponerlo de nuevo se hace una revisión. No se escribió nada.',
     ],
+    'gia_accettato' => [
+        'title' => 'Presupuesto ya aceptado',
+        'detail' => 'Este presupuesto ya fue aceptado: la aceptación se registra una sola vez. Léelo de nuevo con crm.preventivi.mostra para ver las compras creadas. El método no escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',

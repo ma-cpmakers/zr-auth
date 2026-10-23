@@ -79,7 +79,7 @@ trait CrmAcquisti
             $giorno = (string) $campi['acquistato_il'];
             $this->crm['acquisti'][$id] = [
                 'id' => $id, 'workspace' => $chi['workspace'], 'persona_id' => $persona['id'],
-                'voce_id' => $voce['id'], 'voce_tipo' => $voce['tipo'], 'voce_nome' => $voce['nome'], 'voce_durata_minuti' => $voce['durata_minuti'],
+                'voce_id' => $voce['id'], 'preventivo_id' => null, 'voce_tipo' => $voce['tipo'], 'voce_nome' => $voce['nome'], 'voce_durata_minuti' => $voce['durata_minuti'],
                 'voce_unita_incluse' => $voce['unita_incluse'], 'voce_etichetta_unita' => $voce['etichetta_unita'], 'voce_validita_mesi' => $voce['validita_mesi'],
                 'voce_rinnovo' => $voce['rinnovo'], 'prezzo_importo' => $voce['prezzo_importo'],
                 'acquistato_il' => $giorno, 'pagato_importo' => (int) ($campi['pagato']['importo'] ?? 0), 'metodo_pagamento' => $campi['metodo_pagamento'],
@@ -273,6 +273,7 @@ trait CrmAcquisti
             'id' => $riga['id'],
             'persona_id' => $riga['persona_id'],
             'voce_id' => $riga['voce_id'],
+            'preventivo_id' => $riga['preventivo_id'] ?? null,
             'voce' => [
                 'nome' => $riga['voce_nome'],
                 'tipo' => $riga['voce_tipo'],

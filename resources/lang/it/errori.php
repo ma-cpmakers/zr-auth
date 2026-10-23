@@ -193,6 +193,10 @@ return [
         'title' => 'Preventivo scaduto',
         'detail' => 'La validità di questo preventivo è passata. Per riproporlo si fa una revisione. Il metodo non ha scritto niente.',
     ],
+    'gia_accettato' => [
+        'title' => 'Preventivo già accettato',
+        'detail' => 'Questo preventivo è già stato accettato: l\'accettazione si registra una volta sola. Rileggilo con crm.preventivi.mostra per vedere gli acquisti nati. Il metodo non ha scritto niente.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',
