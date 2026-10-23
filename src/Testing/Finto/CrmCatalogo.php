@@ -29,7 +29,7 @@ trait CrmCatalogo
     private const CRM_CATALOGO_ORDINI = ['nome', '-nome', 'aggiornata_il', '-aggiornata_il', 'prezzo', '-prezzo'];
 
     /** I campi di una voce nell'ordine del contratto, come stanno nella cronologia (CatalogoController::CAMPI). */
-    private const CRM_CATALOGO_CAMPI = ['tipo', 'nome', 'descrizione', 'codice', 'categoria', 'prezzo', 'aliquota_iva', 'durata_minuti', 'unita_incluse', 'etichetta_unita', 'validita_mesi', 'rinnovo', 'stato'];
+    private const CRM_CATALOGO_CAMPI = ['tipo', 'nome', 'descrizione', 'codice', 'categoria', 'prezzo', 'aliquota_iva', 'iva_inclusa', 'durata_minuti', 'unita_incluse', 'etichetta_unita', 'validita_mesi', 'rinnovo', 'stato'];
 
     /** I campi che la cronologia ricorda col solo nome (CatalogoController::SENZA_VALORI). */
     private const CRM_CATALOGO_SENZA_VALORI = ['nome', 'descrizione', 'codice', 'categoria'];
@@ -55,7 +55,7 @@ trait CrmCatalogo
             $id = self::id();
             $ora = self::adessoCrm();
             $this->crm['catalogo'][$id] = $this->colonneDellaVoceCrm($campi) + [
-                'id' => $id, 'workspace' => $chi['workspace'], 'stato' => $campi['stato'] ?? 'attiva', 'archiviata_il' => null,
+                'id' => $id, 'workspace' => $chi['workspace'], 'stato' => $campi['stato'] ?? 'attiva', 'iva_inclusa' => true, 'archiviata_il' => null,
                 'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona'],
             ] + $this->colonneDellaVoceCrm(array_fill_keys(self::CRM_CATALOGO_CAMPI, null));
             $this->cambioCrm('catalogo', $id, $chi['persona'], 'creata', []);
@@ -237,6 +237,7 @@ trait CrmCatalogo
             'categoria' => $riga['categoria'],
             'prezzo' => $riga['prezzo_importo'] === null ? null : ['importo' => $riga['prezzo_importo'], 'valuta' => $this->valutaCrm($riga['workspace'])],
             'aliquota_iva' => $riga['aliquota_iva'],
+            'iva_inclusa' => $riga['iva_inclusa'],
             'durata_minuti' => $riga['durata_minuti'],
             'unita_incluse' => $riga['unita_incluse'],
             'etichetta_unita' => $riga['etichetta_unita'],
@@ -278,6 +279,7 @@ trait CrmCatalogo
                 }
             }],
             'aliquota_iva' => ['bail', 'sometimes', 'nullable', 'integer:strict', 'between:0,10000'],
+            'iva_inclusa' => ['bail', 'sometimes', 'boolean:strict'],
             'durata_minuti' => ['bail', 'sometimes', 'nullable', 'integer:strict', 'between:1,1440'],
             'unita_incluse' => ['bail', 'sometimes', 'nullable', 'integer:strict', 'between:1,100000'],
             'etichetta_unita' => ['bail', 'sometimes', 'nullable', 'string', 'max:30'],
@@ -299,6 +301,7 @@ trait CrmCatalogo
 
         if ($riga === null) {
             $valori['stato'] = 'attiva';
+            $valori['iva_inclusa'] = true;
         }
 
         foreach (self::CRM_CATALOGO_CAMPI as $campo) {

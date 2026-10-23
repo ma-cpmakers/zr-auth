@@ -212,6 +212,7 @@ return [
         'righe.*.prezzo_unitario.valuta' => 'valuta',
         'righe.*.sconto_percento' => 'sconto',
         'righe.*.aliquota_iva' => 'aliquota IVA',
+        'righe.*.iva_inclusa' => 'IVA inclusa',
         'piano' => 'piano dei pagamenti',
         'piano.tipo' => 'tipo di piano',
         'piano.rate' => 'rate',

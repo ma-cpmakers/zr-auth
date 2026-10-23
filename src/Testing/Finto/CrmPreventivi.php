@@ -11,8 +11,9 @@ use Illuminate\Validation\Rule;
  * I preventivi del CRM nel backoffice finto (CRM-06, #2387): `crm.preventivi.elenca`, `crea`, `mostra`, `modifica`, `elimina`, `invio.crea`, `rifiuto.crea`, `accettazione.crea` e `revisione.crea` (#2389), con le
  * regole, i pointer e l'ordine di `PreventiviController` e di `App\Crm\Preventivi` del backoffice. Un preventivo nasce in `bozza` col suo
  * numero (`P-2026-001`, il successivo dell'anno, eliminati compresi); ha da 1 a 50 righe e un piano dei pagamenti (`unica`, senza rate;
- * `acconto_saldo`, due; `rate`, da due a 24) la cui somma è il totale. I prezzi sono IVA inclusa: l'imponibile di ogni aliquota si scorpora
- * dalla somma delle sue righe, e ogni divisione arrotonda al più vicino, a metà in su. Le righe e il piano si sostituiscono interi; i totali
+ * `acconto_saldo`, due; `rate`, da due a 24) la cui somma è il totale. Ogni riga dice se il prezzo è IVA inclusa o esclusa (`iva_inclusa`, di
+ * partenza quella della voce, o true: #2400): l'inclusa si scorpora, per aliquota, dalla somma delle righe; all'esclusa l'IVA si aggiunge riga per
+ * riga, e il totale è la somma dei lordi di riga. Ogni divisione arrotonda al più vicino, a metà in su. Le righe e il piano si sostituiscono interi; i totali
  * li calcola il finto. Una bozza inviata (`invio.crea`, modo `manuale`) non si modifica né si elimina più (409 `preventivo_non_modificabile`);
  * `scaduto` è lo stato che si vede di un inviato con la validità passata, calcolato e mai scritto. Il contatto anonimizzato (409
  * `persona_anonimizzata`) perde l'`introduzione`, il motivo del rifiuto, il nome e la nota dell'accettazione e l'etichetta delle rate di ogni suo preventivo. Il finto non emette gli
@@ -189,7 +190,7 @@ trait CrmPreventivi
 
         $righeDate = array_key_exists('righe', $campi);
         $righe = $righeDate ? $this->righeDelPreventivoCrm($campi['righe'], $riga['valuta'], $errori) : null;
-        $contiAttuali = array_map(fn (array $voce) => ['importo' => self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']), 'aliquota' => $voce['aliquota_iva']], $riga['righe']);
+        $contiAttuali = array_map(fn (array $voce) => self::contoDellaRigaPreventivoCrm($voce), $riga['righe']);
         $totale = $righeDate ? ($righe === null ? null : self::totaliPreventivoCrm($righe['conti'])['totale']) : self::totaliPreventivoCrm($contiAttuali)['totale'];
 
         $pianoDato = array_key_exists('piano', $campi);
@@ -401,7 +402,7 @@ trait CrmPreventivi
                     'voce_tipo' => $catalogo['tipo'] ?? 'servizio', 'voce_nome' => mb_substr($voce['descrizione'], 0, 160),
                     'voce_durata_minuti' => $catalogo['durata_minuti'] ?? null, 'voce_unita_incluse' => $catalogo['unita_incluse'] ?? null,
                     'voce_etichetta_unita' => $catalogo['etichetta_unita'] ?? null, 'voce_validita_mesi' => $catalogo['validita_mesi'] ?? null, 'voce_rinnovo' => $catalogo['rinnovo'] ?? null,
-                    'prezzo_importo' => self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']),
+                    'prezzo_importo' => self::lordoDellaRigaPreventivoCrm(self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']), $voce['aliquota_iva'], $voce['iva_inclusa']),
                     'acquistato_il' => $giorno, 'inizio_il' => $giorno, 'pagato_importo' => 0, 'metodo_pagamento' => 'da_pagare', 'documento' => 'da_fare',
                     'valido_fino_al' => ($catalogo['validita_mesi'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, $catalogo['validita_mesi']),
                     'rinnovo_il' => ($catalogo['rinnovo'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, self::CRM_ACQUISTI_MESI_DEL_RINNOVO[$catalogo['rinnovo']]),
@@ -640,7 +641,7 @@ trait CrmPreventivi
 
         foreach ($riga['righe'] as $posizione => $voce) {
             $importo = self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']);
-            $conti[] = ['importo' => $importo, 'aliquota' => $voce['aliquota_iva']];
+            $conti[] = self::contoDellaRigaPreventivoCrm($voce);
             $righe[] = [
                 'id' => $voce['id'],
                 'posizione' => $posizione + 1,
@@ -650,6 +651,7 @@ trait CrmPreventivi
                 'prezzo_unitario' => $soldi($voce['prezzo_unitario_importo']),
                 'sconto_percento' => $voce['sconto_percento'],
                 'aliquota_iva' => $voce['aliquota_iva'],
+                'iva_inclusa' => $voce['iva_inclusa'],
                 'importo' => $soldi($importo),
             ];
         }
@@ -711,11 +713,33 @@ trait CrmPreventivi
         return intdiv($quantita * $prezzo * (100 - $sconto) + 50, 100);
     }
 
+    /** Il lordo di una riga (Preventivi::lordoDiRiga): l'importo, più la sua IVA se il prezzo è IVA esclusa e c'è un'aliquota. */
+    private static function lordoDellaRigaPreventivoCrm(int $importo, ?int $aliquota, bool $inclusa): int
+    {
+        return $inclusa || $aliquota === null ? $importo : $importo + intdiv(2 * $importo * $aliquota + 10000, 20000);
+    }
+
+    /**
+     * I conti di una riga per `totaliPreventivoCrm` (Preventivi::conto).
+     *
+     * @param  array<string, mixed>  $voce
+     * @return array{importo: int, aliquota: int|null, iva_inclusa: bool}
+     */
+    private static function contoDellaRigaPreventivoCrm(array $voce): array
+    {
+        return [
+            'importo' => self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']),
+            'aliquota' => $voce['aliquota_iva'],
+            'iva_inclusa' => $voce['iva_inclusa'],
+        ];
+    }
+
     /**
      * I totali di un insieme di righe (Preventivi::totali): l'IVA per aliquota (le righe senza aliquota non hanno IVA e vengono prime),
-     * l'imponibile scorporato dalla somma di ogni aliquota e il totale, che è la somma degli importi di riga.
+     * l'imponibile (le righe IVA inclusa scorporate dalla loro somma, più gli importi di quelle IVA esclusa) e il totale, che è la somma dei
+     * lordi di riga.
      *
-     * @param  list<array{importo: int, aliquota: int|null}>  $righe
+     * @param  list<array{importo: int, aliquota: int|null, iva_inclusa?: bool}>  $righe
      * @return array{imponibile: int, iva: list<array{aliquota: int|null, imponibile: int, imposta: int}>, totale: int}
      */
     private static function totaliPreventivoCrm(array $righe): array
@@ -724,7 +748,11 @@ trait CrmPreventivi
 
         foreach ($righe as $riga) {
             $chiave = $riga['aliquota'] ?? -1;
-            $somme[$chiave] = ($somme[$chiave] ?? 0) + $riga['importo'];
+            $inclusa = $riga['iva_inclusa'] ?? true;
+            $gruppo = $somme[$chiave] ?? ['inclusa' => 0, 'esclusa' => 0, 'lordo' => 0];
+            $gruppo[$inclusa || $chiave === -1 ? 'inclusa' : 'esclusa'] += $riga['importo'];
+            $gruppo['lordo'] += self::lordoDellaRigaPreventivoCrm($riga['importo'], $riga['aliquota'], $inclusa);
+            $somme[$chiave] = $gruppo;
         }
 
         ksort($somme);
@@ -733,12 +761,13 @@ trait CrmPreventivi
         $imponibile = 0;
         $totale = 0;
 
-        foreach ($somme as $chiave => $somma) {
+        foreach ($somme as $chiave => $gruppo) {
             $aliquota = $chiave === -1 ? null : $chiave;
-            $parte = $aliquota === null || $aliquota === 0 ? $somma : intdiv(2 * $somma * 10000 + (10000 + $aliquota), 2 * (10000 + $aliquota));
-            $iva[] = ['aliquota' => $aliquota, 'imponibile' => $parte, 'imposta' => $somma - $parte];
+            $scorporato = $aliquota === null || $aliquota === 0 ? $gruppo['inclusa'] : intdiv(2 * $gruppo['inclusa'] * 10000 + (10000 + $aliquota), 2 * (10000 + $aliquota));
+            $parte = $scorporato + $gruppo['esclusa'];
+            $iva[] = ['aliquota' => $aliquota, 'imponibile' => $parte, 'imposta' => $gruppo['lordo'] - $parte];
             $imponibile += $parte;
-            $totale += $somma;
+            $totale += $gruppo['lordo'];
         }
 
         return ['imponibile' => $imponibile, 'iva' => $iva, 'totale' => $totale];
@@ -777,6 +806,7 @@ trait CrmPreventivi
             'righe.*.prezzo_unitario.valuta' => ['bail', 'required_with:righe.*.prezzo_unitario', 'string'],
             'righe.*.sconto_percento' => ['bail', 'sometimes', 'integer:strict', 'between:0,100'],
             'righe.*.aliquota_iva' => ['bail', 'sometimes', 'nullable', 'integer:strict', 'between:0,10000'],
+            'righe.*.iva_inclusa' => ['bail', 'sometimes', 'boolean:strict'],
             'piano' => ['bail', 'sometimes', 'array'],
             'piano.tipo' => ['bail', 'required_with:piano', 'string', Rule::in(self::CRM_PREVENTIVI_PIANI)],
             'piano.rate' => ['bail', 'sometimes', 'array', function (string $campo, mixed $rate, Closure $fail) {
@@ -833,13 +863,13 @@ trait CrmPreventivi
     }
 
     /**
-     * Le righe date, normalizzate (Preventivi::righe): i default della voce del catalogo (descrizione, prezzo unitario, aliquota) dove la riga
+     * Le righe date, normalizzate (Preventivi::righe): i default della voce del catalogo (descrizione, prezzo unitario, aliquota, IVA inclusa) dove la riga
      * non li dà, la quantità 1 e lo sconto 0. Una voce non `attiva`, un prezzo che manca, una valuta diversa da quella del preventivo e un
      * totale oltre il massimo sono errori di campo, che si aggiungono a `$errori`; con errori sulle righe restituisce null.
      *
      * @param  list<array<string, mixed>>  $righe
      * @param  list<array<string, mixed>>  $errori
-     * @return array{righe: list<array<string, mixed>>, conti: list<array{importo: int, aliquota: int|null}>}|null
+     * @return array{righe: list<array<string, mixed>>, conti: list<array{importo: int, aliquota: int|null, iva_inclusa: bool}>}|null
      */
     private function righeDelPreventivoCrm(array $righe, string $valuta, array &$errori): ?array
     {
@@ -884,8 +914,9 @@ trait CrmPreventivi
             $quantita = (int) ($riga['quantita'] ?? 1);
             $sconto = (int) ($riga['sconto_percento'] ?? 0);
             $aliquota = array_key_exists('aliquota_iva', $riga) ? $riga['aliquota_iva'] : ($voce['aliquota_iva'] ?? null);
+            $inclusa = array_key_exists('iva_inclusa', $riga) ? (bool) $riga['iva_inclusa'] : ($voce['iva_inclusa'] ?? true);
             $importo = self::importoDiRigaPreventivoCrm($quantita, $prezzo, $sconto);
-            $totale += $importo;
+            $totale += self::lordoDellaRigaPreventivoCrm($importo, $aliquota === null ? null : (int) $aliquota, $inclusa);
 
             $normalizzate[] = [
                 'voce_id' => $voce['id'] ?? null,
@@ -894,8 +925,9 @@ trait CrmPreventivi
                 'prezzo_unitario_importo' => $prezzo,
                 'sconto_percento' => $sconto,
                 'aliquota_iva' => $aliquota === null ? null : (int) $aliquota,
+                'iva_inclusa' => $inclusa,
             ];
-            $conti[] = ['importo' => $importo, 'aliquota' => $aliquota === null ? null : (int) $aliquota];
+            $conti[] = ['importo' => $importo, 'aliquota' => $aliquota === null ? null : (int) $aliquota, 'iva_inclusa' => $inclusa];
         }
 
         if (! $sbagliate && $totale > self::CRM_ACQUISTI_IMPORTO) {
@@ -964,7 +996,7 @@ trait CrmPreventivi
      */
     private static function righeDiverseDelPreventivoCrm(array $attuali, array $nuove): bool
     {
-        $comuni = fn (array $riga) => [$riga['voce_id'], $riga['descrizione'], $riga['quantita'], $riga['prezzo_unitario_importo'], $riga['sconto_percento'], $riga['aliquota_iva']];
+        $comuni = fn (array $riga) => [$riga['voce_id'], $riga['descrizione'], $riga['quantita'], $riga['prezzo_unitario_importo'], $riga['sconto_percento'], $riga['aliquota_iva'], $riga['iva_inclusa']];
 
         return array_map($comuni, $attuali) !== array_map($comuni, $nuove);
     }

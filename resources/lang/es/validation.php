@@ -211,6 +211,7 @@ return [
         'righe.*.prezzo_unitario.valuta' => 'moneda',
         'righe.*.sconto_percento' => 'descuento',
         'righe.*.aliquota_iva' => 'tipo de IVA',
+        'righe.*.iva_inclusa' => 'IVA incluido',
         'piano' => 'plan de pagos',
         'piano.tipo' => 'tipo de plan',
         'piano.rate' => 'cuotas',
