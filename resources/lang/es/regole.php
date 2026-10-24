@@ -121,4 +121,7 @@ return [
     'preventivo_accettazione_altro_contatto' => 'El presupuesto es de otro contacto: las compras se hacen sobre el suyo.',
     'opportunita_non_esiste' => 'En el workspace no hay una oportunidad con este id: crm.trattative.elenca da sus ids.',
     'voce_non_esiste' => 'En el catálogo del workspace no hay una entrada con este id: crm.catalogo.elenca da sus ids.',
+    'tipo_scadenza_non_esiste' => 'En el workspace no hay un tipo de vencimiento con este id: crm.scadenze.tipi.elenca da sus ids.',
+    'tipo_scadenza_archiviato' => 'El tipo de vencimiento está archivado: un vencimiento nuevo se crea sobre un tipo activo.',
+    'acquisto_non_esiste' => 'En el workspace no hay una compra con este id: crm.acquisti.elenca da sus ids.',
 ];

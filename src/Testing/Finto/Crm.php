@@ -67,6 +67,16 @@ trait Crm
         ['GET', '#^/v1/crm/rate/([^/]+)/pagamenti$#', 'crm.rate.pagamenti.elenca'],
         ['POST', '#^/v1/crm/rate/([^/]+)/pagamenti$#', 'crm.rate.pagamenti.crea'],
         ['POST', '#^/v1/crm/pagamenti/([^/]+)/annullamento$#', 'crm.pagamenti.annullamento.crea'],
+        ['GET', '#^/v1/crm/scadenze/tipi$#', 'crm.scadenze.tipi.elenca'],
+        ['POST', '#^/v1/crm/scadenze/tipi$#', 'crm.scadenze.tipi.crea'],
+        ['PATCH', '#^/v1/crm/scadenze/tipi/([^/]+)$#', 'crm.scadenze.tipi.modifica'],
+        ['GET', '#^/v1/crm/scadenze$#', 'crm.scadenze.elenca'],
+        ['POST', '#^/v1/crm/scadenze$#', 'crm.scadenze.crea'],
+        ['GET', '#^/v1/crm/scadenze/([^/]+)$#', 'crm.scadenze.mostra'],
+        ['PATCH', '#^/v1/crm/scadenze/([^/]+)$#', 'crm.scadenze.modifica'],
+        ['DELETE', '#^/v1/crm/scadenze/([^/]+)$#', 'crm.scadenze.elimina'],
+        ['POST', '#^/v1/crm/scadenze/([^/]+)/rinnovo$#', 'crm.scadenze.rinnovo.crea'],
+        ['POST', '#^/v1/crm/scadenze/([^/]+)/chiusura$#', 'crm.scadenze.chiusura.crea'],
         ['GET', '#^/v1/crm/preventivi$#', 'crm.preventivi.elenca'],
         ['POST', '#^/v1/crm/preventivi$#', 'crm.preventivi.crea'],
         ['GET', '#^/v1/crm/preventivi/([^/]+)$#', 'crm.preventivi.mostra'],
@@ -224,7 +234,7 @@ trait Crm
      *
      * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -281,6 +291,16 @@ trait Crm
             'crm.rate.riepilogo.mostra' => $this->riepilogoRateCrm($richiesta),
             'crm.rate.mostra' => $this->mostraCrm($richiesta, 'rate', $parametri[0]),
             'crm.rate.pagamenti.elenca' => $this->elencaPagamentiCrm($richiesta, $parametri[0]),
+            'crm.scadenze.tipi.elenca' => $this->elencaScadenzeTipiCrm($richiesta),
+            'crm.scadenze.tipi.crea' => $this->creaScadenzaTipoCrm($richiesta, $corpo),
+            'crm.scadenze.tipi.modifica' => $this->modificaScadenzaTipoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.scadenze.elenca' => $this->elencaScadenzeCrm($richiesta),
+            'crm.scadenze.crea' => $this->creaScadenzaCrm($richiesta, $corpo),
+            'crm.scadenze.mostra' => $this->mostraCrm($richiesta, 'scadenze', $parametri[0]),
+            'crm.scadenze.modifica' => $this->modificaScadenzaCrm($richiesta, $corpo, $parametri[0]),
+            'crm.scadenze.elimina' => $this->eliminaScadenzaCrm($richiesta, $parametri[0]),
+            'crm.scadenze.rinnovo.crea' => $this->rinnovaScadenzaCrm($richiesta, $corpo, $parametri[0]),
+            'crm.scadenze.chiusura.crea' => $this->chiudiScadenzaCrm($richiesta, $corpo, $parametri[0]),
             'crm.preventivi.elenca' => $this->elencaPreventiviCrm($richiesta),
             'crm.preventivi.crea' => $this->creaPreventivoCrm($richiesta, $corpo),
             'crm.preventivi.mostra' => $this->mostraCrm($richiesta, 'preventivi', $parametri[0]),
@@ -464,7 +484,7 @@ trait Crm
         }
 
         if ($cambiata) {
-            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti', 'rate', 'pagamenti', 'preventivi'], true) ? 'aggiornato_il' : 'aggiornata_il';
+            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti', 'rate', 'pagamenti', 'preventivi', 'scadenzeTipi'], true) ? 'aggiornato_il' : 'aggiornata_il';
             $riga[$colonna] = self::dopoCrm($riga[$colonna]);
             $this->crm[$tipo][$id] = $riga;
         }
@@ -482,11 +502,11 @@ trait Crm
     }
 
     /** Una riga della cronologia di un contatto, un'azienda o una trattativa, con l'autore della scrittura. */
-    private function cambioCrm(string $tipo, string $id, string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null): void
+    private function cambioCrm(string $tipo, string $id, string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null, ?string $scadenza = null): void
     {
         $this->crm['cambi'][] = [
             'id' => self::id(), 'tipo_risorsa' => $tipo, 'risorsa' => $id, 'tipo' => $cambio, 'autore_id' => $autore, 'istante' => self::adessoCrm(),
-            'campi' => $campi, 'importazione_id' => $importazione, 'attivita_id' => $attivita,
+            'campi' => $campi, 'importazione_id' => $importazione, 'attivita_id' => $attivita, 'scadenza_id' => $scadenza,
         ];
     }
 
@@ -1184,7 +1204,7 @@ trait Crm
                 return [
                     'id' => $cambio['id'], 'tipo' => $cambio['tipo'] === 'creata' ? 'trattativa.creata' : 'trattativa.'.self::esitoCrm($cambio),
                     'autore_id' => $cambio['autore_id'], 'istante' => self::iso($cambio['istante']), 'campi' => [], 'importazione_id' => null,
-                    'attivita_id' => null, 'trattativa_id' => $cambio['risorsa'],
+                    'attivita_id' => null, 'scadenza_id' => null, 'trattativa_id' => $cambio['risorsa'],
                 ];
             }
 
@@ -1198,7 +1218,7 @@ trait Crm
                 ] : $campo, $voce['campi']);
             }
 
-            return $voce + ($tipo === 'trattative' ? [] : ['importazione_id' => $cambio['importazione_id']]) + ['attivita_id' => $cambio['attivita_id']];
+            return $voce + ($tipo === 'trattative' ? [] : ['importazione_id' => $cambio['importazione_id']]) + ['attivita_id' => $cambio['attivita_id']] + ($tipo === 'trattative' ? [] : ['scadenza_id' => $cambio['scadenza_id']]);
         };
         $esito = $this->paginaCrm($richiesta, "{$lista}:{$riga['id']}", $righe, fn (array $una, array $altra) => [$altra['istante'], $altra['id']] <=> [$una['istante'], $una['id']], $voce);
         // Come il backoffice (ValoriDeiCampi::senzaEliminati): le voci `campi.<chiave>` di un campo «tuo» eliminato non escono, e una riga che
@@ -1268,6 +1288,7 @@ trait Crm
             'acquisti' => $this->voceAcquistoCrm($riga),
             'rate' => $this->voceRataCrm($riga),
             'preventivi' => $this->vocePreventivoCrm($riga),
+            'scadenze' => $this->voceScadenzaCrm($riga, self::oggiAcquistoCrm()),
             default => $this->voceAttivita($riga),
         };
     }
@@ -2309,7 +2330,7 @@ trait Crm
         foreach ($this->crm['cambi'] as $cambio => $riga) {
             if (($riga['tipo_risorsa'] === 'persone' && $riga['risorsa'] === $persona['id']) || ($riga['tipo_risorsa'] === 'trattative' && in_array($riga['risorsa'], $opportunita, true))) {
                 $this->crm['cambi'][$cambio]['campi'] = array_map(
-                    fn (array $voce) => str_starts_with((string) ($voce['campo'] ?? ''), 'campi.') ? ['campo' => $voce['campo']] : $voce,
+                    fn (array $voce) => str_starts_with((string) ($voce['campo'] ?? ''), 'campi.') || ($voce['campo'] ?? null) === 'motivo' ? ['campo' => $voce['campo']] : $voce,
                     $riga['campi'],
                 );
             }
@@ -2317,6 +2338,7 @@ trait Crm
 
         $this->dimenticaIPagamentiCrm($persona['id']);
         $this->dimenticaIPreventiviCrm($persona['id']);
+        $this->dimenticaLeScadenzeCrm($persona['id']);
 
         foreach ($this->crm['note'] as $nota => $riga) {
             if ($riga['persona_id'] === $persona['id']) {

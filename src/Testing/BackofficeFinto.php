@@ -28,6 +28,7 @@ use Zeiras\Auth\Testing\Finto\CrmCatalogo;
 use Zeiras\Auth\Testing\Finto\CrmRate;
 use Zeiras\Auth\Testing\Finto\CrmEsiti;
 use Zeiras\Auth\Testing\Finto\CrmPreventivi;
+use Zeiras\Auth\Testing\Finto\CrmScadenze;
 use Zeiras\Auth\Testing\Finto\CrmValori;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
@@ -64,6 +65,7 @@ final class BackofficeFinto
     use CrmRate;
     use CrmEsiti;
     use CrmPreventivi;
+    use CrmScadenze;
     use CrmValori;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
