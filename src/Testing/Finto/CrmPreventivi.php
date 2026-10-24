@@ -472,6 +472,27 @@ trait CrmPreventivi
     }
 
     /**
+     * crm.preventivi.richieste.elenca: i messaggi che il cliente ha scritto dal link (`preventivi.pubblici.richieste.crea`), dal più recente
+     * (`creata_il`, poi `id`, decrescenti), a cursore: il solo `messaggio` e la `creata_il`. Dopo l'oblio del contatto il messaggio è vuoto.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaRichiestePreventivoCrm(Request $richiesta, string $id): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $riga = $this->rigaCrm('preventivi', $chi['workspace'], $id);
+        $righe = array_values(array_filter($this->crm['richieste_preventivo'] ?? [], fn (array $voce) => $voce['preventivo_id'] === $riga['id']));
+
+        return $this->paginaCrm(
+            $richiesta,
+            "crm.preventivi.richieste.elenca:{$riga['id']}",
+            $righe,
+            fn (array $uno, array $altro) => [self::iso($altro['creata_il']), $altro['id']] <=> [self::iso($uno['creata_il']), $uno['id']],
+            fn (array $voce) => ['messaggio' => $voce['messaggio'], 'creata_il' => self::iso($voce['creata_il'])],
+        );
+    }
+
+    /**
      * crm.preventivi.revisione.crea (PreventiviController::revisione, Preventivi::rivedi): nessun campo nel corpo (uno è 422 `campo_estraneo`).
      * Da `inviato`, `visto`, `rifiutato` o `scaduto` nasce una bozza con lo stesso numero e il suffisso successivo (`P-2026-001/2`), `revisione_di`,
      * le stesse righe (con id nuovi), lo stesso piano e gli stessi testi, la validità di oggi più 30 giorni e la valuta del preventivo di prima, che
