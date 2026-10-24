@@ -398,7 +398,7 @@ trait CrmPreventivi
         return [200, $pdf, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename='.str_replace('/', '-', $voce['numero']).'.pdf',
-            'Cache-Control' => 'private, no-store',
+            'Cache-Control' => 'no-store, private',
             'X-Content-Type-Options' => 'nosniff',
         ]];
     }
