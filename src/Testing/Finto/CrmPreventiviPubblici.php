@@ -35,7 +35,7 @@ trait CrmPreventiviPubblici
         $token = $this->tokenDelPreventivoPubblico($corpo, [], 'lettura');
         $riga = $this->apriIlPreventivoPubblico($token);
 
-        if ($riga['stato'] === 'inviato' && ($riga['visto_il'] ?? null) === null) {
+        if ($riga['stato'] === 'inviato' && ($riga['visto_il'] ?? null) === null && ! $this->contattoDimenticatoDelPreventivoPubblico($riga)) {
             $ora = self::dopoCrm($riga['aggiornato_il']);
             $this->crm['preventivi'][$riga['id']]['stato'] = 'visto';
             $this->crm['preventivi'][$riga['id']]['visto_il'] = $ora;
@@ -64,10 +64,15 @@ trait CrmPreventiviPubblici
 
         // Gli stati prima del contatto (PreventiviPubblici::accetta): un preventivo di sola azienda, o il cui contatto è archiviato o non c'è più, non
         // si accetta dal link e al cliente non si dice perché. Accettato e scaduto si dicono per primi: li dice accettaIlPreventivoCrm.
+        // Un contatto che ha chiesto l'oblio non si dice al cliente: stesso 409 di un contatto archiviato, in ogni stato.
+        if ($this->contattoDimenticatoDelPreventivoPubblico($riga)) {
+            throw new Problema('preventivo_stato_non_ammesso');
+        }
+
         if (in_array(self::statoDelPreventivoCrm($riga), ['inviato', 'visto'], true)) {
             $contatto = $riga['persona_id'] === null ? null : ($this->crm['persone'][$riga['persona_id']] ?? null);
 
-            if ($contatto === null || ($contatto['eliminata'] ?? false) || ($contatto['archiviata_il'] !== null && $contatto['anonimizzata_il'] === null)) {
+            if ($contatto === null || ($contatto['eliminata'] ?? false) || $contatto['archiviata_il'] !== null) {
                 throw new Problema('preventivo_stato_non_ammesso');
             }
         }
@@ -83,14 +88,16 @@ trait CrmPreventiviPubblici
      */
     private function chiediModificaPreventivoPubblico(array $corpo): array
     {
-        $campi = $this->tokenDelPreventivoPubblico($corpo, ['messaggio' => ['bail', 'required', 'string', 'max:2000']], 'richieste', true);
+        $campi = $this->tokenDelPreventivoPubblico($corpo, ['messaggio' => ['bail', 'required', 'string', 'max:2000', new SenzaCarattereNullo]], 'richieste', true);
         $riga = $this->apriIlPreventivoPubblico($campi['token']);
 
         if ($riga['stato'] === 'sostituito') {
             throw new Problema('preventivo_sostituito');
         }
 
-        $this->senzaContattoAnonimizzatoPreventivoCrm($riga);
+        if ($this->contattoDimenticatoDelPreventivoPubblico($riga)) {
+            throw new Problema('preventivo_stato_non_ammesso');
+        }
 
         if ($riga['stato'] === 'accettato') {
             throw new Problema('gia_accettato');
@@ -114,6 +121,17 @@ trait CrmPreventiviPubblici
         }
 
         return [201, ['data' => ['creata_il' => self::iso($ora)]]];
+    }
+
+    /**
+     * Il contatto del preventivo ha chiesto l'oblio (`anonimizzata_il`): dal link non si legge più come «visto», non si accetta e non si chiede,
+     * e al cliente non si dice perché (PreventiviPubblici del backoffice).
+     *
+     * @param  array<string, mixed>  $riga
+     */
+    private function contattoDimenticatoDelPreventivoPubblico(array $riga): bool
+    {
+        return $riga['persona_id'] !== null && ($this->crm['persone'][$riga['persona_id']]['anonimizzata_il'] ?? null) !== null;
     }
 
     /**
