@@ -287,9 +287,13 @@ trait CrmPreventivi
     }
 
     /**
-     * crm.preventivi.invio.crea (PreventiviController::invio): `{"modo": "manuale"}`; `If-Match` letto prima del corpo (412 sulla versione
-     * vecchia). Una bozza diventa `inviato` con `inviato_il`; non è una bozza: 409 `preventivo_stato_non_ammesso`; contatto anonimizzato: 409
-     * `persona_anonimizzata`; validità passata: 422 su `#/valido_fino_al`.
+     * crm.preventivi.invio.crea (PreventiviController::invio): `{"modo": "manuale"}` o `{"modo": "email", "a": "…", "messaggio": "…"}`; `If-Match`
+     * letto prima del corpo (412 sulla versione vecchia). Manuale: una bozza diventa `inviato` con `inviato_il`; non è una bozza: 409
+     * `preventivo_stato_non_ammesso`. Email (#2390): come Preventivi::inviaPerEmail, una bozza diventa `inviato` e un preventivo `inviato` o `visto`
+     * si rimanda (lo stato e `inviato_il` restano); i link di prima smettono di valere e ne nasce uno nuovo; scaduto: 409 `preventivo_scaduto`;
+     * accettato, rifiutato o sostituito: 409 `preventivo_stato_non_ammesso`. Il finto non manda posta: l'email resta in `emailDeiPreventivi()`,
+     * con il token del link, perché un test lo apra con `preventivi.pubblici.lettura.crea`. Contatto anonimizzato: 409 `persona_anonimizzata`;
+     * validità passata (di una bozza): 422 su `#/valido_fino_al`. Non modella i freni dell'invio.
      *
      * @return array{int, array<string, mixed>, array<string, string>}
      */
@@ -298,24 +302,105 @@ trait CrmPreventivi
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('preventivi', $chi['workspace'], $id);
         $this->pretendiLaVersioneCrm($richiesta, $this->vocePreventivoCrm($riga));
-        $this->testi->validaCorpo($corpo, ['modo' => ['bail', 'required', 'string', Rule::in(['manuale'])]]);
-        $this->senzaContattoAnonimizzatoPreventivoCrm($riga);
+        $regole = ['modo' => ['bail', 'required', 'string', Rule::in(['manuale', 'email'])]];
 
-        if ($riga['stato'] !== 'bozza') {
+        if (($corpo['modo'] ?? null) === 'email') {
+            $regole += ['a' => self::REGOLE_EMAIL, 'messaggio' => ['sometimes', 'nullable', 'string', 'max:2000']];
+        }
+
+        $campi = $this->testi->validaCorpo($corpo, $regole);
+        $email = $campi['modo'] === 'email';
+        $stato = self::statoDelPreventivoCrm($riga);
+
+        if ($email && $stato === 'scaduto') {
+            throw new Problema('preventivo_scaduto');
+        }
+
+        if (! $email || $riga['stato'] === 'bozza' || in_array($riga['stato'], ['inviato', 'visto'], true)) {
+            $this->senzaContattoAnonimizzatoPreventivoCrm($riga);
+        }
+
+        if ($riga['stato'] !== 'bozza' && ! ($email && in_array($riga['stato'], ['inviato', 'visto'], true))) {
             throw new Problema('preventivo_stato_non_ammesso');
         }
 
-        if ($riga['valido_fino_al'] < self::oggiAcquistoCrm()) {
-            throw new Problema('dati_non_validi', [self::erroreDelPreventivoCrm(['valido_fino_al'], $this->testi->testo('regole.preventivo_validita_passata'), Regola::FUORI_INTERVALLO)]);
+        $ora = self::dopoCrm($riga['aggiornato_il']);
+
+        if ($riga['stato'] === 'bozza') {
+            if ($riga['valido_fino_al'] < self::oggiAcquistoCrm()) {
+                throw new Problema('dati_non_validi', [self::erroreDelPreventivoCrm(['valido_fino_al'], $this->testi->testo('regole.preventivo_validita_passata'), Regola::FUORI_INTERVALLO)]);
+            }
+
+            $this->crm['preventivi'][$id]['stato'] = 'inviato';
+            $this->crm['preventivi'][$id]['inviato_il'] = $ora;
+            $this->crm['preventivi'][$id]['aggiornato_il'] = $ora;
         }
 
-        $ora = self::dopoCrm($riga['aggiornato_il']);
-        $this->crm['preventivi'][$id]['stato'] = 'inviato';
-        $this->crm['preventivi'][$id]['inviato_il'] = $ora;
-        $this->crm['preventivi'][$id]['aggiornato_il'] = $ora;
+        if ($email) {
+            // Un preventivo ha un solo link valido alla volta: i vecchi smettono di valere.
+            $this->crm['link_preventivi'] = array_filter($this->crm['link_preventivi'] ?? [], fn (string $preventivo) => $preventivo !== strtolower($id));
+            $this->crm['email_preventivi'][] = ['preventivo_id' => $id, 'a' => strtolower($campi['a']), 'messaggio' => $campi['messaggio'] ?? null, 'token' => $this->emettiLinkDelPreventivo($id)];
+        }
+
         $preventivo = $this->vocePreventivoCrm($this->crm['preventivi'][$id]);
 
         return [200, ['data' => $preventivo], ['ETag' => self::etagCrm($preventivo)]];
+    }
+
+    /**
+     * Le email dei preventivi che il finto "ha mandato" (`crm.preventivi.invio.crea`, modo `email`), in ordine: il preventivo, l'indirizzo, il
+     * messaggio e il token del link. Per un test che apre il link come lo apre il cliente.
+     *
+     * @return list<array{preventivo_id: string, a: string, messaggio: string|null, token: string}>
+     */
+    public function emailDeiPreventivi(): array
+    {
+        return $this->crm['email_preventivi'] ?? [];
+    }
+
+    /**
+     * crm.preventivi.pdf.mostra (PreventiviController::pdf): `200` `application/pdf`. Il finto dà un PDF minimo e valido con il numero del
+     * preventivo: la forma (tipo, nome del file, niente cache) è quella vera, il documento no. Il freno per persona non c'è.
+     *
+     * @return array{int, string, array<string, string>}
+     */
+    private function mostraPdfPreventivoCrm(Request $richiesta, string $id): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $riga = $this->rigaCrm('preventivi', $chi['workspace'], $id);
+        $voce = $this->vocePreventivoCrm($riga);
+        $testo = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], 'Preventivo '.$voce['numero']);
+        $contenuto = "BT /F1 18 Tf 72 720 Td ({$testo}) Tj ET";
+        $oggetti = [
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+            '<< /Length '.strlen($contenuto)." >>\nstream\n{$contenuto}\nendstream",
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        ];
+        $pdf = "%PDF-1.4\n";
+        $posizioni = [];
+
+        foreach ($oggetti as $n => $oggetto) {
+            $posizioni[] = strlen($pdf);
+            $pdf .= ($n + 1)." 0 obj\n{$oggetto}\nendobj\n";
+        }
+
+        $tabella = strlen($pdf);
+        $pdf .= "xref\n0 ".(count($oggetti) + 1)."\n0000000000 65535 f \n";
+
+        foreach ($posizioni as $posizione) {
+            $pdf .= sprintf("%010d 00000 n \n", $posizione);
+        }
+
+        $pdf .= "trailer\n<< /Size ".(count($oggetti) + 1)." /Root 1 0 R >>\nstartxref\n{$tabella}\n%%EOF\n";
+
+        return [200, $pdf, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename='.str_replace('/', '-', $voce['numero']).'.pdf',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]];
     }
 
     /**
