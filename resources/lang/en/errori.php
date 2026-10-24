@@ -197,6 +197,10 @@ return [
         'title' => 'Quote already accepted',
         'detail' => 'This quote has already been accepted: the acceptance is recorded only once. Read it again with crm.preventivi.mostra to see the purchases it created. The method wrote nothing.',
     ],
+    'preventivo_sostituito' => [
+        'title' => 'Quote superseded',
+        'detail' => 'This quote has been replaced by a revision: the link no longer accepts. Ask the sender for the link to the updated version. The method wrote nothing.',
+    ],
     'nome_gia_usato' => [
         'title' => 'Name already used',
         'detail' => 'Another active item already has this name (case and accents do not count). Choose another name, or archive the existing one. The method wrote nothing.',

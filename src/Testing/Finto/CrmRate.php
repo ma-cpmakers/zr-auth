@@ -246,7 +246,7 @@ trait CrmRate
      *
      * @param  array<string, mixed>  $acquisto
      */
-    private function creaLaRataUnicaCrm(array $acquisto, string $autore): void
+    private function creaLaRataUnicaCrm(array $acquisto, ?string $autore): void
     {
         if (($acquisto['prezzo_importo'] ?? 0) <= 0) {
             return;

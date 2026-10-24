@@ -197,6 +197,10 @@ return [
         'title' => 'Preventivo già accettato',
         'detail' => 'Questo preventivo è già stato accettato: l\'accettazione si registra una volta sola. Rileggilo con crm.preventivi.mostra per vedere gli acquisti nati. Il metodo non ha scritto niente.',
     ],
+    'preventivo_sostituito' => [
+        'title' => 'Preventivo sostituito',
+        'detail' => 'Questo preventivo è stato sostituito da una revisione: il link non accetta più. Chiedi il link della versione aggiornata a chi te l\'ha inviato. Il metodo non ha scritto niente.',
+    ],
     'nome_gia_usato' => [
         'title' => 'Nome già usato',
         'detail' => 'Un altro elemento attivo ha già questo nome (maiuscole e accenti non contano). Scegli un altro nome, o archivia quello che c\'è. Il metodo non ha scritto niente.',
