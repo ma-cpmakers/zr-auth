@@ -44,6 +44,7 @@ return [
     'conferma_password' => 'La password non è giusta: per confermare che sei tu serve quella con cui entri in Zeiras.',
     'contatto_vuoto' => 'Un contatto vuole almeno uno fra nome, cognome ed email.',
     'responsabile_del_workspace' => 'Questa persona non è un membro del workspace: gli id dei membri li dà workspace.membri.elenca.',
+    'azienda_o_azienda_nuova' => "Un contatto ha un'azienda che c'è (organizzazione_id) o una che nasce con lui (organizzazione_nuova), non tutte e due.",
     'organizzazione_non_esiste' => "L'azienda del contatto non esiste in questo workspace.",
     'email_doppia' => 'Questo indirizzo compare due volte nella lista.',
     'valuta_del_workspace' => "La valuta dev'essere quella del CRM del workspace (:valuta): la dà crm.impostazioni.mostra.",

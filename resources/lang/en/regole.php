@@ -43,6 +43,7 @@ return [
     'conferma_password' => 'The password is wrong: to confirm it is you, give the one you sign in to Zeiras with.',
     'contatto_vuoto' => 'A contact needs at least one of nome, cognome and email.',
     'responsabile_del_workspace' => 'This person is not a member of the workspace: member ids come from workspace.membri.elenca.',
+    'azienda_o_azienda_nuova' => 'A contact has an existing company (organizzazione_id) or one created with it (organizzazione_nuova), not both.',
     'organizzazione_non_esiste' => "The contact's company does not exist in this workspace.",
     'email_doppia' => 'This address appears twice in the list.',
     'valuta_del_workspace' => "The currency must be the one of the workspace's CRM (:valuta): crm.impostazioni.mostra gives it.",
