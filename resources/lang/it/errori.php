@@ -197,6 +197,14 @@ return [
         'title' => 'Preventivo già accettato',
         'detail' => 'Questo preventivo è già stato accettato: l\'accettazione si registra una volta sola. Rileggilo con crm.preventivi.mostra per vedere gli acquisti nati. Il metodo non ha scritto niente.',
     ],
+    'nome_gia_usato' => [
+        'title' => 'Nome già usato',
+        'detail' => 'Un altro elemento attivo ha già questo nome (maiuscole e accenti non contano). Scegli un altro nome, o archivia quello che c\'è. Il metodo non ha scritto niente.',
+    ],
+    'scadenza_chiusa' => [
+        'title' => 'Scadenza già chiusa',
+        'detail' => 'Questa scadenza è già stata rinnovata o chiusa e non si modifica più. Rileggila con crm.scadenze.mostra: `rinnovata_da` dice la successiva. Il metodo non ha scritto niente.',
+    ],
     'proprieta_da_trasferire' => [
         'title' => 'Proprietà da trasferire',
         'detail' => "Sei proprietario di uno o più workspace (il problema porta accanto al codice `workspace_da_trasferire`, con id e nome): finché lo sei non puoi eliminare l'account. Elimina quei workspace e ripeti la richiesta. Il metodo non ha scritto niente.",

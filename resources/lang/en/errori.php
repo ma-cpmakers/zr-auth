@@ -197,6 +197,14 @@ return [
         'title' => 'Quote already accepted',
         'detail' => 'This quote has already been accepted: the acceptance is recorded only once. Read it again with crm.preventivi.mostra to see the purchases it created. The method wrote nothing.',
     ],
+    'nome_gia_usato' => [
+        'title' => 'Name already used',
+        'detail' => 'Another active item already has this name (case and accents do not count). Choose another name, or archive the existing one. The method wrote nothing.',
+    ],
+    'scadenza_chiusa' => [
+        'title' => 'Deadline already closed',
+        'detail' => 'This deadline has already been renewed or closed and can no longer be changed. Read it again with crm.scadenze.mostra: `rinnovata_da` tells you the next one. The method wrote nothing.',
+    ],
     'proprieta_da_trasferire' => [
         'title' => 'Ownership to hand over',
         'detail' => 'You own one or more workspaces (the problem carries `workspace_da_trasferire` next to the code, with id and name): while you do, you cannot delete the account. Delete those workspaces and repeat the request. Nothing was written.',
