@@ -34,7 +34,7 @@ it('con la conferma è 202 con le due date a trenta giorni, e da lì il gettone 
     $risposta = alFinto('DELETE', '/v1/io', gettone: $gettone);
 
     expect($risposta->status())->toBe(202)
-        ->and($risposta->json('data'))->toBe(['richiesta_il' => '2026-10-24T09:00:00.000Z', 'anonimizzazione_il' => '2026-11-23T09:00:00.000Z'])
+        ->and($risposta->json('data'))->toBe(['richiesta_il' => '2026-10-24T09:00:00.000Z', 'anonimizzazione_il' => '2026-11-23T09:00:00.000Z', 'workspace_eliminati' => []])
         ->and($risposta->header('Link'))->toBe(linkDi('io.elimina'))
         ->and(alFinto('GET', '/v1/io', gettone: $gettone)->status())->toBe(401);
 });
@@ -111,7 +111,10 @@ it('il workspace in cui è l\'unico account non blocca: si elimina con l\'accoun
     // Il gettone di Zelda muore col 202: la scadenza programmata si legge dal finto.
     $programmate = fn (): array => (new ReflectionProperty($finto, 'eliminazioni'))->getValue($finto);
 
-    expect(alFinto('DELETE', '/v1/io', gettone: $gettone)->status())->toBe(202)
+    $risposta = alFinto('DELETE', '/v1/io', gettone: $gettone);
+
+    expect($risposta->status())->toBe(202)
+        ->and($risposta->json('data.workspace_eliminati'))->toBe([['id' => $solo['id'], 'nome' => 'Studio solo']])
         ->and(array_map(fn ($quando) => $quando->toIso8601String(), $programmate()))->toBe([$solo['id'] => '2026-11-23T09:00:00+00:00']);
 
     // Il rientro entro i trenta giorni lo ritrova.

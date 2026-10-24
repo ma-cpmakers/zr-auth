@@ -27,6 +27,7 @@ return [
     'troppe_board' => 'At most :max boards per call.',
     'etichetta_della_board' => "This label is not on the card's board: label ids come from board.board.mostra.",
     'utente_del_workspace' => 'The workspace has no user with this id: user ids come from workspace.membri.elenca.',
+    'utente_gia_proprietario' => 'This person already owns the workspace: send the id of another member, from workspace.membri.elenca.',
     'scheda_del_workspace' => 'The workspace has no card with this id: card ids come from board.schede.elenca.',
     // #1843: :data è la data dell'altro campo nella forma breve di `data_breve` (giorno e mese, dalla libreria delle date).
     'inizio_dopo_la_scadenza' => "The start date can't be after the due date (:data).",

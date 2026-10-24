@@ -202,6 +202,7 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.modifica'],
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
         ['POST', '#^/v1/workspace/uscita$#', 'workspace.uscita.crea'],
+        ['PATCH', '#^/v1/workspace/proprietario$#', 'workspace.proprietario.modifica'],
     ];
 
     /**
@@ -1285,6 +1286,7 @@ final class BackofficeFinto
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
                 'workspace.uscita.crea' => $this->esceDalWorkspace($richiesta, $corpo),
+                'workspace.proprietario.modifica' => $this->passaLaProprieta($richiesta, $corpo),
                 default => $this->eseguiCrm($operazione, $richiesta, $corpo, $parametri),
             };
             // Le intestazioni di una risposta riuscita (la Location di una creazione) sono il terzo elemento, se c'è.
@@ -3501,7 +3503,10 @@ final class BackofficeFinto
             }
         }
 
-        return [202, ['data' => ['richiesta_il' => self::iso($quando), 'anonimizzazione_il' => self::iso($quando->addDays(30))]]];
+        sort($soli, SORT_STRING);
+        $eliminati = array_map(fn (string $id) => ['id' => $id, 'nome' => $this->workspace[$id]['nome']], $soli);
+
+        return [202, ['data' => ['richiesta_il' => self::iso($quando), 'anonimizzazione_il' => self::iso($quando->addDays(30)), 'workspace_eliminati' => $eliminati]]];
     }
 
     /**
@@ -4933,6 +4938,36 @@ final class BackofficeFinto
         $this->togliIlMembro($workspace, $persona);
 
         return [204, null];
+    }
+
+    /**
+     * workspace.proprietario.modifica (ProprietarioController::modifica, #2542): il proprietario passa la proprietà a un altro membro. Nell'ordine
+     * del backoffice: il ruolo di chi chiama (403, solo il proprietario), il workspace in eliminazione (409), il corpo (422 su `#/utente`), chi è già
+     * il proprietario (422 `valore_non_ammesso`), poi chi non è membro o ha chiesto di eliminare l'account (422 `non_trovato`, lo stesso testo di un id
+     * inventato). I due ruoli cambiano insieme: chi chiamava resta amministratore. Risponde 200 col nuovo proprietario.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function passaLaProprieta(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario']);
+        $workspace = $chi['workspace'];
+        $this->rifiutaSeInEliminazione($workspace);
+        $scelto = strtolower((string) $this->testi->validaStretta($corpo, ['utente' => ['bail', 'required', 'string', 'ulid']])['utente']);
+
+        if ($scelto === $chi['persona']) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_gia_proprietario'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/utente']]);
+        }
+
+        if (! isset($this->membri[$workspace][$scelto]) || isset($this->eliminazioniPersona[$scelto])) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => 'non_trovato', 'pointer' => '#/utente']]);
+        }
+
+        $this->membri[$workspace][$chi['persona']] = 'amministratore';
+        $this->membri[$workspace][$scelto] = 'proprietario';
+
+        return [200, ['data' => $this->voceMembro($workspace, $scelto)]];
     }
 
     /**
