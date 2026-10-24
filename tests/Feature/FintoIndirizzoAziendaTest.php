@@ -74,23 +74,23 @@ it('l\'importazione ricava la precisione dalla riga e rifiuta lat, lng, place_id
         ['nome' => 'D', 'indirizzo' => ['citta' => 'Genova', 'cap' => '16100']],
         ['nome' => 'E', 'indirizzo' => ['testo' => 'x', 'citta' => 'Milano']],
         ['nome' => 'F', 'indirizzo' => ['citta' => 'Roma', 'lat' => 41.9]],
-    ]], $gettoni['carla']);
+    ]], $gettoni['anna']);
 
     expect($risposta->status())->toBe(201)
         ->and(array_column($risposta->json('data.righe'), 'esito'))->toBe(['creata', 'creata', 'creata', 'creata', 'rifiutata', 'rifiutata'])
         ->and($risposta->json('data.righe.4.errors.0'))->toMatchArray(['pointer' => '#/righe/4/indirizzo/testo', 'regola' => 'campo_vietato'])
         ->and(array_unique(array_column($risposta->json('data.righe.5.errors'), 'regola')))->toBe(['campo_estraneo']);
 
-    $precisioni = array_map(fn (int $riga) => alFinto('GET', '/v1/crm/organizzazioni/'.$risposta->json("data.righe.{$riga}.id"), null, $gettoni['carla'])->json('data.indirizzo.precisione'), [0, 1, 2, 3]);
+    $precisioni = array_map(fn (int $riga) => alFinto('GET', '/v1/crm/organizzazioni/'.$risposta->json("data.righe.{$riga}.id"), null, $gettoni['anna'])->json('data.indirizzo.precisione'), [0, 1, 2, 3]);
 
     expect($precisioni)->toBe(['testo_libero', 'indirizzo', 'citta', null]);
 });
 
 it('l\'esportazione ha cinque colonne in più dopo paese, e le coordinate sono numeri col loro meno (AD.8)', function () {
     [, $gettoni] = studioColCrm();
-    alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Sydney Pty', 'indirizzo' => ['precisione' => 'citta', 'citta' => 'Sydney', 'lat' => -33.8688, 'lng' => 151.2093, 'place_id' => 'ChIJ-sydney']], $gettoni['carla']);
+    alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Sydney Pty', 'indirizzo' => ['precisione' => 'citta', 'citta' => 'Sydney', 'lat' => -33.8688, 'lng' => 151.2093, 'place_id' => 'ChIJ-sydney']], $gettoni['anna']);
 
-    $righe = array_map(fn (string $riga) => str_getcsv($riga, escape: ''), preg_split('/\r\n/', trim(ltrim(alFinto('GET', '/v1/crm/organizzazioni/esportazione', null, $gettoni['carla'])->body(), "\xEF\xBB\xBF")), -1, PREG_SPLIT_NO_EMPTY));
+    $righe = array_map(fn (string $riga) => str_getcsv($riga, escape: ''), preg_split('/\r\n/', trim(ltrim(alFinto('GET', '/v1/crm/organizzazioni/esportazione', null, $gettoni['anna'])->body(), "\xEF\xBB\xBF")), -1, PREG_SPLIT_NO_EMPTY));
     $colonne = array_combine($righe[0], $righe[1]);
 
     expect(array_slice($righe[0], 4, 10))->toBe(INDIRIZZO_DEL_FINTO)
