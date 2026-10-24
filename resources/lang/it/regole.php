@@ -122,4 +122,7 @@ return [
     'preventivo_accettazione_altro_contatto' => 'Il preventivo è di un altro contatto: gli acquisti nascono sul suo.',
     'opportunita_non_esiste' => 'Nel workspace non c\'è un\'opportunità con questo id: gli id delle opportunità li dà crm.trattative.elenca.',
     'voce_non_esiste' => 'Nel catalogo del workspace non c\'è una voce con questo id: gli id delle voci li dà crm.catalogo.elenca.',
+    'tipo_scadenza_non_esiste' => "Nel workspace non c'è un tipo di scadenza con questo id: gli id dei tipi li dà crm.scadenze.tipi.elenca.",
+    'tipo_scadenza_archiviato' => 'Il tipo di scadenza è archiviato: una scadenza nuova si crea su un tipo attivo.',
+    'acquisto_non_esiste' => "Nel workspace non c'è un acquisto con questo id: gli id degli acquisti li dà crm.acquisti.elenca.",
 ];
