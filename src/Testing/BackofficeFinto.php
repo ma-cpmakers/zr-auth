@@ -3461,7 +3461,8 @@ final class BackofficeFinto
         $daTrasferire = [];
 
         foreach ($this->workspace as $id => $workspace) {
-            if (($this->membri[$id][$persona] ?? null) === 'proprietario') {
+            // Non contano i workspace con l'eliminazione già programmata (nota 16347 punto 1): se ne vanno da sé.
+            if (($this->membri[$id][$persona] ?? null) === 'proprietario' && ! isset($this->eliminazioni[$id])) {
                 $daTrasferire[] = ['id' => $id, 'nome' => $workspace['nome']];
             }
         }
@@ -4289,6 +4290,7 @@ final class BackofficeFinto
                 'azienda.persone' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PERSONE)],
                 'azienda.sito' => ['sometimes', 'nullable', 'bail', 'string', 'max:255', 'url:http,https'],
             ], ['azienda' => ['partita_iva', 'settore', 'persone', 'sito']]);
+            $this->rifiutaICampiEstraneiDeiMembri($corpo['membri'] ?? null);
             $azienda = $campi['azienda_id'] ?? null;
             $datiAzienda = array_filter($campi['azienda'] ?? [], fn (mixed $valore) => $valore !== null);
 
@@ -4307,7 +4309,7 @@ final class BackofficeFinto
             }
 
             // I membri iniziali (#2012, C.2): dopo il 404 e il 403 dell'azienda, prima dell'accordo.
-            $membriIniziali = $this->controllaIMembri($persona, $azienda, $corpo['membri'] ?? null, $campi['membri'] ?? []);
+            $membriIniziali = $this->controllaIMembri($persona, $azienda, $campi['membri'] ?? []);
 
             // L'accordo sul trattamento dei dati (#1700): dopo il 404 e il 403 dell'azienda, prima del freno e di ogni scrittura.
             $accordo = $this->richiediAccordo($azienda, $campi['accordo_trattamento_dati_accettato'] ?? null);
@@ -4366,18 +4368,8 @@ final class BackofficeFinto
         });
     }
 
-    /**
-     * I membri iniziali di io.workspace.crea (IoWorkspaceController::controllaIMembri, #2012 C.2): ognuno entra con un invito, anche se è
-     * della stessa azienda. Si può invitare solo una persona che è già membro di un workspace dell'azienda del workspace nuovo, e non chi lo
-     * crea: tutto il resto (un'altra persona, una che non c'è, un'altra azienda) è 422 `valore_non_ammesso` su `#/membri/N/persona`,
-     * uguale nei casi (G11). Senza `azienda_id` `membri` è 422 `campo_vietato`. Ogni elemento ha solo `persona` e `ruolo`: un altro nome
-     * è 422 `campo_estraneo` su `#/membri/N/<nome>`. Un corpo senza `membri` non cambia.
-     *
-     * @param  mixed  $grezzo  `membri` come è arrivato nel corpo
-     * @param  list<array{persona: string, ruolo: string}>  $membri  quelli validati
-     * @return list<array{0: string, 1: string}> chi invitare e con quale ruolo, nell'ordine del corpo
-     */
-    private function controllaIMembri(string $chi, ?string $azienda, mixed $grezzo, array $membri): array
+    /** Ogni elemento di `membri` ha solo `persona` e `ruolo`: un altro nome è 422 campo_estraneo (IoWorkspaceController::rifiutaICampiEstraneiDeiMembri). Viene prima del 404 e del 403 dell'azienda. */
+    private function rifiutaICampiEstraneiDeiMembri(mixed $grezzo): void
     {
         $errori = [];
 
@@ -4392,6 +4384,22 @@ final class BackofficeFinto
         if ($errori !== []) {
             throw new Problema('dati_non_validi', $errori);
         }
+    }
+
+    /**
+     * I membri iniziali di io.workspace.crea (IoWorkspaceController::controllaIMembri, #2012 C.2): ognuno entra con un invito, anche se è
+     * della stessa azienda. Si può invitare solo una persona che è già membro di un workspace dell'azienda del workspace nuovo, e non chi lo
+     * crea: tutto il resto (un'altra persona, una che non c'è, un'altra azienda) è 422 `valore_non_ammesso` su `#/membri/N/persona`,
+     * uguale nei casi (G11). Senza `azienda_id` `membri` è 422 `campo_vietato`. Ogni elemento ha solo `persona` e `ruolo`: un altro nome
+     * è 422 `campo_estraneo` su `#/membri/N/<nome>`. Un corpo senza `membri` non cambia.
+     *
+     * @param  mixed  $grezzo  `membri` come è arrivato nel corpo
+     * @param  list<array{persona: string, ruolo: string}>  $membri  quelli validati
+     * @return list<array{0: string, 1: string}> chi invitare e con quale ruolo, nell'ordine del corpo
+     */
+    private function controllaIMembri(string $chi, ?string $azienda, array $membri): array
+    {
+        $errori = [];
 
         if ($membri === []) {
             return [];
@@ -4405,9 +4413,10 @@ final class BackofficeFinto
 
         foreach (array_values($membri) as $posto => $membro) {
             $persona = $membro['persona'];
+            // Un workspace dell'azienda in cui sono membri tutte e due, chi chiama e la persona (zr-pm, 24/10, nota 16350).
             $ammessa = $persona !== $chi && isset($this->persone[$persona]) && array_filter(
                 $this->workspace,
-                fn (array $workspace, string $id) => $workspace['azienda_id'] === $azienda && isset($this->membri[$id][$persona]),
+                fn (array $workspace, string $id) => $workspace['azienda_id'] === $azienda && isset($this->membri[$id][$persona], $this->membri[$id][$chi]),
                 ARRAY_FILTER_USE_BOTH,
             ) !== [];
 

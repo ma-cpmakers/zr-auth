@@ -51,6 +51,19 @@ it('una proprietaria è 409 proprieta_da_trasferire con i workspace accanto al c
         ->and(alFinto('GET', '/v1/io', gettone: $gettone)->status())->toBe(200);
 });
 
+it('un workspace con l\'eliminazione programmata non è da trasferire: il 409 elenca solo quello vivo (nota 16347 punto 1)', function () {
+    [$finto, $zelda, $gettone] = chiedeDiEliminare();
+    $morente = $finto->workspace('Studio che se ne va', $zelda);
+    $vivo = $finto->workspace('Studio che resta', $zelda);
+    $delMorente = alFinto('POST', '/v1/gettoni', ['workspace_id' => $morente['id']], $gettone)->json('data.gettone');
+    expect(alFinto('DELETE', '/v1/workspace', gettone: $delMorente)->status())->toBe(202);
+
+    $risposta = alFinto('DELETE', '/v1/io', gettone: $gettone);
+
+    expect($risposta->status())->toBe(409)
+        ->and($risposta->json('workspace_da_trasferire'))->toBe([['id' => $vivo['id'], 'nome' => 'Studio che resta']]);
+});
+
 it('chi rientra con la password toglie la richiesta, e solo allora l\'accesso porta eliminazione_annullata (#1961)', function () {
     [, , $gettone] = chiedeDiEliminare();
     alFinto('DELETE', '/v1/io', gettone: $gettone);
