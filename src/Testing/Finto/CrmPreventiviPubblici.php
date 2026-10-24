@@ -11,6 +11,9 @@ namespace Zeiras\Auth\Testing\Finto;
  */
 trait CrmPreventiviPubblici
 {
+    /** Quante richieste al più per preventivo (RichiestaDelPreventivo::TETTO del backoffice). */
+    private const CRM_RICHIESTE_PREVENTIVO_TETTO = 50;
+
     /**
      * Emette un link per un preventivo e dà il token (43 caratteri di base64url): il finto tiene solo il suo SHA-256, come il backoffice
      * tiene l'impronta. Ne può emettere quanti ne vuole per lo stesso preventivo.
@@ -51,7 +54,7 @@ trait CrmPreventiviPubblici
     {
         $campi = $this->tokenDelPreventivoPubblico($corpo, [
             'nome' => ['bail', 'required', 'string', 'max:200'],
-            'accetto' => ['bail', 'required', 'boolean', 'accepted'],
+            'accetto' => ['bail', 'required', 'boolean:strict', 'accepted'],
         ], 'accettazione', true);
         $riga = $this->apriIlPreventivoPubblico($campi['token']);
 
@@ -59,8 +62,14 @@ trait CrmPreventiviPubblici
             throw new Problema('preventivo_sostituito');
         }
 
-        if ($riga['persona_id'] === null) {
-            throw new Problema('preventivo_stato_non_ammesso');
+        // Gli stati prima del contatto (PreventiviPubblici::accetta): un preventivo di sola azienda, o il cui contatto è archiviato o non c'è più, non
+        // si accetta dal link e al cliente non si dice perché. Accettato e scaduto si dicono per primi: li dice accettaIlPreventivoCrm.
+        if (in_array(self::statoDelPreventivoCrm($riga), ['inviato', 'visto'], true)) {
+            $contatto = $riga['persona_id'] === null ? null : ($this->crm['persone'][$riga['persona_id']] ?? null);
+
+            if ($contatto === null || ($contatto['eliminata'] ?? false) || ($contatto['archiviata_il'] !== null && $contatto['anonimizzata_il'] === null)) {
+                throw new Problema('preventivo_stato_non_ammesso');
+            }
         }
 
         $this->accettaIlPreventivoCrm($riga['workspace'], null, ['nome' => $campi['nome']], $riga['id'], 'online');
@@ -81,12 +90,19 @@ trait CrmPreventiviPubblici
             throw new Problema('preventivo_sostituito');
         }
 
+        $this->senzaContattoAnonimizzatoPreventivoCrm($riga);
+
         if ($riga['stato'] === 'accettato') {
             throw new Problema('gia_accettato');
         }
 
         if ($riga['stato'] === 'rifiutato') {
             throw new Problema('preventivo_stato_non_ammesso');
+        }
+
+        // Al più 50 richieste per preventivo (RichiestaDelPreventivo::TETTO): oltre, 409 limite_raggiunto.
+        if (count(array_filter($this->crm['richieste_preventivo'] ?? [], fn (array $richiesta) => $richiesta['preventivo_id'] === $riga['id'])) >= self::CRM_RICHIESTE_PREVENTIVO_TETTO) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_RICHIESTE_PREVENTIVO_TETTO]);
         }
 
         $ora = self::adessoCrm();
