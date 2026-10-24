@@ -291,6 +291,10 @@ trait CrmScadenze
             throw new Problema('permesso_negato');
         }
 
+        if ($riga['origine'] !== 'manuale') {
+            throw new Problema('permesso_negato');
+        }
+
         $this->crm['scadenze'][$riga['id']]['eliminata'] = true;
 
         return [204, null];
@@ -308,7 +312,7 @@ trait CrmScadenze
         $chi = $this->conCrm($richiesta);
         $this->rigaCrm('scadenze', $chi['workspace'], $id);
 
-        return $this->conIdempotenza($richiesta, 'crm.scadenze.rinnovo.crea:'.strtolower($id), $chi, $corpo, function () use ($richiesta, $chi, $corpo, $id) {
+        return $this->conIdempotenza($richiesta, 'crm.scadenze.rinnovo.crea', $chi, ['corpo' => $corpo, 'percorso' => ['scadenza' => strtolower($id)]], function () use ($richiesta, $chi, $corpo, $id) {
             $riga = $this->rigaCrm('scadenze', $chi['workspace'], $id);
             $this->pretendiLaVersioneCrm($richiesta, $this->voceScadenzaCrm($riga, self::oggiAcquistoCrm()));
             $campi = $this->testi->validaCorpo($corpo, ['scade_il' => $this->regolaDellaDataDiScadenzaCrm(true)]);
@@ -319,7 +323,7 @@ trait CrmScadenze
             $this->crm['scadenze'][$nuova] = [
                 ...$riga, 'id' => $nuova, 'scade_il' => $campi['scade_il'], 'preavviso_dal' => self::preavvisoDalCrm($campi['scade_il'], $riga['preavvisi']),
                 'stato' => 'attiva', 'chiusa_il' => null, 'motivo' => null, 'rinnovata_da' => null,
-                'creata_da' => $chi['persona'], 'creata_il' => $ora, 'aggiornata_il' => $ora,
+                'creata_da' => $riga['creata_da'], 'creata_il' => $ora, 'aggiornata_il' => $ora,
             ];
             $this->salvaCrm('scadenze', $riga['id'], ['stato' => 'rinnovata', 'rinnovata_da' => $nuova]);
             $this->rigaDellaScadenzaCrm($this->crm['scadenze'][$nuova], $chi['persona'], 'rinnovata', null);
