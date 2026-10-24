@@ -1031,7 +1031,7 @@ trait Crm
     {
         $forme = [$parola];
 
-        if (preg_match('/^[a-z]{2}(\d+)$/', $parola, $partita) === 1) {
+        if (preg_match('/^[a-z]{2}(\d{8,})$/', $parola, $partita) === 1) {
             $forme[] = $partita[1];
         }
 
@@ -1468,7 +1468,7 @@ trait Crm
         $ora = self::adessoCrm();
         $this->crm['organizzazioni'][$id] = [
             'id' => $id, 'workspace' => $chi['workspace'], 'nome' => $campi['nome'], 'sito' => $campi['sito'] ?? null,
-            'partita_iva' => $campi['partita_iva'] ?? null, 'dominio' => isset($campi['dominio']) ? mb_strtolower($campi['dominio']) : null,
+            'partita_iva' => $campi['partita_iva'] ?? null, 'dominio' => isset($campi['dominio']) ? mb_convert_case($campi['dominio'], MB_CASE_LOWER_SIMPLE) : null,
             'telefono' => $campi['telefono'] ?? null, 'indirizzo' => self::indirizzoCrm($campi['indirizzo'] ?? null),
             'stato' => $campi['stato'] ?? self::CRM_STATI[0],
             'responsabile_id' => isset($campi['responsabile_id']) ? strtolower($campi['responsabile_id']) : $chi['persona'],
@@ -1492,7 +1492,7 @@ trait Crm
         }
 
         if (array_key_exists('dominio', $campi) && $campi['dominio'] !== null) {
-            $campi['dominio'] = mb_strtolower($campi['dominio']);
+            $campi['dominio'] = mb_convert_case($campi['dominio'], MB_CASE_LOWER_SIMPLE);
         }
 
         $this->applicaOrganizzazione($riga['id'], $campi, $chi['persona']);
@@ -1707,12 +1707,21 @@ trait Crm
                 }
             }
 
-            if ($nuova !== null) {
-                $campi['organizzazione_id'] = $this->nasceOrganizzazione($chi, $nuova);
-            }
+            // Come il backoffice, in una scrittura sola: un valore rifiutato dopo la nascita non lascia un contatto né un'azienda.
+            $prima = $this->crm;
 
-            $id = $this->nascePersonaCrm($chi, $campi);
-            $this->scriviIValoriCrm('persona', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $id, $validati['campi'] ?? []));
+            try {
+                if ($nuova !== null) {
+                    $campi['organizzazione_id'] = $this->nasceOrganizzazione($chi, $nuova);
+                }
+
+                $id = $this->nascePersonaCrm($chi, $campi);
+                $this->scriviIValoriCrm('persona', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $id, $validati['campi'] ?? []));
+            } catch (\Throwable $errore) {
+                $this->crm = $prima;
+
+                throw $errore;
+            }
 
             return [201, ['data' => $this->vocePersona($this->crm['persone'][$id], true)], ['Location' => "/v1/crm/persone/{$id}"]];
         });
