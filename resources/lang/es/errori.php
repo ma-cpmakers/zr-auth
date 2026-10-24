@@ -197,6 +197,14 @@ return [
         'title' => 'Presupuesto ya aceptado',
         'detail' => 'Este presupuesto ya fue aceptado: la aceptación se registra una sola vez. Léelo de nuevo con crm.preventivi.mostra para ver las compras creadas. El método no escribió nada.',
     ],
+    'nome_gia_usato' => [
+        'title' => 'Nombre ya usado',
+        'detail' => 'Otro elemento activo ya tiene este nombre (mayúsculas y acentos no cuentan). Elige otro nombre o archiva el que existe. No se escribió nada.',
+    ],
+    'scadenza_chiusa' => [
+        'title' => 'Vencimiento ya cerrado',
+        'detail' => 'Este vencimiento ya fue renovado o cerrado y no se puede cambiar más. Léelo de nuevo con crm.scadenze.mostra: `rinnovata_da` indica el siguiente. No se escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',

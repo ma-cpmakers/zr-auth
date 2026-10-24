@@ -197,6 +197,14 @@ return [
         'title' => 'Preventivo già accettato',
         'detail' => 'Questo preventivo è già stato accettato: l\'accettazione si registra una volta sola. Rileggilo con crm.preventivi.mostra per vedere gli acquisti nati. Il metodo non ha scritto niente.',
     ],
+    'nome_gia_usato' => [
+        'title' => 'Nome già usato',
+        'detail' => 'Un altro elemento attivo ha già questo nome (maiuscole e accenti non contano). Scegli un altro nome, o archivia quello che c\'è. Il metodo non ha scritto niente.',
+    ],
+    'scadenza_chiusa' => [
+        'title' => 'Scadenza già chiusa',
+        'detail' => 'Questa scadenza è già stata rinnovata o chiusa e non si modifica più. Rileggila con crm.scadenze.mostra: `rinnovata_da` dice la successiva. Il metodo non ha scritto niente.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',
