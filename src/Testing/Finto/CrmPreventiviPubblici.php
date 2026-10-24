@@ -113,7 +113,7 @@ trait CrmPreventiviPubblici
         }
 
         $ora = self::adessoCrm();
-        $this->crm['richieste_preventivo'][] = ['preventivo_id' => $riga['id'], 'messaggio' => $campi['messaggio'], 'creata_il' => $ora];
+        $this->crm['richieste_preventivo'][] = ['id' => self::id(), 'preventivo_id' => $riga['id'], 'messaggio' => $campi['messaggio'], 'creata_il' => $ora];
         $trattativa = $riga['trattativa_id'] === null ? null : ($this->crm['trattative'][$riga['trattativa_id']] ?? null);
 
         if ($trattativa !== null && ! ($trattativa['eliminata'] ?? false)) {
