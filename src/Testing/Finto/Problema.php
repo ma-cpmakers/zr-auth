@@ -39,6 +39,8 @@ final class Problema extends RuntimeException
         'scadenza_chiusa' => 409,
         'preventivo_stato_non_ammesso' => 409,
         'preventivo_scaduto' => 409,
+        'gia_accettato' => 409,
+        'preventivo_sostituito' => 409,
         'rate_con_pagamenti' => 409,
         'pagamento_annullato' => 409,
         'esportazione_in_corso' => 409,

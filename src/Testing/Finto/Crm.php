@@ -502,7 +502,7 @@ trait Crm
     }
 
     /** Una riga della cronologia di un contatto, un'azienda o una trattativa, con l'autore della scrittura. */
-    private function cambioCrm(string $tipo, string $id, string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null, ?string $scadenza = null): void
+    private function cambioCrm(string $tipo, string $id, ?string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null, ?string $scadenza = null): void
     {
         $this->crm['cambi'][] = [
             'id' => self::id(), 'tipo_risorsa' => $tipo, 'risorsa' => $id, 'tipo' => $cambio, 'autore_id' => $autore, 'istante' => self::adessoCrm(),
@@ -1728,7 +1728,7 @@ trait Crm
     }
 
     /** PersoneModifica::applica: i campi che cambiano davvero, le liste sostituite, il conto dei contatti, la cronologia. */
-    private function applicaPersona(string $id, array $campi, string $autore, ?string $importazione = null): void
+    private function applicaPersona(string $id, array $campi, ?string $autore, ?string $importazione = null): void
     {
         $riga = $this->crm['persone'][$id];
         $ora = self::adessoCrm();
@@ -3176,7 +3176,7 @@ trait Crm
      *
      * @return array{persona: bool, organizzazione: bool}
      */
-    private function applicaTrattativa(array $riga, array $campi, string $autore): array
+    private function applicaTrattativa(array $riga, array $campi, ?string $autore): array
     {
         $diventati = ['persona' => false, 'organizzazione' => false];
         $destinazione = $campi['pipeline_id'] ?? $riga['pipeline_id'];

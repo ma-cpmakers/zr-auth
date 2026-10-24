@@ -197,6 +197,10 @@ return [
         'title' => 'Presupuesto ya aceptado',
         'detail' => 'Este presupuesto ya fue aceptado: la aceptación se registra una sola vez. Léelo de nuevo con crm.preventivi.mostra para ver las compras creadas. El método no escribió nada.',
     ],
+    'preventivo_sostituito' => [
+        'title' => 'Presupuesto sustituido',
+        'detail' => 'Este presupuesto fue sustituido por una revisión: el enlace ya no acepta. Pide a quien te lo envió el enlace de la versión actualizada. El método no escribió nada.',
+    ],
     'nome_gia_usato' => [
         'title' => 'Nombre ya usado',
         'detail' => 'Otro elemento activo ya tiene este nombre (mayúsculas y acentos no cuentan). Elige otro nombre o archiva el que existe. No se escribió nada.',
