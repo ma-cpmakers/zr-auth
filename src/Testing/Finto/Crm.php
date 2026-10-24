@@ -131,6 +131,12 @@ trait Crm
     /** Gli stati di un contatto e di un'azienda (Persona::STATI, Organizzazione::STATI). */
     private const CRM_STATI = ['lead', 'qualificato', 'cliente', 'perso'];
 
+    /** Organizzazioni::regoleDellaNuova: la partita IVA, lettere e cifre soltanto. */
+    private const REGOLE_PARTITA_IVA = ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'];
+
+    /** Organizzazioni::FORMA_DEL_DOMINIO: il dominio senza schema né percorso (`acme.it`). */
+    private const REGOLE_DOMINIO = ['nullable', 'string', 'max:253', 'regex:/^[\p{L}\p{N}]([\p{L}\p{N}-]*[\p{L}\p{N}])?(\.[\p{L}\p{N}]([\p{L}\p{N}-]*[\p{L}\p{N}])?)+$/u'];
+
     private const CRM_BASI_GIURIDICHE = ['consenso', 'contratto', 'obbligo_legale', 'interesse_legittimo'];
 
     private const CRM_ETICHETTE_EMAIL = ['lavoro', 'personale', 'altro'];
@@ -1020,6 +1026,22 @@ trait Crm
      * @param  array<string, mixed>  $filtri
      * @param  array<string, mixed>  $riga
      */
+    /** Organizzazioni::formeDelTermine: una parola com'è, senza le due lettere del paese davanti a una partita IVA e senza `www.` davanti a un dominio. */
+    private static function formeDelTermineCrm(string $parola): array
+    {
+        $forme = [$parola];
+
+        if (preg_match('/^[a-z]{2}(\d{8,})$/', $parola, $partita) === 1) {
+            $forme[] = $partita[1];
+        }
+
+        if (str_starts_with($parola, 'www.') && mb_strlen($parola) > 4) {
+            $forme[] = mb_substr($parola, 4);
+        }
+
+        return $forme;
+    }
+
     private function tieneCrm(string $tipo, string $workspace, array $filtri, array $riga): bool
     {
         $uguale = fn (string $filtro, string $campo) => ($filtri[$filtro] ?? null) === null || ($riga[$campo] ?? null) === $filtri[$filtro];
@@ -1037,7 +1059,8 @@ trait Crm
                 && array_filter($parole, fn (string $parola) => ! $contiene($riga['nome'], $parola) && ! $contiene($riga['cognome'], $parola)
                     && ! $contiene($riga['organizzazione_id'] === null ? null : ($this->crm['organizzazioni'][$riga['organizzazione_id']]['nome'] ?? null), $parola)) === []
                 && ($filtri['email'] === null || $this->personaConEmailCrm($workspace, $filtri['email']) === $riga['id']),
-            'organizzazioni' => array_filter($parole, fn (string $parola) => ! $contiene($riga['nome'], $parola)) === [],
+            'organizzazioni' => array_filter($parole, fn (string $parola) => ! $contiene($riga['nome'], $parola)
+                && array_filter(self::formeDelTermineCrm($parola), fn (string $forma) => $contiene($riga['partita_iva'] ?? null, $forma) || $contiene($riga['dominio'] ?? null, $forma)) === []) === [],
             'trattative' => $uguale('pipeline', 'pipeline_id') && $uguale('fase', 'fase_id') && $uguale('persona', 'persona_id') && $uguale('organizzazione', 'organizzazione_id')
                 && ($filtri['chiusa_dal'] === null || ($riga['chiusa_il'] !== null && $riga['chiusa_il']->greaterThanOrEqualTo(CarbonImmutable::parse($filtri['chiusa_dal'].' 00:00:00', 'UTC'))))
                 && array_filter($parole, fn (string $parola) => ! $contiene($riga['titolo'], $parola)) === [],
@@ -1369,6 +1392,8 @@ trait Crm
             'id' => $riga['id'],
             'nome' => $riga['nome'],
             'sito' => $riga['sito'],
+            'partita_iva' => $riga['partita_iva'] ?? null,
+            'dominio' => $riga['dominio'] ?? null,
             'telefono' => $riga['telefono'],
             'indirizzo' => $riga['indirizzo'],
             'stato' => $riga['stato'],
@@ -1392,6 +1417,8 @@ trait Crm
         return [
             'nome' => $nuova ? ['required', 'string', 'min:1', 'max:160', new NomeScritto] : ['filled', 'string', 'max:160', new NomeScritto],
             'sito' => ['nullable', 'string', 'max:255', 'url:http,https'],
+            'partita_iva' => self::REGOLE_PARTITA_IVA,
+            'dominio' => self::REGOLE_DOMINIO,
             'telefono' => ['nullable', 'string', 'max:32'],
             'indirizzo' => ['nullable', 'array'],
             'indirizzo.via' => ['nullable', 'string', 'max:200'],
@@ -1441,6 +1468,7 @@ trait Crm
         $ora = self::adessoCrm();
         $this->crm['organizzazioni'][$id] = [
             'id' => $id, 'workspace' => $chi['workspace'], 'nome' => $campi['nome'], 'sito' => $campi['sito'] ?? null,
+            'partita_iva' => $campi['partita_iva'] ?? null, 'dominio' => isset($campi['dominio']) ? mb_convert_case($campi['dominio'], MB_CASE_LOWER_SIMPLE) : null,
             'telefono' => $campi['telefono'] ?? null, 'indirizzo' => self::indirizzoCrm($campi['indirizzo'] ?? null),
             'stato' => $campi['stato'] ?? self::CRM_STATI[0],
             'responsabile_id' => isset($campi['responsabile_id']) ? strtolower($campi['responsabile_id']) : $chi['persona'],
@@ -1463,6 +1491,10 @@ trait Crm
             $campi['indirizzo'] = self::indirizzoCrm($campi['indirizzo']);
         }
 
+        if (array_key_exists('dominio', $campi) && $campi['dominio'] !== null) {
+            $campi['dominio'] = mb_convert_case($campi['dominio'], MB_CASE_LOWER_SIMPLE);
+        }
+
         $this->applicaOrganizzazione($riga['id'], $campi, $chi['persona']);
 
         return [200, ['data' => $this->voceOrganizzazione($this->crm['organizzazioni'][$riga['id']], true)]];
@@ -1476,16 +1508,16 @@ trait Crm
         $nuovi = [];
         $tipi = [];
 
-        foreach (['nome', 'sito', 'telefono', 'indirizzo', 'stato', 'responsabile_id'] as $campo) {
+        foreach (['nome', 'sito', 'partita_iva', 'dominio', 'telefono', 'indirizzo', 'stato', 'responsabile_id'] as $campo) {
             if (! array_key_exists($campo, $campi)) {
                 continue;
             }
 
             $nuovo = $campo === 'responsabile_id' ? strtolower((string) $campi[$campo]) : $campi[$campo];
 
-            if ($riga[$campo] !== $nuovo) {
+            if (($riga[$campo] ?? null) !== $nuovo) {
                 $nuovi[$campo] = $nuovo;
-                $cambi[$campo] = ['prima' => $riga[$campo], 'dopo' => $nuovo];
+                $cambi[$campo] = ['prima' => $riga[$campo] ?? null, 'dopo' => $nuovo];
             }
         }
 
@@ -1512,7 +1544,7 @@ trait Crm
 
         $voci = [];
 
-        foreach (['nome', 'sito', 'telefono', 'indirizzo', 'stato', 'responsabile_id'] as $campo) {
+        foreach (['nome', 'sito', 'partita_iva', 'dominio', 'telefono', 'indirizzo', 'stato', 'responsabile_id'] as $campo) {
             if (isset($cambi[$campo])) {
                 $voci[] = in_array($campo, ['stato', 'responsabile_id'], true) ? ['campo' => $campo, ...$cambi[$campo]] : ['campo' => $campo];
             }
@@ -1564,6 +1596,7 @@ trait Crm
             'nome' => $riga['nome'],
             'cognome' => $riga['cognome'],
             'ruolo' => $riga['ruolo'],
+            'professione' => $riga['professione'] ?? null,
             'organizzazione_id' => $riga['organizzazione_id'],
             'organizzazione' => $azienda === null ? null : ['id' => $azienda['id'], 'nome' => $azienda['nome'], 'archiviata_il' => self::isoCrm($azienda['archiviata_il'])],
             'email' => $riga['email'],
@@ -1594,6 +1627,7 @@ trait Crm
             'nome' => ['nullable', 'string', 'max:120', new NomeScritto],
             'cognome' => ['nullable', 'string', 'max:120', new NomeScritto],
             'ruolo' => ['nullable', 'string', 'max:120', new NomeScritto],
+            'professione' => ['nullable', 'string', 'max:120', new NomeScritto],
             'organizzazione_id' => ['bail', 'nullable', 'string', 'max:64', $this->regolaCheEsiste($workspace, 'organizzazioni', 'regole.organizzazione_non_esiste')],
             'email' => ['nullable', 'array', 'list', 'max:5'],
             'email.*.indirizzo' => ['required', 'string', 'email', 'max:254'],
@@ -1652,7 +1686,17 @@ trait Crm
         $chi = $this->conCrm($richiesta);
 
         return $this->conIdempotenza($richiesta, 'crm.persone.crea', $chi, $corpo, function () use ($chi, $corpo) {
-            $validati = $this->testi->validaCorpo($corpo, [...$this->regolePersona($chi['workspace']), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', true)]);
+            $validati = $this->testi->validaCorpo($corpo, [...$this->regolePersona($chi['workspace']), ...$this->regoleDellAziendaNuovaCrm(), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', true)]);
+            $nuova = $validati['organizzazione_nuova'] ?? null;
+
+            if ($nuova !== null && ($validati['organizzazione_id'] ?? null) !== null) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.azienda_o_azienda_nuova'), 'regola' => Regola::CAMPO_VIETATO, 'pointer' => '#']]);
+            }
+
+            if ($nuova !== null && ! isset($nuova['nome'])) {
+                throw $this->erroreCrm('organizzazione_nuova.nome', 'validation.required', Regola::OBBLIGATORIO, ['attribute' => 'nome']);
+            }
+
             $campi = $this->nuovaPersonaCrm($validati, $chi['persona']);
 
             foreach ($campi['email'] as $voce) {
@@ -1663,11 +1707,35 @@ trait Crm
                 }
             }
 
-            $id = $this->nascePersonaCrm($chi, $campi);
-            $this->scriviIValoriCrm('persona', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $id, $validati['campi'] ?? []));
+            // Come il backoffice, in una scrittura sola: un valore rifiutato dopo la nascita non lascia un contatto né un'azienda.
+            $prima = $this->crm;
+
+            try {
+                if ($nuova !== null) {
+                    $campi['organizzazione_id'] = $this->nasceOrganizzazione($chi, $nuova);
+                }
+
+                $id = $this->nascePersonaCrm($chi, $campi);
+                $this->scriviIValoriCrm('persona', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $id, $validati['campi'] ?? []));
+            } catch (\Throwable $errore) {
+                $this->crm = $prima;
+
+                throw $errore;
+            }
 
             return [201, ['data' => $this->vocePersona($this->crm['persone'][$id], true)], ['Location' => "/v1/crm/persone/{$id}"]];
         });
+    }
+
+    /** @return array<string, mixed> le regole di `organizzazione_nuova` (Persone::regoleDellAziendaNuova) */
+    private function regoleDellAziendaNuovaCrm(): array
+    {
+        return [
+            'organizzazione_nuova' => ['nullable', 'array'],
+            'organizzazione_nuova.nome' => ['required_with:organizzazione_nuova', 'string', 'min:1', 'max:160', new NomeScritto],
+            'organizzazione_nuova.partita_iva' => self::REGOLE_PARTITA_IVA,
+            'organizzazione_nuova.dominio' => self::REGOLE_DOMINIO,
+        ];
     }
 
     /** I campi di un contatto nuovo dai valori validati (Persone::nuova): le email normalizzate, i default, e almeno un nome o un'email. */
@@ -1683,6 +1751,7 @@ trait Crm
             'nome' => $campi['nome'] ?? null,
             'cognome' => $campi['cognome'] ?? null,
             'ruolo' => $campi['ruolo'] ?? null,
+            'professione' => $campi['professione'] ?? null,
             'organizzazione_id' => isset($campi['organizzazione_id']) ? strtolower($campi['organizzazione_id']) : null,
             'stato' => $campi['stato'] ?? self::CRM_STATI[0],
             'responsabile_id' => isset($campi['responsabile_id']) ? strtolower($campi['responsabile_id']) : $autore,
@@ -1736,7 +1805,7 @@ trait Crm
         $nuovi = [];
         $tipi = [];
 
-        foreach (['nome', 'cognome', 'ruolo', 'organizzazione_id', 'stato', 'responsabile_id', 'base_giuridica', 'fonte'] as $campo) {
+        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'stato', 'responsabile_id', 'base_giuridica', 'fonte'] as $campo) {
             if (! array_key_exists($campo, $campi)) {
                 continue;
             }
@@ -1818,7 +1887,7 @@ trait Crm
         $valori = ['organizzazione_id' => 'organizzazione_id', 'stato' => 'stato', 'responsabile_id' => 'responsabile_id', 'base_giuridica' => 'base_giuridica', 'consenso_marketing' => 'consenso_marketing.dato'];
         $voci = [];
 
-        foreach (['nome', 'cognome', 'ruolo', 'organizzazione_id', 'email', 'telefoni', 'stato', 'responsabile_id', 'base_giuridica', 'consenso_marketing'] as $campo) {
+        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'email', 'telefoni', 'stato', 'responsabile_id', 'base_giuridica', 'consenso_marketing'] as $campo) {
             if (isset($cambi[$campo])) {
                 $voci[] = isset($valori[$campo]) ? ['campo' => $valori[$campo], ...$cambi[$campo]] : ['campo' => $campo];
             }
@@ -2314,7 +2383,7 @@ trait Crm
 
         $ora = self::adessoCrm();
         $this->crm['persone'][$persona['id']] = [
-            ...$persona, 'nome' => null, 'cognome' => null, 'ruolo' => null, 'fonte' => null, 'email' => [], 'telefoni' => [],
+            ...$persona, 'nome' => null, 'cognome' => null, 'ruolo' => null, 'professione' => null, 'fonte' => null, 'email' => [], 'telefoni' => [],
             'anonimizzata_il' => $ora, 'aggiornato_il' => $ora,
         ];
         // L'oblio svuota anche i valori dei campi «tuoi» del contatto e delle sue opportunità (Anonimizzazione::valori).
