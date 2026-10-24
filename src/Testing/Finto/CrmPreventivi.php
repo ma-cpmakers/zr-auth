@@ -354,107 +354,121 @@ trait CrmPreventivi
                 'accettato_il' => ['bail', 'sometimes', 'string', 'date_format:Y-m-d'],
                 'persona_id' => ['bail', 'sometimes', 'nullable', 'string', 'max:64'],
             ]);
-            $riga = $this->crm['preventivi'][$id];
-            $this->senzaContattoAnonimizzatoPreventivoCrm($riga);
-            $stato = self::statoDelPreventivoCrm($riga);
-
-            if ($stato === 'accettato') {
-                throw new Problema('gia_accettato');
-            }
-
-            if ($stato === 'scaduto') {
-                throw new Problema('preventivo_scaduto');
-            }
-
-            if (! in_array($stato, ['inviato', 'visto'], true)) {
-                throw new Problema('preventivo_stato_non_ammesso');
-            }
-
-            $oggi = self::oggiAcquistoCrm();
-            $giorno = (string) ($campi['accettato_il'] ?? $oggi);
-            $errori = [];
-
-            if ($giorno > $oggi) {
-                $errori[] = self::erroreDelPreventivoCrm(['accettato_il'], $this->testi->testo('regole.preventivo_accettazione_data_futura'), Regola::FUORI_INTERVALLO);
-            }
-
-            $compratore = $this->compratoreDelPreventivoCrm($riga, $campi['persona_id'] ?? null, $errori);
-
-            if ($errori !== [] || $compratore === null) {
-                throw new Problema('dati_non_validi', $errori);
-            }
-
-            if (count($this->righeCrm('acquisti', $chi['workspace'])) + count($riga['righe']) > self::CRM_ACQUISTI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ACQUISTI_TETTO]);
-            }
-
-            $primo = array_filter($this->crm['acquisti'], fn (array $acquisto) => $acquisto['persona_id'] === $compratore['id']) === [];
-            $trattativa = $riga['trattativa_id'] === null ? null : ($this->crm['trattative'][$riga['trattativa_id']] ?? null);
-            $rate = array_map(fn (array $rata) => ['scade_il' => $rata['scade_il'], 'importo' => $rata['importo'], 'etichetta' => $rata['etichetta'] ?? null], $riga['rate']);
-            $ora = self::adessoCrm();
-            $acquisti = [];
-
-            foreach ($riga['righe'] as $voce) {
-                $catalogo = $voce['voce_id'] === null ? null : ($this->crm['catalogo'][$voce['voce_id']] ?? null);
-                $nuovo = self::id();
-                $this->crm['acquisti'][$nuovo] = [
-                    'id' => $nuovo, 'workspace' => $chi['workspace'], 'persona_id' => $compratore['id'], 'voce_id' => $catalogo['id'] ?? null, 'preventivo_id' => $id,
-                    'voce_tipo' => $catalogo['tipo'] ?? 'servizio', 'voce_nome' => mb_substr($voce['descrizione'], 0, 160),
-                    'voce_durata_minuti' => $catalogo['durata_minuti'] ?? null, 'voce_unita_incluse' => $catalogo['unita_incluse'] ?? null,
-                    'voce_etichetta_unita' => $catalogo['etichetta_unita'] ?? null, 'voce_validita_mesi' => $catalogo['validita_mesi'] ?? null, 'voce_rinnovo' => $catalogo['rinnovo'] ?? null,
-                    'prezzo_importo' => self::lordoDellaRigaPreventivoCrm(self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']), $voce['aliquota_iva'], $voce['iva_inclusa']),
-                    'acquistato_il' => $giorno, 'inizio_il' => $giorno, 'pagato_importo' => 0, 'metodo_pagamento' => 'da_pagare', 'documento' => 'da_fare',
-                    'valido_fino_al' => ($catalogo['validita_mesi'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, $catalogo['validita_mesi']),
-                    'rinnovo_il' => ($catalogo['rinnovo'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, self::CRM_ACQUISTI_MESI_DEL_RINNOVO[$catalogo['rinnovo']]),
-                    'crediti_totali' => ($catalogo['tipo'] ?? null) === 'pacchetto' && $catalogo['unita_incluse'] !== null ? $catalogo['unita_incluse'] * $voce['quantita'] : null,
-                    'crediti_usati' => 0, 'crediti_prenotati' => 0,
-                    'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
-                ];
-                $acquisti[] = $nuovo;
-                $parti = $rate === [] ? [] : self::ripartisciPreventivoCrm((int) $this->crm['acquisti'][$nuovo]['prezzo_importo'], array_column($rate, 'importo'));
-
-                if ($parti === []) {
-                    $this->creaLaRataUnicaCrm($this->crm['acquisti'][$nuovo], $chi['persona']);
-
-                    continue;
-                }
-
-                $numero = 0;
-
-                foreach ($parti as $i => $parte) {
-                    $this->nuovaRataCrm($this->crm['acquisti'][$nuovo], ++$numero, (string) $rate[$i]['scade_il'], $parte, $rate[$i]['etichetta'], $chi['persona']);
-                }
-            }
-
-            $chiusa = null;
-
-            if ($trattativa !== null && ! ($trattativa['eliminata'] ?? false)) {
-                if ($trattativa['stato'] === 'aperta') {
-                    $this->applicaTrattativa($trattativa, ['stato' => 'vinta'], $chi['persona']);
-                } else {
-                    $chiusa = $trattativa['stato'];
-                }
-
-                $this->cambioCrm('trattative', $trattativa['id'], $chi['persona'], 'preventivo.accettato', [['campo' => 'preventivo_id', 'dopo' => $id]]);
-            }
-
-            $persona = $this->crm['persone'][$compratore['id']];
-
-            if ($primo && in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
-                $this->applicaPersona($persona['id'], ['stato' => 'cliente'], $chi['persona']);
-            }
-
-            $adesso = self::dopoCrm($riga['aggiornato_il']);
-            $this->crm['preventivi'][$id]['stato'] = 'accettato';
-            $this->crm['preventivi'][$id]['accettato_il'] = $giorno;
-            $this->crm['preventivi'][$id]['accettazione_nome'] = $campi['nome'];
-            $this->crm['preventivi'][$id]['accettazione_nota'] = ($campi['nota'] ?? '') === '' ? null : $campi['nota'];
-            $this->crm['preventivi'][$id]['accettazione_opportunita'] = $chiusa;
-            $this->crm['preventivi'][$id]['acquisti'] = $acquisti;
-            $this->crm['preventivi'][$id]['aggiornato_il'] = $adesso;
+            $this->accettaIlPreventivoCrm($chi['workspace'], $chi['persona'], $campi, $id, 'manuale');
 
             return [201, ['data' => $this->vocePreventivoCrm($this->crm['preventivi'][$id])], ['Location' => "/v1/crm/preventivi/{$id}"]];
         });
+    }
+
+    /**
+     * Gli effetti di un'accettazione (Preventivi::accetta), per chi vende (`crm.preventivi.accettazione.crea`, `modo` `manuale`, `$autore` la
+     * persona del gettone) e per il cliente col link (`preventivi.pubblici.accettazione.crea`, `modo` `online`, senza autore): il preventivo
+     * diventa `accettato`, nasce un acquisto per riga con le sue rate, l'opportunità aperta è vinta e il contatto è «Cliente». Tutto o niente: i
+     * controlli vengono prima di ogni scrittura.
+     *
+     * @param  array<string, mixed>  $campi  `nome`, `nota`, `accettato_il`, `persona_id`
+     */
+    private function accettaIlPreventivoCrm(string $workspace, ?string $autore, array $campi, string $id, string $modo): void
+    {
+        $riga = $this->crm['preventivi'][$id];
+        $this->senzaContattoAnonimizzatoPreventivoCrm($riga);
+        $stato = self::statoDelPreventivoCrm($riga);
+
+        if ($stato === 'accettato') {
+            throw new Problema('gia_accettato');
+        }
+
+        if ($stato === 'scaduto') {
+            throw new Problema('preventivo_scaduto');
+        }
+
+        if (! in_array($stato, ['inviato', 'visto'], true)) {
+            throw new Problema('preventivo_stato_non_ammesso');
+        }
+
+        $oggi = self::oggiAcquistoCrm();
+        $giorno = (string) ($campi['accettato_il'] ?? $oggi);
+        $errori = [];
+
+        if ($giorno > $oggi) {
+            $errori[] = self::erroreDelPreventivoCrm(['accettato_il'], $this->testi->testo('regole.preventivo_accettazione_data_futura'), Regola::FUORI_INTERVALLO);
+        }
+
+        $compratore = $this->compratoreDelPreventivoCrm($riga, $campi['persona_id'] ?? null, $errori);
+
+        if ($errori !== [] || $compratore === null) {
+            throw new Problema('dati_non_validi', $errori);
+        }
+
+        if (count($this->righeCrm('acquisti', $workspace)) + count($riga['righe']) > self::CRM_ACQUISTI_TETTO) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ACQUISTI_TETTO]);
+        }
+
+        $primo = array_filter($this->crm['acquisti'], fn (array $acquisto) => $acquisto['persona_id'] === $compratore['id']) === [];
+        $trattativa = $riga['trattativa_id'] === null ? null : ($this->crm['trattative'][$riga['trattativa_id']] ?? null);
+        $rate = array_map(fn (array $rata) => ['scade_il' => $rata['scade_il'], 'importo' => $rata['importo'], 'etichetta' => $rata['etichetta'] ?? null], $riga['rate']);
+        $ora = self::adessoCrm();
+        $acquisti = [];
+
+        foreach ($riga['righe'] as $voce) {
+            $catalogo = $voce['voce_id'] === null ? null : ($this->crm['catalogo'][$voce['voce_id']] ?? null);
+            $nuovo = self::id();
+            $this->crm['acquisti'][$nuovo] = [
+                'id' => $nuovo, 'workspace' => $workspace, 'persona_id' => $compratore['id'], 'voce_id' => $catalogo['id'] ?? null, 'preventivo_id' => $id,
+                'voce_tipo' => $catalogo['tipo'] ?? 'servizio', 'voce_nome' => mb_substr($voce['descrizione'], 0, 160),
+                'voce_durata_minuti' => $catalogo['durata_minuti'] ?? null, 'voce_unita_incluse' => $catalogo['unita_incluse'] ?? null,
+                'voce_etichetta_unita' => $catalogo['etichetta_unita'] ?? null, 'voce_validita_mesi' => $catalogo['validita_mesi'] ?? null, 'voce_rinnovo' => $catalogo['rinnovo'] ?? null,
+                'prezzo_importo' => self::lordoDellaRigaPreventivoCrm(self::importoDiRigaPreventivoCrm($voce['quantita'], $voce['prezzo_unitario_importo'], $voce['sconto_percento']), $voce['aliquota_iva'], $voce['iva_inclusa']),
+                'acquistato_il' => $giorno, 'inizio_il' => $giorno, 'pagato_importo' => 0, 'metodo_pagamento' => 'da_pagare', 'documento' => 'da_fare',
+                'valido_fino_al' => ($catalogo['validita_mesi'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, $catalogo['validita_mesi']),
+                'rinnovo_il' => ($catalogo['rinnovo'] ?? null) === null ? null : self::dopoMesiAcquistoCrm($giorno, self::CRM_ACQUISTI_MESI_DEL_RINNOVO[$catalogo['rinnovo']]),
+                'crediti_totali' => ($catalogo['tipo'] ?? null) === 'pacchetto' && $catalogo['unita_incluse'] !== null ? $catalogo['unita_incluse'] * $voce['quantita'] : null,
+                'crediti_usati' => 0, 'crediti_prenotati' => 0,
+                'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $autore,
+            ];
+            $acquisti[] = $nuovo;
+            $parti = $rate === [] ? [] : self::ripartisciPreventivoCrm((int) $this->crm['acquisti'][$nuovo]['prezzo_importo'], array_column($rate, 'importo'));
+
+            if ($parti === []) {
+                $this->creaLaRataUnicaCrm($this->crm['acquisti'][$nuovo], $autore);
+
+                continue;
+            }
+
+            $numero = 0;
+
+            foreach ($parti as $i => $parte) {
+                $this->nuovaRataCrm($this->crm['acquisti'][$nuovo], ++$numero, (string) $rate[$i]['scade_il'], $parte, $rate[$i]['etichetta'], $autore);
+            }
+        }
+
+        $chiusa = null;
+
+        if ($trattativa !== null && ! ($trattativa['eliminata'] ?? false)) {
+            if ($trattativa['stato'] === 'aperta') {
+                $this->applicaTrattativa($trattativa, ['stato' => 'vinta'], $autore);
+            } else {
+                $chiusa = $trattativa['stato'];
+            }
+
+            $this->cambioCrm('trattative', $trattativa['id'], $autore, 'preventivo.accettato', [['campo' => 'preventivo_id', 'dopo' => $id]]);
+        }
+
+        $persona = $this->crm['persone'][$compratore['id']];
+
+        if ($primo && in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
+            $this->applicaPersona($persona['id'], ['stato' => 'cliente'], $autore);
+        }
+
+        $adesso = self::dopoCrm($riga['aggiornato_il']);
+        $this->crm['preventivi'][$id]['stato'] = 'accettato';
+        $this->crm['preventivi'][$id]['accettato_il'] = $giorno;
+        $this->crm['preventivi'][$id]['accettazione_nome'] = $campi['nome'];
+        $this->crm['preventivi'][$id]['accettazione_nota'] = ($campi['nota'] ?? '') === '' ? null : $campi['nota'];
+        $this->crm['preventivi'][$id]['accettazione_opportunita'] = $chiusa;
+        $this->crm['preventivi'][$id]['accettazione_modo'] = $modo;
+        $this->crm['preventivi'][$id]['acquisti'] = $acquisti;
+        $this->crm['preventivi'][$id]['aggiornato_il'] = $adesso;
     }
 
     /**
@@ -618,6 +632,12 @@ trait CrmPreventivi
 
         foreach ($this->crm['preventivi'] as $id => $preventivo) {
             if ($preventivo['persona_id'] === $persona) {
+                foreach ($this->crm['richieste_preventivo'] ?? [] as $n => $richiesta) {
+                    if ($richiesta['preventivo_id'] === $id) {
+                        $this->crm['richieste_preventivo'][$n]['messaggio'] = '';
+                    }
+                }
+
                 $this->crm['preventivi'][$id]['introduzione'] = null;
                 $this->crm['preventivi'][$id]['rifiuto_motivo'] = null;
                 $this->crm['preventivi'][$id]['accettazione_nome'] = null;
@@ -683,12 +703,13 @@ trait CrmPreventivi
                 'totale' => $soldi($totali['totale']),
             ],
             'inviato_il' => ($riga['inviato_il'] ?? null) === null ? null : self::iso($riga['inviato_il']),
+            'visto_il' => ($riga['visto_il'] ?? null) === null ? null : self::iso($riga['visto_il']),
             'rifiutato_il' => ($riga['rifiutato_il'] ?? null) === null ? null : self::iso($riga['rifiutato_il']),
             'rifiuto' => ($riga['rifiutato_il'] ?? null) === null ? null : ['motivo' => $riga['rifiuto_motivo'] ?? null],
             'accettato_il' => $riga['accettato_il'] ?? null,
             'accettazione' => ($riga['accettato_il'] ?? null) === null ? null : [
                 'nome' => $riga['accettazione_nome'] ?? null,
-                'modo' => 'manuale',
+                'modo' => $riga['accettazione_modo'] ?? 'manuale',
                 'nota' => $riga['accettazione_nota'] ?? null,
                 'opportunita_gia_chiusa' => $riga['accettazione_opportunita'] ?? null,
             ],
