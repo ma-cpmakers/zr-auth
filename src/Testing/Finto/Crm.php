@@ -149,7 +149,10 @@ trait Crm
     private const CRM_TIPI_ATTIVITA = ['chiamata', 'riunione', 'email', 'compito', 'messaggio'];
 
     /** I campi dell'indirizzo di un'azienda nell'ordine della risposta (Organizzazioni::INDIRIZZO). */
-    private const CRM_INDIRIZZO = ['via', 'cap', 'citta', 'provincia', 'paese'];
+    private const CRM_INDIRIZZO = ['via', 'cap', 'citta', 'provincia', 'paese', 'testo', 'lat', 'lng', 'place_id', 'precisione'];
+
+    /** Quanto è preciso un indirizzo (Organizzazioni::PRECISIONI). */
+    private const CRM_PRECISIONI = ['citta', 'indirizzo', 'testo_libero'];
 
     /** La valuta di un CRM che non l'ha mai cambiata (Impostazioni::PREDEFINITA). */
     private const CRM_VALUTA = 'EUR';
@@ -677,18 +680,17 @@ trait Crm
                 ];
             } else {
                 $voce = $this->voceOrganizzazione($riga);
-                $indirizzo = $voce['indirizzo'] ?? [];
+                $indirizzo = $voce['indirizzo'] ?? array_fill_keys(self::CRM_INDIRIZZO, null);
                 $celle[] = [
-                    $voce['id'], $voce['nome'], $voce['sito'], $voce['telefono'], $indirizzo['via'] ?? null, $indirizzo['cap'] ?? null, $indirizzo['citta'] ?? null,
-                    $indirizzo['provincia'] ?? null, $indirizzo['paese'] ?? null, $voce['stato'], $voce['responsabile_id'], $nome($voce['responsabile_id']),
-                    $voce['numero_contatti'], $voce['creata_il'],
+                    $voce['id'], $voce['nome'], $voce['sito'], $voce['telefono'], ...array_map(fn (string $chiave) => $indirizzo[$chiave], self::CRM_INDIRIZZO),
+                    $voce['stato'], $voce['responsabile_id'], $nome($voce['responsabile_id']), $voce['numero_contatti'], $voce['creata_il'],
                 ];
             }
         }
 
         $intestazione = $tipo === 'persone'
             ? ['id', 'nome', 'cognome', 'ruolo', 'stato', 'email', 'telefoni', 'organizzazione_id', 'organizzazione', 'responsabile_id', 'responsabile', 'creato_il']
-            : ['id', 'nome', 'sito', 'telefono', 'via', 'cap', 'citta', 'provincia', 'paese', 'stato', 'responsabile_id', 'responsabile', 'numero_contatti', 'creata_il'];
+            : ['id', 'nome', 'sito', 'telefono', ...self::CRM_INDIRIZZO, 'stato', 'responsabile_id', 'responsabile', 'numero_contatti', 'creata_il'];
         $file = "\xEF\xBB\xBF".implode('', array_map(self::rigaCsvCrm(...), [$intestazione, ...$celle]));
 
         return [200, $file, [
@@ -702,7 +704,12 @@ trait Crm
     /** @param  array<int, string|int|null>  $celle */
     private static function rigaCsvCrm(array $celle): string
     {
-        return implode(',', array_map(function (string|int|null $valore): string {
+        return implode(',', array_map(function (string|int|float|null $valore): string {
+            // Un numero decimale (le coordinate di un indirizzo) esce com'è, il meno compreso (Esportazioni::cella).
+            if (is_float($valore)) {
+                return (string) json_encode($valore);
+            }
+
             $testo = (string) $valore;
             $testo = $testo !== '' && str_contains("=+-@\t\r\n", $testo[0]) ? "'".$testo : $testo;
 
@@ -1414,7 +1421,7 @@ trait Crm
     }
 
     /** @return array<string, mixed> le regole di `OrganizzazioneNuova` (Organizzazioni::regole) */
-    private function regoleOrganizzazione(string $workspace, bool $nuova): array
+    private function regoleOrganizzazione(string $workspace, bool $nuova, bool $dellaRiga = false): array
     {
         return [
             'nome' => $nuova ? ['required', 'string', 'min:1', 'max:160', new NomeScritto] : ['filled', 'string', 'max:160', new NomeScritto],
@@ -1428,25 +1435,142 @@ trait Crm
             'indirizzo.citta' => ['nullable', 'string', 'max:100'],
             'indirizzo.provincia' => ['nullable', 'string', 'max:100'],
             'indirizzo.paese' => ['nullable', 'string', 'regex:/^[A-Z]{2}$/'],
+            'indirizzo.testo' => ['nullable', 'string', 'max:500'],
+            ...($dellaRiga ? [] : [
+                'indirizzo.lat' => ['nullable', 'numeric:strict', 'between:-90,90'],
+                'indirizzo.lng' => ['nullable', 'numeric:strict', 'between:-180,180'],
+                'indirizzo.place_id' => ['nullable', 'string', 'max:255'],
+                'indirizzo.precisione' => ['nullable', 'string', Rule::in(self::CRM_PRECISIONI)],
+            ]),
             'stato' => ['filled', 'string', Rule::in(self::CRM_STATI)],
             'responsabile_id' => $this->regolaDelResponsabile($workspace),
         ];
     }
 
     /**
-     * L'indirizzo con le sue cinque chiavi, nell'ordine della risposta e con `null` dove manca; `null` se non ne porta nessuna.
+     * L'indirizzo con le sue dieci chiavi, nell'ordine della risposta e con `null` dove manca; `null` se non ne porta nessuna. `lat` e
+     * `lng` sono sempre numeri decimali (Organizzazioni::indirizzo).
      *
-     * @return array<string, string|null>|null
+     * @return array<string, string|float|null>|null
      */
     private static function indirizzoCrm(?array $indirizzo): ?array
     {
         $completo = [];
 
         foreach (self::CRM_INDIRIZZO as $chiave) {
-            $completo[$chiave] = $indirizzo[$chiave] ?? null;
+            $valore = $indirizzo[$chiave] ?? null;
+            $completo[$chiave] = in_array($chiave, ['lat', 'lng'], true) && $valore !== null ? (float) $valore : $valore;
         }
 
-        return array_filter($completo, fn (?string $valore) => $valore !== null) === [] ? null : $completo;
+        return array_filter($completo, fn (string|float|null $valore) => $valore !== null) === [] ? null : $completo;
+    }
+
+    /**
+     * Le regole fra i campi di un indirizzo già validato (Organizzazioni::controllaLIndirizzo): `lat` e `lng` in coppia; `indirizzo` vuole la
+     * `via`; `citta` vuole la `citta` e rifiuta `via` e `cap`; `testo_libero` vuole il `testo` e rifiuta ogni altro campo; il `testo` senza
+     * `testo_libero` è rifiutato. Un 422 con un errore per campo, nell'ordine dell'indirizzo.
+     */
+    private function controllaLIndirizzoCrm(?array $indirizzo): void
+    {
+        if ($indirizzo === null) {
+            return;
+        }
+
+        $c = fn (string $chiave): bool => ($indirizzo[$chiave] ?? null) !== null;
+        $precisione = $indirizzo['precisione'] ?? null;
+        $mancanti = [];
+        $vietati = [];
+
+        if ($c('lat') !== $c('lng')) {
+            $mancanti[] = $c('lat') ? 'lng' : 'lat';
+        }
+
+        if ($precisione === 'indirizzo' && ! $c('via')) {
+            $mancanti[] = 'via';
+        }
+
+        if ($precisione === 'citta') {
+            if (! $c('citta')) {
+                $mancanti[] = 'citta';
+            }
+
+            $vietati = ['via', 'cap'];
+        }
+
+        if ($precisione === 'testo_libero') {
+            if (! $c('testo')) {
+                $mancanti[] = 'testo';
+            }
+
+            $vietati = ['via', 'cap', 'citta', 'provincia', 'paese', 'lat', 'lng', 'place_id'];
+        } else {
+            $vietati[] = 'testo';
+        }
+
+        // Un campo che la precisione vieta non si chiede: con `testo_libero` il solo `lat` è vietato, e `lng` non manca.
+        $mancanti = array_diff($mancanti, $vietati);
+        $errori = [];
+
+        foreach (self::CRM_INDIRIZZO as $chiave) {
+            if (in_array($chiave, $mancanti, true)) {
+                $errori[] = $this->erroreDelCampoIndirizzoCrm($chiave, Regola::OBBLIGATORIO, 'validation.required');
+            } elseif (in_array($chiave, $vietati, true) && $c($chiave)) {
+                $errori[] = $this->erroreDelCampoIndirizzoCrm($chiave, Regola::CAMPO_VIETATO, 'validation.prohibited');
+            }
+        }
+
+        if ($errori !== []) {
+            throw new Problema('dati_non_validi', $errori);
+        }
+    }
+
+    /** @return array{detail: string, regola: string, pointer: string} */
+    private function erroreDelCampoIndirizzoCrm(string $chiave, string $regola, string $testo): array
+    {
+        return ['detail' => $this->testi->testo($testo, ['attribute' => $this->testi->nome("indirizzo.{$chiave}")]), 'regola' => $regola, 'pointer' => "#/indirizzo/{$chiave}"];
+    }
+
+    /**
+     * La precisione di una riga di importazione (Organizzazioni::precisioneDellaRiga): `testo` → `testo_libero` (con un altro campo
+     * dell'indirizzo la riga è rifiutata sul `testo`), `via` → `indirizzo`, `citta` senza `via` né `cap` → `citta`, altrimenti `null`.
+     */
+    private function precisioneDellaRigaCrm(array $indirizzo): ?string
+    {
+        $c = fn (string $chiave): bool => ($indirizzo[$chiave] ?? null) !== null;
+
+        if ($c('testo')) {
+            foreach (['via', 'cap', 'citta', 'provincia', 'paese'] as $altro) {
+                if ($c($altro)) {
+                    throw new Problema('dati_non_validi', [$this->erroreDelCampoIndirizzoCrm('testo', Regola::CAMPO_VIETATO, 'validation.prohibited')]);
+                }
+            }
+
+            return 'testo_libero';
+        }
+
+        return match (true) {
+            $c('via') => 'indirizzo',
+            $c('citta') && ! $c('cap') => 'citta',
+            default => null,
+        };
+    }
+
+    /**
+     * Una riga di `crm.organizzazioni.importazioni.crea`, validata con le regole di `crm.organizzazioni.crea` (l'indirizzo ha i soli campi di una
+     * riga) e con la `precisione` ricavata dalla riga (Organizzazioni::dellaRiga).
+     *
+     * @param  array<mixed>  $riga
+     * @return array<string, mixed>
+     */
+    private function rigaDiOrganizzazioneCrm(array $riga, string $workspace): array
+    {
+        $campi = $this->testi->validaCorpo($riga, $this->regoleOrganizzazione($workspace, true, true));
+
+        if (isset($campi['indirizzo'])) {
+            $campi['indirizzo']['precisione'] = $this->precisioneDellaRigaCrm($campi['indirizzo']);
+        }
+
+        return $campi;
     }
 
     /** @return array{int, array<string, mixed>, array<string, string>} */
@@ -1456,6 +1580,7 @@ trait Crm
 
         return $this->conIdempotenza($richiesta, 'crm.organizzazioni.crea', $chi, $corpo, function () use ($chi, $corpo) {
             $campi = $this->testi->validaCorpo($corpo, [...$this->regoleOrganizzazione($chi['workspace'], true), ...$this->regoleDeiValoriCrm($chi['workspace'], 'organizzazione', true)]);
+            $this->controllaLIndirizzoCrm($campi['indirizzo'] ?? null);
             $id = $this->nasceOrganizzazione($chi, $campi);
             $this->scriviIValoriCrm('organizzazione', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'organizzazione', $id, $campi['campi'] ?? []));
 
@@ -1490,6 +1615,7 @@ trait Crm
         $campi = $this->modificaCrm($corpo, [...$this->regoleOrganizzazione($chi['workspace'], false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'organizzazione', false, $riga['id'], $corpo['campi'] ?? null), 'archiviata' => ['filled', 'boolean:strict']]);
 
         if (array_key_exists('indirizzo', $campi)) {
+            $this->controllaLIndirizzoCrm($campi['indirizzo']);
             $campi['indirizzo'] = self::indirizzoCrm($campi['indirizzo']);
         }
 
@@ -1960,7 +2086,7 @@ trait Crm
                 try {
                     $valida = $tipo === 'persone'
                         ? $this->nuovaPersonaCrm($this->testi->validaCorpo($riga, $this->regolePersona($chi['workspace'])), $chi['persona'])
-                        : $this->testi->validaCorpo($riga, $this->regoleOrganizzazione($chi['workspace'], true));
+                        : $this->rigaDiOrganizzazioneCrm($riga, $chi['workspace']);
                 } catch (Problema $problema) {
                     $esiti[$indice] = $problema->codice === 'dati_non_validi' ? $this->rigaRifiutataCrm($indice, $problema) : throw $problema;
 
