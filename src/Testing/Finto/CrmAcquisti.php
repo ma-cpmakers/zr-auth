@@ -131,7 +131,7 @@ trait CrmAcquisti
         $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
         $riga = $this->rigaCrm('acquisti', $chi['workspace'], $id);
         $this->pretendiLaVersioneCrm($richiesta, $this->voceAcquistoCrm($riga));
-        $vietati = ['id', 'persona_id', 'voce_id', 'voce', 'prezzo', 'acquistato_il', 'pagato', 'metodo_pagamento', 'valido_fino_al', 'rinnovo_il', 'crediti', 'stato', 'creato_il', 'aggiornato_il', 'creato_da'];
+        $vietati = ['id', 'persona_id', 'voce_id', 'preventivo_id', 'voce', 'prezzo', 'acquistato_il', 'pagato', 'metodo_pagamento', 'valido_fino_al', 'rinnovo_il', 'crediti', 'stato', 'creato_il', 'aggiornato_il', 'creato_da'];
         $campi = $this->modificaCrm($corpo, [
             'documento' => ['bail', 'filled', 'string', Rule::in(self::CRM_ACQUISTI_DOCUMENTI)],
             'inizio_il' => ['bail', 'filled', 'string', 'date_format:Y-m-d'],
