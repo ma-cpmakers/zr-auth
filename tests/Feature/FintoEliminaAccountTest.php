@@ -42,6 +42,7 @@ it('con la conferma è 202 con le due date a trenta giorni, e da lì il gettone 
 it('una proprietaria è 409 proprieta_da_trasferire con i workspace accanto al codice, e non cambia niente (#1961)', function () {
     [$finto, $zelda, $gettone] = chiedeDiEliminare();
     $studio = $finto->workspace('Studio di Zelda', $zelda);
+    $finto->membro($studio, $finto->persona('paolo@example.com', PASSWORD, nome: 'Paolo'), 'membro');
 
     $risposta = alFinto('DELETE', '/v1/io', gettone: $gettone);
 
@@ -55,6 +56,7 @@ it('un workspace con l\'eliminazione programmata non è da trasferire: il 409 el
     [$finto, $zelda, $gettone] = chiedeDiEliminare();
     $morente = $finto->workspace('Studio che se ne va', $zelda);
     $vivo = $finto->workspace('Studio che resta', $zelda);
+    $finto->membro($vivo, $finto->persona('paolo@example.com', PASSWORD, nome: 'Paolo'), 'membro');
     $delMorente = alFinto('POST', '/v1/gettoni', ['workspace_id' => $morente['id']], $gettone)->json('data.gettone');
     expect(alFinto('DELETE', '/v1/workspace', gettone: $delMorente)->status())->toBe(202);
 
@@ -100,4 +102,34 @@ it('oltre cinque richieste in un\'ora è 429 troppe_richieste con Retry-After (#
     expect($sesta->status())->toBe(429)
         ->and($sesta->json('codice'))->toBe('troppe_richieste')
         ->and((int) $sesta->header('Retry-After'))->toBeGreaterThan(0);
+});
+
+it('il workspace in cui è l\'unico account non blocca: si elimina con l\'account, alla stessa data, e chi rientra lo ritrova (Luciano 24/10)', function () {
+    $this->travelTo('2026-10-24 09:00:00');
+    [$finto, $zelda, $gettone] = chiedeDiEliminare();
+    $solo = $finto->workspace('Studio solo', $zelda);
+    // Il gettone di Zelda muore col 202: la scadenza programmata si legge dal finto.
+    $programmate = fn (): array => (new ReflectionProperty($finto, 'eliminazioni'))->getValue($finto);
+
+    expect(alFinto('DELETE', '/v1/io', gettone: $gettone)->status())->toBe(202)
+        ->and(array_map(fn ($quando) => $quando->toIso8601String(), $programmate()))->toBe([$solo['id'] => '2026-11-23T09:00:00+00:00']);
+
+    // Il rientro entro i trenta giorni lo ritrova.
+    entraNelFinto('zelda@example.com');
+
+    expect($programmate())->toBe([]);
+});
+
+it('il rientro non annulla l\'eliminazione che Zelda aveva chiesto a mano (Luciano 24/10)', function () {
+    $this->travelTo('2026-10-24 09:00:00');
+    [$finto, $zelda, $gettone] = chiedeDiEliminare();
+    $voluto = $finto->workspace('Studio che se ne andava già', $zelda);
+    $finto->workspace('Studio solo', $zelda);
+    $delVoluto = alFinto('POST', '/v1/gettoni', ['workspace_id' => $voluto['id']], $gettone)->json('data.gettone');
+    expect(alFinto('DELETE', '/v1/workspace', gettone: $delVoluto)->status())->toBe(202)
+        ->and(alFinto('DELETE', '/v1/io', gettone: $gettone)->status())->toBe(202);
+
+    entraNelFinto('zelda@example.com');
+
+    expect(array_keys((new ReflectionProperty($finto, 'eliminazioni'))->getValue($finto)))->toBe([$voluto['id']]);
 });

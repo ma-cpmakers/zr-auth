@@ -431,6 +431,9 @@ final class BackofficeFinto
     /** @var array<string, CarbonImmutable> quando si archivia ogni workspace di cui il proprietario ha chiesto l'eliminazione, per id: il finto non archivia alla scadenza */
     private array $eliminazioni = [];
 
+    /** @var array<string, string> i workspace la cui eliminazione l'ha programmata io.elimina (il solo account del workspace), per id: la persona che l'ha chiesta; il rientro li ritrova */
+    private array $eliminazioniConAccount = [];
+
     /** @var array<string, string> il nome di ogni azienda, per id: quello del primo workspace che l'ha fatta nascere, mai aggiornato */
     private array $aziende = [];
 
@@ -3439,7 +3442,8 @@ final class BackofficeFinto
      * io.elimina (IoController::elimina, #1961): «Elimina account» con ripensamento. Nell'ordine del backoffice: il gettone (ogni gettone
      * della persona, con o senza workspace), la conferma recente dell'accesso (403 `conferma_richiesta`, prima di guardare altro), il freno
      * di 5 richieste in un'ora per persona (429), poi i workspace di cui è proprietaria (409 `proprieta_da_trasferire`, con `workspace_da_trasferire`,
-     * id e nome in ordine di id, accanto al codice: non cambia niente). Altrimenti 202 con `richiesta_il` e `anonimizzazione_il`, trenta giorni
+     * id e nome in ordine di id, accanto al codice: non cambia niente; non contano quelli in cui è l'unico account, che si eliminano con lei,
+     * alla stessa data, e li ritrova chi rientra). Altrimenti 202 con `richiesta_il` e `anonimizzazione_il`, trenta giorni
      * dopo: gli accessi della persona si chiudono subito, e i loro gettoni, quello che chiama compreso, sono 401; il resto (nome, email, appartenenze)
      * resta com'è, e un nuovo accesso entro i trenta giorni toglie la richiesta (`eliminazione_annullata` in accessi.crea e accessi.provider.crea).
      * La seconda richiesta di chi l'ha già fatta non può arrivare con un gettone: dopo il 202 non ce n'è uno che valga.
@@ -3459,12 +3463,22 @@ final class BackofficeFinto
         $this->frena('freni:io.elimina:persona:'.$persona, self::FRENI['eliminazioni_persona'], self::ORA);
 
         $daTrasferire = [];
+        $soli = [];
 
         foreach ($this->workspace as $id => $workspace) {
             // Non contano i workspace con l'eliminazione già programmata (nota 16347 punto 1): se ne vanno da sé.
-            if (($this->membri[$id][$persona] ?? null) === 'proprietario' && ! isset($this->eliminazioni[$id])) {
-                $daTrasferire[] = ['id' => $id, 'nome' => $workspace['nome']];
+            if (($this->membri[$id][$persona] ?? null) !== 'proprietario' || isset($this->eliminazioni[$id])) {
+                continue;
             }
+
+            // Il workspace in cui è l'unico account non blocca: si elimina con lei, e se rientra lo ritrova (Luciano, 24/10).
+            if (array_diff_key($this->membri[$id], [$persona => true]) === []) {
+                $soli[] = $id;
+
+                continue;
+            }
+
+            $daTrasferire[] = ['id' => $id, 'nome' => $workspace['nome']];
         }
 
         if ($daTrasferire !== []) {
@@ -3475,6 +3489,11 @@ final class BackofficeFinto
 
         $adesso = now()->toImmutable()->startOfMillisecond();
         $quando = $this->eliminazioniPersona[$persona] ??= $adesso;
+
+        foreach ($soli as $id) {
+            $this->eliminazioni[$id] = $quando->addDays(30);
+            $this->eliminazioniConAccount[$id] = $persona;
+        }
 
         foreach ($this->accessi as $id => $accesso) {
             if ($accesso['utente'] === $persona) {
@@ -3496,6 +3515,12 @@ final class BackofficeFinto
         }
 
         unset($this->eliminazioniPersona[$persona]);
+
+        foreach ($this->eliminazioniConAccount as $id => $chi) {
+            if ($chi === $persona) {
+                unset($this->eliminazioni[$id], $this->eliminazioniConAccount[$id]);
+            }
+        }
 
         return true;
     }
