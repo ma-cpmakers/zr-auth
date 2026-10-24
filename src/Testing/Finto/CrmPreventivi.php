@@ -916,6 +916,14 @@ trait CrmPreventivi
             $aliquota = array_key_exists('aliquota_iva', $riga) ? $riga['aliquota_iva'] : ($voce['aliquota_iva'] ?? null);
             $inclusa = array_key_exists('iva_inclusa', $riga) ? (bool) $riga['iva_inclusa'] : ($voce['iva_inclusa'] ?? true);
             $importo = self::importoDiRigaPreventivoCrm($quantita, $prezzo, $sconto);
+
+            if ($importo > self::CRM_ACQUISTI_IMPORTO) {
+                $errori[] = self::erroreDelPreventivoCrm(['righe', (string) $i], $this->testi->testo('regole.preventivo_totale_troppo_alto'), Regola::FUORI_INTERVALLO);
+                $sbagliate = true;
+
+                continue;
+            }
+
             $totale += self::lordoDellaRigaPreventivoCrm($importo, $aliquota === null ? null : (int) $aliquota, $inclusa);
 
             $normalizzate[] = [
