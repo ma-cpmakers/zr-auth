@@ -197,6 +197,10 @@ return [
         'title' => 'Quote already accepted',
         'detail' => 'This quote has already been accepted: the acceptance is recorded only once. Read it again with crm.preventivi.mostra to see the purchases it created. The method wrote nothing.',
     ],
+    'proprieta_da_trasferire' => [
+        'title' => 'Ownership to hand over',
+        'detail' => 'You own one or more workspaces (the problem carries `workspace_da_trasferire` next to the code, with id and name): while you do, you cannot delete the account. Delete those workspaces and repeat the request. Nothing was written.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',

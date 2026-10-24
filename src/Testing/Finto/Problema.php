@@ -56,6 +56,7 @@ final class Problema extends RuntimeException
         'sezione_non_vuota' => 409,
         'ultimo_workspace' => 409,
         'workspace_in_eliminazione' => 409,
+        'proprieta_da_trasferire' => 409,
         'versione_scaduta' => 410,
         'dati_non_validi' => 422,
         'collegamento_circolare' => 422,
