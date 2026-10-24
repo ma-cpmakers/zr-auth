@@ -121,4 +121,7 @@ return [
     'preventivo_accettazione_altro_contatto' => 'The quote belongs to another contact: the purchases are made on theirs.',
     'opportunita_non_esiste' => 'There is no opportunity with this id in the workspace: crm.trattative.elenca gives their ids.',
     'voce_non_esiste' => 'There is no entry with this id in the workspace catalogue: crm.catalogo.elenca gives their ids.',
+    'tipo_scadenza_non_esiste' => 'There is no deadline type with this id in the workspace: crm.scadenze.tipi.elenca gives their ids.',
+    'tipo_scadenza_archiviato' => 'The deadline type is archived: a new deadline is created on an active type.',
+    'acquisto_non_esiste' => 'There is no purchase with this id in the workspace: crm.acquisti.elenca gives their ids.',
 ];

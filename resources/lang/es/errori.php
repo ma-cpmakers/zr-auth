@@ -197,6 +197,14 @@ return [
         'title' => 'Presupuesto ya aceptado',
         'detail' => 'Este presupuesto ya fue aceptado: la aceptación se registra una sola vez. Léelo de nuevo con crm.preventivi.mostra para ver las compras creadas. El método no escribió nada.',
     ],
+    'nome_gia_usato' => [
+        'title' => 'Nombre ya usado',
+        'detail' => 'Otro elemento activo ya tiene este nombre (mayúsculas y acentos no cuentan). Elige otro nombre o archiva el que existe. No se escribió nada.',
+    ],
+    'scadenza_chiusa' => [
+        'title' => 'Vencimiento ya cerrado',
+        'detail' => 'Este vencimiento ya fue renovado o cerrado y no se puede cambiar más. Léelo de nuevo con crm.scadenze.mostra: `rinnovata_da` indica el siguiente. No se escribió nada.',
+    ],
     'proprieta_da_trasferire' => [
         'title' => 'Propiedad por transferir',
         'detail' => 'Eres propietario de uno o más espacios de trabajo (el problema lleva `workspace_da_trasferire` junto al código, con id y nombre): mientras lo seas no puedes eliminar la cuenta. Elimina esos espacios y repite la petición. No se escribió nada.',
