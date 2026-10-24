@@ -253,6 +253,27 @@ trait CrmPreventivi
     }
 
     /**
+     * crm.preventivi.link.elimina (PreventiviController::linkElimina): revoca tutti i link vivi del preventivo, che da lì rispondono `404`
+     * `non_trovato` come un token che non c'è. La revoca chi l'ha creato, il proprietario e l'amministratore (gli altri 403 `permesso_negato`).
+     * Un preventivo senza link vivi, o una bozza, risponde 204 lo stesso; non cambia il preventivo né il suo ETag.
+     *
+     * @return array{int, null}
+     */
+    private function revocaLinkDelPreventivoCrm(Request $richiesta, string $id): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $riga = $this->rigaCrm('preventivi', $chi['workspace'], $id);
+
+        if ($riga['creato_da'] !== $chi['persona'] && ! in_array($this->membri[$chi['workspace']][$chi['persona']], ['proprietario', 'amministratore'], true)) {
+            throw new Problema('permesso_negato');
+        }
+
+        $this->crm['link_preventivi'] = array_filter($this->crm['link_preventivi'] ?? [], fn (string $preventivo) => $preventivo !== $riga['id']);
+
+        return [204, null];
+    }
+
+    /**
      * Lo stato che si vede di un preventivo (Preventivi::stato): quello scritto, tranne un inviato o visto con la validità passata, che è
      * `scaduto` (calcolato nel fuso del workspace, mai scritto).
      */
