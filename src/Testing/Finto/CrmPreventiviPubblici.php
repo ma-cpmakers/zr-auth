@@ -2,6 +2,8 @@
 
 namespace Zeiras\Auth\Testing\Finto;
 
+use Carbon\CarbonImmutable;
+
 /**
  * Il link pubblico di un preventivo del CRM nel finto (#2391, CRM-06): `preventivi.pubblici.lettura.crea`, `.accettazione.crea` e
  * `.richieste.crea`, senza gettone, come PreventiviPubbliciController del backoffice. Il token sta nel corpo; sconosciuto, di una bozza o di
@@ -11,6 +13,9 @@ namespace Zeiras\Auth\Testing\Finto;
  */
 trait CrmPreventiviPubblici
 {
+    /** Per quanti giorni un link si apre ancora dopo che il preventivo è accettato, rifiutato o scaduto (PreventiviPubblici::GIORNI_DOPO_LA_CHIUSURA, #2436). */
+    private const CRM_LINK_GIORNI_DOPO_LA_CHIUSURA = 90;
+
     /** Quante richieste al più per preventivo (RichiestaDelPreventivo::TETTO del backoffice). */
     private const CRM_RICHIESTE_PREVENTIVO_TETTO = 50;
 
@@ -168,6 +173,18 @@ trait CrmPreventiviPubblici
         }
 
         if ($riga['stato'] === 'sostituito' && $riga['valido_fino_al'] < self::oggiAcquistoCrm()) {
+            throw new Problema('non_trovato');
+        }
+
+        // Accettato, rifiutato o scaduto da novanta giorni: il link si è spento (il giorno 89 si apre, il giorno 90 no).
+        $chiusoDal = match (self::statoDelPreventivoCrm($riga)) {
+            'accettato' => $riga['accettato_il'],
+            'rifiutato' => CarbonImmutable::instance($riga['rifiutato_il'])->setTimezone(self::CRM_ACQUISTI_FUSO)->format('Y-m-d'),
+            'scaduto' => CarbonImmutable::parse($riga['valido_fino_al'], self::CRM_ACQUISTI_FUSO)->addDay()->format('Y-m-d'),
+            default => null,
+        };
+
+        if ($chiusoDal !== null && CarbonImmutable::parse($chiusoDal, self::CRM_ACQUISTI_FUSO)->addDays(self::CRM_LINK_GIORNI_DOPO_LA_CHIUSURA)->format('Y-m-d') <= self::oggiAcquistoCrm()) {
             throw new Problema('non_trovato');
         }
 
