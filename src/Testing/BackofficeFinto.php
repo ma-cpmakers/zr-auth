@@ -4374,7 +4374,7 @@ final class BackofficeFinto
         foreach (is_array($grezzo) ? $grezzo : [] as $posto => $membro) {
             foreach (is_array($membro) ? array_keys($membro) : [] as $nome) {
                 if (! in_array($nome, ['persona', 'ruolo'], true)) {
-                    $errori[] = ['detail' => $this->testi->testo('validation.prohibited', ['attribute' => $this->testi->nome("membri.{$posto}.{$nome}")]), 'regola' => Regola::CAMPO_ESTRANEO, 'pointer' => "#/membri/{$posto}/{$nome}"];
+                    $errori[] = ['detail' => $this->testi->testo('validation.prohibited', ['attribute' => "membri.{$posto}.{$nome}"]), 'regola' => Regola::CAMPO_ESTRANEO, 'pointer' => "#/membri/{$posto}/{$nome}"];
                 }
             }
         }
@@ -4388,7 +4388,7 @@ final class BackofficeFinto
         }
 
         if ($azienda === null) {
-            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.prohibited', ['attribute' => $this->testi->nome('membri')]), 'regola' => Regola::CAMPO_VIETATO, 'pointer' => '#/membri']]);
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.prohibited', ['attribute' => 'membri']), 'regola' => Regola::CAMPO_VIETATO, 'pointer' => '#/membri']]);
         }
 
         $inviti = [];
@@ -4402,7 +4402,7 @@ final class BackofficeFinto
             ) !== [];
 
             if (! $ammessa) {
-                $errori[] = ['detail' => $this->testi->testo('validation.in', ['attribute' => $this->testi->nome("membri.{$posto}.persona")]), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => "#/membri/{$posto}/persona"];
+                $errori[] = ['detail' => $this->testi->testo('validation.in', ['attribute' => "membri.{$posto}.persona"]), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => "#/membri/{$posto}/persona"];
 
                 continue;
             }
