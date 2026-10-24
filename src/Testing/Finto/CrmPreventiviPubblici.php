@@ -53,7 +53,7 @@ trait CrmPreventiviPubblici
     private function accettaPreventivoPubblico(array $corpo): array
     {
         $campi = $this->tokenDelPreventivoPubblico($corpo, [
-            'nome' => ['bail', 'required', 'string', 'max:200'],
+            'nome' => ['bail', 'required', 'string', 'max:200', new NomeScritto],
             'accetto' => ['bail', 'required', 'boolean:strict', 'accepted'],
         ], 'accettazione', true);
         $riga = $this->apriIlPreventivoPubblico($campi['token']);
