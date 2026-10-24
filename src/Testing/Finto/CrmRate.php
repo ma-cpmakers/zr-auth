@@ -125,7 +125,7 @@ trait CrmRate
      */
     private function creaPianoCrm(Request $richiesta, array $corpo, string $id): array
     {
-        $chi = $this->conCrm($richiesta);
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
         $acquisto = $this->rigaCrm('acquisti', $chi['workspace'], $id);
         $this->pretendiLaVersioneCrm($richiesta, $this->voceAcquistoCrm($acquisto));
         $campi = $this->testi->validaCorpo($corpo, $this->regoleDelPianoCrm($chi['workspace'], true));
@@ -145,7 +145,7 @@ trait CrmRate
      */
     private function creaPagamentoCrm(Request $richiesta, array $corpo, string $id): array
     {
-        $chi = $this->conCrm($richiesta);
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
         $rata = $this->rigaCrm('rate', $chi['workspace'], $id);
 
         return $this->conIdempotenza($richiesta, 'crm.rate.pagamenti.crea', $chi, $corpo, function () use ($chi, $corpo, $rata) {

@@ -167,7 +167,7 @@ return [
     ],
     'crediti_esauriti' => [
         'title' => 'Créditos agotados',
-        'detail' => 'Los créditos disponibles de esta compra no bastan para la cantidad pedida, y un crédito nunca baja de cero. No se escribió nada: vuelve a leer la compra con crm.acquisti.mostra y pide como máximo los créditos disponibles.',
+        'detail' => 'Los créditos disponibles de esta compra no bastan para la cantidad pedida, y un paquete nunca baja de −1. No se escribió nada: vuelve a leer la compra con crm.acquisti.mostra y pide una cantidad que deje los créditos disponibles en −1 o más.',
     ],
     'acquisto_scaduto' => [
         'title' => 'Compra caducada',
@@ -192,6 +192,10 @@ return [
     'preventivo_scaduto' => [
         'title' => 'Presupuesto caducado',
         'detail' => 'La validez de este presupuesto ha pasado. Para proponerlo de nuevo se hace una revisión. No se escribió nada.',
+    ],
+    'gia_accettato' => [
+        'title' => 'Presupuesto ya aceptado',
+        'detail' => 'Este presupuesto ya fue aceptado: la aceptación se registra una sola vez. Léelo de nuevo con crm.preventivi.mostra para ver las compras creadas. El método no escribió nada.',
     ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',

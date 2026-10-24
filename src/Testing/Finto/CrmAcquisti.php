@@ -10,10 +10,10 @@ use Illuminate\Validation\Rule;
 /**
  * Gli acquisti del CRM nel backoffice finto (CRM-07, #2357): `crm.acquisti.elenca`, `mostra`, `crea`, `modifica`, `consumi.crea` e
  * `consumi.elenca`, con le regole, i pointer e l'ordine di `AcquistiController` del backoffice. Un acquisto è un contatto che compra una
- * voce del catalogo e ne conserva nome, prezzo e condizioni del momento; il pagato si scrive alla creazione, dopo si cambia il solo
- * `documento`. Il primo acquisto di un contatto `lead`, `qualificato` o `perso` lo fa `cliente`, con la sua riga di cronologia. Un consumo
- * porta i crediti di un pacchetto verso zero senza mai superarli (409 `crediti_esauriti`), e non si registra su un acquisto scaduto (409
- * `acquisto_scaduto`); un acquisto non si elimina. Lo `stato` non è una colonna: si calcola a ogni risposta. Li chiamano i tre ruoli.
+ * voce del catalogo e ne conserva nome, prezzo e condizioni del momento; il pagato si scrive alla creazione, dopo si cambiano il
+ * `documento` e l'`inizio_il` (da cui partono la scadenza e il rinnovo). Il primo acquisto di un contatto `lead`, `qualificato` o `perso` lo fa `cliente`, con la sua riga di cronologia. Un consumo
+ * porta i crediti di un pacchetto fino a −1 senza mai superarli (409 `crediti_esauriti`), e non si registra su un acquisto scaduto (409
+ * `acquisto_scaduto`); un acquisto non si elimina. Lo `stato` non è una colonna: si calcola a ogni risposta. Li chiamano i tre ruoli per leggere e per i consumi; `crea` e `modifica` sono del proprietario e degli amministratori (#2404), un membro è 403 `permesso_negato`.
  * L'`ETag` non è lo stesso valore del backoffice: conta la forma. Il finto non emette gli eventi.
  */
 trait CrmAcquisti
@@ -29,6 +29,9 @@ trait CrmAcquisti
     private const CRM_ACQUISTI_DOCUMENTI = ['da_fare', 'ricevuta_fatta', 'fattura_fatta'];
 
     private const CRM_ACQUISTI_STATI = ['attivo', 'esaurito', 'scaduto'];
+
+    /** Il credito più basso che un pacchetto può toccare (`zeiras.crm.credito_minimo_del_pacchetto`): un consumo non porta i disponibili sotto. */
+    private const CRM_ACQUISTI_CREDITO_MINIMO = -1;
 
     private const CRM_ACQUISTI_ORDINI = ['-acquistato_il', 'acquistato_il', 'valido_fino_al', '-valido_fino_al'];
 
@@ -50,7 +53,7 @@ trait CrmAcquisti
      */
     private function creaAcquistoCrm(Request $richiesta, array $corpo): array
     {
-        $chi = $this->conCrm($richiesta);
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
 
         return $this->conIdempotenza($richiesta, 'crm.acquisti.crea', $chi, $corpo, function () use ($chi, $corpo) {
             $campi = $this->testi->validaCorpo($corpo, $this->regoleDellAcquistoCrm($chi['workspace']));
@@ -77,15 +80,16 @@ trait CrmAcquisti
             $id = self::id();
             $ora = self::adessoCrm();
             $giorno = (string) $campi['acquistato_il'];
+            $inizio = (string) ($campi['inizio_il'] ?? $giorno);
             $this->crm['acquisti'][$id] = [
                 'id' => $id, 'workspace' => $chi['workspace'], 'persona_id' => $persona['id'],
-                'voce_id' => $voce['id'], 'voce_tipo' => $voce['tipo'], 'voce_nome' => $voce['nome'], 'voce_durata_minuti' => $voce['durata_minuti'],
+                'voce_id' => $voce['id'], 'preventivo_id' => null, 'voce_tipo' => $voce['tipo'], 'voce_nome' => $voce['nome'], 'voce_durata_minuti' => $voce['durata_minuti'],
                 'voce_unita_incluse' => $voce['unita_incluse'], 'voce_etichetta_unita' => $voce['etichetta_unita'], 'voce_validita_mesi' => $voce['validita_mesi'],
                 'voce_rinnovo' => $voce['rinnovo'], 'prezzo_importo' => $voce['prezzo_importo'],
-                'acquistato_il' => $giorno, 'pagato_importo' => (int) ($campi['pagato']['importo'] ?? 0), 'metodo_pagamento' => $campi['metodo_pagamento'],
+                'acquistato_il' => $giorno, 'inizio_il' => $inizio, 'pagato_importo' => (int) ($campi['pagato']['importo'] ?? 0), 'metodo_pagamento' => $campi['metodo_pagamento'],
                 'documento' => $campi['documento'] ?? 'da_fare',
-                'valido_fino_al' => $voce['validita_mesi'] === null ? null : self::dopoMesiAcquistoCrm($giorno, $voce['validita_mesi']),
-                'rinnovo_il' => $voce['rinnovo'] === null ? null : self::dopoMesiAcquistoCrm($giorno, self::CRM_ACQUISTI_MESI_DEL_RINNOVO[$voce['rinnovo']]),
+                'valido_fino_al' => $voce['validita_mesi'] === null ? null : self::dopoMesiAcquistoCrm($inizio, $voce['validita_mesi']),
+                'rinnovo_il' => $voce['rinnovo'] === null ? null : self::dopoMesiAcquistoCrm($inizio, self::CRM_ACQUISTI_MESI_DEL_RINNOVO[$voce['rinnovo']]),
                 'crediti_totali' => $voce['tipo'] === 'pacchetto' ? $voce['unita_incluse'] : null, 'crediti_usati' => 0, 'crediti_prenotati' => 0,
                 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
             ];
@@ -116,20 +120,34 @@ trait CrmAcquisti
     }
 
     /**
-     * crm.acquisti.modifica (AcquistiController::modifica): JSON Merge Patch del solo `documento`, con `If-Match` letto prima del corpo (412
-     * sulla versione vecchia). Ogni altro campo che l'acquisto ha è 422 `campo_vietato`, uno che non ha `campo_estraneo`. Un `documento`
-     * uguale a quello di adesso non scrive.
+     * crm.acquisti.modifica (AcquistiController::modifica): JSON Merge Patch del `documento` e dell'`inizio_il` (che ricalcola la scadenza e il
+     * rinnovo dalla copia della voce), con `If-Match` letto prima del corpo (412 sulla versione vecchia). Ogni altro campo che l'acquisto ha è
+     * 422 `campo_vietato`, uno che non ha `campo_estraneo`. Un valore uguale a quello di adesso non scrive.
      *
      * @return array{int, array<string, mixed>, array<string, string>}
      */
     private function modificaAcquistoCrm(Request $richiesta, array $corpo, string $id): array
     {
-        $chi = $this->conCrm($richiesta);
+        $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
         $riga = $this->rigaCrm('acquisti', $chi['workspace'], $id);
         $this->pretendiLaVersioneCrm($richiesta, $this->voceAcquistoCrm($riga));
         $vietati = ['id', 'persona_id', 'voce_id', 'voce', 'prezzo', 'acquistato_il', 'pagato', 'metodo_pagamento', 'valido_fino_al', 'rinnovo_il', 'crediti', 'stato', 'creato_il', 'aggiornato_il', 'creato_da'];
-        $campi = $this->modificaCrm($corpo, ['documento' => ['bail', 'filled', 'string', Rule::in(self::CRM_ACQUISTI_DOCUMENTI)]] + array_fill_keys($vietati, ['missing']));
-        $this->salvaCrm('acquisti', $riga['id'], ['documento' => $campi['documento']]);
+        $campi = $this->modificaCrm($corpo, [
+            'documento' => ['bail', 'filled', 'string', Rule::in(self::CRM_ACQUISTI_DOCUMENTI)],
+            'inizio_il' => ['bail', 'filled', 'string', 'date_format:Y-m-d'],
+        ] + array_fill_keys($vietati, ['missing']));
+        $nuovi = isset($campi['documento']) ? ['documento' => $campi['documento']] : [];
+
+        if (isset($campi['inizio_il']) && $campi['inizio_il'] !== ($riga['inizio_il'] ?? $riga['acquistato_il'])) {
+            $inizio = (string) $campi['inizio_il'];
+            $nuovi += [
+                'inizio_il' => $inizio,
+                'valido_fino_al' => $riga['voce_validita_mesi'] === null ? null : self::dopoMesiAcquistoCrm($inizio, $riga['voce_validita_mesi']),
+                'rinnovo_il' => $riga['voce_rinnovo'] === null ? null : self::dopoMesiAcquistoCrm($inizio, self::CRM_ACQUISTI_MESI_DEL_RINNOVO[$riga['voce_rinnovo']]),
+            ];
+        }
+
+        $this->salvaCrm('acquisti', $riga['id'], $nuovi);
         $acquisto = $this->voceAcquistoCrm($this->crm['acquisti'][$riga['id']]);
 
         return [200, ['data' => $acquisto], ['ETag' => self::etagCrm($acquisto)]];
@@ -192,7 +210,7 @@ trait CrmAcquisti
     /**
      * crm.acquisti.consumi.crea (AcquistiController::consumiCrea): 201 con il solo consumo, senza `Location`. `quantita` (1-100, di partenza 1),
      * `svolto_il` (di partenza adesso, non nel futuro) e `nota` (al più 500). Un acquisto senza crediti (servizio, prodotto) è 422; uno
-     * scaduto è 409 `acquisto_scaduto`; un pacchetto con meno crediti della `quantita` è 409 `crediti_esauriti` coi `disponibili`. L'abbonamento
+     * scaduto è 409 `acquisto_scaduto`; un pacchetto che dopo il consumo scenderebbe sotto −1 è 409 `crediti_esauriti` coi `disponibili` (a credito zero passa). L'abbonamento
      * si consuma senza tetto.
      *
      * @return array{int, array<string, mixed>, array<string, string>}
@@ -223,7 +241,8 @@ trait CrmAcquisti
                 throw new Problema('acquisto_scaduto');
             }
 
-            if ($riga['voce_tipo'] === 'pacchetto' && $quantita > self::disponibiliAcquistoCrm($riga)) {
+            // Un pacchetto si consuma anche a credito zero, fino al credito minimo (−1, `zeiras.crm.credito_minimo_del_pacchetto`): il cliente è da pagare (#2399).
+            if ($riga['voce_tipo'] === 'pacchetto' && self::disponibiliAcquistoCrm($riga) - $quantita < self::CRM_ACQUISTI_CREDITO_MINIMO) {
                 throw new Problema('crediti_esauriti', estensioni: ['disponibili' => self::disponibiliAcquistoCrm($riga)]);
             }
 
@@ -273,6 +292,7 @@ trait CrmAcquisti
             'id' => $riga['id'],
             'persona_id' => $riga['persona_id'],
             'voce_id' => $riga['voce_id'],
+            'preventivo_id' => $riga['preventivo_id'] ?? null,
             'voce' => [
                 'nome' => $riga['voce_nome'],
                 'tipo' => $riga['voce_tipo'],
@@ -284,6 +304,7 @@ trait CrmAcquisti
             ],
             'prezzo' => $riga['prezzo_importo'] === null ? null : ['importo' => $riga['prezzo_importo'], 'valuta' => $valuta],
             'acquistato_il' => $riga['acquistato_il'],
+            'inizio_il' => $riga['inizio_il'] ?? $riga['acquistato_il'],
             'pagato' => ['importo' => $riga['pagato_importo'], 'valuta' => $valuta],
             'metodo_pagamento' => $riga['metodo_pagamento'],
             'documento' => $riga['documento'],
@@ -328,6 +349,7 @@ trait CrmAcquisti
             'persona_id' => ['bail', 'required', 'string', 'max:64'],
             'voce_id' => ['bail', 'required', 'string', 'max:64'],
             'acquistato_il' => ['bail', 'required', 'string', 'date_format:Y-m-d'],
+            'inizio_il' => ['bail', 'sometimes', 'string', 'date_format:Y-m-d'],
             'pagato' => ['bail', 'sometimes', 'array', 'prohibits:rate', function (string $campo, mixed $pagato, Closure $fail) {
                 if ($pagato === []) {
                     $this->rifiutaCrm($fail, $campo, Regola::OBBLIGATORIO, 'validation.required', ['attribute' => $campo]);

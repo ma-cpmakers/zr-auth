@@ -116,6 +116,9 @@ return [
     'preventivo_piano_rate' => 'El plan «:tipo» tiene de :minimo a :massimo cuotas.',
     'preventivo_somma_diversa' => 'La suma de las cuotas debe ser igual al total del presupuesto.',
     'preventivo_righe_troppe' => 'Un presupuesto tiene de 1 a :massimo líneas.',
+    'preventivo_accettazione_data_futura' => 'La fecha de aceptación no puede ser posterior a hoy.',
+    'preventivo_accettazione_contatto' => 'Este presupuesto es para una empresa: indica el contacto que compra.',
+    'preventivo_accettazione_altro_contatto' => 'El presupuesto es de otro contacto: las compras se hacen sobre el suyo.',
     'opportunita_non_esiste' => 'En el workspace no hay una oportunidad con este id: crm.trattative.elenca da sus ids.',
     'voce_non_esiste' => 'En el catálogo del workspace no hay una entrada con este id: crm.catalogo.elenca da sus ids.',
 ];

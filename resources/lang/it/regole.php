@@ -117,6 +117,9 @@ return [
     'preventivo_piano_rate' => 'Il piano «:tipo» ha da :minimo a :massimo rate.',
     'preventivo_somma_diversa' => 'La somma delle rate deve essere uguale al totale del preventivo.',
     'preventivo_righe_troppe' => 'Un preventivo ha da 1 a :massimo righe.',
+    'preventivo_accettazione_data_futura' => "La data dell'accettazione non può essere dopo oggi.",
+    'preventivo_accettazione_contatto' => "Questo preventivo è per un'azienda: dai il contatto che compra.",
+    'preventivo_accettazione_altro_contatto' => 'Il preventivo è di un altro contatto: gli acquisti nascono sul suo.',
     'opportunita_non_esiste' => 'Nel workspace non c\'è un\'opportunità con questo id: gli id delle opportunità li dà crm.trattative.elenca.',
     'voce_non_esiste' => 'Nel catalogo del workspace non c\'è una voce con questo id: gli id delle voci li dà crm.catalogo.elenca.',
 ];

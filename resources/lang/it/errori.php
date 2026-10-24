@@ -167,7 +167,7 @@ return [
     ],
     'crediti_esauriti' => [
         'title' => 'Crediti esauriti',
-        'detail' => "I crediti disponibili di questo acquisto non bastano per la quantità chiesta, e un credito non va mai sotto zero. Il metodo non ha scritto niente: rileggi l'acquisto con crm.acquisti.mostra e chiedi al più i crediti disponibili.",
+        'detail' => "I crediti disponibili di questo acquisto non bastano per la quantità chiesta, e un pacchetto non scende sotto −1. Il metodo non ha scritto niente: rileggi l'acquisto con crm.acquisti.mostra e chiedi una quantità che lasci i disponibili a −1 o più.",
     ],
     'acquisto_scaduto' => [
         'title' => 'Acquisto scaduto',
@@ -192,6 +192,10 @@ return [
     'preventivo_scaduto' => [
         'title' => 'Preventivo scaduto',
         'detail' => 'La validità di questo preventivo è passata. Per riproporlo si fa una revisione. Il metodo non ha scritto niente.',
+    ],
+    'gia_accettato' => [
+        'title' => 'Preventivo già accettato',
+        'detail' => 'Questo preventivo è già stato accettato: l\'accettazione si registra una volta sola. Rileggilo con crm.preventivi.mostra per vedere gli acquisti nati. Il metodo non ha scritto niente.',
     ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',

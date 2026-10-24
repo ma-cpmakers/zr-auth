@@ -213,6 +213,7 @@ return [
         'righe.*.prezzo_unitario.valuta' => 'currency',
         'righe.*.sconto_percento' => 'discount',
         'righe.*.aliquota_iva' => 'VAT rate',
+        'righe.*.iva_inclusa' => 'VAT included',
         'piano' => 'payment plan',
         'piano.tipo' => 'plan type',
         'piano.rate' => 'installments',

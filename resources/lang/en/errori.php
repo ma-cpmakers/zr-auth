@@ -167,7 +167,7 @@ return [
     ],
     'crediti_esauriti' => [
         'title' => 'Credits used up',
-        'detail' => 'This purchase does not have enough credits left for the requested quantity, and a credit never goes below zero. Nothing was written: read the purchase again with crm.acquisti.mostra and ask for at most the available credits.',
+        'detail' => 'This purchase does not have enough credits for the requested quantity, and a package never goes below −1. Nothing was written: read the purchase again with crm.acquisti.mostra and ask for a quantity that leaves the available credits at −1 or more.',
     ],
     'acquisto_scaduto' => [
         'title' => 'Purchase expired',
@@ -192,6 +192,10 @@ return [
     'preventivo_scaduto' => [
         'title' => 'Quote expired',
         'detail' => 'The validity of this quote has passed. To offer it again, make a revision. Nothing was written.',
+    ],
+    'gia_accettato' => [
+        'title' => 'Quote already accepted',
+        'detail' => 'This quote has already been accepted: the acceptance is recorded only once. Read it again with crm.preventivi.mostra to see the purchases it created. The method wrote nothing.',
     ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
