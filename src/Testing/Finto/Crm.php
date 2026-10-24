@@ -1507,6 +1507,8 @@ trait Crm
             $vietati[] = 'testo';
         }
 
+        // Un campo che la precisione vieta non si chiede: con `testo_libero` il solo `lat` è vietato, e `lng` non manca.
+        $mancanti = array_diff($mancanti, $vietati);
         $errori = [];
 
         foreach (self::CRM_INDIRIZZO as $chiave) {
