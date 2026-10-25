@@ -2,6 +2,7 @@
 
 namespace Zeiras\Auth;
 
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Route as Rotta;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Session\SessionManager;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +32,13 @@ final class ZrAuthServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/zr-auth.php', 'zr-auth');
+
+        // Come Laravel costruisce StartSession (SessionServiceProvider), col resolver della cache: senza, la sottoclasse non ha il
+        // blocco di `Route::block` (BloccoSessioneTest).
+        $this->app->singleton(AvviaLaSessioneSenzaQuery::class, fn ($app) => new AvviaLaSessioneSenzaQuery(
+            $app->make(SessionManager::class),
+            fn () => $app->make(CacheFactory::class),
+        ));
     }
 
     public function boot(): void
