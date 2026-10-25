@@ -22,6 +22,7 @@ return [
     'passaggio_doppio' => 'Una posición aparece dos veces en los passaggi.',
     'lista_della_board' => 'Esta lista no es del mismo tablero que la tarjeta: los ids de las listas los da board.board.mostra.',
     'scheda_della_board' => 'Esta tarjeta no es del mismo tablero: los ids de las tarjetas los da board.schede.elenca.',
+    'record_del_crm' => 'En el workspace no hay un registro del CRM de este tipo con este id: los ids los dan crm.persone.ricerca.crea, crm.organizzazioni.ricerca.crea y crm.trattative.ricerca.crea.',
     'una_posizione_o_un_ancora' => 'El cuerpo necesita exactamente uno de posizione y dopo_scheda_id, ni ninguno ni los dos.',
     'lista_della_stessa_board' => 'Esta lista no es del mismo tablero que la lista que se mueve: los ids de las listas los da board.board.mostra.',
     'una_posizione_o_una_lista' => 'El cuerpo necesita exactamente uno de posizione y dopo_lista_id, ni ninguno ni los dos.',

@@ -36,6 +36,7 @@ use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
+use Zeiras\Auth\Testing\Finto\SchedeCrm;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
 
@@ -70,6 +71,7 @@ final class BackofficeFinto
     use CrmPersonalizzazione;
     use CrmPreventivi;
     use CrmPreventiviPubblici;
+    use SchedeCrm;
     use CrmScadenze;
     use CrmValori;
 
@@ -154,6 +156,9 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/collegamenti/([^/]+)$#', 'board.schede.collegamenti.elimina'],
+        ['GET', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.elenca'],
+        ['POST', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/crm/([^/]+)$#', 'board.schede.crm.elimina'],
         ['GET', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.elenca'],
         ['POST', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.crea'],
         ['PATCH', '#^/v1/board/board/([^/]+)/viste/([^/]+)$#', 'board.board.viste.modifica'],
@@ -308,7 +313,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -1273,6 +1278,9 @@ final class BackofficeFinto
                 'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
                 'board.schede.collegamenti.crea' => $this->creaCollegamento($richiesta, $corpo, $parametri[0]),
                 'board.schede.collegamenti.elimina' => $this->eliminaCollegamento($richiesta, $parametri[0], $parametri[1]),
+                'board.schede.crm.elenca' => $this->elencaSchedeCrm($richiesta, $parametri[0]),
+                'board.schede.crm.crea' => $this->creaSchedaCrm($richiesta, $corpo, $parametri[0]),
+                'board.schede.crm.elimina' => $this->eliminaSchedaCrm($richiesta, $parametri[0], $parametri[1]),
                 'board.board.viste.elenca' => $this->elencaViste($richiesta, $parametri[0]),
                 'board.board.viste.crea' => $this->creaVista($richiesta, $corpo, $parametri[0]),
                 'board.board.viste.modifica' => $this->modificaVista($richiesta, $corpo, $parametri[0], $parametri[1]),

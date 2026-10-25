@@ -29,6 +29,7 @@ final class Problema extends RuntimeException
         'gia_membro' => 409,
         'invito_esistente' => 409,
         'collegamento_esistente' => 409,
+        'record_gia_collegato' => 409,
         'scheda_archiviata' => 409,
         'limite_raggiunto' => 409,
         'crediti_esauriti' => 409,
