@@ -211,7 +211,11 @@ return [
     ],
     'proprieta_da_trasferire' => [
         'title' => 'Propiedad por transferir',
-        'detail' => 'Eres propietario de uno o más espacios de trabajo con otros miembros (el problema lleva `workspace_da_trasferire` junto al código, con id y nombre): mientras lo seas no puedes eliminar la cuenta. Pasa la propiedad a otro miembro (`workspace.proprietario.modifica`) o elimina esos espacios, y repite la petición. No se escribió nada.',
+        'detail' => 'Eres propietario de un espacio de trabajo, y mientras lo seas no puedes abandonarlo (`io.workspace.elimina`) ni eliminar la cuenta (`io.elimina`: el problema lleva `workspace_da_trasferire` junto al código, con id y nombre). Si tiene otros miembros, pasa la propiedad a uno de ellos (`workspace.proprietario.modifica`); si no, elimina el espacio (`workspace.elimina`), y repite la petición. No se escribió nada.',
+    ],
+    'unico_amministratore' => [
+        'title' => 'Único administrador',
+        'detail' => 'Eres el único administrador de este espacio de trabajo y no puedes abandonarlo: nombra primero a otro administrador con `workspace.membri.modifica` y repite la petición. No se escribió nada.',
     ],
     'indirizzo_occupato' => [
         'title' => 'Dirección ya en uso',

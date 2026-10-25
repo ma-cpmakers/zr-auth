@@ -211,7 +211,11 @@ return [
     ],
     'proprieta_da_trasferire' => [
         'title' => 'Proprietà da trasferire',
-        'detail' => "Sei proprietario di uno o più workspace in cui ci sono altri membri (il problema porta accanto al codice `workspace_da_trasferire`, con id e nome): finché lo sei non puoi eliminare l'account. Passa la proprietà a un altro membro (`workspace.proprietario.modifica`) o elimina quei workspace, poi ripeti la richiesta. Il metodo non ha scritto niente.",
+        'detail' => "Sei proprietario di un workspace, e finché lo sei non puoi lasciarlo (`io.workspace.elimina`) né eliminare l'account (`io.elimina`: il problema porta accanto al codice `workspace_da_trasferire`, con id e nome). Se ci sono altri membri passa la proprietà a uno di loro (`workspace.proprietario.modifica`), altrimenti elimina il workspace (`workspace.elimina`), poi ripeti la richiesta. Il metodo non ha scritto niente.",
+    ],
+    'unico_amministratore' => [
+        'title' => 'Unico amministratore',
+        'detail' => 'Sei l\'unico amministratore di questo workspace e non puoi lasciarlo: nomina prima un altro amministratore con `workspace.membri.modifica`, poi ripeti la richiesta. Il metodo non ha scritto niente.',
     ],
     'indirizzo_occupato' => [
         'title' => 'Indirizzo già in uso',

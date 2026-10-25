@@ -3,7 +3,11 @@
 // Sprint 36, PR G (#2014): workspace.elimina e workspace.eliminazione.elimina nel finto. Qui ciò che un frontend vede dal suo lato;
 // che le risposte e gli errori siano quelli del backoffice, byte per byte, lo prova il FintoTest del backoffice.
 
-/** Un proprietario con due workspace, e un amministratore del primo: [studio, altro, gettone del proprietario, gettone dell'amministratore, gettone dell'altro, il finto]. */
+/**
+ * Un proprietario con due workspace, e un amministratore del primo: [studio, altro, gettone del proprietario, gettone dell'amministratore,
+ * gettone dell'altro, il finto, gettone senza workspace del proprietario]. Dal #2600 i gettoni di un workspace in eliminazione non valgono più
+ * (401): con quello senza workspace la persona lo ritrova e lo ripristina (#2602).
+ */
 function conDueWorkspace(): array
 {
     $finto = Zeiras\Auth\Testing\BackofficeFinto::attiva();
@@ -15,29 +19,47 @@ function conDueWorkspace(): array
     $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
     $gettone = fn (string $workspace) => alFinto('POST', '/v1/gettoni', ['workspace_id' => $workspace], $accesso)->json('data.gettone');
 
-    return [$studio, $altro, $gettone($studio['id']), alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('bruno@example.com')['gettone']['gettone'])->json('data.gettone'), $gettone($altro['id']), $finto];
+    return [$studio, $altro, $gettone($studio['id']), alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('bruno@example.com')['gettone']['gettone'])->json('data.gettone'), $gettone($altro['id']), $finto, $accesso];
 }
 
-it('il proprietario programma l\'eliminazione fra 30 giorni, l\'elenco la mostra e il workspace lavora come prima (#2014)', function () {
+it('il proprietario programma l\'eliminazione fra 30 giorni: il workspace sparisce subito dagli elenchi e i suoi gettoni sono 401 (#2014, #2600, #2601)', function () {
     $this->travelTo('2026-10-15 12:00:00');
-    [$studio, $altro, $anna, $bruno] = conDueWorkspace();
+    [$studio, $altro, $anna, $bruno, , , $accesso] = conDueWorkspace();
 
     $risposta = alFinto('DELETE', '/v1/workspace', gettone: $anna);
 
     expect($risposta->status())->toBe(202)
         ->and($risposta->json('data'))->toBe(['id' => $studio['id'], 'eliminazione_il' => '2026-11-14T12:00:00.000Z']);
 
-    $elenco = collect(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data'))->keyBy('id');
-    expect($elenco[$studio['id']]['eliminazione_il'])->toBe('2026-11-14T12:00:00.000Z')
-        ->and($elenco[$altro['id']]['eliminazione_il'])->toBeNull()
-        ->and(alFinto('GET', '/v1/workspace/membri', gettone: $bruno)->status())->toBe(200)
-        ->and(alFinto('PATCH', '/v1/workspace', ['nome' => 'Nuovo'], $bruno)->json('data.eliminazione_il'))->toBe('2026-11-14T12:00:00.000Z')
-        // Una seconda chiamata risponde con la stessa data.
-        ->and(alFinto('DELETE', '/v1/workspace', gettone: $anna)->json('data.eliminazione_il'))->toBe('2026-11-14T12:00:00.000Z');
+    $elenco = alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data');
+    $eliminati = alFinto('GET', "/v1/aziende/{$studio['azienda_id']}/workspace?eliminati=true", gettone: $accesso)->json('data');
+    $annaId = alFinto('GET', '/v1/io', gettone: $accesso)->json('data.utente.id');
+
+    // Il proprietario e l'amministratore non hanno più un gettone che valga; l'altro workspace della stessa persona sì.
+    expect(array_column($elenco, 'id'))->toBe([$altro['id']])
+        ->and($elenco[0]['eliminazione_il'])->toBeNull()
+        ->and(array_column($eliminati, 'id'))->toBe([$studio['id']])
+        ->and($eliminati[0]['eliminazione_il'])->toBe('2026-11-14T12:00:00.000Z')
+        ->and($eliminati[0]['eliminato_da'])->toBe($annaId)
+        ->and($eliminati[0]['uscita_negata'])->toBeNull();
+
+    foreach ([
+        alFinto('GET', '/v1/workspace/membri', gettone: $bruno),
+        alFinto('PATCH', '/v1/workspace', ['nome' => 'Nuovo'], $bruno),
+        alFinto('DELETE', '/v1/workspace', gettone: $anna),
+        alFinto('GET', '/v1/io', gettone: $anna),
+    ] as $risposta) {
+        expect([$risposta->status(), $risposta->json('codice')])->toBe([401, 'gettone_non_valido']);
+    }
+
+    // `gettoni.crea` non riapre un workspace in eliminazione: è lo stesso 422 di un workspace non tuo.
+    $riapre = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso);
+
+    expect($riapre->status())->toBe(422)->and($riapre->json('errors.0.pointer'))->toBe('#/workspace_id');
 });
 
 it('un amministratore non elimina né annulla (403), e l\'ultimo workspace della persona è 409 ultimo_workspace (#2014)', function () {
-    [$studio, , $anna, $bruno, $altroAnna] = conDueWorkspace();
+    [$studio, , $anna, $bruno, $altroAnna, , $accesso] = conDueWorkspace();
 
     expect(alFinto('DELETE', '/v1/workspace', gettone: $bruno)->json('codice'))->toBe('permesso_negato')
         ->and(alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $bruno)->json('codice'))->toBe('permesso_negato');
@@ -47,27 +69,59 @@ it('un amministratore non elimina né annulla (403), e l\'ultimo workspace della
 
     expect($ultimo->status())->toBe(409)
         ->and($ultimo->json('codice'))->toBe('ultimo_workspace');
-    // Annullata la prima, il secondo non è più l'ultimo.
-    alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
+    // Ripristinata la prima, il secondo non è più l'ultimo.
+    alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso);
     expect(alFinto('DELETE', '/v1/workspace', gettone: $altroAnna)->status())->toBe(202)
         ->and($studio['id'])->not->toBeEmpty();
 });
 
-it('annullare toglie la data (204), e senza un\'eliminazione programmata è 404 non_trovato (#2014)', function () {
-    [$studio, , $anna] = conDueWorkspace();
+it('workspace.eliminazione.elimina, senza un\'eliminazione programmata, è 404 non_trovato; dopo, il gettone del workspace è 401 (#2014, #2600)', function () {
+    [, , $anna] = conDueWorkspace();
 
     expect(alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna)->json('codice'))->toBe('non_trovato');
 
     alFinto('DELETE', '/v1/workspace', gettone: $anna);
-    $annullata = alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
+    $vecchio = alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
 
-    expect($annullata->status())->toBe(204)
-        ->and($annullata->body())->toBe('')
-        ->and(collect(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data'))->firstWhere('id', $studio['id'])['eliminazione_il'])->toBeNull();
+    expect($vecchio->status())->toBe(401)->and($vecchio->json('codice'))->toBe('gettone_non_valido');
 });
 
-it('con l\'eliminazione programmata gli inviti e il link sono 409 workspace_in_eliminazione, e annullata tornano a valere (#2259)', function () {
-    [$studio, , $anna, $bruno, , $finto] = conDueWorkspace();
+it('io.workspace.eliminazione.elimina ripristina col gettone della persona (204): il workspace torna negli elenchi e i gettoni tornano validi (#2602)', function () {
+    [$studio, , $anna, , , , $accesso] = conDueWorkspace();
+    alFinto('DELETE', '/v1/workspace', gettone: $anna);
+
+    $ripristinato = alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso);
+    $elenco = collect(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->keyBy('id');
+
+    expect($ripristinato->status())->toBe(204)
+        ->and($ripristinato->body())->toBe('')
+        ->and($elenco[$studio['id']]['eliminazione_il'])->toBeNull()
+        ->and($elenco[$studio['id']]['eliminato_da'])->toBeNull()
+        ->and(alFinto('GET', '/v1/io', gettone: $anna)->status())->toBe(200)
+        ->and(alFinto('GET', "/v1/aziende/{$studio['azienda_id']}/workspace?eliminati=true", gettone: $accesso)->json('data'))->toBe([]);
+});
+
+it('io.workspace.eliminazione.elimina: l\'amministratore ripristina, un membro o un workspace non in eliminazione è 404, un corpo con campi 422 prima del 404 (#2602)', function () {
+    [$studio, $altro, $anna, , , $finto, $accesso] = conDueWorkspace();
+    $finto->membro($studio, $finto->persona('carla@example.com', PASSWORD, nome: 'Carla'), 'membro');
+    $accessoBruno = entraNelFinto('bruno@example.com')['gettone']['gettone'];
+    $accessoCarla = entraNelFinto('carla@example.com')['gettone']['gettone'];
+    $ripristina = fn (string $gettone, string $workspace, ?array $corpo = null) => alFinto('DELETE', "/v1/io/workspace/{$workspace}/eliminazione", $corpo, $gettone);
+
+    // Ancora vivo: 404 anche al proprietario; il corpo sbagliato è 422 prima.
+    expect($ripristina($accesso, $studio['id'])->status())->toBe(404)
+        ->and($ripristina($accesso, $studio['id'], ['x' => 1])->status())->toBe(422);
+
+    alFinto('DELETE', '/v1/workspace', gettone: $anna);
+
+    expect($ripristina($accessoCarla, $studio['id'])->status())->toBe(404)
+        ->and($ripristina($accessoBruno, $altro['id'])->status())->toBe(404)
+        ->and($ripristina($accesso, 'inventato')->status())->toBe(404)
+        ->and($ripristina($accessoBruno, $studio['id'])->status())->toBe(204);
+});
+
+it('con l\'eliminazione programmata le due accettazioni sono 409 workspace_in_eliminazione e i tre metodi del workspace 401; ripristinata tornano a valere (#2259, #2600)', function () {
+    [$studio, , $anna, $bruno, , $finto, $accesso] = conDueWorkspace();
     $finto->persona('carla@example.com', PASSWORD, nome: 'Carla');
     $finto->persona('dario@example.com', PASSWORD, nome: 'Dario');
     $accessoCarla = entraNelFinto('carla@example.com')['gettone']['gettone'];
@@ -79,23 +133,31 @@ it('con l\'eliminazione programmata gli inviti e il link sono 409 workspace_in_e
 
     alFinto('DELETE', '/v1/workspace', gettone: $anna);
 
-    $esiti = [
-        alFinto('POST', '/v1/workspace/inviti', ['email' => 'nuovo@example.com', 'ruolo' => 'membro'], $bruno),
-        alFinto('POST', "/v1/workspace/inviti/{$invito}/reinvio", gettone: $anna),
-        alFinto('POST', '/v1/workspace/link', gettone: $bruno),
+    $accettazioni = [
         alFinto('POST', '/v1/inviti/accettazione', ['codice' => $codice], $accessoCarla),
         alFinto('POST', '/v1/link/accettazione', ['codice' => $codiceLink], $accessoDario),
     ];
 
-    foreach ($esiti as $esito) {
+    foreach ($accettazioni as $esito) {
         expect($esito->status())->toBe(409)->and($esito->json('codice'))->toBe('workspace_in_eliminazione');
     }
 
-    // Elencare e revocare restano ammessi; un codice che non vale è la stessa 422 di sempre.
-    expect(alFinto('GET', '/v1/workspace/inviti', gettone: $bruno)->status())->toBe(200)
-        ->and(alFinto('POST', '/v1/inviti/accettazione', ['codice' => str_repeat('a', 43)], $accessoDario)->json('codice'))->toBe('verifica_non_riuscita');
+    // I gettoni del workspace non valgono più (#2600): invitare, reinviare, creare il link, elencare gli inviti sono 401.
+    $chiusi = [
+        alFinto('POST', '/v1/workspace/inviti', ['email' => 'nuovo@example.com', 'ruolo' => 'membro'], $bruno),
+        alFinto('POST', "/v1/workspace/inviti/{$invito}/reinvio", gettone: $anna),
+        alFinto('POST', '/v1/workspace/link', gettone: $bruno),
+        alFinto('GET', '/v1/workspace/inviti', gettone: $bruno),
+    ];
 
-    alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
+    foreach ($chiusi as $esito) {
+        expect($esito->status())->toBe(401)->and($esito->json('codice'))->toBe('gettone_non_valido');
+    }
+
+    // Un codice che non vale è la stessa 422 di sempre.
+    expect(alFinto('POST', '/v1/inviti/accettazione', ['codice' => str_repeat('a', 43)], $accessoDario)->json('codice'))->toBe('verifica_non_riuscita');
+
+    alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso);
 
     expect(alFinto('POST', '/v1/inviti/accettazione', ['codice' => $codice], $accessoCarla)->status())->toBe(201)
         ->and(alFinto('POST', '/v1/link/accettazione', ['codice' => $codiceLink], $accessoDario)->status())->toBe(201)
@@ -104,7 +166,7 @@ it('con l\'eliminazione programmata gli inviti e il link sono 409 workspace_in_e
 });
 
 it('un invito a un workspace in eliminazione è 409 anche per una persona nuova, da utenti.crea e da accessi.provider.crea, e la persona non nasce (#2044, zr-pm 17/10)', function () {
-    [$studio, , $anna, , , $finto] = conDueWorkspace();
+    [$studio, , $anna, , , $finto, $accessoAnna] = conDueWorkspace();
     $finto->provider('google');
     $finto->identitaDelProvider('google', 'codice-di-erika', 'erika@example.com');
 
@@ -136,8 +198,8 @@ it('un invito a un workspace in eliminazione è 409 anche per una persona nuova,
     expect($edoardo->status())->toBe(422)->and($edoardo->json('codice'))->toBe('credenziali_non_valide')
         ->and(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-di-erika', 'stato' => $stato])->status())->toBe(422);
 
-    // Annullata l'eliminazione, gli stessi inviti valgono.
-    alFinto('DELETE', '/v1/workspace/eliminazione', gettone: $anna);
+    // Ripristinato il workspace, gli stessi inviti valgono.
+    alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accessoAnna);
     $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
 
     expect(alFinto('POST', '/v1/utenti', [

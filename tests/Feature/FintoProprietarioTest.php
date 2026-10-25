@@ -48,7 +48,7 @@ it('un amministratore e un membro sono 403 permesso_negato; chi non è membro e 
         ->and($gia->status())->toBe(422)->and($gia->json('errors.0.pointer'))->toBe('#/utente')->and($gia->json('errors.0.regola'))->toBe('valore_non_ammesso');
 });
 
-it('un workspace in eliminazione è 409 workspace_in_eliminazione, e il corpo senza utente è 422 su #/utente (#2542)', function () {
+it('un workspace in eliminazione non ha più gettoni validi (401 gettone_non_valido, #2600), e il corpo senza utente è 422 su #/utente (#2542)', function () {
     [$finto, $studio, $anna, $bruno, $gettoneAnna] = conIlProprietario();
 
     expect(alFinto('PATCH', '/v1/workspace/proprietario', [], $gettoneAnna)->json('errors.0.pointer'))->toBe('#/utente');
@@ -59,7 +59,7 @@ it('un workspace in eliminazione è 409 workspace_in_eliminazione, e il corpo se
     expect(alFinto('DELETE', '/v1/workspace', gettone: $gettoneAnna)->status())->toBe(202);
     $risposta = alFinto('PATCH', '/v1/workspace/proprietario', ['utente' => $bruno['id']], $gettoneAnna);
 
-    expect($risposta->status())->toBe(409)->and($risposta->json('codice'))->toBe('workspace_in_eliminazione');
+    expect($risposta->status())->toBe(401)->and($risposta->json('codice'))->toBe('gettone_non_valido');
 });
 
 it('chi ha chiesto di eliminare l\'account non riceve la proprietà: 422 non_trovato su #/utente, come un id inventato (#2542)', function () {
