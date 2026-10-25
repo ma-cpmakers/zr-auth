@@ -237,6 +237,18 @@ return [
         'title' => 'Reserva no modificable',
         'detail' => 'Esta reserva ya está cancelada, realizada o marcada como no presentada, y no cambia más: una cancelada no se reabre, se hace una nueva. No se escribió nada.',
     ],
+    'termini_cambiati' => [
+        'title' => 'Términos cambiados',
+        'detail' => 'Los Términos de la página han cambiado desde que los viste: la versión que envías ya no es la vigente y no se ha registrado ningún consentimiento. Vuelve a leer la página con `bookings.pubblico.pagine.mostra`, muestra los Términos nuevos y repite la solicitud. El método no escribió nada.',
+    ],
+    'termini_mancanti' => [
+        'title' => 'Términos por aceptar',
+        'detail' => 'Para cambiar o cancelar esta reserva en línea debes aceptar antes los Términos de la página: la creó el profesional y los Términos aún no están aceptados. Acéptalos con `io.prenotazioni.modifica` enviando `termini`. El método no escribió nada.',
+    ],
+    'termine_superato' => [
+        'title' => 'Plazo para cambiar superado',
+        'detail' => 'El plazo para cambiar o cancelar esta reserva en línea ha pasado. El problema lleva `contatto`, el correo y el teléfono de la página: escribe al profesional. El método no escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',
