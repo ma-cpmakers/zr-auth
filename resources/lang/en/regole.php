@@ -127,4 +127,11 @@ return [
     'tipo_scadenza_non_esiste' => 'There is no deadline type with this id in the workspace: crm.scadenze.tipi.elenca gives their ids.',
     'tipo_scadenza_archiviato' => 'The deadline type is archived: a new deadline is created on an active type.',
     'acquisto_non_esiste' => 'There is no purchase with this id in the workspace: crm.acquisti.elenca gives their ids.',
+    'lista_del_todo' => 'You have no To-do list with this id: board.todo.liste.elenca gives the ids of your lists.',
+    'todo_giorno_fuori_intervallo' => 'The day of a to-do is between 2000-01-01 and 2100-12-31.',
+    'todo_ora_senza_giorno' => 'A time needs a day: send the day as well, or remove the time.',
+    'todo_posizione' => 'The :attribute field is not written: to put a to-do somewhere else use dopo_id (and lista_id if it changes list).',
+    'todo_dopo_id' => 'The :attribute field takes the id of another to-do of yours, in the list where the to-do ends up; null puts it first.',
+    'todo_fatti_con_lista' => 'fatti=true is used only with lista_id.',
+    'todo_ordine_con_lista' => 'With vista the order is the view\'s own: ordine is used only with lista_id.',
 ];

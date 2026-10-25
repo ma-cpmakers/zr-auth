@@ -127,4 +127,11 @@ return [
     'tipo_scadenza_non_esiste' => 'En el workspace no hay un tipo de vencimiento con este id: crm.scadenze.tipi.elenca da sus ids.',
     'tipo_scadenza_archiviato' => 'El tipo de vencimiento está archivado: un vencimiento nuevo se crea sobre un tipo activo.',
     'acquisto_non_esiste' => 'En el workspace no hay una compra con este id: crm.acquisti.elenca da sus ids.',
+    'lista_del_todo' => 'No tienes una lista del To-do con este id: board.todo.liste.elenca da los ids de tus listas.',
+    'todo_giorno_fuori_intervallo' => 'El día de una tarea está entre 2000-01-01 y 2100-12-31.',
+    'todo_ora_senza_giorno' => 'La hora necesita un día: manda también el día, o quita la hora.',
+    'todo_posizione' => 'El campo :attribute no se escribe: para poner una tarea en otro sitio usa dopo_id (y lista_id si cambia de lista).',
+    'todo_dopo_id' => 'El campo :attribute lleva el id de otra tarea tuya, de la lista donde la tarea termina; null la pone la primera.',
+    'todo_fatti_con_lista' => 'fatti=true se usa solo con lista_id.',
+    'todo_ordine_con_lista' => 'Con vista el orden es el de la vista: ordine se usa solo con lista_id.',
 ];

@@ -128,4 +128,11 @@ return [
     'tipo_scadenza_non_esiste' => "Nel workspace non c'è un tipo di scadenza con questo id: gli id dei tipi li dà crm.scadenze.tipi.elenca.",
     'tipo_scadenza_archiviato' => 'Il tipo di scadenza è archiviato: una scadenza nuova si crea su un tipo attivo.',
     'acquisto_non_esiste' => "Nel workspace non c'è un acquisto con questo id: gli id degli acquisti li dà crm.acquisti.elenca.",
+    'lista_del_todo' => 'Non hai una lista del To-do con questo id: gli id delle tue liste li dà board.todo.liste.elenca.',
+    'todo_giorno_fuori_intervallo' => 'Il giorno di un to-do sta fra 2000-01-01 e 2100-12-31.',
+    'todo_ora_senza_giorno' => "L'ora vuole un giorno: dai anche il giorno, o togli l'ora.",
+    'todo_posizione' => 'Il campo :attribute non si scrive: per mettere un to-do in un altro posto usa dopo_id (e lista_id se cambia lista).',
+    'todo_dopo_id' => "Il campo :attribute vuole l'id di un altro to-do tuo, della lista dove il to-do va a finire; null lo mette in testa.",
+    'todo_fatti_con_lista' => 'fatti=true si usa solo con lista_id.',
+    'todo_ordine_con_lista' => "Con vista l'ordine è quello della vista: ordine si usa solo con lista_id.",
 ];
