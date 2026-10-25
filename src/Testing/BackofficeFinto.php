@@ -187,6 +187,8 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/io/password$#', 'io.password.modifica'],
         ['GET', '#^/v1/io/workspace$#', 'io.workspace.elenca'],
         ['POST', '#^/v1/io/workspace$#', 'io.workspace.crea'],
+        ['DELETE', '#^/v1/io/workspace/([^/]+)$#', 'io.workspace.elimina'],
+        ['DELETE', '#^/v1/io/workspace/([^/]+)/eliminazione$#', 'io.workspace.eliminazione.elimina'],
         ['GET', '#^/v1/lingue$#', 'lingue.elenca'],
         ['POST', '#^/v1/password/recupero$#', 'password.recupero.crea'],
         ['POST', '#^/v1/password/reimpostazione$#', 'password.reimpostazione.crea'],
@@ -194,6 +196,7 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/workspace$#', 'workspace.modifica'],
         ['DELETE', '#^/v1/workspace$#', 'workspace.elimina'],
         ['DELETE', '#^/v1/workspace/eliminazione$#', 'workspace.eliminazione.elimina'],
+        ['GET', '#^/v1/workspace/contenuti$#', 'workspace.contenuti.mostra'],
         ['GET', '#^/v1/legale/documenti$#', 'legale.documenti.elenca'],
         ['POST', '#^/v1/legale/accettazioni$#', 'legale.accettazioni.crea'],
         ['GET', '#^/v1/workspace/link$#', 'workspace.link.mostra'],
@@ -437,6 +440,9 @@ final class BackofficeFinto
 
     /** @var array<string, CarbonImmutable> quando si archivia ogni workspace di cui il proprietario ha chiesto l'eliminazione, per id: il finto non archivia alla scadenza */
     private array $eliminazioni = [];
+
+    /** @var array<string, string> la persona che ha chiesto l'eliminazione di ogni workspace in eliminazione (`eliminato_da`, #2601), per id del workspace */
+    private array $eliminatiDa = [];
 
     /** @var array<string, string> i workspace la cui eliminazione l'ha programmata io.elimina (il solo account del workspace), per id: la persona che l'ha chiesta; il rientro li ritrova */
     private array $eliminazioniConAccount = [];
@@ -1299,6 +1305,8 @@ final class BackofficeFinto
                 'io.inviti.verifica.crea' => $this->verificaInvitoIo($richiesta, $corpo),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
                 'io.workspace.crea' => $this->creaWorkspaceDellaPersona($richiesta, $corpo),
+                'io.workspace.elimina' => $this->lasciaIlWorkspace($richiesta, $corpo, $parametri[0]),
+                'io.workspace.eliminazione.elimina' => $this->ripristinaIlWorkspace($richiesta, $corpo, $parametri[0]),
                 'lingue.elenca' => $this->elencaLingue($richiesta),
                 'password.recupero.crea' => $this->creaRecupero($corpo),
                 'password.reimpostazione.crea' => $this->reimposta($corpo),
@@ -1306,6 +1314,7 @@ final class BackofficeFinto
                 'workspace.modifica' => $this->modificaWorkspace($richiesta, $corpo),
                 'workspace.elimina' => $this->programmaEliminazione($richiesta),
                 'workspace.eliminazione.elimina' => $this->annullaEliminazione($richiesta),
+                'workspace.contenuti.mostra' => $this->mostraContenuti($richiesta),
                 'workspace.link.mostra' => $this->mostraLink($richiesta),
                 'workspace.link.crea' => $this->creaLink($richiesta, $corpo),
                 'workspace.link.elimina' => $this->eliminaLink($richiesta),
@@ -3131,7 +3140,7 @@ final class BackofficeFinto
 
         $workspace = $this->testi->valida($corpo, ['workspace_id' => ['required', 'string']])['workspace_id'];
 
-        if (! isset($this->membri[$workspace][$chi['persona']])) {
+        if (! isset($this->membri[$workspace][$chi['persona']]) || isset($this->eliminazioni[$workspace])) {
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.workspace_non_tuo'), 'regola' => 'non_trovato', 'pointer' => '#/workspace_id']]);
         }
 
@@ -3541,6 +3550,7 @@ final class BackofficeFinto
 
         foreach ($soli as $id) {
             $this->eliminazioni[$id] = $quando->addDays(30);
+            $this->eliminatiDa[$id] = $persona;
             $this->eliminazioniConAccount[$id] = $persona;
         }
 
@@ -3570,7 +3580,7 @@ final class BackofficeFinto
 
         foreach ($this->eliminazioniConAccount as $id => $chi) {
             if ($chi === $persona) {
-                unset($this->eliminazioni[$id], $this->eliminazioniConAccount[$id]);
+                unset($this->eliminazioni[$id], $this->eliminatiDa[$id], $this->eliminazioniConAccount[$id]);
             }
         }
 
@@ -4145,8 +4155,9 @@ final class BackofficeFinto
         $voci = [];
 
         foreach ($this->membri as $workspace => $ruoli) {
-            if (isset($ruoli[$persona])) {
-                $voci[] = $this->conRuolo($workspace, $ruoli[$persona]);
+            // Un workspace con l'eliminazione programmata non c'è più per i suoi membri (#2601): si ripristina da aziende.workspace.elenca.
+            if (isset($ruoli[$persona]) && ! isset($this->eliminazioni[$workspace])) {
+                $voci[] = $this->conRuolo($workspace, $ruoli[$persona], $persona);
             }
         }
 
@@ -4263,14 +4274,21 @@ final class BackofficeFinto
     private function elencaWorkspaceDellAzienda(Request $richiesta, string $azienda): array
     {
         $persona = $this->autentica($richiesta)['persona'];
-        $voci = function () use ($persona, $azienda) {
+        // Con `eliminati=true` i soli workspace con l'eliminazione viva e la finestra aperta, a chi ne era proprietario o amministratore (#2601);
+        // senza, quelli vivi. Il cursore è legato al filtro, come in AziendaWorkspaceElencaRequest::lista().
+        $eliminati = (self::query($richiesta)['eliminati'] ?? null) === 'true';
+        $voci = function () use ($persona, $azienda, $eliminati) {
             $ruoli = $this->ruoliNellAzienda($persona, $azienda);
+            $ruoli = array_filter($ruoli, fn (string $ruolo, string $id) => $eliminati
+                ? in_array($ruolo, ['proprietario', 'amministratore'], true) && isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture()
+                : ! isset($this->eliminazioni[$id]), ARRAY_FILTER_USE_BOTH);
 
-            return array_values(array_map(fn (string $id) => $this->conRuolo($id, $ruoli[$id]), array_keys($ruoli)));
+            return array_values(array_map(fn (string $id) => $this->conRuolo($id, $ruoli[$id], $persona), array_keys($ruoli)));
         };
 
-        return $this->pagina($richiesta, 'aziende.workspace.elenca', 'id', $voci, self::perNomeEId(...),
-            fn (string $id) => isset($this->workspace[$id]) ? self::perNomeEId($this->workspace[$id]) : null);
+        return $this->pagina($richiesta, 'aziende.workspace.elenca'.($eliminati ? ':eliminati' : ''), 'id', $voci, self::perNomeEId(...),
+            fn (string $id) => isset($this->workspace[$id]) ? self::perNomeEId($this->workspace[$id]) : null,
+            regole: ['eliminati' => ['sometimes', 'string', 'in:true,false']]);
     }
 
     /**
@@ -4441,7 +4459,7 @@ final class BackofficeFinto
                 $this->postaInviti[$email] = $this->inviti[$invito]['codice'];
             }
 
-            return [201, ['data' => $this->conRuolo($id, 'proprietario')], []];
+            return [201, ['data' => $this->conRuolo($id, 'proprietario', $chi['persona'])], []];
         });
     }
 
@@ -4886,13 +4904,44 @@ final class BackofficeFinto
             $this->colori[$workspace] = (string) $campi['colore'];
         }
 
-        return [200, ['data' => $this->conRuolo($workspace, $this->membri[$workspace][$chi['persona']])]];
+        return [200, ['data' => $this->conRuolo($workspace, $this->membri[$workspace][$chi['persona']], $chi['persona'])]];
     }
 
-    /** Un workspace con il ruolo di chi chiama e la data in cui si archivia, se il proprietario ne ha chiesto l'eliminazione (Forme::workspaceConRuolo). */
-    private function conRuolo(string $workspace, string $ruolo): array
+    /**
+     * Un workspace come lo vede la persona (Forme::workspaceConRuolo e ElencoDeiWorkspace): il ruolo che ha lì, la data in cui si archivia e chi
+     * l'ha chiesto se è in eliminazione, quanti membri ha, da quando la persona c'è e perché non può uscirne (`uscita_negata`, null se può).
+     */
+    private function conRuolo(string $workspace, string $ruolo, string $persona): array
     {
-        return [...$this->workspace[$workspace], 'colore' => $this->colori[$workspace] ?? 'neutral', 'ruolo' => $ruolo, 'eliminazione_il' => isset($this->eliminazioni[$workspace]) ? self::iso($this->eliminazioni[$workspace]) : null];
+        $inEliminazione = isset($this->eliminazioni[$workspace]);
+
+        return [
+            ...$this->workspace[$workspace],
+            'colore' => $this->colori[$workspace] ?? 'neutral',
+            'ruolo' => $ruolo,
+            'eliminazione_il' => $inEliminazione ? self::iso($this->eliminazioni[$workspace]) : null,
+            'eliminato_da' => $inEliminazione ? ($this->eliminatiDa[$workspace] ?? null) : null,
+            'membri' => count($this->membri[$workspace]),
+            'entrato_il' => self::iso($this->entrati[$workspace][$persona]),
+            'uscita_negata' => $inEliminazione ? null : $this->ostacoloAllUscita($persona, $workspace, $ruolo),
+        ];
+    }
+
+    /**
+     * Il primo ostacolo all'uscita della persona da un workspace (UscitaDalWorkspace::ostacolo), nell'ordine del backoffice: il proprietario non
+     * esce, l'ultimo workspace vivo (senza eliminazione programmata) non si lascia, l'unico amministratore non esce (il proprietario non conta).
+     */
+    private function ostacoloAllUscita(string $persona, string $workspace, string $ruolo): ?string
+    {
+        $vivi = array_filter(array_keys($this->membri), fn (string $id) => isset($this->membri[$id][$persona]) && ! isset($this->eliminazioni[$id]));
+        $altriAmministratori = array_filter($this->membri[$workspace], fn (string $ruoloDiUnAltro, string $id) => $ruoloDiUnAltro === 'amministratore' && $id !== $persona, ARRAY_FILTER_USE_BOTH);
+
+        return match (true) {
+            $ruolo === 'proprietario' => 'proprieta_da_trasferire',
+            array_diff($vivi, [$workspace]) === [] => 'ultimo_workspace',
+            $ruolo === 'amministratore' && $altriAmministratori === [] => 'unico_amministratore',
+            default => null,
+        };
     }
 
     /**
@@ -4916,6 +4965,7 @@ final class BackofficeFinto
             }
 
             $this->eliminazioni[$workspace] = now()->toImmutable()->startOfMillisecond()->addDays(30);
+            $this->eliminatiDa[$workspace] = $chi['persona'];
         }
 
         return [202, ['data' => ['id' => $workspace, 'eliminazione_il' => self::iso($this->eliminazioni[$workspace])]], []];
@@ -4935,7 +4985,7 @@ final class BackofficeFinto
             throw new Problema('non_trovato');
         }
 
-        unset($this->eliminazioni[$workspace]);
+        unset($this->eliminazioni[$workspace], $this->eliminatiDa[$workspace]);
 
         // Una 204 non ha corpo (gate 2 del backoffice: il FintoTest di #2044 la prova per la prima volta).
         return [204, null];
@@ -5015,6 +5065,82 @@ final class BackofficeFinto
         $this->membri[$workspace][$scelto] = 'proprietario';
 
         return [200, ['data' => $this->voceMembro($workspace, $scelto)]];
+    }
+
+    /**
+     * io.workspace.elimina (IoWorkspaceController::elimina, #2596): la persona lascia un workspace di cui è membro, con qualunque suo gettone.
+     * Nell'ordine del backoffice: il corpo (422, nessun campo), poi un workspace di cui non è membro, che non c'è o che è in eliminazione, tutti lo
+     * stesso 404; poi l'ostacolo (409 col suo codice: proprieta_da_trasferire, ultimo_workspace, unico_amministratore). Il finto non scrive la
+     * notifica `board.schede.senza_assegnatario` che il backoffice manda ai responsabili.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, null}
+     */
+    private function lasciaIlWorkspace(Request $richiesta, array $corpo, string $workspace): array
+    {
+        $persona = $this->autentica($richiesta)['persona'];
+        $this->testi->validaStretta($corpo, []);
+
+        if (! isset($this->membri[$workspace][$persona]) || isset($this->eliminazioni[$workspace])) {
+            throw new Problema('non_trovato');
+        }
+
+        $ostacolo = $this->ostacoloAllUscita($persona, $workspace, $this->membri[$workspace][$persona]);
+
+        if ($ostacolo !== null) {
+            throw new Problema($ostacolo);
+        }
+
+        $this->togliIlMembro($workspace, $persona);
+
+        return [204, null];
+    }
+
+    /**
+     * io.workspace.eliminazione.elimina (WorkspaceEliminazioneController::ripristina, #2602): chi era proprietario o amministratore di un workspace
+     * in eliminazione lo ripristina col gettone della persona. Il corpo (422, nessun campo) viene prima; un workspace non suo, non in eliminazione,
+     * con la finestra scaduta o in cui è solo membro è lo stesso 404.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, null}
+     */
+    private function ripristinaIlWorkspace(Request $richiesta, array $corpo, string $workspace): array
+    {
+        $persona = $this->autentica($richiesta)['persona'];
+        $this->testi->validaStretta($corpo, []);
+
+        if (! in_array($this->membri[$workspace][$persona] ?? null, ['proprietario', 'amministratore'], true)
+            || ! isset($this->eliminazioni[$workspace]) || ! $this->eliminazioni[$workspace]->isFuture()) {
+            throw new Problema('non_trovato');
+        }
+
+        unset($this->eliminazioni[$workspace], $this->eliminatiDa[$workspace], $this->eliminazioniConAccount[$workspace]);
+
+        return [204, null];
+    }
+
+    /**
+     * workspace.contenuti.mostra (WorkspaceContenutiController::mostra, #2598): quanto contiene il workspace del gettone, a proprietario e
+     * amministratori. Con l'app `pm` attiva `cartelle` (attive), `board` (attive e chiuse) e `schede` (non archiviate, di una board viva); con
+     * l'app spenta il `data` è vuoto. Sola lettura.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraContenuti(Request $richiesta): array
+    {
+        $workspace = $this->conWorkspace($richiesta, ['proprietario', 'amministratore'])['workspace'];
+        $contenuti = [];
+
+        if ($this->appAttiva($workspace, 'pm')) {
+            $vive = array_keys(array_filter($this->boards, fn (array $board) => $board['workspace'] === $workspace && in_array($board['stato'], ['attiva', 'chiusa'], true)));
+            $contenuti = [
+                'cartelle' => count(array_filter($this->cartelle, fn (array $cartella) => $cartella['workspace'] === $workspace && $cartella['stato'] === 'attiva')),
+                'board' => count($vive),
+                'schede' => count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $workspace && $scheda['archiviata_il'] === null && in_array($scheda['board'], $vive, true))),
+            ];
+        }
+
+        return [200, ['data' => (object) $contenuti], ['Cache-Control' => 'no-store, private']];
     }
 
     /**
@@ -5555,7 +5681,7 @@ final class BackofficeFinto
     /**
      * La persona del gettone della richiesta (la guardia del backoffice): senza un gettone 401 gettone_assente; con un
      * gettone che non è di Zeiras, sconosciuto, scaduto, di un accesso chiuso, o di un workspace di cui la persona non è
-     * più membro, 401 gettone_non_valido. Da qui si risponde nella lingua della persona, anche negli errori.
+     * più membro, o di un workspace con l'eliminazione programmata (#2600), 401 gettone_non_valido. Da qui si risponde nella lingua della persona, anche negli errori.
      *
      * @return array{persona: string, accesso: string, workspace: ?string}
      */
@@ -5571,7 +5697,7 @@ final class BackofficeFinto
         $accesso = $riga === null ? null : $this->accessi[$riga['accesso']];
 
         if ($riga === null || $accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now()->startOfMillisecond())
-            || ($riga['workspace'] !== null && ! isset($this->membri[$riga['workspace']][$accesso['utente']]))) {
+            || ($riga['workspace'] !== null && (! isset($this->membri[$riga['workspace']][$accesso['utente']]) || isset($this->eliminazioni[$riga['workspace']])))) {
             throw new Problema('gettone_non_valido', header: ['WWW-Authenticate' => 'Bearer realm="zeiras", error="invalid_token"']);
         }
 
