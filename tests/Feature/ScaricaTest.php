@@ -42,7 +42,7 @@ it('scarica un file dello stesso host, col gettone del workspace e Accept dei ti
     Http::assertSent(fn (Request $r) => $r->url() === API.SCARICA_CSV.'?stato=lead'
         && $r->method() === 'GET'
         && $r->header('Authorization') === ['Bearer '.GETTONE_WORKSPACE]
-        && $r->header('Accept') === ['text/csv, application/zip']);
+        && $r->header('Accept') === ['text/csv, application/zip, application/pdf']);
 });
 
 it('accetta solo un percorso dentro /v1 senza query: un indirizzo intero, un percorso fuori da /v1, una query nel percorso non partono (S.1)', function (string $percorso) {
@@ -453,7 +453,7 @@ it('scaricaConPost: una POST senza query, col gettone e Accept dei tipi ammessi,
     Http::assertSent(fn (Request $r) => $r->url() === API.SCARICA_ZIP_POST
         && $r->method() === 'POST'
         && $r->header('Authorization') === ['Bearer '.GETTONE_WORKSPACE]
-        && $r->header('Accept') === ['text/csv, application/zip']);
+        && $r->header('Accept') === ['text/csv, application/zip, application/pdf']);
 });
 
 it('scaricaConPost: un percorso fuori da /v1, con una query o con un segmento .. non parte', function (string $percorso) {
@@ -513,3 +513,41 @@ it('scaricaConPost: senza un nome dal backoffice resta quello passato, ripulito;
     expect(Api::workspace()->scaricaConPost(SCARICA_ZIP_POST, 'zeiras-workspace-dati.zip')->nome)->toBe('dal-backoffice.zip');
 });
 
+// #2390 (zr-crm #2385): il PDF di un preventivo passa come il CSV e lo ZIP; il nome prende .pdf dal tipo.
+
+it('scarica un PDF: il tipo, il nome con .pdf e le intestazioni per il browser senza charset (#2390)', function () {
+    Http::fake(['*' => Http::response("%PDF-1.4\n%%EOF", 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename=P-2026-014-2.pdf'])]);
+    apriSessione();
+
+    $file = Api::workspace()->scarica('/v1/crm/preventivi/01k7a1b3d5f7h9k1n3q5s7u9w1/pdf');
+    $risposta = $file->comeRisposta();
+
+    expect($file->tipo)->toBe('application/pdf')
+        ->and($file->nome)->toBe('P-2026-014-2.pdf')
+        ->and($risposta->headers->get('Content-Type'))->toBe('application/pdf')
+        ->and($risposta->headers->get('Content-Disposition'))->toBe('attachment; filename="P-2026-014-2.pdf"')
+        ->and($risposta->headers->get('X-Content-Type-Options'))->toBe('nosniff');
+});
+
+it('il nome di un PDF prende .pdf, e senza un nome che valga è zeiras-preventivo.pdf; gli altri tipi restano come prima (#2390)', function () {
+    expect(Scaricamento::nomeDi('attachment; filename="../x"', 'application/pdf'))->toBe('x.pdf')
+        ->and(Scaricamento::nomeDi('attachment; filename=a.csv', 'application/pdf'))->toBe('a.csv.pdf')
+        ->and(Scaricamento::nomeDi('attachment', 'application/pdf'))->toBe('zeiras-preventivo.pdf')
+        ->and(Scaricamento::nomeDi('attachment', 'application/zip'))->toBe('zeiras-i-miei-dati.zip');
+});
+
+it('col finto il PDF di un preventivo si scarica: application/pdf, il nome è il numero, il corpo inizia con %PDF (#2390)', function () {
+    [, $gettoni] = studioColCrm();
+    $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Anna'], $gettoni['carla'])->json('data.id');
+    $preventivo = alFinto('POST', '/v1/crm/preventivi', [
+        'persona_id' => $persona,
+        'righe' => [['descrizione' => 'Consulenza', 'quantita' => 1, 'prezzo_unitario' => ['importo' => 10000, 'valuta' => 'EUR']]],
+    ], $gettoni['carla']);
+
+    expect($preventivo->status())->toBe(201, $preventivo->body());
+
+    $file = Scaricamento::da(alFinto('GET', '/v1/crm/preventivi/'.$preventivo->json('data.id').'/pdf', null, $gettoni['carla']));
+
+    expect($file->tipo)->toBe('application/pdf')
+        ->and($file->nome)->toBe(str_replace('/', '-', (string) $preventivo->json('data.numero')).'.pdf');
+});

@@ -12,7 +12,7 @@ use Zeiras\Auth\Errori\BackofficeNonRisponde;
 /**
  * Un file che il backoffice manda a flusso (`Api::scarica`, #1906): l'esportazione CSV del CRM. Il corpo non è mai tutto in memoria:
  * `blocchi()` lo legge a pezzi, entro `zr-auth.scarico` secondi, e `comeRisposta()` lo passa al browser a pezzi, con le intestazioni
- * che un file da salvare vuole. Il tipo è uno di `TIPI` (un elenco chiuso: `text/csv` e `application/zip`) e il nome del file è ripulito: mai un
+ * che un file da salvare vuole. Il tipo è uno di `TIPI` (un elenco chiuso: `text/csv`, `application/zip` e `application/pdf`) e il nome del file è ripulito: mai un
  * percorso, un carattere di controllo, un a capo.
  *
  *     return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'lead'])->comeRisposta();
@@ -20,16 +20,16 @@ use Zeiras\Auth\Errori\BackofficeNonRisponde;
 final class Scaricamento
 {
     /** I tipi che si scaricano. Crescere questo elenco è una decisione: ogni tipo è un file che il browser potrebbe eseguire. */
-    public const TIPI = ['text/csv', 'application/zip'];
+    public const TIPI = ['text/csv', 'application/zip', 'application/pdf'];
 
     /** Il nome che resta se il backoffice non ne dà uno che vale (per un CSV; vedi `NOMI_PREDEFINITI` per gli altri tipi). */
     public const NOME_PREDEFINITO = 'scaricamento.csv';
 
     /** Il nome che resta, per tipo, se il backoffice non ne dà uno che vale. */
-    public const NOMI_PREDEFINITI = ['text/csv' => 'scaricamento.csv', 'application/zip' => 'zeiras-i-miei-dati.zip'];
+    public const NOMI_PREDEFINITI = ['text/csv' => 'scaricamento.csv', 'application/zip' => 'zeiras-i-miei-dati.zip', 'application/pdf' => 'zeiras-preventivo.pdf'];
 
     /** L'estensione che un nome di file ha sempre, per tipo. */
-    private const ESTENSIONI = ['text/csv' => 'csv', 'application/zip' => 'zip'];
+    private const ESTENSIONI = ['text/csv' => 'csv', 'application/zip' => 'zip', 'application/pdf' => 'pdf'];
 
     /** Le lettere di un nome di file: il resto diventa un trattino. */
     private const NOME_MASSIMO = 100;
@@ -58,7 +58,7 @@ final class Scaricamento
 
     /**
      * Il nome del file da `Content-Disposition`, ripulito: senza cartelle, solo lettere, cifre, punto, trattino e trattino basso, mai
-     * più di 100 caratteri, sempre con l'estensione del tipo (`.csv`, `.zip`). Senza un nome che valga, `$predefinito` (ripulito allo
+     * più di 100 caratteri, sempre con l'estensione del tipo (`.csv`, `.zip`, `.pdf`). Senza un nome che valga, `$predefinito` (ripulito allo
      * stesso modo) o quello predefinito del tipo.
      */
     public static function nomeDi(string $intestazione, string $tipo = 'text/csv', ?string $predefinito = null): string
