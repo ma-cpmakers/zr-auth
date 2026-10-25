@@ -255,11 +255,11 @@ return [
     ],
     'ultimo_workspace' => [
         'title' => 'Last workspace',
-        'detail' => 'This is the last live workspace of the person calling, and it cannot be deleted: a person always has at least one workspace. Create another with io.workspace.crea, or cancel the deletion of the other one with workspace.eliminazione.elimina. The method wrote nothing.',
+        'detail' => 'This is the last live workspace of the person calling: it can be neither left nor deleted, because a person always has at least one workspace. Create another with io.workspace.crea, or restore the other one being deleted with io.workspace.eliminazione.elimina. The method wrote nothing.',
     ],
     'workspace_in_eliminazione' => [
         'title' => 'Workspace being deleted',
-        'detail' => 'This workspace has a scheduled deletion and no longer takes invitations: not new ones, not resent ones, not through the link, and not those already sent. Ask the workspace owner (proprietario) to cancel it with workspace.eliminazione.elimina, then try again: invitations already sent become valid again until they expire. The method wrote nothing.',
+        'detail' => 'This workspace is being deleted: it is gone for everyone, and whoever uses an invitation code or a link that concerns it gets this 409. Whoever was its owner (proprietario) or an administrator (amministratore) restores it with io.workspace.eliminazione.elimina (with the person\'s token) before the eliminazione_il date, then try again: invitations already sent become valid again until they expire. The method wrote nothing.',
     ],
     'ultima_fase' => [
         'title' => 'Last stage',

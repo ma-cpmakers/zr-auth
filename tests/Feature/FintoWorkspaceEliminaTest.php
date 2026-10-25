@@ -241,3 +241,34 @@ it('io.workspace.crea accetta il colore (#2012, C.1): uno della palette, senza o
 
     expect(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->toHaveCount(3);
 });
+
+it("eliminati con un valore che non va, anche vuoto, è 422 sul parametro con la stessa regola valore_non_ammesso (#2684)", function (string $valore) {
+    [$studio, , , , , , $accesso] = conDueWorkspace();
+
+    $risposta = alFinto('GET', "/v1/aziende/{$studio['azienda_id']}/workspace?eliminati={$valore}", gettone: $accesso);
+
+    // deve fallire se: l'errore non indica il parametro, o il valore vuoto dà un'altra regola
+    expect($risposta->status())->toBe(422)
+        ->and($risposta->json('codice'))->toBe('dati_non_validi')
+        ->and($risposta->json('errors.0.parameter'))->toBe('eliminati')
+        ->and($risposta->json('errors.0.regola'))->toBe('valore_non_ammesso');
+})->with(['1', 'yes', 'maybe', '']);
+
+it("l'ultimo workspace non si lascia né si elimina: il detail è lo stesso per chi elimina e per chi esce, e rimanda al ripristino di oggi (#2684)", function () {
+    $finto = Zeiras\Auth\Testing\BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $solo = $finto->workspace('Solo', $anna);
+    $bruno = $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
+    $finto->membro($solo, $bruno, 'membro');
+    $gettoneAnna = alFinto('POST', '/v1/gettoni', ['workspace_id' => $solo['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
+    $accessoBruno = entraNelFinto('bruno@example.com')['gettone']['gettone'];
+
+    $eliminazione = alFinto('DELETE', '/v1/workspace', gettone: $gettoneAnna);
+    $uscita = alFinto('DELETE', "/v1/io/workspace/{$solo['id']}", gettone: $accessoBruno);
+
+    // deve fallire se: la risposta di chi esce dice solo «non si elimina»
+    expect($eliminazione->status())->toBe(409)
+        ->and($uscita->status())->toBe(409)
+        ->and($uscita->json('detail'))->toBe($eliminazione->json('detail'))
+        ->and($uscita->json('detail'))->toContain('lasci')->toContain('elimini')->toContain('io.workspace.eliminazione.elimina');
+});
