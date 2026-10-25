@@ -10,6 +10,7 @@ use Illuminate\Foundation\Http\Kernel;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Route as Rotta;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,7 @@ use Throwable;
 use Zeiras\Auth\Http\Controllers\EventiController;
 use Zeiras\Auth\Http\Controllers\RicevitoreController;
 use Zeiras\Auth\Http\Middleware\ConGettone;
+use Zeiras\Auth\Http\Middleware\PrecedenteSenzaQuery;
 use Zeiras\Auth\Http\Middleware\RicordaLIdDellaSessione;
 use Zeiras\Auth\Http\Middleware\SessioneChiusa;
 use Zeiras\Auth\Http\Middleware\SoloDallaPersona;
@@ -75,6 +77,13 @@ final class ZrAuthServiceProvider extends ServiceProvider
                 $kernel->prependMiddlewareToGroup('web', SessioneChiusa::class);
                 // Dopo StartSession (e prima delle rotte): ricorda l'id con cui la sessione è partita.
                 $kernel->appendMiddlewareToGroup('web', RicordaLIdDellaSessione::class);
+                // Subito dopo StartSession e prima di ConGettone, che con un rifiuto non chiama il resto: il suo codice dopo `$next` gira
+                // prima che StartSession scriva `_previous.url`, anche per chi viene mandato all'ingresso.
+                $web = array_values(array_filter($kernel->getMiddlewareGroups()['web'], fn ($m): bool => $m !== PrecedenteSenzaQuery::class));
+                $posizione = array_search(StartSession::class, $web, true);
+                $posizione = $posizione !== false ? $posizione + 1 : (array_search(ConGettone::class, $web, true) ?: count($web));
+                array_splice($web, $posizione, 0, [PrecedenteSenzaQuery::class]);
+                $kernel->setMiddlewareGroups([...$kernel->getMiddlewareGroups(), 'web' => $web]);
             }
             $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, ConGettone::class);
             $kernel->addToMiddlewarePriorityAfter(ConGettone::class, SoloDallaPersona::class);
