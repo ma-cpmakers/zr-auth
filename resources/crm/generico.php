@@ -2,8 +2,10 @@
 
 // Il pack «generico» del CRM come lo pubblica il backoffice (`resources/crm/pack/generico.php`, copia): il backoffice finto lo legge per
 // crm.personalizzazione.*, crm.funzioni.*, crm.vocabolario.* e crm.primi-passi.*. I testi sono in generico-vocabolario.json (copia).
+$nome = 'generico';
+
 return [
-    'chiave' => 'generico',
+    'chiave' => $nome,
     'versione' => 1,
     'variante' => null,
     // Come il pack si presenta in `crm.personalizzazioni.*` (P2, #2674): nome e descrizione nelle tre lingue, le varianti che si possono

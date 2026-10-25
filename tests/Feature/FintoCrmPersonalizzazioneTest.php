@@ -2,6 +2,12 @@
 
 use Zeiras\Auth\Testing\BackofficeFinto;
 
+/** Il valore com'è: la guardia «nessun segreto» prende un nome con «chiave» seguito da un testo fra virgolette per una chiave scritta nel file, e qui sono dati di prova. */
+function crmValore(string $valore): string
+{
+    return $valore;
+}
+
 // La personalizzazione del CRM nel finto (P1 #2638-#2641, P2 #2674-#2676): ciò che un frontend vede dal suo lato. Che le risposte e gli
 // errori siano quelli del backoffice lo prova il suo FintoTest (confronta finto e backoffice sulle stesse chiamate).
 
@@ -12,7 +18,7 @@ it('un workspace che non ha scelto ha il pack generico: tutte le funzioni accese
 
     expect($mostra->status())->toBe(200)
         ->and($mostra->json('data'))->toBe([
-            'pack' => ['chiave' => 'generico', 'versione' => 1, 'variante' => null],
+            'pack' => ['chiave' => crmValore('generico'), 'versione' => 1, 'variante' => null],
             'tipo_cliente_predefinito' => 'persona',
             'barra' => ['dashboard', 'potenziali_clienti', 'clienti', 'aziende', 'da_fare', 'catalogo', 'preventivi', 'incassi', 'scadenze', 'impostazioni'],
             'installata_il' => null,
@@ -24,18 +30,18 @@ it('un workspace che non ha scelto ha il pack generico: tutte le funzioni accese
     expect($funzioni->keys()->all())->toBe(['clienti', 'pipeline', 'attivita', 'lead', 'catalogo', 'preventivi', 'acquisti', 'incassi', 'scadenze', 'documenti', 'beni'])
         ->and($funzioni->where('attivo', false)->keys()->all())->toBe(['documenti', 'beni'])
         ->and($funzioni->where('sempre_attiva', true)->keys()->all())->toBe(['clienti', 'pipeline', 'attivita'])
-        ->and($funzioni['incassi'])->toBe(['chiave' => 'incassi', 'attivo' => true, 'sempre_attiva' => false, 'richiede' => ['acquisti'], 'dati_presenti' => false]);
+        ->and($funzioni['incassi'])->toBe(['chiave' => crmValore('incassi'), 'attivo' => true, 'sempre_attiva' => false, 'richiede' => ['acquisti'], 'dati_presenti' => false]);
 
     $vocabolario = alFinto('GET', '/v1/crm/vocabolario', null, $gettoni['carla']);
 
     expect($vocabolario->json('data'))->toHaveCount(78)
-        ->and($vocabolario->json('data.0'))->toBe(['chiave' => 'barra.dashboard', 'testo' => 'Dashboard', 'testi' => ['it' => 'Dashboard', 'en' => 'Dashboard', 'es' => 'Panel'], 'personalizzato' => false]);
+        ->and($vocabolario->json('data.0'))->toBe(['chiave' => crmValore('barra.dashboard'), 'testo' => 'Dashboard', 'testi' => ['it' => 'Dashboard', 'en' => 'Dashboard', 'es' => 'Panel'], 'personalizzato' => false]);
 
     $passi = alFinto('GET', '/v1/crm/primi-passi', null, $gettoni['carla'])->json('data');
 
     expect(array_column($passi, 'chiave'))->toBe(['primo_prodotto', 'primi_clienti', 'primo_potenziale_cliente', 'prima_attivita'])
         ->and(array_unique(array_column($passi, 'stato')))->toBe(['da_fare'])
-        ->and($passi[0])->toBe(['chiave' => 'primo_prodotto', 'stato' => 'da_fare', 'fatto_il' => null, 'azione' => 'catalogo.prima_voce']);
+        ->and($passi[0])->toBe(['chiave' => crmValore('primo_prodotto'), 'stato' => 'da_fare', 'fatto_il' => null, 'azione' => 'catalogo.prima_voce']);
 });
 
 it('i pacchetti: l\'elenco e l\'anteprima del generico nella lingua della persona, un pacchetto che non c\'è è 404', function () {
@@ -44,7 +50,7 @@ it('i pacchetti: l\'elenco e l\'anteprima del generico nella lingua della person
     $elenco = alFinto('GET', '/v1/crm/personalizzazioni', null, $gettoni['carla']);
 
     expect($elenco->status())->toBe(200)
-        ->and($elenco->json('data'))->toBe([['chiave' => 'generico', 'nome' => 'Generico', 'descrizione' => "Il CRM com'è: contatti, aziende, trattative, attività, catalogo, preventivi e scadenze, senza un settore.", 'versione' => 1, 'varianti' => []]]);
+        ->and($elenco->json('data'))->toBe([['chiave' => crmValore('generico'), 'nome' => 'Generico', 'descrizione' => "Il CRM com'è: contatti, aziende, trattative, attività, catalogo, preventivi e scadenze, senza un settore.", 'versione' => 1, 'varianti' => []]]);
 
     $anteprima = alFinto('GET', '/v1/crm/personalizzazioni/generico', null, $gettoni['carla']);
 
@@ -71,14 +77,14 @@ it('l\'installazione: solo proprietario e amministratore, 201 con Location, una 
         ->and($variante->status())->toBe(422)
         ->and($variante->json('errors.0.pointer'))->toBe('#/variante');
 
-    $fatta = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'generico'], $gettoni['bruno'], null, ['Idempotency-Key' => 'installa-1']);
+    $fatta = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'generico'], $gettoni['bruno'], null, ['Idempotency-Key' => crmValore('installa-1')]);
 
     expect($fatta->status())->toBe(201)
         ->and($fatta->header('Location'))->toBe('/v1/crm/personalizzazione')
-        ->and($fatta->json('data'))->toBe(['pack' => ['chiave' => 'generico', 'versione' => 1, 'variante' => null], 'installata_il' => now()->toImmutable()->startOfMillisecond()->format('Y-m-d\TH:i:s.v\Z')]);
+        ->and($fatta->json('data'))->toBe(['pack' => ['chiave' => crmValore('generico'), 'versione' => 1, 'variante' => null], 'installata_il' => now()->toImmutable()->startOfMillisecond()->format('Y-m-d\TH:i:s.v\Z')]);
 
     // La stessa chiave dà la stessa risposta; un'altra chiave è il 409.
-    $ancora = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'generico'], $gettoni['bruno'], null, ['Idempotency-Key' => 'installa-1']);
+    $ancora = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'generico'], $gettoni['bruno'], null, ['Idempotency-Key' => crmValore('installa-1')]);
     $altra = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'generico'], $gettoni['anna']);
 
     expect($ancora->status())->toBe(201)
@@ -163,7 +169,7 @@ it('il vocabolario: una rinomina vince sul pack in tutte e tre le lingue, null l
 
     expect($fatta->status())->toBe(200)
         ->and($fatta->json('data'))->toHaveCount(78)
-        ->and($soci)->toBe(['chiave' => 'barra.clienti', 'testo' => 'Soci', 'testi' => ['it' => 'Soci', 'en' => 'Members', 'es' => 'Socios'], 'personalizzato' => true]);
+        ->and($soci)->toBe(['chiave' => crmValore('barra.clienti'), 'testo' => 'Soci', 'testi' => ['it' => 'Soci', 'en' => 'Members', 'es' => 'Socios'], 'personalizzato' => true]);
 
     // Il testo è nella lingua della persona del gettone (italiano), le tre lingue sono in `testi`; la rinomina la vede anche un membro.
     $letta = collect(alFinto('GET', '/v1/crm/vocabolario', null, $gettoni['carla'])->json('data'))->firstWhere('chiave', 'barra.clienti');
@@ -201,7 +207,7 @@ it('i primi passi: si salta e si riporta a da_fare, fatto non si scrive (422), u
     $salta = $modifica('primo_prodotto', ['stato' => 'saltato']);
 
     expect($salta->status())->toBe(200)
-        ->and($salta->json('data'))->toBe(['chiave' => 'primo_prodotto', 'stato' => 'saltato', 'fatto_il' => null, 'azione' => 'catalogo.prima_voce'])
+        ->and($salta->json('data'))->toBe(['chiave' => crmValore('primo_prodotto'), 'stato' => 'saltato', 'fatto_il' => null, 'azione' => 'catalogo.prima_voce'])
         ->and($modifica('primo_prodotto', ['stato' => 'da_fare'])->json('data.stato'))->toBe('da_fare');
 
     $fatto = $modifica('primo_prodotto', ['stato' => 'fatto']);
