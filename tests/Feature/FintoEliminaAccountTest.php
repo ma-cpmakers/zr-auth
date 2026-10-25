@@ -90,9 +90,10 @@ it('l\'accesso di chi non aveva chiesto niente non porta eliminazione_annullata 
 
 it('oltre cinque richieste in un\'ora è 429 troppe_richieste con Retry-After (#1961)', function () {
     [$finto, $zelda, $gettone] = chiedeDiEliminare();
-    $finto->workspace('Studio', $zelda);
+    $studio = $finto->workspace('Studio', $zelda);
+    $finto->membro($studio, $finto->persona('ugo@example.com', PASSWORD, nome: 'Ugo'), 'membro');
 
-    // Con una proprietà da trasferire ogni chiamata passa dal freno e finisce in 409: la sesta è 429.
+    // Con una proprietà da trasferire (un altro membro: da sola, Zelda se ne va con il workspace) ogni chiamata passa dal freno e finisce in 409: la sesta è 429.
     foreach (range(1, 5) as $_) {
         expect(alFinto('DELETE', '/v1/io', gettone: $gettone)->status())->toBe(409);
     }

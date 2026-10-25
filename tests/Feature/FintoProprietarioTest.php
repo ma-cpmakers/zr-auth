@@ -49,9 +49,12 @@ it('un amministratore e un membro sono 403 permesso_negato; chi non è membro e 
 });
 
 it('un workspace in eliminazione è 409 workspace_in_eliminazione, e il corpo senza utente è 422 su #/utente (#2542)', function () {
-    [$finto, $studio, , $bruno, $gettoneAnna] = conIlProprietario();
+    [$finto, $studio, $anna, $bruno, $gettoneAnna] = conIlProprietario();
 
     expect(alFinto('PATCH', '/v1/workspace/proprietario', [], $gettoneAnna)->json('errors.0.pointer'))->toBe('#/utente');
+
+    // Anna ha un altro workspace: eliminare l'ultimo sarebbe 409 ultimo_workspace.
+    $finto->workspace('Altro studio', $anna);
 
     expect(alFinto('DELETE', '/v1/workspace', gettone: $gettoneAnna)->status())->toBe(202);
     $risposta = alFinto('PATCH', '/v1/workspace/proprietario', ['utente' => $bruno['id']], $gettoneAnna);
