@@ -233,6 +233,18 @@ return [
         'title' => 'Booking cannot be changed',
         'detail' => 'This booking is already cancelled, completed or marked as a no-show, and it no longer changes: a cancelled booking is not reopened, a new one is made. Nothing was written.',
     ],
+    'termini_cambiati' => [
+        'title' => 'Terms changed',
+        'detail' => "The page's Terms have changed since you saw them: the version you sent is no longer the one in force, and no consent has been recorded. Reread the page with `bookings.pubblico.pagine.mostra`, show the new Terms and repeat the request. The method wrote nothing.",
+    ],
+    'termini_mancanti' => [
+        'title' => 'Terms to accept',
+        'detail' => "To change or cancel this booking online you must first accept the page's Terms: the professional created it and the Terms are not accepted yet. Accept them with `io.prenotazioni.modifica` sending `termini`. The method wrote nothing.",
+    ],
+    'termine_superato' => [
+        'title' => 'Change deadline passed',
+        'detail' => "The deadline to change or cancel this booking online has passed. The problem carries `contatto`, the page's email and phone: write to the professional. The method wrote nothing.",
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',

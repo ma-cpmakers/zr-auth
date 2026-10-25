@@ -181,5 +181,6 @@ return [
     'prenotazione_stato_prima_della_fine' => 'A booking is marked as completed or no-show only after it ends.',
     'prenotazione_inizio_e_stato' => 'Move the booking or change its status, not both at once.',
     'prenotazione_motivo_solo_annullata' => 'The reason is written only when cancelling the booking.',
+    'ospite_prenotazione_un_gruppo' => 'Change one thing per call: the time (`inizio`), the cancellation (`stato`) or the Terms (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => 'The message is written only with a time change or a cancellation.',
 ];

@@ -233,6 +233,18 @@ return [
         'title' => 'Prenotazione non modificabile',
         'detail' => 'Questa prenotazione è già annullata, svolta o segnata come non presentata, e non cambia più: una annullata non si riapre, si prenota di nuovo. Il metodo non ha scritto niente.',
     ],
+    'termini_cambiati' => [
+        'title' => 'Termini cambiati',
+        'detail' => 'I Termini della pagina sono cambiati da quando li hai visti: la versione che mandi non è più quella in vigore, e nessun consenso è stato registrato. Rileggi la pagina con `bookings.pubblico.pagine.mostra`, mostra i Termini nuovi e ripeti la richiesta. Il metodo non ha scritto niente.',
+    ],
+    'termini_mancanti' => [
+        'title' => 'Termini da accettare',
+        'detail' => "Per cambiare o annullare questa prenotazione online devi prima accettare i Termini della pagina: l'ha creata il professionista e i Termini non risultano accettati. Accettali con `io.prenotazioni.modifica` mandando `termini`. Il metodo non ha scritto niente.",
+    ],
+    'termine_superato' => [
+        'title' => 'Termine per cambiare superato',
+        'detail' => "Il termine per cambiare o annullare questa prenotazione online è passato. Il problema porta `contatto`, l'email e il telefono della pagina: scrivi al professionista. Il metodo non ha scritto niente.",
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',
