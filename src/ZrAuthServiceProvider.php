@@ -19,8 +19,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 use Zeiras\Auth\Http\Controllers\EventiController;
 use Zeiras\Auth\Http\Controllers\RicevitoreController;
+use Zeiras\Auth\Http\Middleware\AvviaLaSessioneSenzaQuery;
 use Zeiras\Auth\Http\Middleware\ConGettone;
-use Zeiras\Auth\Http\Middleware\PrecedenteSenzaQuery;
 use Zeiras\Auth\Http\Middleware\RicordaLIdDellaSessione;
 use Zeiras\Auth\Http\Middleware\SessioneChiusa;
 use Zeiras\Auth\Http\Middleware\SoloDallaPersona;
@@ -77,12 +77,10 @@ final class ZrAuthServiceProvider extends ServiceProvider
                 $kernel->prependMiddlewareToGroup('web', SessioneChiusa::class);
                 // Dopo StartSession (e prima delle rotte): ricorda l'id con cui la sessione è partita.
                 $kernel->appendMiddlewareToGroup('web', RicordaLIdDellaSessione::class);
-                // Subito dopo StartSession e prima di ConGettone, che con un rifiuto non chiama il resto: il suo codice dopo `$next` gira
-                // prima che StartSession scriva `_previous.url`, anche per chi viene mandato all'ingresso.
-                $web = array_values(array_filter($kernel->getMiddlewareGroups()['web'], fn ($m): bool => $m !== PrecedenteSenzaQuery::class));
-                $posizione = array_search(StartSession::class, $web, true);
-                $posizione = $posizione !== false ? $posizione + 1 : (array_search(ConGettone::class, $web, true) ?: count($web));
-                array_splice($web, $posizione, 0, [PrecedenteSenzaQuery::class]);
+                // StartSession diventa la sua sottoclasse, che per chi non è entrato scrive `_previous.url` senza la query (e senza un
+                // percorso lungo): la sessione anonima resta piccola. Nello stesso posto del gruppo; se il frontend ha già un'altra
+                // StartSession nel gruppo, non c'è niente da cambiare qui.
+                $web = array_map(fn ($m) => $m === StartSession::class ? AvviaLaSessioneSenzaQuery::class : $m, $kernel->getMiddlewareGroups()['web']);
                 $kernel->setMiddlewareGroups([...$kernel->getMiddlewareGroups(), 'web' => $web]);
             }
             $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, ConGettone::class);

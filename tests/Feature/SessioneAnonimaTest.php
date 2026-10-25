@@ -7,7 +7,7 @@ use Zeiras\Auth\Ritorno;
 
 // Un GET anonimo con una query lunga non deve riempire Redis (misura di zr-devops-af, 25/10): la sessione di chi non è entrato
 // resta di qualche centinaio di byte. url.intended è il solo percorso (Ritorno::dallaRichiesta), `_previous.url` senza query
-// (PrecedenteSenzaQuery).
+// (AvviaLaSessioneSenzaQuery, la sottoclasse di StartSession che il provider mette nel gruppo `web`).
 
 it('cento GET anonimi con una query lunga lasciano una sessione piccola, con e senza la guardia', function (string $pagina) {
     $massimo = 0;
@@ -31,7 +31,7 @@ it('chi è entrato tiene la query in _previous.url: le sue sessioni sono poche e
     expect(session('_previous.url'))->toBe(FRONTEND.'/pagina?vista=2');
 });
 
-it('la query arriva intera alla rotta pubblica: la toglie solo dopo la risposta', function () {
+it('la query arriva intera alla rotta pubblica, e non resta in _previous.url', function () {
     Route::middleware('web')->get('cerca', fn (Request $richiesta) => ['q' => $richiesta->query('q')])
         ->withoutMiddleware(ConGettone::class);
 
@@ -64,4 +64,28 @@ it('un GET con un percorso lungo non ricorda niente, nemmeno quello di prima', f
     $this->get(FRONTEND.'/lungo/'.str_repeat('a', 400))->assertRedirect(INGRESSO);
 
     expect(session()->has('url.intended'))->toBeFalse();
+});
+
+it('cento GET anonimi con un percorso lungo non riempiono la sessione: _previous.url non si scrive', function () {
+    Route::middleware('web')->get('w/{workspace}/pagina', fn () => 'ok');
+
+    $massimo = 0;
+    foreach (range(1, 100) as $i) {
+        $this->get(FRONTEND.'/w/'.str_repeat('a', 7000).$i.'/pagina')->assertRedirect(INGRESSO);
+
+        $massimo = max($massimo, strlen(serialize(session()->all())));
+        expect(session()->has('_previous.url'))->toBeFalse()
+            ->and(session()->has('url.intended'))->toBeFalse();
+    }
+
+    expect($massimo)->toBeLessThan(800);
+});
+
+it('il ricevitore dell\'ingresso non lascia il suo codice in _previous.url, nemmeno a sessione aperta', function () {
+    Route::middleware('web')->get('ricevitore-di-prova', fn () => 'ok')->name('zr-auth.ricevitore')->withoutMiddleware(ConGettone::class);
+    apriSessione();
+
+    $this->get(FRONTEND.'/ricevitore-di-prova?codice=segreto&state=altro');
+
+    expect(session('_previous.url'))->toBe(FRONTEND.'/ricevitore-di-prova');
 });
