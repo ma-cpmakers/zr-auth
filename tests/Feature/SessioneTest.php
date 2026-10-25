@@ -148,3 +148,95 @@ it('entra() con un\'altra persona scarta l\'accesso e i gettoni di prima; con la
         ->and(array_keys(session(Sessione::CHIAVE.'.gettoni')))->toBe(['workspace'])
         ->and(session(Sessione::CHIAVE.'.utente.email'))->toBe('bruno@example.com');
 });
+
+// #2681: la sessione dell'ospite senza account, dalla risposta OspiteDalLink di accessi.link.crea.
+
+/** I `data` di accessi.link.crea per un contatto senza account (lo schema OspiteDalLink). */
+function ospiteDalLink(?string $scadeIl = null): array
+{
+    return [
+        'gettone' => GETTONE_ACCESSO,
+        'scade_il' => $scadeIl ?? now()->addHours(2)->toJSON(),
+        'prenotazione_id' => '01k6r2s4a8c2e6g0j4m8p2r6t0',
+    ];
+}
+
+it('apriOspite: la sessione è aperta fino a scade_il, la persona e l\'accesso mancano, il gettone sta dove Api::persona() lo manda (OS.1)', function () {
+    $this->get('/pubblica');
+    $prima = session()->getId();
+
+    Sessione::apriOspite(ospiteDalLink());
+
+    expect(Sessione::aperta())->toBeTrue()
+        ->and(Sessione::utente())->toBeNull()
+        ->and(Sessione::accesso())->toBeNull()
+        ->and(Sessione::workspace())->toBeNull()
+        ->and(Sessione::ruolo())->toBeNull()
+        ->and(Sessione::ospite())->toBe(['prenotazione_id' => '01k6r2s4a8c2e6g0j4m8p2r6t0'])
+        ->and(session(Sessione::CHIAVE)['gettoni'])->toBe(['accesso' => GETTONE_ACCESSO])
+        ->and(session()->getId())->not->toBe($prima);
+});
+
+it('apriOspite: scaduta la scadenza la sessione non è più aperta, e ospite() non la mostra (OS.1)', function () {
+    Sessione::apriOspite(ospiteDalLink(now()->subSecond()->toJSON()));
+
+    expect(Sessione::aperta())->toBeFalse()
+        ->and(Sessione::ospite())->toBeNull();
+});
+
+it('apriOspite rifiuta la forma di Accesso e una forma monca, e non scrive niente: serve un errore chiaro, non un TypeError (OS.1, deve fallire se apri() con questa forma o questa con quella)', function (string $forma) {
+    $dati = match ($forma) {
+        'accesso' => accesso(),
+        'senza scade_il' => ['gettone' => GETTONE_ACCESSO, 'prenotazione_id' => '01k6r2s4a8c2e6g0j4m8p2r6t0'],
+        'senza prenotazione_id' => ['gettone' => GETTONE_ACCESSO, 'scade_il' => now()->addHours(2)->toJSON()],
+        'gettone vuoto' => [...ospiteDalLink(), 'gettone' => ''],
+    };
+
+    expect(fn () => Sessione::apriOspite($dati))->toThrow(InvalidArgumentException::class)
+        ->and(session()->has(Sessione::CHIAVE))->toBeFalse();
+})->with(['accesso', 'senza scade_il', 'senza prenotazione_id', 'gettone vuoto']);
+
+it('apriOspite si rifiuta con la sessione nel cookie, come apri() (OS.1)', function () {
+    config(['session.driver' => 'cookie']);
+
+    expect(fn () => Sessione::apriOspite(ospiteDalLink()))->toThrow(SessioneNelBrowser::class)
+        ->and(session()->has(Sessione::CHIAVE))->toBeFalse();
+});
+
+it('apriOspite distrugge la sessione di prima: nessuna fixation (OS.1)', function () {
+    session()->put('di prima', true);
+    session()->save();
+    $prima = session()->getId();
+
+    Sessione::apriOspite(ospiteDalLink());
+
+    expect(session()->getHandler()->read($prima))->toBe('')
+        ->and(session()->has('di prima'))->toBeFalse();
+});
+
+it('entra() su una sessione di ospite non tiene il gettone dell\'ospite, e lascia() non la tocca (OS.2, deve fallire se entra() lo tiene)', function () {
+    Sessione::apriOspite(ospiteDalLink());
+    $idSessione = session()->getId();
+
+    Sessione::lascia();
+
+    expect(session()->getId())->toBe($idSessione)
+        ->and(Sessione::ospite())->not->toBeNull();
+
+    Sessione::entra(gettoneDelWorkspace());
+
+    expect(session(Sessione::CHIAVE)['gettoni'])->toBe(['workspace' => GETTONE_WORKSPACE])
+        ->and(Sessione::ospite())->toBeNull()
+        ->and(Sessione::utente()['id'])->toBe(utente()['id']);
+});
+
+it('aggiorna() non fa niente su una sessione di ospite, e chiudi() la chiude come ogni altra (OS.2)', function () {
+    Sessione::apriOspite(ospiteDalLink());
+
+    expect(Sessione::aggiorna(['utente' => utente()]))->toBeFalse();
+
+    Sessione::chiudi();
+
+    expect(Sessione::aperta())->toBeFalse()
+        ->and(Sessione::ospite())->toBeNull();
+});
