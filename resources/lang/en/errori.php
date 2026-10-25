@@ -269,6 +269,10 @@ return [
         'title' => 'Currency in use',
         'detail' => 'This workspace has deals with an amount (open, won, lost or archived) in the current currency. Changing the currency does not convert the amounts: the numbers stay the same. To change it anyway, send `senza_conversione: true` together with `valuta`.',
     ],
+    'funzione_vincolata' => [
+        'title' => 'Linked function',
+        'detail' => 'This CRM function cannot be turned on or off right now: it is either always on, or it needs a function that is off, or another function that is on needs it. Nothing changes in cascade. Check `richiede` and `attivo` in crm.funzioni.elenca, turn the other function on or off first with crm.funzioni.modifica, then try again. The method wrote nothing.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Acceptance required',
         'detail' => 'To use Zeiras you must accept the privacy notice and the terms of use in their current version. The problem carries `mancanti` next to the code, the documents still to accept: accept them with legale.accettazioni.crea (legale.documenti.elenca lists them) and repeat the request.',

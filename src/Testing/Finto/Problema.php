@@ -52,6 +52,7 @@ final class Problema extends RuntimeException
         'fase_non_vuota' => 409,
         'ultima_fase' => 409,
         'valuta_in_uso' => 409,
+        'funzione_vincolata' => 409,
         'persona_anonimizzata' => 409,
         'annullamento_scaduto' => 409,
         'campo_di_sistema' => 409,

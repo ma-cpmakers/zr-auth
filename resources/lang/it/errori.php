@@ -269,6 +269,10 @@ return [
         'title' => 'Valuta in uso',
         'detail' => 'In questo workspace ci sono trattative con un importo (aperte, vinte, perse o archiviate) nella valuta di adesso. Cambiare la valuta non converte gli importi: restano gli stessi numeri. Per cambiarla comunque manda `senza_conversione: true` insieme a `valuta`.',
     ],
+    'funzione_vincolata' => [
+        'title' => 'Funzione vincolata',
+        'detail' => "Questa funzione del CRM non si può accendere o spegnere adesso: o è sempre attiva, o richiede una funzione che è spenta, o è richiesta da un'altra funzione accesa. Nessuna funzione cambia a cascata. Guarda `richiede` e `attivo` in crm.funzioni.elenca, accendi o spegni prima l'altra funzione con crm.funzioni.modifica e ripeti la richiesta. Il metodo non ha scritto niente.",
+    ],
     'accettazione_richiesta' => [
         'title' => 'Accettazione richiesta',
         'detail' => 'Per usare Zeiras devi accettare l\'informativa sulla privacy e i termini d\'uso nella versione in vigore. Il problema porta accanto al codice `mancanti`, i documenti da accettare: accettali con legale.accettazioni.crea (li elenca legale.documenti.elenca) e ripeti la richiesta.',
