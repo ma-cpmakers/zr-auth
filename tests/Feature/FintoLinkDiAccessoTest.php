@@ -24,7 +24,7 @@ it('accessi.link.crea: usato, scaduto e sconosciuto sono lo stesso 404 non_trova
     $usato = $finto->link('anna@example.com', '01k6r2s4a8c2e6g0j4m8p2r6t0');
     $scaduto = $finto->link('anna@example.com', '01k6r2s4a8c2e6g0j4m8p2r6t0', now()->toImmutable()->subSecond());
 
-    alFinto('POST', '/v1/accessi/link', ['codice' => $usato])->assertCreated();
+    expect(alFinto('POST', '/v1/accessi/link', ['codice' => $usato])->status())->toBe(201);
     $risposte = array_map(fn (string $codice) => alFinto('POST', '/v1/accessi/link', ['codice' => $codice]), [$usato, $scaduto, str_repeat('a', 43)]);
 
     expect(array_map(fn ($r) => esito($r), $risposte))->toBe([[404, 'non_trovato'], [404, 'non_trovato'], [404, 'non_trovato']])
