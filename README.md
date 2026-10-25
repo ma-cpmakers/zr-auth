@@ -715,8 +715,8 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.elimina`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`, `workspace.uscita.crea`,
   `workspace.inviti.crea`, `workspace.inviti.elimina`, `workspace.inviti.reinvio.crea` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
-  `io.workspace.elenca`, `io.aziende.elenca`, `io.notifiche.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca` e `workspace.inviti.elenca`. Fa anche
-  `io.workspace.crea` (vedi «Il workspace»). Una chiamata
+  `io.workspace.elenca`, `io.aziende.elenca`, `io.notifiche.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca`, `workspace.inviti.elenca` e `workspace.contenuti.mostra`. Fa anche
+  `io.workspace.crea`, `io.workspace.elimina` e `io.workspace.eliminazione.elimina` (vedi «Il workspace»). Una chiamata
   di `/v1` che non conosce lancia `RichiestaSconosciuta`: il finto non inventa una risposta che il backoffice non darebbe.
 - **I provider.** Spenti di norma, come in produzione senza credenziali: `provider('google', 'linkedin-openid', 'facebook')`
   ne accende. Ciò che il provider risponde al `codice` del ritorno lo dice il test:
@@ -760,9 +760,19 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - **Il workspace.** `workspace.modifica` (`{"nome"}`, 1-255 caratteri senza spazi ai bordi) è del proprietario e
   dell'amministratore, `403` `permesso_negato` a un membro prima del corpo; lo slug non cambia, e la risposta è un elemento
   di `io.workspace.elenca`, che da `eliminazione_il` (la data in cui il workspace si archivia, `null` senza un'eliminazione
-  programmata). `workspace.elimina` (del solo proprietario) la programma fra 30 giorni (`202`, stessa data se già programmata, `409`
-  `ultimo_workspace` se è l'ultimo workspace vivo della persona), `workspace.eliminazione.elimina` la annulla (`204`, `404` senza
-  una programmata): il finto non archivia alla scadenza. `workspace.membri.modifica` (`{"ruolo"}`, `amministratore` o `membro`) e
+  programmata). `workspace.elimina` (del solo proprietario) la programma fra 30 giorni (`202`, `409`
+  `ultimo_workspace` se è l'ultimo workspace vivo della persona): da quel momento il workspace sparisce subito (#2600, #2601) — i
+  suoi gettoni, di tutti i membri, sono `401` `gettone_non_valido`, `gettoni.crea` non lo riapre (`422` su `#/workspace_id`),
+  `io.workspace.elenca` e `aziende.workspace.elenca` non lo elencano — e il finto non archivia alla scadenza. Chi ne era proprietario
+  o amministratore lo ritrova con `aziende.workspace.elenca?eliminati=true` (`eliminazione_il` ed `eliminato_da`, l'id della persona che
+  l'ha chiesto) e lo ripristina con `io.workspace.eliminazione.elimina` (`DELETE /v1/io/workspace/{workspace}/eliminazione`, col gettone
+  della persona: `204`, `404` per ogni altro caso, `422` a un corpo con campi). `workspace.eliminazione.elimina` è deprecato: dopo
+  l'eliminazione il gettone del workspace non vale più, e il finto lo risponde com'è di fatto, `401`. Ogni workspace degli elenchi
+  porta `eliminato_da`, `membri`, `entrato_il` e `uscita_negata` (`null`, o il codice del `409` che darebbe `io.workspace.elimina`:
+  `proprieta_da_trasferire`, `ultimo_workspace`, `unico_amministratore`). `io.workspace.elimina` (`DELETE /v1/io/workspace/{workspace}`)
+  fa lasciare un workspace con qualunque gettone della persona (`204`, `404` se non è suo o è in eliminazione, `422` a un corpo con
+  campi, poi `409` con il suo ostacolo; il finto non scrive la notifica ai responsabili). `workspace.contenuti.mostra` (proprietario e
+  amministratori) dà `cartelle`, `board` e `schede` con l'app `pm` attiva, un `data` vuoto senza. `workspace.membri.modifica` (`{"ruolo"}`, `amministratore` o `membro`) e
   `workspace.membri.elimina` rispondono nell'ordine del backoffice: il ruolo di chi chiama `403`, il membro `404`, il corpo
   `422`, il proprietario `409` `proprietario_intoccabile`, e un amministratore che tocca un amministratore, o ne fa uno, `403`.
   `io.modifica` accetta anche `utente.formato_data` (`gg/mm/aaaa`, `mm/gg/aaaa`, `aaaa-mm-gg`) e `utente.inizio_settimana` (`lunedi`, `domenica`, `sabato`): `null` li azzera, un valore fuori elenco è `422` `valore_non_ammesso` sul loro pointer, e `io.mostra` li dà sempre (`null` finché non scelti). Togliere un membro toglie i suoi gettoni **di quel workspace** (`401`, anche se rientra); quello dell'accesso e gli altri

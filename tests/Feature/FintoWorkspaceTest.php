@@ -46,9 +46,9 @@ it('workspace.modifica cambia il nome del workspace del gettone, senza gli spazi
     $risposta = alFinto('PATCH', '/v1/workspace', ['nome' => '  Studio Rossi  '], $anna);
 
     expect($risposta->status())->toBe(200)
-        ->and($risposta->json('data'))->toBe([...$studio, 'nome' => 'Studio Rossi', 'colore' => 'neutral', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
+        ->and(senzaIlResto($risposta->json('data')))->toBe([...$studio, 'nome' => 'Studio Rossi', 'colore' => 'neutral', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
         ->and(alFinto('GET', '/v1/io', gettone: $anna)->json('data.workspace.nome'))->toBe('Studio Rossi')
-        ->and(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data.0'))->toBe([...$studio, 'nome' => 'Studio Rossi', 'colore' => 'neutral', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
+        ->and(senzaIlResto(alFinto('GET', '/v1/io/workspace', gettone: $anna)->json('data.0')))->toBe([...$studio, 'nome' => 'Studio Rossi', 'colore' => 'neutral', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
         // Lo stesso nome di prima è un 200 che non cambia niente; l'amministratore lo cambia come il proprietario.
         ->and(alFinto('PATCH', '/v1/workspace', ['nome' => 'Studio Rossi'], $anna)->status())->toBe(200)
         ->and(alFinto('PATCH', '/v1/workspace', ['nome' => 'Studio Bianchi'], $gettone('bruno@example.com'))->json('data.ruolo'))->toBe('amministratore');
@@ -79,7 +79,7 @@ it('workspace.modifica cambia anche settore, lingua dei contenuti e colore come 
     $anna = $gettone('anna@example.com');
     $chiama = fn (array $corpo) => alFinto('PATCH', '/v1/workspace', $corpo, $anna);
 
-    expect($chiama(['settore' => 'consulenza', 'lingua_contenuti' => 'en', 'colore' => 'coral'])->json('data'))
+    expect(senzaIlResto($chiama(['settore' => 'consulenza', 'lingua_contenuti' => 'en', 'colore' => 'coral'])->json('data')))
         ->toBe([...$studio, 'settore' => 'consulenza', 'lingua_contenuti' => 'en', 'colore' => 'coral', 'ruolo' => 'proprietario', 'eliminazione_il' => null])
         ->and($chiama(['nome' => 'Altro nome'])->json('data'))->toMatchArray(['settore' => 'consulenza', 'lingua_contenuti' => 'en', 'colore' => 'coral'])
         ->and($chiama(['settore' => null, 'lingua_contenuti' => null, 'colore' => null])->json('data'))->toMatchArray(['settore' => null, 'lingua_contenuti' => 'en', 'colore' => 'coral'])

@@ -140,6 +140,12 @@ function linkDi(string $operationId): string
     return "<https://docs.zeiras.com/v1/{$operationId}>; rel=\"describedby\"";
 }
 
+/** Un workspace di un elenco senza i quattro campi di #2596-#2601 (`eliminato_da`, `membri`, `entrato_il`, `uscita_negata`): quelli si provano a parte. */
+function senzaIlResto(array $workspace): array
+{
+    return array_diff_key($workspace, array_flip(['eliminato_da', 'membri', 'entrato_il', 'uscita_negata']));
+}
+
 /** Un istante come lo scrive il backoffice: ISO 8601, in UTC, coi millesimi. */
 function iso(CarbonInterface $istante): string
 {

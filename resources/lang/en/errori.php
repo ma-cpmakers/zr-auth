@@ -211,7 +211,11 @@ return [
     ],
     'proprieta_da_trasferire' => [
         'title' => 'Ownership to hand over',
-        'detail' => 'You own one or more workspaces that have other members (the problem carries `workspace_da_trasferire` next to the code, with id and name): while you do, you cannot delete the account. Hand the ownership to another member (`workspace.proprietario.modifica`) or delete those workspaces, then repeat the request. Nothing was written.',
+        'detail' => 'You own a workspace that has other members, and while you do you cannot leave it (`io.workspace.elimina`) or delete the account (`io.elimina`: the problem carries `workspace_da_trasferire` next to the code, with id and name). Hand the ownership to another member (`workspace.proprietario.modifica`) or delete the workspace, then repeat the request. Nothing was written.',
+    ],
+    'unico_amministratore' => [
+        'title' => 'Only administrator',
+        'detail' => 'You are the only administrator of this workspace and cannot leave it: first appoint another administrator with `workspace.membri.modifica`, then repeat the request. Nothing was written.',
     ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',

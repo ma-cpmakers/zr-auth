@@ -144,7 +144,16 @@ it('io.workspace.elenca dà i workspace della persona, col ruolo e lo slug, in o
     foreach ($coiGettoni as $risposta) {
         expect($risposta->status())->toBe(200)
             ->and($risposta->header('Link'))->toBe(linkDi('io.workspace.elenca'))
-            ->and($risposta->json())->toBe(['data' => $attese, 'successivo' => null]);
+            ->and(array_map(senzaIlResto(...), $risposta->json('data')))->toBe($attese)
+            ->and($risposta->json('successivo'))->toBeNull()
+            // I quattro campi nuovi (#2596, #2601): nessuno è in eliminazione, i membri sono quelli veri, l'entrata è un istante,
+            // e l'uscita la nega il primo ostacolo — il proprietario non esce, l'unico amministratore (il proprietario non conta) neppure.
+            ->and(collect($risposta->json('data'))->pluck('membri', 'id')->all())->toEqual([$albero['id'] => 2, $alfa['id'] => 1, $alfaDiBruno['id'] => 2, $beta['id'] => 1])
+            ->and(collect($risposta->json('data'))->pluck('uscita_negata', 'id')->all())->toEqual([
+                $albero['id'] => 'unico_amministratore', $alfa['id'] => 'proprieta_da_trasferire', $alfaDiBruno['id'] => null, $beta['id'] => 'proprieta_da_trasferire',
+            ])
+            ->and(collect($risposta->json('data'))->pluck('eliminato_da')->filter()->all())->toBe([])
+            ->and(collect($risposta->json('data'))->every(fn (array $voce) => is_string($voce['entrato_il']) && str_ends_with($voce['entrato_il'], 'Z')))->toBeTrue();
     }
 });
 
