@@ -211,7 +211,7 @@ return [
     ],
     'proprieta_da_trasferire' => [
         'title' => 'Proprietà da trasferire',
-        'detail' => "Sei proprietario di uno o più workspace (il problema porta accanto al codice `workspace_da_trasferire`, con id e nome): finché lo sei non puoi eliminare l'account. Elimina quei workspace e ripeti la richiesta. Il metodo non ha scritto niente.",
+        'detail' => "Sei proprietario di uno o più workspace in cui ci sono altri membri (il problema porta accanto al codice `workspace_da_trasferire`, con id e nome): finché lo sei non puoi eliminare l'account. Passa la proprietà a un altro membro (`workspace.proprietario.modifica`) o elimina quei workspace, poi ripeti la richiesta. Il metodo non ha scritto niente.",
     ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',

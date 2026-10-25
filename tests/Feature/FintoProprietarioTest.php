@@ -61,3 +61,16 @@ it('un workspace in eliminazione è 409 workspace_in_eliminazione, e il corpo se
 
     expect($risposta->status())->toBe(409)->and($risposta->json('codice'))->toBe('workspace_in_eliminazione');
 });
+
+it('chi ha chiesto di eliminare l\'account non riceve la proprietà: 422 non_trovato su #/utente, come un id inventato (#2542)', function () {
+    [, , , $bruno, $gettoneAnna] = conIlProprietario();
+    $accessoBruno = entraNelFinto('bruno@example.com')['gettone']['gettone'];
+    expect(alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $accessoBruno)->status())->toBe(200)
+        ->and(alFinto('DELETE', '/v1/io', gettone: $accessoBruno)->status())->toBe(202);
+
+    $risposta = alFinto('PATCH', '/v1/workspace/proprietario', ['utente' => $bruno['id']], $gettoneAnna);
+    $inventato = alFinto('PATCH', '/v1/workspace/proprietario', ['utente' => '01k6r4c9f2h6k0n4r8v2x6z0b4'], $gettoneAnna);
+
+    expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.pointer'))->toBe('#/utente')->and($risposta->json('errors.0.regola'))->toBe('non_trovato')
+        ->and($risposta->json('errors.0.detail'))->toBe($inventato->json('errors.0.detail'));
+});
