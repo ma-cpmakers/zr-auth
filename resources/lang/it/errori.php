@@ -273,6 +273,14 @@ return [
         'title' => 'Funzione vincolata',
         'detail' => "Questa funzione del CRM non si può accendere o spegnere adesso: o è sempre attiva, o richiede una funzione che è spenta, o è richiesta da un'altra funzione accesa. Nessuna funzione cambia a cascata. Guarda `richiede` e `attivo` in crm.funzioni.elenca, accendi o spegni prima l'altra funzione con crm.funzioni.modifica e ripeti la richiesta. Il metodo non ha scritto niente.",
     ],
+    'personalizzazione_con_dati' => [
+        'title' => 'Personalizzazione con dati',
+        'detail' => 'Il CRM di questo workspace ha già dei dati (contatti, trattative, attività, catalogo, preventivi, acquisti, incassi o scadenze): un pacchetto di personalizzazione si installa solo su un CRM vuoto, perché cambierebbe i dati che ci sono. Il metodo non ha scritto niente. Per partire da un pacchetto crea un nuovo workspace.',
+    ],
+    'pacchetto_gia_installato' => [
+        'title' => 'Pacchetto già installato',
+        'detail' => 'Nel CRM di questo workspace è già stato installato un pacchetto di personalizzazione, anche «generico», e non se ne installa un altro. Il metodo non ha scritto niente. `crm.personalizzazione.mostra` dice quale è e quando è stato installato.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Accettazione richiesta',
         'detail' => 'Per usare Zeiras devi accettare l\'informativa sulla privacy e i termini d\'uso nella versione in vigore. Il problema porta accanto al codice `mancanti`, i documenti da accettare: accettali con legale.accettazioni.crea (li elenca legale.documenti.elenca) e ripeti la richiesta.',

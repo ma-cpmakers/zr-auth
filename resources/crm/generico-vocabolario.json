@@ -1,0 +1,392 @@
+{
+  "barra.dashboard": {
+    "it": "Dashboard",
+    "en": "Dashboard",
+    "es": "Panel"
+  },
+  "barra.potenziali_clienti": {
+    "it": "Opportunità",
+    "en": "Opportunities",
+    "es": "Oportunidades"
+  },
+  "barra.clienti": {
+    "it": "Contatti",
+    "en": "Contacts",
+    "es": "Contactos"
+  },
+  "barra.aziende": {
+    "it": "Aziende",
+    "en": "Companies",
+    "es": "Empresas"
+  },
+  "barra.da_fare": {
+    "it": "Da fare",
+    "en": "To do",
+    "es": "Pendientes"
+  },
+  "barra.catalogo": {
+    "it": "Catalogo",
+    "en": "Catalog",
+    "es": "Catálogo"
+  },
+  "barra.preventivi": {
+    "it": "Preventivi",
+    "en": "Quotes",
+    "es": "Presupuestos"
+  },
+  "barra.incassi": {
+    "it": "Incassi",
+    "en": "Collections",
+    "es": "Cobros"
+  },
+  "barra.scadenze": {
+    "it": "Scadenze",
+    "en": "Deadlines",
+    "es": "Vencimientos"
+  },
+  "barra.impostazioni": {
+    "it": "Impostazioni CRM",
+    "en": "CRM settings",
+    "es": "Ajustes del CRM"
+  },
+  "contatto.titolo": {
+    "it": "Contatti",
+    "en": "Contacts",
+    "es": "Contactos"
+  },
+  "contatto.nuovo": {
+    "it": "Nuovo contatto",
+    "en": "New contact",
+    "es": "Nuevo contacto"
+  },
+  "contatto.vuoto": {
+    "it": "Aggiungi il tuo primo contatto",
+    "en": "Add your first contact",
+    "es": "Añade tu primer contacto"
+  },
+  "azienda.titolo": {
+    "it": "Aziende",
+    "en": "Companies",
+    "es": "Empresas"
+  },
+  "azienda.nuovo": {
+    "it": "Nuova azienda",
+    "en": "New company",
+    "es": "Nueva empresa"
+  },
+  "azienda.vuoto": {
+    "it": "Aggiungi la tua prima azienda",
+    "en": "Add your first company",
+    "es": "Añade tu primera empresa"
+  },
+  "opportunita.titolo": {
+    "it": "Opportunità",
+    "en": "Opportunities",
+    "es": "Oportunidades"
+  },
+  "opportunita.nuovo": {
+    "it": "Nuova opportunità",
+    "en": "New opportunity",
+    "es": "Nueva oportunidad"
+  },
+  "opportunita.vuoto": {
+    "it": "Crea la prima opportunità",
+    "en": "Create your first opportunity",
+    "es": "Crea tu primera oportunidad"
+  },
+  "catalogo.titolo": {
+    "it": "Catalogo",
+    "en": "Catalog",
+    "es": "Catálogo"
+  },
+  "catalogo.nuovo": {
+    "it": "Nuova voce",
+    "en": "New item",
+    "es": "Nuevo elemento"
+  },
+  "catalogo.vuoto": {
+    "it": "Catalogo vuoto",
+    "en": "Empty catalog",
+    "es": "Catálogo vacío"
+  },
+  "preventivo.titolo": {
+    "it": "Preventivi",
+    "en": "Quotes",
+    "es": "Presupuestos"
+  },
+  "preventivo.nuovo": {
+    "it": "Nuovo preventivo",
+    "en": "New quote",
+    "es": "Nuevo presupuesto"
+  },
+  "preventivo.vuoto": {
+    "it": "Nessun preventivo. Crea il primo dal catalogo.",
+    "en": "No quotes yet. Create the first one from the catalogue.",
+    "es": "Ningún presupuesto. Crea el primero desde el catálogo."
+  },
+  "acquisto.titolo": {
+    "it": "Acquisti",
+    "en": "Purchases",
+    "es": "Compras"
+  },
+  "acquisto.nuovo": {
+    "it": "Registra acquisto",
+    "en": "Record purchase",
+    "es": "Registrar compra"
+  },
+  "acquisto.vuoto": {
+    "it": "Nessun acquisto.",
+    "en": "No purchases.",
+    "es": "Ninguna compra."
+  },
+  "incasso.titolo": {
+    "it": "Incassi",
+    "en": "Collections",
+    "es": "Cobros"
+  },
+  "incasso.nuovo": {
+    "it": "Segna pagato",
+    "en": "Mark as paid",
+    "es": "Marcar como pagado"
+  },
+  "incasso.vuoto": {
+    "it": "Nessuna rata da incassare.",
+    "en": "No instalments to collect.",
+    "es": "Ninguna cuota por cobrar."
+  },
+  "scadenza.titolo": {
+    "it": "Scadenze",
+    "en": "Deadlines",
+    "es": "Vencimientos"
+  },
+  "scadenza.nuovo": {
+    "it": "Nuova scadenza",
+    "en": "New deadline",
+    "es": "Nuevo vencimiento"
+  },
+  "scadenza.vuoto": {
+    "it": "Nessuna scadenza aperta.",
+    "en": "No open deadlines.",
+    "es": "Ningún vencimiento abierto."
+  },
+  "contatto.uno": {
+    "it": "Contatto",
+    "en": "Contact",
+    "es": "Contacto"
+  },
+  "opportunita.uno": {
+    "it": "Opportunità",
+    "en": "Opportunity",
+    "es": "Oportunidad"
+  },
+  "acquisto.uno": {
+    "it": "Acquisto",
+    "en": "Purchase",
+    "es": "Compra"
+  },
+  "consumo.uno": {
+    "it": "Consumo",
+    "en": "Usage",
+    "es": "Consumo"
+  },
+  "funzione.clienti.nome": {
+    "it": "Contatti",
+    "en": "Contacts",
+    "es": "Contactos"
+  },
+  "funzione.clienti.descrizione": {
+    "it": "Le persone e le aziende con cui lavori, con la loro scheda.",
+    "en": "The people and companies you work with, each with their own record.",
+    "es": "Las personas y empresas con las que trabajas, cada una con su ficha."
+  },
+  "funzione.pipeline.nome": {
+    "it": "Opportunità",
+    "en": "Opportunities",
+    "es": "Oportunidades"
+  },
+  "funzione.pipeline.descrizione": {
+    "it": "Le vendite possibili, in pipeline e fasi, con il loro valore.",
+    "en": "Possible sales, in pipelines and stages, with their value.",
+    "es": "Las ventas posibles, en pipelines y fases, con su valor."
+  },
+  "funzione.attivita.nome": {
+    "it": "Attività",
+    "en": "Activities",
+    "es": "Actividades"
+  },
+  "funzione.attivita.descrizione": {
+    "it": "Chiamate, email e cose da fare, con le loro scadenze.",
+    "en": "Calls, emails and to-dos, with their due dates.",
+    "es": "Llamadas, correos y tareas, con sus fechas."
+  },
+  "funzione.lead.nome": {
+    "it": "Lead",
+    "en": "Leads",
+    "es": "Leads"
+  },
+  "funzione.lead.descrizione": {
+    "it": "Chi ti ha cercato e non ha ancora comprato: lo segui finché diventa cliente.",
+    "en": "People who reached out and have not bought yet: you follow them until they become customers.",
+    "es": "Quien te ha buscado y aún no ha comprado: lo sigues hasta que sea cliente."
+  },
+  "funzione.catalogo.nome": {
+    "it": "Catalogo",
+    "en": "Catalogue",
+    "es": "Catálogo"
+  },
+  "funzione.catalogo.descrizione": {
+    "it": "Quello che vendi: pacchetti, abbonamenti e servizi, con prezzo e IVA.",
+    "en": "What you sell: packages, memberships and services, with price and VAT.",
+    "es": "Lo que vendes: paquetes, abonos y servicios, con precio e IVA."
+  },
+  "funzione.preventivi.nome": {
+    "it": "Preventivi",
+    "en": "Quotes",
+    "es": "Presupuestos"
+  },
+  "funzione.preventivi.descrizione": {
+    "it": "Le offerte ai tuoi clienti, dalla bozza all'accettazione. Richiede il Catalogo.",
+    "en": "Offers to your customers, from draft to acceptance. Needs the Catalogue.",
+    "es": "Las ofertas a tus clientes, del borrador a la aceptación. Requiere el Catálogo."
+  },
+  "funzione.acquisti.nome": {
+    "it": "Acquisti",
+    "en": "Purchases",
+    "es": "Compras"
+  },
+  "funzione.acquisti.descrizione": {
+    "it": "Cosa ha comprato ogni cliente, con crediti e consumi. Richiede il Catalogo.",
+    "en": "What each customer has bought, with credits and usage. Needs the Catalogue.",
+    "es": "Lo que ha comprado cada cliente, con créditos y consumos. Requiere el Catálogo."
+  },
+  "funzione.incassi.nome": {
+    "it": "Incassi",
+    "en": "Collections",
+    "es": "Cobros"
+  },
+  "funzione.incassi.descrizione": {
+    "it": "Le rate e i pagamenti da incassare, scaduti e in arrivo. Richiede gli Acquisti.",
+    "en": "Instalments and payments to collect, overdue and upcoming. Needs Purchases.",
+    "es": "Las cuotas y pagos por cobrar, vencidos y próximos. Requiere las Compras."
+  },
+  "funzione.scadenze.nome": {
+    "it": "Scadenze",
+    "en": "Deadlines",
+    "es": "Vencimientos"
+  },
+  "funzione.scadenze.descrizione": {
+    "it": "Le date da non perdere, con i preavvisi a chi le segue.",
+    "en": "The dates not to miss, with reminders for whoever follows them.",
+    "es": "Las fechas que no hay que perder, con avisos para quien las sigue."
+  },
+  "funzione.documenti.nome": {
+    "it": "Documenti",
+    "en": "Documents",
+    "es": "Documentos"
+  },
+  "funzione.documenti.descrizione": {
+    "it": "Modelli, liberatorie e firme. In arrivo.",
+    "en": "Templates, waivers and signatures. Coming soon.",
+    "es": "Plantillas, exenciones y firmas. Próximamente."
+  },
+  "funzione.beni.nome": {
+    "it": "Beni",
+    "en": "Assets",
+    "es": "Bienes"
+  },
+  "funzione.beni.descrizione": {
+    "it": "I beni che vendi o che segui nel tempo. In arrivo.",
+    "en": "The assets you sell or follow over time. Coming soon.",
+    "es": "Los bienes que vendes o sigues en el tiempo. Próximamente."
+  },
+  "dashboard.titolo": {
+    "it": "Dashboard",
+    "en": "Dashboard",
+    "es": "Panel"
+  },
+  "dashboard.primi_passi": {
+    "it": "Primi passi",
+    "en": "Getting started",
+    "es": "Primeros pasos"
+  },
+  "dashboard.avanzamento": {
+    "it": ":fatti di :totale",
+    "en": ":fatti of :totale",
+    "es": ":fatti de :totale"
+  },
+  "dashboard.azioni_rapide": {
+    "it": "Azioni rapide",
+    "en": "Quick actions",
+    "es": "Acciones rápidas"
+  },
+  "dashboard.riepilogo": {
+    "it": "Riepilogo",
+    "en": "Summary",
+    "es": "Resumen"
+  },
+  "dashboard.salta": {
+    "it": "Salta per ora",
+    "en": "Skip for now",
+    "es": "Omitir por ahora"
+  },
+  "dashboard.riapri_primi_passi": {
+    "it": "Mostra i primi passi",
+    "en": "Show getting started",
+    "es": "Mostrar los primeros pasos"
+  },
+  "dashboard.da_fare_oggi": {
+    "it": "Da fare oggi",
+    "en": "To do today",
+    "es": "Para hoy"
+  },
+  "dashboard.opportunita_aperte": {
+    "it": "Opportunità aperte",
+    "en": "Open opportunities",
+    "es": "Oportunidades abiertas"
+  },
+  "dashboard.chiusure_scadute": {
+    "it": "Chiusure scadute",
+    "en": "Overdue closings",
+    "es": "Cierres vencidos"
+  },
+  "passo.primo_prodotto.titolo": {
+    "it": "Aggiungi quello che vendi",
+    "en": "Add what you sell",
+    "es": "Añade lo que vendes"
+  },
+  "passo.primo_prodotto.testo": {
+    "it": "Crea la prima voce del catalogo: la userai nelle vendite.",
+    "en": "Create the first catalogue item: you'll use it in sales.",
+    "es": "Crea el primer artículo del catálogo: lo usarás en las ventas."
+  },
+  "passo.primi_clienti.titolo": {
+    "it": "Aggiungi i tuoi primi contatti",
+    "en": "Add your first contacts",
+    "es": "Añade tus primeros contactos"
+  },
+  "passo.primi_clienti.testo": {
+    "it": "Inseriscili a mano o importali da un file.",
+    "en": "Enter them by hand or import them from a file.",
+    "es": "Introdúcelos a mano o impórtalos desde un archivo."
+  },
+  "passo.primo_potenziale_cliente.titolo": {
+    "it": "Crea la prima opportunità",
+    "en": "Create your first opportunity",
+    "es": "Crea tu primera oportunidad"
+  },
+  "passo.primo_potenziale_cliente.testo": {
+    "it": "Una vendita possibile: scegli la fase e segui il valore.",
+    "en": "A possible sale: pick the stage and follow the value.",
+    "es": "Una venta posible: elige la fase y sigue el valor."
+  },
+  "passo.prima_attivita.titolo": {
+    "it": "Pianifica la prima attività",
+    "en": "Plan your first activity",
+    "es": "Planifica tu primera actividad"
+  },
+  "passo.prima_attivita.testo": {
+    "it": "Una chiamata, un'email o una cosa da fare, con la sua scadenza.",
+    "en": "A call, an email or a to-do, with its due date.",
+    "es": "Una llamada, un correo o una tarea, con su fecha."
+  }
+}

@@ -273,6 +273,14 @@ return [
         'title' => 'Linked function',
         'detail' => 'This CRM function cannot be turned on or off right now: it is either always on, or it needs a function that is off, or another function that is on needs it. Nothing changes in cascade. Check `richiede` and `attivo` in crm.funzioni.elenca, turn the other function on or off first with crm.funzioni.modifica, then try again. The method wrote nothing.',
     ],
+    'personalizzazione_con_dati' => [
+        'title' => 'Customization with data',
+        'detail' => 'This workspace\'s CRM already has data (contacts, deals, activities, catalog, quotes, purchases, payments or deadlines): a customization package is installed only on an empty CRM, because it would change the data that is there. The method wrote nothing. To start from a package, create a new workspace.',
+    ],
+    'pacchetto_gia_installato' => [
+        'title' => 'Package already installed',
+        'detail' => 'A customization package has already been installed in this workspace\'s CRM, even «general», and another one is not installed. The method wrote nothing. `crm.personalizzazione.mostra` says which one it is and when it was installed.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Acceptance required',
         'detail' => 'To use Zeiras you must accept the privacy notice and the terms of use in their current version. The problem carries `mancanti` next to the code, the documents still to accept: accept them with legale.accettazioni.crea (legale.documenti.elenca lists them) and repeat the request.',
