@@ -125,7 +125,7 @@ it('HEAD non ricorda niente, un GET ricorda il suo indirizzo e non il Referer', 
     expect(session()->has('url.intended'))->toBeFalse();
 
     test()->call('GET', FRONTEND.'/w/studio/pagina?x=1', [], [], [], ['HTTP_REFERER' => 'https://altro.zeiras.com/x']);
-    expect(session('url.intended'))->toBe(FRONTEND.'/w/studio/pagina?x=1');
+    expect(session('url.intended'))->toBe(FRONTEND.'/w/studio/pagina');
 });
 
 it('una visita di Inertia riceve 409 con X-Inertia-Location e ricorda la pagina; una richiesta JSON 401 e niente', function () {
