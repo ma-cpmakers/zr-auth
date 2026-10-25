@@ -840,6 +840,13 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   dai suoi valori (scriverlo è `422` `non_trovato`), `crm.campi.elenca?archiviati=true` lo dà per 30 giorni, con `archiviato_il` e
   `ripristinabile_fino`, e `crm.campi.modifica {archiviato: false}` lo ripristina in fondo alla sua sezione, coi suoi valori; dopo i 30
   giorni è `404`. `Campo` porta sempre `archiviato_il` e `ripristinabile_fino` (`null` per un campo vivo).
+  La **personalizzazione** (`crm.personalizzazione.mostra`, `crm.personalizzazione.installazione.crea`, `crm.personalizzazioni.elenca` e
+  `mostra`, `crm.funzioni.elenca` e `modifica`, `crm.vocabolario.elenca` e `modifica`, `crm.primi-passi.elenca` e `modifica`) parte dal
+  pack «generico» del backoffice (l'unico pubblicato, copia in `resources/crm`): tutte le funzioni accese tranne `documenti` e `beni`, i 78
+  testi in italiano, inglese e spagnolo (nella lingua della persona del gettone), la barra e i primi passi che seguono le funzioni accese. Non
+  c'è cascata (`409` `funzione_vincolata`), «fatto» di un passo e `dati_presenti` di una funzione si leggono dai dati del CRM del finto, la
+  rinomina di un testo è tutto o niente, e l'installazione è una sola per workspace (`409` `pacchetto_gia_installato`) e solo su un CRM
+  senza dati (`409` `personalizzazione_con_dati`). Il finto non tiene lo storico e non emette `com.zeiras.crm.installazione.creata`.
   I **valori** dei campi «tuoi» di un contatto (`crm.persone.mostra`, `crea` e `modifica`, dalla v0.12.37) sono in `campi`: `{}` senza
   valori, ogni tipo con la sua forma, `null` toglie (Merge Patch), uno standard o una chiave che non c'è è `422` `campo_estraneo`,
   e la cronologia dice `campi.<chiave>` (dopo l'oblio il solo nome, senza `prima` e `dopo`); un membro di un altro workspace è

@@ -269,6 +269,18 @@ return [
         'title' => 'Moneda en uso',
         'detail' => 'Este workspace tiene negociaciones con un importe (abiertas, ganadas, perdidas o archivadas) en la moneda actual. Cambiar la moneda no convierte los importes: los números siguen siendo los mismos. Para cambiarla igualmente, envía `senza_conversione: true` junto con `valuta`.',
     ],
+    'funzione_vincolata' => [
+        'title' => 'Función vinculada',
+        'detail' => 'Esta función del CRM no se puede activar o desactivar ahora: o está siempre activa, o necesita una función que está desactivada, o la necesita otra función activa. Nada cambia en cascada. Mira `richiede` y `attivo` en crm.funzioni.elenca, activa o desactiva antes la otra función con crm.funzioni.modifica y repite la petición. El método no ha escrito nada.',
+    ],
+    'personalizzazione_con_dati' => [
+        'title' => 'Personalización con datos',
+        'detail' => 'El CRM de este workspace ya tiene datos (contactos, oportunidades, actividades, catálogo, presupuestos, compras, cobros o vencimientos): un paquete de personalización se instala solo en un CRM vacío, porque cambiaría los datos que hay. El método no ha escrito nada. Para empezar desde un paquete crea un workspace nuevo.',
+    ],
+    'pacchetto_gia_installato' => [
+        'title' => 'Paquete ya instalado',
+        'detail' => 'En el CRM de este workspace ya se instaló un paquete de personalización, incluso «general», y no se instala otro. El método no ha escrito nada. `crm.personalizzazione.mostra` dice cuál es y cuándo se instaló.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Aceptación requerida',
         'detail' => 'Para usar Zeiras debes aceptar el aviso de privacidad y las condiciones de uso en su versión vigente. El problema lleva junto al código `mancanti`, los documentos por aceptar: acéptalos con legale.accettazioni.crea (los lista legale.documenti.elenca) y repite la solicitud.',
