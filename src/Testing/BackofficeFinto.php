@@ -5523,6 +5523,11 @@ final class BackofficeFinto
         if ($mancanti !== []) {
             throw new Problema('accettazione_richiesta', estensioni: ['mancanti' => $mancanti]);
         }
+
+        // Un ospite (#2478) apre la sua persona e i suoi accessi; ogni altro metodo vuole i documenti dei workspace (Accettazione::OSPITE_AMMESSI).
+        if ($this->eUnOspite($persona) && ! in_array($this->operazioneInCorso, ['io.elimina', 'accessi.elenca', 'accessi.altri.elimina'], true)) {
+            throw new Problema('accettazione_richiesta', estensioni: ['mancanti' => array_map(fn (string $documento, array $dati) => ['documento' => $documento, 'versione' => $dati['versione']], array_keys($this->documentiLegali), array_values($this->documentiLegali))]);
+        }
     }
 
     /**
@@ -5616,9 +5621,9 @@ final class BackofficeFinto
         $dati = $this->testi->validaStretta($corpo, [
             'email' => self::REGOLE_EMAIL,
             'codice' => ['required', 'string', 'digits:6'],
-            'nome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
-            'cognome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
-            'termini_accettati' => ['sometimes', 'nullable', 'boolean'],
+            'nome' => ['sometimes'],
+            'cognome' => ['sometimes'],
+            'termini_accettati' => ['sometimes'],
         ]);
         $email = self::normalizza($dati['email']);
         $this->frena('accessi-codici-verifiche:'.$email, self::FRENI['accessi_codici_verifiche'], self::MINUTO);
@@ -5640,10 +5645,12 @@ final class BackofficeFinto
         $persona = $this->conEmail($email);
 
         if ($persona === null) {
-            $this->testi->valida($dati, [
-                'nome' => ['bail', 'required'],
-                'cognome' => ['bail', 'required'],
-                'termini_accettati' => ['bail', 'required', 'accepted'],
+            $dati = $this->testi->valida(Testi::pulisci($corpo), [
+                'email' => ['sometimes'],
+                'codice' => ['sometimes'],
+                'nome' => ['bail', 'required', 'string', 'max:255', new NomeScritto],
+                'cognome' => ['bail', 'required', 'string', 'max:255', new NomeScritto],
+                'termini_accettati' => ['bail', 'required', 'boolean:strict', 'accepted'],
             ]);
 
             $persona = self::id();

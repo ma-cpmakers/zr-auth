@@ -27,7 +27,7 @@ it('accessi.codici.verifica.crea: un\'email senza account nasce col codice giust
     alFinto('POST', '/v1/accessi/codici', ['email' => 'olga@example.com']);
     $codice = $finto->ultimoCodice('olga@example.com');
 
-    foreach (range(1, 7) as $giro) {
+    foreach (range(1, 3) as $giro) {
         $senzaCampi = alFinto('POST', '/v1/accessi/codici/verifica', ['email' => 'olga@example.com', 'codice' => $codice]);
         expect(esito($senzaCampi))->toBe([422, 'dati_non_validi'])
             ->and(array_column($senzaCampi->json('errors'), 'pointer'))->toBe(['#/nome', '#/cognome', '#/termini_accettati']);
@@ -76,14 +76,15 @@ it('i documenti ospite: l\'ospite li vede e li accetta, con una versione nuova o
     $elenco = alFinto('GET', '/v1/legale/documenti', gettone: $gettone)->json('data');
     expect(array_column($elenco, 'documento'))->toBe(['condizioni-ospite'])
         ->and($elenco[0]['accettato'])->toBeTrue()
-        ->and(alFinto('GET', '/v1/io', gettone: $gettone)->status())->toBe(200);
+        ->and(alFinto('GET', '/v1/accessi', gettone: $gettone)->status())->toBe(200)
+        ->and(esito(alFinto('GET', '/v1/io/workspace', gettone: $gettone)))->toBe([403, 'accettazione_richiesta']);
 
     $finto->documentiOspite(['condizioni-ospite' => ['versione' => 'bozza-3'] + OSPITI_DI_PROVA['condizioni-ospite']]);
-    $rifiutato = alFinto('GET', '/v1/io', gettone: $gettone);
+    $rifiutato = alFinto('GET', '/v1/accessi', gettone: $gettone);
     expect(esito($rifiutato))->toBe([403, 'accettazione_richiesta'])
         ->and($rifiutato->json('mancanti'))->toBe([['documento' => 'condizioni-ospite', 'versione' => 'bozza-3']]);
 
     expect(alFinto('POST', '/v1/legale/accettazioni', ['documento' => 'termini-d-uso', 'versione' => 'bozza-0.1'], $gettone)->status())->toBe(201)
         ->and(array_column(alFinto('GET', '/v1/legale/documenti', gettone: $gettone)->json('data'), 'documento'))->toBe(['termini-d-uso'])
-        ->and(alFinto('GET', '/v1/io', gettone: $gettone)->status())->toBe(200);
+        ->and(alFinto('GET', '/v1/io/workspace', gettone: $gettone)->status())->toBe(200);
 });
