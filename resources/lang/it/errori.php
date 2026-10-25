@@ -211,7 +211,7 @@ return [
     ],
     'proprieta_da_trasferire' => [
         'title' => 'Proprietà da trasferire',
-        'detail' => "Sei proprietario di un workspace in cui ci sono altri membri, e finché lo sei non puoi lasciarlo (`io.workspace.elimina`) né eliminare l'account (`io.elimina`: il problema porta accanto al codice `workspace_da_trasferire`, con id e nome). Passa la proprietà a un altro membro (`workspace.proprietario.modifica`) o elimina il workspace, poi ripeti la richiesta. Il metodo non ha scritto niente.",
+        'detail' => "Sei proprietario di un workspace, e finché lo sei non puoi lasciarlo (`io.workspace.elimina`) né eliminare l'account (`io.elimina`: il problema porta accanto al codice `workspace_da_trasferire`, con id e nome). Se ci sono altri membri passa la proprietà a uno di loro (`workspace.proprietario.modifica`), altrimenti elimina il workspace (`workspace.elimina`), poi ripeti la richiesta. Il metodo non ha scritto niente.",
     ],
     'unico_amministratore' => [
         'title' => 'Unico amministratore',

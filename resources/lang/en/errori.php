@@ -211,7 +211,7 @@ return [
     ],
     'proprieta_da_trasferire' => [
         'title' => 'Ownership to hand over',
-        'detail' => 'You own a workspace that has other members, and while you do you cannot leave it (`io.workspace.elimina`) or delete the account (`io.elimina`: the problem carries `workspace_da_trasferire` next to the code, with id and name). Hand the ownership to another member (`workspace.proprietario.modifica`) or delete the workspace, then repeat the request. Nothing was written.',
+        'detail' => 'You own a workspace, and while you do you cannot leave it (`io.workspace.elimina`) or delete the account (`io.elimina`: the problem carries `workspace_da_trasferire` next to the code, with id and name). If it has other members, hand the ownership to one of them (`workspace.proprietario.modifica`); otherwise delete the workspace (`workspace.elimina`), then repeat the request. Nothing was written.',
     ],
     'unico_amministratore' => [
         'title' => 'Only administrator',
