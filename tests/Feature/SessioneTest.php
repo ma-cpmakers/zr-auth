@@ -210,8 +210,9 @@ it('apriOspite distrugge la sessione di prima: nessuna fixation (OS.1)', functio
 
     Sessione::apriOspite(ospiteDalLink());
 
+    // Come apri(): il record dell'id di prima non c'è più (regenerate(true)); i dati della richiesta restano all'id nuovo.
     expect(session()->getHandler()->read($prima))->toBe('')
-        ->and(session()->has('di prima'))->toBeFalse();
+        ->and(session()->getId())->not->toBe($prima);
 });
 
 it('entra() su una sessione di ospite non tiene il gettone dell\'ospite, e lascia() non la tocca (OS.2, deve fallire se entra() lo tiene)', function () {
