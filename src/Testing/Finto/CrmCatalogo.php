@@ -8,7 +8,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * Il catalogo del CRM nel backoffice finto (CRM-05, #2349): `crm.catalogo.elenca`, `categorie.elenca`, `mostra`, `crea`, `modifica` e
- * `cronologia.elenca`, con le regole, i pointer e l'ordine di `CatalogoController` del backoffice. Una voce ha un tipo (`servizio`,
+ * `ricerca.crea` e `cronologia.elenca`, con le regole, i pointer e l'ordine di `CatalogoController` del backoffice. Una voce ha un tipo (`servizio`,
  * `prodotto`, `abbonamento`, `pacchetto`) e i campi di quel tipo: un campo che il tipo non ha è 422 `campo_vietato`, uno che manca
  * `obbligatorio`. Si archivia e si ripristina con `stato`, mai si elimina; il prezzo è un intero in unità minori nella valuta del CRM; la
  * modifica vuole l'`If-Match` se c'è, e la cronologia ricorda i valori vecchi e nuovi (di nome, descrizione, codice e categoria il solo nome
@@ -136,20 +136,79 @@ trait CrmCatalogo
             'categoria' => ['bail', 'sometimes', 'nullable', 'string', 'max:60'],
             'ordina' => ['bail', 'sometimes', 'string', Rule::in(self::CRM_CATALOGO_ORDINI)],
             'totale' => ['sometimes', 'string', Rule::in(['true', 'false'])],
+            'q' => ['prohibited'],
         ]);
         $voci = fn (string $parametro) => array_values(array_unique(array_filter(array_map('trim', explode(',', (string) ($query[$parametro] ?? ''))), fn (string $voce) => $voce !== '')));
-        $tipi = $voci('tipo');
-        $stati = $voci('stato') ?: ['bozza', 'attiva'];
+        $categoria = isset($query['categoria']) && trim((string) $query['categoria']) !== '' ? self::chiaveCrm($query['categoria']) : null;
+
+        return $this->paginaCatalogoCrm($richiesta, $chi['workspace'], 'crm.catalogo.elenca', $voci('tipo'), $voci('stato') ?: ['bozza', 'attiva'], $categoria, null, (string) ($query['ordina'] ?? 'nome'), ($query['totale'] ?? null) === 'true', self::LIMITE_PREDEFINITO, null);
+    }
+
+    /**
+     * crm.catalogo.ricerca.crea (CatalogoController::ricercaCrea): le voci per nome, con `q` nel corpo (mai nell'URL: nella query è 422 sul
+     * parametro) e gli stessi filtri di `elenca` come liste. `q` presente ma vuoto o non testo è 422 su `#/q`; ogni parola deve stare nel
+     * nome, senza maiuscole né accenti. Il cursore è di questo metodo e dei suoi filtri.
+     *
+     * @param  array<string, mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function ricercaCatalogoCrm(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $this->testi->validaQuery(self::query($richiesta), ['q' => ['prohibited']]);
+        $grezzi = Testi::pulisci($corpo);
+        $elenco = fn (string $nome, array $ammessi) => [
+            $nome => ['nullable', 'array', 'list', 'max:'.count($ammessi)],
+            "{$nome}.*" => ['bail', 'string', Rule::in($ammessi), function (string $campo, mixed $valore, Closure $fail) use ($grezzi, $nome) {
+                $prima = array_slice(array_values((array) ($grezzi[$nome] ?? [])), 0, (int) substr($campo, strlen($nome) + 1));
+
+                if (in_array($valore, $prima, true)) {
+                    $this->rifiutaCrm($fail, $campo, Regola::DUPLICATO, 'validation.distinct', ['attribute' => $nome]);
+                }
+            }],
+        ];
+        $campi = $this->testi->validaCorpo($corpo, [
+            'q' => ['sometimes', 'required', 'string', 'max:100'],
+            ...$elenco('tipo', self::CRM_CATALOGO_TIPI),
+            ...$elenco('stato', self::CRM_CATALOGO_STATI),
+            'categoria' => ['nullable', 'string', 'max:60'],
+            'ordina' => ['nullable', 'string', Rule::in(self::CRM_CATALOGO_ORDINI)],
+            'limite' => ['nullable', 'integer:strict', 'between:1,'.self::LIMITE_MASSIMO],
+            'cursore' => ['nullable', 'string'],
+            'totale' => ['nullable', 'boolean:strict'],
+        ]);
+        $categoria = isset($campi['categoria']) && trim((string) $campi['categoria']) !== '' ? self::chiaveCrm($campi['categoria']) : null;
+        $ricerca = isset($campi['q']) ? self::chiaveCrm($campi['q']) : null;
+        $tipi = array_values(array_unique($campi['tipo'] ?? []));
+        $stati = array_values(array_unique($campi['stato'] ?? [])) ?: ['bozza', 'attiva'];
         sort($tipi);
         sort($stati);
-        $categoria = isset($query['categoria']) && trim((string) $query['categoria']) !== '' ? self::chiaveCrm($query['categoria']) : null;
-        $ordina = (string) ($query['ordina'] ?? 'nome');
+        $ordina = (string) ($campi['ordina'] ?? 'nome');
+        $limite = $campi['limite'] ?? self::LIMITE_PREDEFINITO;
+
+        return $this->paginaCatalogoCrm(null, $chi['workspace'], 'crm.catalogo.ricerca.crea', $tipi, $stati, $categoria, $ricerca, $ordina, $campi['totale'] ?? false, $campi['limite'] ?? self::LIMITE_PREDEFINITO, $campi['cursore'] ?? null);
+    }
+
+    /**
+     * Una pagina di voci del catalogo, dal codice che `elenca` e `ricercaCrea` hanno in comune. `elenca` ha una richiesta e legge `limite` e
+     * `cursore` dalla sua query; la ricerca non ne ha e li porta già letti dal corpo (un cursore che non vale è 422 su `#/cursore`).
+     *
+     * @param  list<string>  $tipi
+     * @param  list<string>  $stati
+     * @return array{int, array<string, mixed>}
+     */
+    private function paginaCatalogoCrm(?Request $richiesta, string $workspace, string $metodo, array $tipi, array $stati, ?string $categoria, ?string $ricerca, string $ordina, bool $totale, int $limite, ?string $cursore): array
+    {
+        sort($tipi);
+        sort($stati);
+        $parole = $ricerca === null ? [] : (preg_split('/\s+/u', $ricerca, -1, PREG_SPLIT_NO_EMPTY) ?: []);
         $righe = array_values(array_filter(
-            $this->righeCrm('catalogo', $chi['workspace']),
+            $this->righeCrm('catalogo', $workspace),
             fn (array $riga) => in_array($riga['stato'], $stati, true) && ($tipi === [] || in_array($riga['tipo'], $tipi, true))
-                && ($categoria === null || ($riga['categoria'] !== null && self::chiaveCrm($riga['categoria']) === $categoria)),
+                && ($categoria === null || ($riga['categoria'] !== null && self::chiaveCrm($riga['categoria']) === $categoria))
+                && array_reduce($parole, fn (bool $tutte, string $parola) => $tutte && str_contains((string) self::chiaveCrm($riga['nome']), $parola), true),
         ));
-        $lista = 'crm.catalogo.elenca:'.substr(hash('sha256', json_encode([$ordina, $tipi, $stati, $categoria], JSON_THROW_ON_ERROR)), 0, 16);
+        $lista = $metodo.':'.substr(hash('sha256', json_encode([$ordina, $tipi, $stati, $categoria, $ricerca], JSON_THROW_ON_ERROR)), 0, 16);
         $campo = ['nome' => 'nome', 'aggiornata_il' => 'aggiornata_il', 'prezzo' => 'prezzo_importo'][ltrim($ordina, '-')];
         $discendente = str_starts_with($ordina, '-');
         $ordine = function (array $una, array $altra) use ($campo, $discendente): int {
@@ -165,9 +224,17 @@ trait CrmCatalogo
 
             return $ordine !== 0 ? $ordine : $verso * (strcmp($una['id'], $altra['id']) <=> 0);
         };
-        $risposta = $this->paginaCrm($richiesta, $lista, $righe, $ordine, fn (array $riga) => $this->voceCatalogoCrm($riga));
+        $voce = fn (array $riga) => $this->voceCatalogoCrm($riga);
 
-        if (($query['totale'] ?? null) === 'true') {
+        if ($richiesta !== null) {
+            $risposta = $this->paginaCrm($richiesta, $lista, $righe, $ordine, $voce);
+        } elseif ($cursore !== null && $this->leggiCursore($lista, 'id', $cursore) === null) {
+            throw $this->erroreCrm('cursore', 'regole.cursore', Regola::FORMATO, ['attribute' => 'cursore']);
+        } else {
+            $risposta = $this->tagliaPaginaCrm($lista, $righe, $ordine, $voce, $limite, $cursore);
+        }
+
+        if ($totale) {
             $risposta[1]['totale'] = count($righe);
         }
 
