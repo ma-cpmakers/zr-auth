@@ -47,6 +47,25 @@ it('una persona di un\'altra azienda, una che non c\'è e chi crea sono lo stess
         ->and(collect(alFinto('GET', '/v1/io/workspace', gettone: $gettone)->json('data'))->count())->toBe(1);
 });
 
+it('una persona che sta solo in un workspace dell\'azienda che chi chiama non vede è lo stesso 422; con un workspace in comune è ammessa (nota 16350)', function () {
+    [$finto, $studio, , , $gettone, $anna] = conLaCollega();
+    $paolo = $finto->persona('paolo@example.com', PASSWORD, nome: 'Paolo');
+    $altro = $finto->workspace('Altro studio', $paolo, $studio['azienda_id']);
+    $eva = $finto->persona('eva@example.com', PASSWORD, nome: 'Eva');
+    $finto->membro($altro, $eva, 'membro');
+    $corpo = fn (array $persona) => ['nome' => 'Secondo', 'azienda_id' => $studio['azienda_id'], 'membri' => [['persona' => $persona['id'], 'ruolo' => 'membro']]];
+
+    $risposta = alFinto('POST', '/v1/io/workspace', $corpo($eva), $gettone);
+
+    expect($risposta->status())->toBe(422)
+        ->and($risposta->json('errors.0.pointer'))->toBe('#/membri/0/persona')
+        ->and($risposta->json('errors.0.regola'))->toBe('valore_non_ammesso');
+
+    $finto->membro($altro, $anna, 'membro');
+
+    expect(alFinto('POST', '/v1/io/workspace', $corpo($eva), $gettone)->status())->toBe(201);
+});
+
 it('senza azienda_id membri è 422 campo_vietato su #/membri (#2012 C.2)', function () {
     [, , $collega, , $gettone] = conLaCollega();
 

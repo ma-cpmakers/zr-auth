@@ -211,7 +211,7 @@ return [
     ],
     'proprieta_da_trasferire' => [
         'title' => 'Ownership to hand over',
-        'detail' => 'You own one or more workspaces (the problem carries `workspace_da_trasferire` next to the code, with id and name): while you do, you cannot delete the account. Delete those workspaces and repeat the request. Nothing was written.',
+        'detail' => 'You own one or more workspaces that have other members (the problem carries `workspace_da_trasferire` next to the code, with id and name): while you do, you cannot delete the account. Hand the ownership to another member (`workspace.proprietario.modifica`) or delete those workspaces, then repeat the request. Nothing was written.',
     ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',

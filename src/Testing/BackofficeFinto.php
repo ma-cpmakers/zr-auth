@@ -204,6 +204,7 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.modifica'],
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
         ['POST', '#^/v1/workspace/uscita$#', 'workspace.uscita.crea'],
+        ['PATCH', '#^/v1/workspace/proprietario$#', 'workspace.proprietario.modifica'],
     ];
 
     /**
@@ -432,6 +433,9 @@ final class BackofficeFinto
 
     /** @var array<string, CarbonImmutable> quando si archivia ogni workspace di cui il proprietario ha chiesto l'eliminazione, per id: il finto non archivia alla scadenza */
     private array $eliminazioni = [];
+
+    /** @var array<string, string> i workspace la cui eliminazione l'ha programmata io.elimina (il solo account del workspace), per id: la persona che l'ha chiesta; il rientro li ritrova */
+    private array $eliminazioniConAccount = [];
 
     /** @var array<string, string> il nome di ogni azienda, per id: quello del primo workspace che l'ha fatta nascere, mai aggiornato */
     private array $aziende = [];
@@ -1292,6 +1296,7 @@ final class BackofficeFinto
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
                 'workspace.uscita.crea' => $this->esceDalWorkspace($richiesta, $corpo),
+                'workspace.proprietario.modifica' => $this->passaLaProprieta($richiesta, $corpo),
                 default => $this->eseguiCrm($operazione, $richiesta, $corpo, $parametri),
             };
             // Le intestazioni di una risposta riuscita (la Location di una creazione) sono il terzo elemento, se c'è.
@@ -3464,7 +3469,8 @@ final class BackofficeFinto
      * io.elimina (IoController::elimina, #1961): «Elimina account» con ripensamento. Nell'ordine del backoffice: il gettone (ogni gettone
      * della persona, con o senza workspace), la conferma recente dell'accesso (403 `conferma_richiesta`, prima di guardare altro), il freno
      * di 5 richieste in un'ora per persona (429), poi i workspace di cui è proprietaria (409 `proprieta_da_trasferire`, con `workspace_da_trasferire`,
-     * id e nome in ordine di id, accanto al codice: non cambia niente). Altrimenti 202 con `richiesta_il` e `anonimizzazione_il`, trenta giorni
+     * id e nome in ordine di id, accanto al codice: non cambia niente; non contano quelli in cui è l'unico account, che si eliminano con lei,
+     * alla stessa data, e li ritrova chi rientra). Altrimenti 202 con `richiesta_il` e `anonimizzazione_il`, trenta giorni
      * dopo: gli accessi della persona si chiudono subito, e i loro gettoni, quello che chiama compreso, sono 401; il resto (nome, email, appartenenze)
      * resta com'è, e un nuovo accesso entro i trenta giorni toglie la richiesta (`eliminazione_annullata` in accessi.crea e accessi.provider.crea).
      * La seconda richiesta di chi l'ha già fatta non può arrivare con un gettone: dopo il 202 non ce n'è uno che valga.
@@ -3484,11 +3490,22 @@ final class BackofficeFinto
         $this->frena('freni:io.elimina:persona:'.$persona, self::FRENI['eliminazioni_persona'], self::ORA);
 
         $daTrasferire = [];
+        $soli = [];
 
         foreach ($this->workspace as $id => $workspace) {
-            if (($this->membri[$id][$persona] ?? null) === 'proprietario') {
-                $daTrasferire[] = ['id' => $id, 'nome' => $workspace['nome']];
+            // Non contano i workspace con l'eliminazione già programmata (nota 16347 punto 1): se ne vanno da sé.
+            if (($this->membri[$id][$persona] ?? null) !== 'proprietario' || isset($this->eliminazioni[$id])) {
+                continue;
             }
+
+            // Il workspace in cui è l'unico account non blocca: si elimina con lei, e se rientra lo ritrova (Luciano, 24/10).
+            if (array_diff_key($this->membri[$id], [$persona => true]) === []) {
+                $soli[] = $id;
+
+                continue;
+            }
+
+            $daTrasferire[] = ['id' => $id, 'nome' => $workspace['nome']];
         }
 
         if ($daTrasferire !== []) {
@@ -3500,13 +3517,21 @@ final class BackofficeFinto
         $adesso = now()->toImmutable()->startOfMillisecond();
         $quando = $this->eliminazioniPersona[$persona] ??= $adesso;
 
+        foreach ($soli as $id) {
+            $this->eliminazioni[$id] = $quando->addDays(30);
+            $this->eliminazioniConAccount[$id] = $persona;
+        }
+
         foreach ($this->accessi as $id => $accesso) {
             if ($accesso['utente'] === $persona) {
                 $this->accessi[$id]['chiuso'] = true;
             }
         }
 
-        return [202, ['data' => ['richiesta_il' => self::iso($quando), 'anonimizzazione_il' => self::iso($quando->addDays(30))]]];
+        sort($soli, SORT_STRING);
+        $eliminati = array_map(fn (string $id) => ['id' => $id, 'nome' => $this->workspace[$id]['nome']], $soli);
+
+        return [202, ['data' => ['richiesta_il' => self::iso($quando), 'anonimizzazione_il' => self::iso($quando->addDays(30)), 'workspace_eliminati' => $eliminati]]];
     }
 
     /**
@@ -3520,6 +3545,12 @@ final class BackofficeFinto
         }
 
         unset($this->eliminazioniPersona[$persona]);
+
+        foreach ($this->eliminazioniConAccount as $id => $chi) {
+            if ($chi === $persona) {
+                unset($this->eliminazioni[$id], $this->eliminazioniConAccount[$id]);
+            }
+        }
 
         return true;
     }
@@ -4314,6 +4345,7 @@ final class BackofficeFinto
                 'azienda.persone' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PERSONE)],
                 'azienda.sito' => ['sometimes', 'nullable', 'bail', 'string', 'max:255', 'url:http,https'],
             ], ['azienda' => ['partita_iva', 'settore', 'persone', 'sito']]);
+            $this->rifiutaICampiEstraneiDeiMembri($corpo['membri'] ?? null);
             $azienda = $campi['azienda_id'] ?? null;
             $datiAzienda = array_filter($campi['azienda'] ?? [], fn (mixed $valore) => $valore !== null);
 
@@ -4332,7 +4364,7 @@ final class BackofficeFinto
             }
 
             // I membri iniziali (#2012, C.2): dopo il 404 e il 403 dell'azienda, prima dell'accordo.
-            $membriIniziali = $this->controllaIMembri($persona, $azienda, $corpo['membri'] ?? null, $campi['membri'] ?? []);
+            $membriIniziali = $this->controllaIMembri($persona, $azienda, $campi['membri'] ?? []);
 
             // L'accordo sul trattamento dei dati (#1700): dopo il 404 e il 403 dell'azienda, prima del freno e di ogni scrittura.
             $accordo = $this->richiediAccordo($azienda, $campi['accordo_trattamento_dati_accettato'] ?? null);
@@ -4391,18 +4423,8 @@ final class BackofficeFinto
         });
     }
 
-    /**
-     * I membri iniziali di io.workspace.crea (IoWorkspaceController::controllaIMembri, #2012 C.2): ognuno entra con un invito, anche se è
-     * della stessa azienda. Si può invitare solo una persona che è già membro di un workspace dell'azienda del workspace nuovo, e non chi lo
-     * crea: tutto il resto (un'altra persona, una che non c'è, un'altra azienda) è 422 `valore_non_ammesso` su `#/membri/N/persona`,
-     * uguale nei casi (G11). Senza `azienda_id` `membri` è 422 `campo_vietato`. Ogni elemento ha solo `persona` e `ruolo`: un altro nome
-     * è 422 `campo_estraneo` su `#/membri/N/<nome>`. Un corpo senza `membri` non cambia.
-     *
-     * @param  mixed  $grezzo  `membri` come è arrivato nel corpo
-     * @param  list<array{persona: string, ruolo: string}>  $membri  quelli validati
-     * @return list<array{0: string, 1: string}> chi invitare e con quale ruolo, nell'ordine del corpo
-     */
-    private function controllaIMembri(string $chi, ?string $azienda, mixed $grezzo, array $membri): array
+    /** Ogni elemento di `membri` ha solo `persona` e `ruolo`: un altro nome è 422 campo_estraneo (IoWorkspaceController::rifiutaICampiEstraneiDeiMembri). Viene prima del 404 e del 403 dell'azienda. */
+    private function rifiutaICampiEstraneiDeiMembri(mixed $grezzo): void
     {
         $errori = [];
 
@@ -4417,6 +4439,22 @@ final class BackofficeFinto
         if ($errori !== []) {
             throw new Problema('dati_non_validi', $errori);
         }
+    }
+
+    /**
+     * I membri iniziali di io.workspace.crea (IoWorkspaceController::controllaIMembri, #2012 C.2): ognuno entra con un invito, anche se è
+     * della stessa azienda. Si può invitare solo una persona che è già membro di un workspace dell'azienda del workspace nuovo, e non chi lo
+     * crea: tutto il resto (un'altra persona, una che non c'è, un'altra azienda) è 422 `valore_non_ammesso` su `#/membri/N/persona`,
+     * uguale nei casi (G11). Senza `azienda_id` `membri` è 422 `campo_vietato`. Ogni elemento ha solo `persona` e `ruolo`: un altro nome
+     * è 422 `campo_estraneo` su `#/membri/N/<nome>`. Un corpo senza `membri` non cambia.
+     *
+     * @param  mixed  $grezzo  `membri` come è arrivato nel corpo
+     * @param  list<array{persona: string, ruolo: string}>  $membri  quelli validati
+     * @return list<array{0: string, 1: string}> chi invitare e con quale ruolo, nell'ordine del corpo
+     */
+    private function controllaIMembri(string $chi, ?string $azienda, array $membri): array
+    {
+        $errori = [];
 
         if ($membri === []) {
             return [];
@@ -4430,9 +4468,10 @@ final class BackofficeFinto
 
         foreach (array_values($membri) as $posto => $membro) {
             $persona = $membro['persona'];
+            // Un workspace dell'azienda in cui sono membri tutte e due, chi chiama e la persona (zr-pm, 24/10, nota 16350).
             $ammessa = $persona !== $chi && isset($this->persone[$persona]) && array_filter(
                 $this->workspace,
-                fn (array $workspace, string $id) => $workspace['azienda_id'] === $azienda && isset($this->membri[$id][$persona]),
+                fn (array $workspace, string $id) => $workspace['azienda_id'] === $azienda && isset($this->membri[$id][$persona], $this->membri[$id][$chi]),
                 ARRAY_FILTER_USE_BOTH,
             ) !== [];
 
@@ -4924,6 +4963,36 @@ final class BackofficeFinto
         $this->togliIlMembro($workspace, $persona);
 
         return [204, null];
+    }
+
+    /**
+     * workspace.proprietario.modifica (ProprietarioController::modifica, #2542): il proprietario passa la proprietà a un altro membro. Nell'ordine
+     * del backoffice: il ruolo di chi chiama (403, solo il proprietario), il workspace in eliminazione (409), il corpo (422 su `#/utente`), chi è già
+     * il proprietario (422 `valore_non_ammesso`), poi chi non è membro o ha chiesto di eliminare l'account (422 `non_trovato`, lo stesso testo di un id
+     * inventato). I due ruoli cambiano insieme: chi chiamava resta amministratore. Risponde 200 col nuovo proprietario.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function passaLaProprieta(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conWorkspace($richiesta, ['proprietario']);
+        $workspace = $chi['workspace'];
+        $this->rifiutaSeInEliminazione($workspace);
+        $scelto = strtolower((string) $this->testi->validaStretta($corpo, ['utente' => ['bail', 'required', 'string', 'ulid']])['utente']);
+
+        if ($scelto === $chi['persona']) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_gia_proprietario'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/utente']]);
+        }
+
+        if (! isset($this->membri[$workspace][$scelto]) || isset($this->eliminazioniPersona[$scelto])) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => 'non_trovato', 'pointer' => '#/utente']]);
+        }
+
+        $this->membri[$workspace][$chi['persona']] = 'amministratore';
+        $this->membri[$workspace][$scelto] = 'proprietario';
+
+        return [200, ['data' => $this->voceMembro($workspace, $scelto)]];
     }
 
     /**

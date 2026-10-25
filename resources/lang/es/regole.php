@@ -28,6 +28,7 @@ return [
     'troppe_board' => 'Como máximo :max tableros por llamada.',
     'etichetta_della_board' => 'Esta etiqueta no es del tablero de la tarjeta: los ids de las etiquetas los da board.board.mostra.',
     'utente_del_workspace' => 'En el workspace no hay un usuario con este id: los ids de los usuarios los da workspace.membri.elenca.',
+    'utente_gia_proprietario' => 'Esta persona ya es la propietaria del workspace: envía el id de otro miembro, que da workspace.membri.elenca.',
     'scheda_del_workspace' => 'En el workspace no hay una tarjeta con este id: los ids de las tarjetas los da board.schede.elenca.',
     // #1843: :data è la data dell'altro campo nella forma breve di `data_breve` (giorno e mese, dalla libreria delle date).
     'inizio_dopo_la_scadenza' => 'El inicio no puede ser posterior a la fecha límite (:data).',
