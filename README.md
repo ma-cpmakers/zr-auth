@@ -579,6 +579,22 @@ expect(Rotte::senzaGuardia(['GET accedi', 'POST accedi']))->toBe([]);
 `GET up` è già un'eccezione. E per la prova 8: `Zeiras\Auth\Testing\Gettone::assenteDa($this->get('/dashboard'))`.
 
 
+### La sessione di chi non è entrato resta piccola (da v0.12.104, zr-pm 25/10)
+
+Un GET anonimo con una query lunga scriveva in Redis una sessione di ~25 KB per due ore: la guardia ricordava `fullUrl()` in
+`url.intended` e StartSession di Laravel aggiunge `_previous.url` a ogni GET. Redis è uno per tutta Zeiras (256 MB, `noeviction`):
+~10.000 richieste fermavano tutti i siti. Ora:
+
+- `url.intended` di un GET è **il solo percorso**, rimesso sull'origine, **mai la query** (`Ritorno::dallaRichiesta`). Un
+  percorso più lungo di 300 byte, con byte di controllo, spazi, barre rovesciate, `//` o `.`/`..` non si ricorda (e cancella un
+  ritorno ricordato prima): dopo l'accesso si va alla pagina predefinita. Chi tornava alla pagina con i suoi filtri (`?vista=2`)
+  ora torna alla pagina senza; il ritorno dopo una scrittura (sotto) tiene la query come prima.
+- `StartSession` di Laravel scrive `_previous.url = fullUrl()` a ogni GET: zr-auth lo sostituisce **da sé nel gruppo `web`**, nello
+  stesso posto, con una sottoclasse (`AvviaLaSessioneSenzaQuery`). Per chi non ha una sessione aperta `_previous.url` è il solo
+  percorso (lo stesso controllo di `url.intended`), o non si scrive se il percorso non vale; lo stesso per il ricevitore
+  dell'ingresso, il cui `?codice=&state=` non resta nella sessione di chi è appena entrato. Il frontend non aggiunge niente (se ha
+  già una sua `StartSession` nel gruppo, zr-auth non la tocca). Chi è entrato non cambia.
+
 ### Il ritorno dopo una scrittura (da v0.12.42, #2043)
 
 Una scrittura (POST, PUT, PATCH, DELETE) che trova la sessione scaduta non perde la pagina da cui è partita: la guardia ricorda,

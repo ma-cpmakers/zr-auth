@@ -2,6 +2,7 @@
 
 namespace Zeiras\Auth;
 
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
@@ -10,6 +11,8 @@ use Illuminate\Foundation\Http\Kernel;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Route as Rotta;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Session\SessionManager;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 use Zeiras\Auth\Http\Controllers\EventiController;
 use Zeiras\Auth\Http\Controllers\RicevitoreController;
+use Zeiras\Auth\Http\Middleware\AvviaLaSessioneSenzaQuery;
 use Zeiras\Auth\Http\Middleware\ConGettone;
 use Zeiras\Auth\Http\Middleware\RicordaLIdDellaSessione;
 use Zeiras\Auth\Http\Middleware\SessioneChiusa;
@@ -28,6 +32,13 @@ final class ZrAuthServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/zr-auth.php', 'zr-auth');
+
+        // Come Laravel costruisce StartSession (SessionServiceProvider), col resolver della cache: senza, la sottoclasse non ha il
+        // blocco di `Route::block` (BloccoSessioneTest).
+        $this->app->singleton(AvviaLaSessioneSenzaQuery::class, fn ($app) => new AvviaLaSessioneSenzaQuery(
+            $app->make(SessionManager::class),
+            fn () => $app->make(CacheFactory::class),
+        ));
     }
 
     public function boot(): void
@@ -75,6 +86,11 @@ final class ZrAuthServiceProvider extends ServiceProvider
                 $kernel->prependMiddlewareToGroup('web', SessioneChiusa::class);
                 // Dopo StartSession (e prima delle rotte): ricorda l'id con cui la sessione è partita.
                 $kernel->appendMiddlewareToGroup('web', RicordaLIdDellaSessione::class);
+                // StartSession diventa la sua sottoclasse, che per chi non è entrato scrive `_previous.url` senza la query (e senza un
+                // percorso lungo): la sessione anonima resta piccola. Nello stesso posto del gruppo; se il frontend ha già un'altra
+                // StartSession nel gruppo, non c'è niente da cambiare qui.
+                $web = array_map(fn ($m) => $m === StartSession::class ? AvviaLaSessioneSenzaQuery::class : $m, $kernel->getMiddlewareGroups()['web']);
+                $kernel->setMiddlewareGroups([...$kernel->getMiddlewareGroups(), 'web' => $web]);
             }
             $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, ConGettone::class);
             $kernel->addToMiddlewarePriorityAfter(ConGettone::class, SoloDallaPersona::class);

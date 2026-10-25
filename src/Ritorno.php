@@ -17,6 +17,28 @@ final class Ritorno
     /** Il Referer più lungo che si guarda: oltre, non è una pagina del frontend. */
     public const TETTO = 2000;
 
+    /** Il percorso più lungo che la guardia ricorda da un GET: oltre, non si ricorda niente e si va alla pagina predefinita. */
+    public const TETTO_PERCORSO = 300;
+
+    /**
+     * Dove tornare dopo l'accesso quando a chiedere era un GET: il solo percorso della richiesta, rimesso sull'origine, MAI la
+     * query. Un GET anonimo con una query lunga la scriveva intera nella sessione (e Redis la tiene due ore): chi non è
+     * entrato non ha ancora una sessione che valga, e ogni richiesta ne apriva una grossa. Null se il percorso è lungo più di
+     * TETTO_PERCORSO, o ha byte di controllo, spazi, barre rovesciate, un segmento vuoto (`//`) o `.`/`..`: dopo l'accesso si va
+     * alla pagina predefinita del modulo.
+     */
+    public static function dallaRichiesta(Request $richiesta): ?string
+    {
+        $percorso = $richiesta->getPathInfo();
+        $chiaro = rawurldecode($percorso);
+        if ($percorso === '' || $percorso[0] !== '/' || strlen($percorso) > self::TETTO_PERCORSO || str_contains($chiaro, '//')
+            || preg_match('/[\x00-\x20\x7F\\\\]/', $chiaro) === 1 || preg_match('#(^|/)\.\.?(/|$)#', $chiaro) === 1) {
+            return null;
+        }
+
+        return $richiesta->getSchemeAndHttpHost().$percorso;
+    }
+
     public static function dalReferer(Request $richiesta, mixed $slug): ?string
     {
         $referer = $richiesta->headers->get('referer');

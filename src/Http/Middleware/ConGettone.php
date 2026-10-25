@@ -12,7 +12,7 @@ use Zeiras\Auth\Sessione;
 /**
  * La guardia di zr-auth: ogni rotta dei gruppi `web` e `api` vuole una sessione con un gettone che non è scaduto
  * (ZrAuthServiceProvider la mette nei gruppi da sé). Senza, una pagina rimanda all'ingresso e ricorda dove voleva andare
- * (un GET: la sua pagina; una scrittura: la pagina da cui è partita, dal Referer, Ritorno::dalReferer); una visita di Inertia
+ * (un GET: il percorso della sua pagina, senza query; una scrittura: la pagina da cui è partita, dal Referer, Ritorno::dalReferer); una visita di Inertia
  * riceve 409 con `X-Inertia-Location`; una richiesta JSON 401.
  */
 final class ConGettone
@@ -48,7 +48,9 @@ final class ConGettone
         // ritorno lo legge Sessione::ritorno(), con un GET: la scrittura non si ripete.
         if ($richiesta->hasSession()) {
             if ($richiesta->isMethod('GET')) {
-                $richiesta->session()->put('url.intended', $richiesta->fullUrl());
+                // Il solo percorso, mai la query (Ritorno::dallaRichiesta): la sessione di chi non è entrato resta piccola.
+                $dovEri = Ritorno::dallaRichiesta($richiesta);
+                $dovEri !== null ? $richiesta->session()->put('url.intended', $dovEri) : $richiesta->session()->forget('url.intended');
             } elseif (in_array($richiesta->getRealMethod(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
                 $dovEri = Ritorno::dalReferer($richiesta, $richiesta->route('workspace'));
                 // Un ritorno ricordato prima non vale per questa scrittura.
