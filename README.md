@@ -490,7 +490,7 @@ cartelle, caratteri di controllo né a capo); senza, quello del tipo (`Scaricame
   metà, `BackofficeNonRisponde`. `comeRisposta()` non rilancia un errore dopo il primo byte (accoderebbe la pagina d'errore al file): lo
   scrive nel log e il file finisce lì, troncato.
 - Il tipo è uno di `Scaricamento::TIPI` (oggi `text/csv`, `application/zip` e `application/pdf`); un `text/html`, un JSON o una risposta senza tipo non sono un file.
-- Il nome del file è ripulito (niente cartelle, caratteri di controllo, a capo; sempre `.csv`), e `comeRisposta()` aggiunge
+- Il nome del file è ripulito (niente cartelle, caratteri di controllo, a capo; con l'estensione del tipo: `.csv`, `.zip`, `.pdf`), e `comeRisposta()` aggiunge
   `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.
 - Il finto (`BackofficeFinto`) risponde ai due metodi con il CSV dei suoi contatti e delle sue aziende, a proprietario e amministratore.
 
