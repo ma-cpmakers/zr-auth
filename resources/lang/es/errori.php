@@ -213,6 +213,26 @@ return [
         'title' => 'Propiedad por transferir',
         'detail' => 'Eres propietario de uno o más espacios de trabajo con otros miembros (el problema lleva `workspace_da_trasferire` junto al código, con id y nombre): mientras lo seas no puedes eliminar la cuenta. Pasa la propiedad a otro miembro (`workspace.proprietario.modifica`) o elimina esos espacios, y repite la petición. No se escribió nada.',
     ],
+    'indirizzo_occupato' => [
+        'title' => 'Dirección ya en uso',
+        'detail' => 'La dirección ya está en uso: la de una página de Bookings es única en todo Zeiras, la de un calendario es única dentro de su página. El problema lleva `proposta` junto al código, una dirección libre; elige otra y repite la petición. No se escribió nada.',
+    ],
+    'pagina_presente' => [
+        'title' => 'Página ya existente',
+        'detail' => 'Ya tienes una página de reservas en este espacio de trabajo: cada miembro tiene solo una. Léela con `bookings.pagine.elenca` (`mie=true`) y cámbiala con `bookings.pagine.modifica`. No se escribió nada.',
+    ],
+    'orario_non_disponibile' => [
+        'title' => 'Horario no disponible',
+        'detail' => 'El horario elegido ya no está libre: la franja está llena, el profesional tiene otro compromiso que la toca (una reserva de otro calendario, una pausa). Vuelve a leer las franjas con `bookings.calendari.slot.elenca` y elige otra. No se escribió nada.',
+    ],
+    'prenotazioni_future' => [
+        'title' => 'Hay reservas futuras',
+        'detail' => 'El calendario tiene reservas confirmadas que aún no han empezado, y no se elimina mientras existan. Cancélalas (`bookings.prenotazioni.modifica` con `stato: annullata`) o pon el calendario en pausa con `bookings.calendari.modifica`. No se escribió nada.',
+    ],
+    'prenotazione_non_modificabile' => [
+        'title' => 'Reserva no modificable',
+        'detail' => 'Esta reserva ya está cancelada, realizada o marcada como no presentada, y no cambia más: una cancelada no se reabre, se hace una nueva. No se escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',
