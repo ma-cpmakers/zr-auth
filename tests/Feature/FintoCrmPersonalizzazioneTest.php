@@ -1,5 +1,7 @@
 <?php
 
+use Zeiras\Auth\Testing\BackofficeFinto;
+
 // La personalizzazione del CRM nel finto (P1 #2638-#2641, P2 #2674-#2676): ciò che un frontend vede dal suo lato. Che le risposte e gli
 // errori siano quelli del backoffice lo prova il suo FintoTest (confronta finto e backoffice sulle stesse chiamate).
 
@@ -124,8 +126,11 @@ it('le funzioni: nessuna cascata, le vincolate sono 409, la barra e i passi segu
         ->and($modifica('clienti', false)->json('codice'))->toBe('funzione_vincolata')      // sempre attiva
         ->and($modifica('documenti', true)->status())->toBe(200)                            // non richiede niente
         ->and($modifica('catalogo', true)->status())->toBe(200)                             // lo stesso valore: 200 senza scrivere
+        ->and($modifica('clienti', true)->status())->toBe(200)                              // anche una sempre attiva: il valore uguale vince sul vincolo
         ->and($modifica('catalogo', false, 'carla')->json('codice'))->toBe('permesso_negato')
-        ->and($modifica('magia', false)->status())->toBe(404);
+        ->and($modifica('magia', false)->status())->toBe(404)
+        ->and(alFinto('PATCH', '/v1/crm/funzioni/magia', [], $gettoni['anna'])->status())->toBe(404)      // il 404 viene prima del corpo
+        ->and(alFinto('PATCH', '/v1/crm/funzioni/catalogo', [], $gettoni['carla'])->json('codice'))->toBe('permesso_negato');   // il 403 viene prima del corpo
 
     $testo = $modifica('scadenze', 'false');
 
@@ -165,7 +170,8 @@ it('il vocabolario: una rinomina vince sul pack in tutte e tre le lingue, null l
 
     expect($letta['testo'])->toBe('Soci')->and($letta['testi']['en'])->toBe('Members');
 
-    $rifiutata = $modifica(['barra.aziende' => ['it' => 'Ditte', 'en' => str_repeat('x', 201)], 'barra.inesistente' => ['it' => 'x', 'en' => 'x', 'es' => 'x'], 'barra.da_fare' => ['it' => 'Fare', 'en' => 'Do', 'es' => 'Hacer', 'fr' => 'Faire']]);
+    // Una chiave buona accanto alle sbagliate: tutto o niente, non se ne scrive nessuna.
+    $rifiutata = $modifica(['barra.catalogo' => ['it' => 'Prodotti', 'en' => 'Products', 'es' => 'Productos'], 'barra.aziende' => ['it' => 'Ditte', 'en' => str_repeat('x', 201)], 'barra.inesistente' => ['it' => 'x', 'en' => 'x', 'es' => 'x'], 'barra.da_fare' => ['it' => 'Fare', 'en' => 'Do', 'es' => 'Hacer', 'fr' => 'Faire']]);
 
     expect($rifiutata->status())->toBe(422)
         ->and(array_map(fn (array $errore) => [$errore['pointer'], $errore['regola']], $rifiutata->json('errors')))->toBe([
@@ -177,7 +183,8 @@ it('il vocabolario: una rinomina vince sul pack in tutte e tre le lingue, null l
 
     $dopo = collect(alFinto('GET', '/v1/crm/vocabolario', null, $gettoni['carla'])->json('data'));
 
-    expect($dopo->firstWhere('chiave', 'barra.aziende')['personalizzato'])->toBeFalse()
+    expect($dopo->firstWhere('chiave', 'barra.catalogo')['personalizzato'])->toBeFalse()
+        ->and($dopo->firstWhere('chiave', 'barra.aziende')['personalizzato'])->toBeFalse()
         ->and($dopo->firstWhere('chiave', 'barra.da_fare')['personalizzato'])->toBeFalse();
 
     $tolta = $modifica(['barra.clienti' => null]);
@@ -202,11 +209,29 @@ it('i primi passi: si salta e si riporta a da_fare, fatto non si scrive (422), u
     expect($fatto->status())->toBe(422)
         ->and($fatto->json('errors.0.pointer'))->toBe('#/stato')
         ->and($modifica('primo_prodotto', ['stato' => 'saltato'], 'carla')->json('codice'))->toBe('permesso_negato')
-        ->and($modifica('ultimo_passo', ['stato' => 'saltato'])->status())->toBe(404);
+        ->and($modifica('ultimo_passo', ['stato' => 'saltato'])->status())->toBe(404)
+        ->and($modifica('ultimo_passo', [])->status())->toBe(404)                                    // il 404 viene prima del corpo
+        ->and($modifica('primo_prodotto', [], 'carla')->json('codice'))->toBe('permesso_negato');    // il 403 viene prima del corpo
 
     foreach (['incassi', 'acquisti', 'preventivi', 'catalogo'] as $funzione) {
         alFinto('PATCH', "/v1/crm/funzioni/{$funzione}", ['attivo' => false], $gettoni['anna']);
     }
 
     expect($modifica('primo_prodotto', ['stato' => 'saltato'])->status())->toBe(404);
+});
+
+it('i testi seguono la lingua della persona del gettone: per una persona spagnola il pacchetto e il vocabolario escono in spagnolo', function () {
+    $finto = BackofficeFinto::attiva();
+    $eva = $finto->persona('eva@example.com', PASSWORD, 'Eva', lingua: 'es');
+    $studio = $finto->workspace('Estudio', $eva);
+    $finto->attivaApp($studio, 'crm');
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('eva@example.com')['gettone']['gettone'])->json('data.gettone');
+
+    $pacchetto = alFinto('GET', '/v1/crm/personalizzazioni', null, $gettone)->json('data.0');
+    $dashboard = collect(alFinto('GET', '/v1/crm/vocabolario', null, $gettone)->json('data'))->firstWhere('chiave', 'barra.dashboard');
+
+    expect($pacchetto['nome'])->toBe('General')
+        ->and($pacchetto['descrizione'])->toStartWith('El CRM tal cual')
+        ->and($dashboard['testo'])->toBe('Panel')
+        ->and($dashboard['testi']['it'])->toBe('Dashboard');
 });
