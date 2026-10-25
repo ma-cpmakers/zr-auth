@@ -118,11 +118,15 @@ final class BackofficeFinto
 
     private const SOGLIA_DELLE_POSIZIONI = 1_000_000_000;
 
+    /** I soli metodi che il gettone nato da un link di Bookings apre (AmbitoDelGettone::AMMESSI): l'uscita. */
+    private const AMMESSI_DEL_LINK = ['accessi.corrente.elimina'];
+
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['POST', '#^/v1/accessi/codici$#', 'accessi.codici.crea'],
         ['POST', '#^/v1/accessi/codici/verifica$#', 'accessi.codici.verifica.crea'],
+        ['POST', '#^/v1/accessi/link$#', 'accessi.link.crea'],
         ['GET', '#^/v1/accessi$#', 'accessi.elenca'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/altri$#', 'accessi.altri.elimina'],
@@ -462,6 +466,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{codice: string, tentativi: int, scade: int}> i codici di accesso (accessi.codici.crea) in attesa, per email: la persona può non esserci */
     private array $codiciDiAccesso = [];
+
+    /** @var array<string, array{persona: string, prenotazione: string, scade: int, usato: bool}> i link monouso di Bookings (accessi.link.crea), per codice */
+    private array $linkDiAccesso = [];
 
     /** @var array<string, array{versione: string, in_vigore_dal: string, impronta: string}> i documenti «ospite» in vigore (config/legale.php, `ospiti`): vuoto è l'interruttore spento */
     private array $documentiOspite = [];
@@ -1062,6 +1069,20 @@ final class BackofficeFinto
     }
 
     /**
+     * Un link monouso di Bookings per la persona dell'email e la sua prenotazione (LinkDiAccesso::emetti): il codice in chiaro, che nel
+     * backoffice sta nell'email di una prenotazione e qui il test legge da questo metodo. Vale fino a `$scadeIl` (un giorno da adesso se
+     * manca) e una volta sola con accessi.link.crea. La persona deve esserci.
+     */
+    public function link(string $email, string $prenotazione, ?CarbonImmutable $scadeIl = null): string
+    {
+        $persona = $this->conEmail(self::normalizza($email)) ?? throw new LogicException("Nessuna persona con l'email {$email}: il link è di una persona che c'è.");
+        $codice = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $this->linkDiAccesso[$codice] = ['persona' => $persona, 'prenotazione' => $prenotazione, 'scade' => ($scadeIl ?? now()->toImmutable()->addDay())->getTimestamp(), 'usato' => false];
+
+        return $codice;
+    }
+
+    /**
      * L'ultimo codice d'invito partito per l'email, null se nessuno: la casella di posta degli inviti. Il codice non esce
      * mai dalle risposte (workspace.inviti.crea, workspace.inviti.elenca): è nella mail, e il test lo legge da qui.
      */
@@ -1131,7 +1152,7 @@ final class BackofficeFinto
     /** I metodi che chi non ha accettato i documenti legali può chiamare (Accettazione::ESENTI del backoffice, #1699). */
     private const APERTI_SENZA_ACCETTAZIONE = ['legale.documenti.elenca', 'legale.accettazioni.crea', 'io.mostra', 'accessi.corrente.elimina', 'accessi.elimina'];
 
-    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.link.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
 
     /**
      * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
@@ -1211,6 +1232,7 @@ final class BackofficeFinto
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.codici.crea' => $this->creaCodiceDiAccesso($corpo),
                 'accessi.codici.verifica.crea' => $this->verificaCodiceDiAccesso($richiesta, $corpo),
+                'accessi.link.crea' => $this->creaAccessoDalLink($corpo),
                 'accessi.elenca' => $this->elencaAccessi($richiesta),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
                 'accessi.altri.elimina' => $this->eliminaAltriAccessi($richiesta),
@@ -5496,6 +5518,11 @@ final class BackofficeFinto
 
         $this->freni->hit($chiave, self::MINUTO);
 
+        // L'ambito del gettone nato da un link (AmbitoDelGettone, #2479): dopo il freno e prima dell'accettazione.
+        if (($riga['prenotazione'] ?? null) !== null && ! in_array($this->operazioneInCorso, self::AMMESSI_DEL_LINK, true)) {
+            throw new Problema('permesso_negato');
+        }
+
         // L'accettazione obbligatoria (middleware Accettazione, #1699): dopo il freno del gettone e prima del workspace e dei modelli.
         $this->richiedeLeAccettazioni($accesso['utente']);
 
@@ -5686,6 +5713,35 @@ final class BackofficeFinto
         ]]];
     }
 
+    /**
+     * accessi.link.crea (AccessiLinkController::crea), senza gettone: 201 con l'accesso, il gettone e la `prenotazione_id` del link. Il codice
+     * (base64url, 16-128 caratteri) sta nel corpo. Usato, scaduto e sconosciuto sono lo stesso 404 `non_trovato`, e non consumano. Il gettone
+     * vale per la sola prenotazione del link (AMMESSI_DEL_LINK).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaAccessoDalLink(array $corpo): array
+    {
+        $dati = $this->testi->validaStretta($corpo, ['codice' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{16,128}$/D']]);
+        $link = $this->linkDiAccesso[$dati['codice']] ?? null;
+
+        if ($link === null || $link['usato'] || $link['scade'] <= now()->getTimestamp() || ! isset($this->persone[$link['persona']])) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->linkDiAccesso[$dati['codice']]['usato'] = true;
+        $accesso = self::id();
+        $this->accessi[$accesso] = ['utente' => $link['persona'], 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'link'];
+
+        return [201, ['data' => [
+            'id' => $accesso,
+            'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
+            'gettone' => $this->emetti($accesso, null, $link['prenotazione']),
+            'prenotazione_id' => $link['prenotazione'],
+        ]]];
+    }
+
     /** Il solo errore di un codice che non vale: 422 `dati_non_validi` su `#/codice`, uguale per ogni email e ogni corpo. */
     private function codiceDiAccessoNonValido(): never
     {
@@ -5710,10 +5766,10 @@ final class BackofficeFinto
      *
      * @return array<string, mixed>
      */
-    private function emetti(string $accesso, ?string $workspace): array
+    private function emetti(string $accesso, ?string $workspace, ?string $prenotazione = null): array
     {
         $gettone = 'zr_'.Str::random(48);
-        $this->gettoni[$gettone] = ['accesso' => $accesso, 'workspace' => $workspace];
+        $this->gettoni[$gettone] = ['accesso' => $accesso, 'workspace' => $workspace, 'prenotazione' => $prenotazione];
         $persona = $this->accessi[$accesso]['utente'];
 
         return [
