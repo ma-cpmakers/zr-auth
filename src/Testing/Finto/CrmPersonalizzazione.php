@@ -482,9 +482,9 @@ trait CrmPersonalizzazione
         return $errori;
     }
 
-    /** Un segmento di pointer JSON (RFC 6901): `~` e `/` si scrivono `~0` e `~1`. Le chiavi del vocabolario hanno punti, che restano. */
+    /** Un segmento di pointer JSON (RFC 6901, ErroreDiCampo::pointer): `~` e `/` si scrivono `~0` e `~1`, poi la codifica dell'URL. Le chiavi del vocabolario hanno punti, che restano. */
     private static function pointerCrm(string $segmento): string
     {
-        return str_replace(['~', '/'], ['~0', '~1'], $segmento);
+        return rawurlencode(str_replace(['~', '/'], ['~0', '~1'], $segmento));
     }
 }
