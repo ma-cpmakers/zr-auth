@@ -4,10 +4,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Zeiras\Auth\Http\Middleware\ConGettone;
 use Zeiras\Auth\Ritorno;
+use Zeiras\Auth\Sessione;
 
 // Un GET anonimo con una query lunga non deve riempire Redis (misura di zr-devops-af, 25/10): la sessione di chi non è entrato
-// resta di qualche centinaio di byte. url.intended è il solo percorso (Ritorno::dallaRichiesta), `_previous.url` senza query
-// (AvviaLaSessioneSenzaQuery, la sottoclasse di StartSession che il provider mette nel gruppo `web`).
+// resta di qualche centinaio di byte. url.intended è l'indirizzo con la query solo se percorso e query stanno in 512 byte, altrimenti
+// il solo percorso (Ritorno::dallaRichiesta); `_previous.url` lo stesso (AvviaLaSessioneSenzaQuery, la sottoclasse di StartSession
+// che il provider mette nel gruppo `web`). La query corta serve: `/ingresso?state=&sfida=` dei moduli deve riprendere dopo l'accesso.
 
 it('cento GET anonimi con una query lunga lasciano una sessione piccola, con e senza la guardia', function (string $pagina) {
     $massimo = 0;
@@ -31,18 +33,49 @@ it('chi è entrato tiene la query in _previous.url: le sue sessioni sono poche e
     expect(session('_previous.url'))->toBe(FRONTEND.'/pagina?vista=2');
 });
 
-it('la query arriva intera alla rotta pubblica, e non resta in _previous.url', function () {
+it('la query arriva intera alla rotta pubblica, e in _previous.url resta se è corta', function () {
     Route::middleware('web')->get('cerca', fn (Request $richiesta) => ['q' => $richiesta->query('q')])
         ->withoutMiddleware(ConGettone::class);
 
     $this->get(FRONTEND.'/cerca?q=ciao')->assertOk()->assertJson(['q' => 'ciao']);
 
-    expect(session('_previous.url'))->toBe(FRONTEND.'/cerca');
+    expect(session('_previous.url'))->toBe(FRONTEND.'/cerca?q=ciao');
 });
 
-it('il ritorno di un GET è il percorso rimesso sull\'origine, senza query né frammento', function () {
-    expect(Ritorno::dallaRichiesta(Request::create(FRONTEND.'/w/studio/b?vista=2&q=ciao')))->toBe(FRONTEND.'/w/studio/b')
-        ->and(Ritorno::dallaRichiesta(Request::create(FRONTEND.'/')))->toBe(FRONTEND.'/');
+it('il ritorno di un GET è l\'indirizzo della richiesta, come fullUrl(): la query corta resta, il frammento no', function () {
+    expect(Ritorno::dallaRichiesta(Request::create(FRONTEND.'/w/studio/b?vista=2&q=ciao')))->toBe(FRONTEND.'/w/studio/b?q=ciao&vista=2')
+        ->and(Ritorno::dallaRichiesta(Request::create(FRONTEND.'/')))->toBe(FRONTEND)
+        ->and(Ritorno::dallaRichiesta(Request::create(FRONTEND.'/w/studio/b/')))->toBe(FRONTEND.'/w/studio/b')
+        ->and(Ritorno::dallaRichiesta(Request::create(FRONTEND.'/w/studio/b?vista=2'), false))->toBe(FRONTEND.'/w/studio/b');
+});
+
+it('la query resta se percorso e query stanno in 512 byte, oltre si ricorda il solo percorso', function () {
+    $percorso = '/w/studio/b';
+    $tiene = 512 - strlen($percorso) - strlen('?k=');
+
+    expect(Ritorno::dallaRichiesta(Request::create(FRONTEND.$percorso.'?k='.str_repeat('a', $tiene))))->toBe(FRONTEND.$percorso.'?k='.str_repeat('a', $tiene))
+        ->and(Ritorno::dallaRichiesta(Request::create(FRONTEND.$percorso.'?k='.str_repeat('a', $tiene + 1))))->toBe(FRONTEND.$percorso);
+});
+
+it('/ingresso con state e sfida riprende dopo l\'accesso: il ritorno li porta tutti e due', function () {
+    Route::middleware('web')->get('ingresso', fn () => 'ok');
+    $state = str_repeat('s', 43);
+    $sfida = str_repeat('f', 43);
+
+    $this->get(FRONTEND.'/ingresso?state='.$state.'&sfida='.$sfida)->assertRedirect(INGRESSO);
+
+    expect(session('_previous.url'))->toBe(FRONTEND.'/ingresso?sfida='.$sfida.'&state='.$state)
+        ->and(Sessione::ritorno(FRONTEND.'/predefinita'))->toBe(FRONTEND.'/ingresso?sfida='.$sfida.'&state='.$state);
+});
+
+it('6.000 caratteri di query dopo /ingresso non scrivono niente di grosso: il ritorno è il solo percorso', function () {
+    Route::middleware('web')->get('ingresso', fn () => 'ok');
+
+    $this->get(FRONTEND.'/ingresso?state='.str_repeat('s', 6000).'&sfida='.str_repeat('f', 43))->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(FRONTEND.'/ingresso')
+        ->and(session('_previous.url'))->toBe(FRONTEND.'/ingresso')
+        ->and(strlen(serialize(session()->all())))->toBeLessThan(800);
 });
 
 it('un percorso che non è una pagina interna pulita non si ricorda', function (string $percorso) {

@@ -20,14 +20,18 @@ final class Ritorno
     /** Il percorso più lungo che la guardia ricorda da un GET: oltre, non si ricorda niente e si va alla pagina predefinita. */
     public const TETTO_PERCORSO = 300;
 
+    /** Percorso e query di un GET insieme (senza l'origine): oltre, si ricorda il solo percorso. Sopra ogni query legittima di Zeiras (`?state=&sfida=` sono ~100 byte). */
+    public const TETTO_PERCORSO_E_QUERY = 512;
+
     /**
-     * Dove tornare dopo l'accesso quando a chiedere era un GET: il solo percorso della richiesta, rimesso sull'origine, MAI la
-     * query. Un GET anonimo con una query lunga la scriveva intera nella sessione (e Redis la tiene due ore): chi non è
-     * entrato non ha ancora una sessione che valga, e ogni richiesta ne apriva una grossa. Null se il percorso è lungo più di
-     * TETTO_PERCORSO, o ha byte di controllo, spazi, barre rovesciate, un segmento vuoto (`//`) o `.`/`..`: dopo l'accesso si va
-     * alla pagina predefinita del modulo.
+     * Dove tornare dopo l'accesso quando a chiedere era un GET: l'indirizzo della richiesta (come `fullUrl()`), con la query solo se
+     * percorso e query insieme stanno in TETTO_PERCORSO_E_QUERY byte; oltre, il solo percorso. Un GET anonimo con una query lunga la
+     * scriveva intera nella sessione (e Redis la tiene due ore), ma la query corta serve: `/ingresso?state=&sfida=` dei moduli e il
+     * collegamento di un'email devono riprendere dopo l'accesso. `$conQuery` false: mai la query (il ricevitore dell'ingresso, il
+     * cui `?codice=` è già consumato). Null se il percorso è lungo più di TETTO_PERCORSO, o ha byte di controllo, spazi, barre
+     * rovesciate, un segmento vuoto (`//`) o `.`/`..`: dopo l'accesso si va alla pagina predefinita del modulo.
      */
-    public static function dallaRichiesta(Request $richiesta): ?string
+    public static function dallaRichiesta(Request $richiesta, bool $conQuery = true): ?string
     {
         $percorso = $richiesta->getPathInfo();
         $chiaro = rawurldecode($percorso);
@@ -36,7 +40,12 @@ final class Ritorno
             return null;
         }
 
-        return $richiesta->getSchemeAndHttpHost().$percorso;
+        $query = (string) $richiesta->getQueryString();
+        if (! $conQuery || $query === '' || strlen($percorso) + 1 + strlen($query) > self::TETTO_PERCORSO_E_QUERY) {
+            return $richiesta->url();
+        }
+
+        return $richiesta->fullUrl();
     }
 
     public static function dalReferer(Request $richiesta, mixed $slug): ?string

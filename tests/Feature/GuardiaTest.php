@@ -62,10 +62,10 @@ it('l\'ingresso si sceglie con ZR_AUTH_INGRESSO', function () {
 
 // T6.1 (ZB1): il ritorno di un GET è l'indirizzo della richiesta, mai il Referer (quello di una scrittura: RitornoDalRefererTest).
 
-it('senza sessione un GET ricorda il percorso della richiesta, senza query e non il Referer', function () {
+it('senza sessione un GET ricorda l\'indirizzo della richiesta, con la query corta, e non il Referer', function () {
     $this->get(FRONTEND.'/pagina?vista=2', ['Referer' => 'https://altro.zeiras.com/x'])->assertRedirect(INGRESSO);
 
-    expect(session('url.intended'))->toBe('https://board.zeiras.com/pagina');
+    expect(session('url.intended'))->toBe('https://board.zeiras.com/pagina?vista=2');
 });
 
 it('senza sessione HEAD, POST, PUT, PATCH e DELETE rimandano all\'ingresso e non ricordano niente: il Referer di una rotta senza workspace non vale', function (string $metodo) {
