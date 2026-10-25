@@ -4,6 +4,7 @@
 // elemento di `errors` in un errore `dati_non_validi`.
 
 return [
+    'codice_di_accesso' => 'Il codice non vale: controllalo, o chiedine uno nuovo.',
     'cursore' => 'Il campo :attribute non è un cursore di questa lista: usa il valore di successivo della pagina prima.',
     'chiave_idempotenza' => "L'header Idempotency-Key vuole da 1 a 255 caratteri ASCII visibili, senza spazi.",
     'if_match' => "L'header If-Match vuole `*` oppure uno o più entity-tag fra virgolette separati da virgole (come l'`ETag` di una risposta).",
