@@ -3,6 +3,7 @@
 // The messages of the validation rules written here (app/Rules), in English: the same keys as lang/it/regole.php.
 
 return [
+    'codice_di_accesso' => 'The code is not valid: check it, or ask for a new one.',
     'cursore' => 'The :attribute field is not a cursor of this list: use the successivo value of the previous page.',
     'chiave_idempotenza' => 'The Idempotency-Key header needs 1 to 255 visible ASCII characters, without spaces.',
     'if_match' => 'The If-Match header needs `*` or one or more quoted entity-tags separated by commas (like a response `ETag`).',

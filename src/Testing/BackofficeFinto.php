@@ -121,6 +121,8 @@ final class BackofficeFinto
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
+        ['POST', '#^/v1/accessi/codici$#', 'accessi.codici.crea'],
+        ['POST', '#^/v1/accessi/codici/verifica$#', 'accessi.codici.verifica.crea'],
         ['GET', '#^/v1/accessi$#', 'accessi.elenca'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/altri$#', 'accessi.altri.elimina'],
@@ -296,7 +298,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -457,6 +459,12 @@ final class BackofficeFinto
 
     /** @var array<string, string> gli inviti accettati: l'HMAC del codice => il workspace. Il backoffice li tiene archiviati e li legge solo io.inviti.verifica.crea */
     private array $invitiAccettati = [];
+
+    /** @var array<string, array{codice: string, tentativi: int, scade: int}> i codici di accesso (accessi.codici.crea) in attesa, per email: la persona può non esserci */
+    private array $codiciDiAccesso = [];
+
+    /** @var array<string, array{versione: string, in_vigore_dal: string, impronta: string}> i documenti «ospite» in vigore (config/legale.php, `ospiti`): vuoto è l'interruttore spento */
+    private array $documentiOspite = [];
 
     /** @var array<string, string> l'ultimo codice d'invito partito, per email */
     private array $postaInviti = [];
@@ -1123,7 +1131,7 @@ final class BackofficeFinto
     /** I metodi che chi non ha accettato i documenti legali può chiamare (Accettazione::ESENTI del backoffice, #1699). */
     private const APERTI_SENZA_ACCETTAZIONE = ['legale.documenti.elenca', 'legale.accettazioni.crea', 'io.mostra', 'accessi.corrente.elimina', 'accessi.elimina'];
 
-    private const SENZA_GETTONE = ['accessi.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'password.recupero.crea', 'password.reimpostazione.crea'];
 
     /**
      * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
@@ -1201,6 +1209,8 @@ final class BackofficeFinto
 
             $esito = match ($operazione) {
                 'accessi.crea' => $this->creaAccesso($corpo),
+                'accessi.codici.crea' => $this->creaCodiceDiAccesso($corpo),
+                'accessi.codici.verifica.crea' => $this->verificaCodiceDiAccesso($richiesta, $corpo),
                 'accessi.elenca' => $this->elencaAccessi($richiesta),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
                 'accessi.altri.elimina' => $this->eliminaAltriAccessi($richiesta),
@@ -2731,6 +2741,20 @@ final class BackofficeFinto
     }
 
     /**
+     * Accende i documenti «ospite» (config/legale.php, `ospiti`, #2478): chi nasce con accessi.codici.verifica.crea li accetta, e finché non
+     * accetta un documento dei workspace li vede e li accetta soltanto quelli (Legale::ospite). Serve anche documentiLegali(): a interruttore spento
+     * non c'è nessun documento.
+     *
+     * @param  array<string, array{versione: string, in_vigore_dal: string, impronta: string}>  $documenti
+     */
+    public function documentiOspite(array $documenti): static
+    {
+        $this->documentiOspite = $documenti;
+
+        return $this;
+    }
+
+    /**
      * Il campo `accordo_trattamento_dati_da_accettare` di aziende.mostra e aziende.modifica (Legale::accordoAccettato, #1765): vero se c'è un
      * accordo in vigore e l'azienda non ne ha accettato la versione; falso con l'accordo spento.
      */
@@ -2771,7 +2795,7 @@ final class BackofficeFinto
         $chi = $this->autentica($richiesta);
         $elenco = [];
 
-        foreach ($this->documentiLegali as $documento => $dati) {
+        foreach ($this->documentiDi($chi['persona']) as $documento => $dati) {
             $elenco[] = ['documento' => $documento, 'versione' => $dati['versione'], 'in_vigore_dal' => $dati['in_vigore_dal'], 'impronta' => $dati['impronta'],
                 'accettato' => isset($this->accettazioni[$chi['persona']][$documento.'@'.$dati['versione']])];
         }
@@ -2790,10 +2814,11 @@ final class BackofficeFinto
     {
         $chi = $this->autentica($richiesta);
         $documento = $corpo['documento'] ?? null;
-        $versione = is_string($documento) ? ($this->documentiLegali[$documento]['versione'] ?? null) : null;
+        $documenti = $this->documentiLegali + ($this->eUnOspite($chi['persona']) ? $this->documentiOspite : []);
+        $versione = is_string($documento) ? ($documenti[$documento]['versione'] ?? null) : null;
 
         $campi = $this->testi->validaStretta($corpo, [
-            'documento' => ['required', 'bail', 'string', Rule::in(array_keys($this->documentiLegali))],
+            'documento' => ['required', 'bail', 'string', Rule::in(array_keys($documenti))],
             'versione' => ['required', 'bail', 'string', Rule::in($versione === null ? [] : [$versione])],
         ]);
         $this->frena('legale-accettazioni:'.$chi['persona'], self::FRENI['legale_accettazioni_per_persona'], self::ORA);
@@ -5489,7 +5514,7 @@ final class BackofficeFinto
 
         $mancanti = [];
 
-        foreach ($this->documentiLegali as $documento => $dati) {
+        foreach ($this->documentiDi($persona) as $documento => $dati) {
             if (! isset($this->accettazioni[$persona][$documento.'@'.$dati['versione']])) {
                 $mancanti[] = ['documento' => $documento, 'versione' => $dati['versione']];
             }
@@ -5498,6 +5523,178 @@ final class BackofficeFinto
         if ($mancanti !== []) {
             throw new Problema('accettazione_richiesta', estensioni: ['mancanti' => $mancanti]);
         }
+
+        // Un ospite (#2478) apre la sua persona e i suoi accessi; ogni altro metodo vuole i documenti dei workspace (Accettazione::OSPITE_AMMESSI).
+        if ($this->eUnOspite($persona) && ! in_array($this->operazioneInCorso, ['io.elimina', 'accessi.elenca', 'accessi.altri.elimina'], true)) {
+            throw new Problema('accettazione_richiesta', estensioni: ['mancanti' => array_map(fn (string $documento, array $dati) => ['documento' => $documento, 'versione' => $dati['versione']], array_keys($this->documentiLegali), array_values($this->documentiLegali))]);
+        }
+    }
+
+    /**
+     * I documenti che la persona deve accettare (Legale::elenco): quelli dei workspace, o, se non li ha accettati tutti ed è un ospite,
+     * quelli «ospite».
+     *
+     * @return array<string, array{versione: string, in_vigore_dal: string, impronta: string}>
+     */
+    private function documentiDi(string $persona): array
+    {
+        $tutti = true;
+
+        foreach ($this->documentiLegali as $documento => $dati) {
+            $tutti = $tutti && isset($this->accettazioni[$persona][$documento.'@'.$dati['versione']]);
+        }
+
+        return $tutti || ! $this->eUnOspite($persona) ? $this->documentiLegali : $this->documentiOspite;
+    }
+
+    /** Un ospite ha accettato un documento «ospite» e nessun documento dei workspace, in nessuna versione (Legale::ospite). */
+    private function eUnOspite(string $persona): bool
+    {
+        if ($this->documentiOspite === [] || $this->documentiLegali === []) {
+            return false;
+        }
+
+        $accettati = array_map(fn (string $chiave) => explode('@', $chiave)[0], array_keys($this->accettazioni[$persona] ?? []));
+
+        return array_intersect($accettati, array_keys($this->documentiOspite)) !== []
+            && array_intersect($accettati, array_keys($this->documentiLegali)) === [];
+    }
+
+    /** L'ospite che nasce accetta i documenti «ospite» in vigore (Legale::accettaOspite). */
+    private function accettaIDocumentiOspite(string $persona): void
+    {
+        if ($this->documentiLegali === []) {
+            return;
+        }
+
+        foreach ($this->documentiOspite as $documento => $dati) {
+            $this->accettazioni[$persona][$documento.'@'.$dati['versione']] ??= self::iso(now());
+        }
+    }
+
+    /**
+     * accessi.codici.crea (AccessiCodiciController::crea), senza gettone: 202 con l'email e i tempi nominali, la stessa risposta per un'email con
+     * un account e per una senza. L'email, il suo freno, Turnstile, poi il codice, che parte per ogni email se i freni degli invii lo ammettono. La
+     * persona non nasce. Il finto non ha la lista dei domini usa e getta: manda il codice anche a quelli.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaCodiceDiAccesso(array $corpo): array
+    {
+        $dati = $this->testi->validaStretta($corpo, [
+            'email' => self::REGOLE_EMAIL,
+            'turnstile' => ['sometimes', 'nullable', 'string', 'max:'.self::LUNGHEZZA_TURNSTILE],
+        ]);
+        $email = self::normalizza($dati['email']);
+        $this->frena('accessi-codici:'.$email, self::FRENI['accessi_codici'], self::MINUTO);
+        $this->controllaTurnstile($dati['turnstile'] ?? null);
+
+        foreach (self::INVII as $freno => [$invii]) {
+            if ($this->freni->tooManyAttempts("accesso-codice-{$freno}:{$email}", $invii)) {
+                return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
+            }
+        }
+
+        foreach (self::INVII as $freno => [, $secondi]) {
+            $this->freni->hit("accesso-codice-{$freno}:{$email}", $secondi);
+        }
+
+        $codice = $this->codiceNuovo($email);
+        $this->codiciDiAccesso[$email] = ['codice' => $codice, 'tentativi' => 0, 'scade' => now()->getTimestamp() + self::MINUTI_DEL_CODICE * 60];
+        $this->posta[$email] = $codice;
+
+        return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
+    }
+
+    /**
+     * accessi.codici.verifica.crea (AccessiCodiciController::verificaCrea), senza gettone: 201 con l'accesso e il gettone. Il codice si controlla
+     * prima dei campi della registrazione; uno che non vale è 422 su `#/codice`, uguale per ogni email. Per un'email senza account, a codice
+     * giusto, servono nome, cognome e `termini_accettati: true` (422 `obbligatorio` sui mancanti, senza consumare il codice né il tentativo);
+     * per una che ce l'ha si ignorano. La persona nasce con l'email verificata e i documenti «ospite».
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function verificaCodiceDiAccesso(Request $richiesta, array $corpo): array
+    {
+        $dati = $this->testi->validaStretta($corpo, [
+            'email' => self::REGOLE_EMAIL,
+            'codice' => ['required', 'string', 'digits:6'],
+            'nome' => ['sometimes'],
+            'cognome' => ['sometimes'],
+            'termini_accettati' => ['sometimes'],
+        ]);
+        $email = self::normalizza($dati['email']);
+        $this->frena('accessi-codici-verifiche:'.$email, self::FRENI['accessi_codici_verifiche'], self::MINUTO);
+
+        $stato = $this->codiciDiAccesso[$email] ?? null;
+        $errori = "errori-accesso-codice:{$email}";
+
+        if ($stato === null || $stato['scade'] - now()->getTimestamp() <= 0 || $stato['tentativi'] >= self::TENTATIVI
+            || $this->freni->tooManyAttempts($errori, self::ERRORI_AL_GIORNO)) {
+            $this->codiceDiAccessoNonValido();
+        }
+
+        if (! hash_equals($stato['codice'], $dati['codice'])) {
+            $this->codiciDiAccesso[$email]['tentativi']++;
+            $this->freni->hit($errori, 86400);
+            $this->codiceDiAccessoNonValido();
+        }
+
+        $persona = $this->conEmail($email);
+
+        if ($persona === null) {
+            $dati = $this->testi->valida(Testi::pulisci($corpo), [
+                'email' => ['sometimes'],
+                'codice' => ['sometimes'],
+                'nome' => ['bail', 'required', 'string', 'max:255', new NomeScritto],
+                'cognome' => ['bail', 'required', 'string', 'max:255', new NomeScritto],
+                'termini_accettati' => ['bail', 'required', 'boolean:strict', 'accepted'],
+            ]);
+
+            $persona = self::id();
+            $this->persone[$persona] = [
+                'nome' => $dati['nome'],
+                'cognome' => $dati['cognome'],
+                'mansione' => null,
+                'telefono' => null,
+                'formato_data' => null,
+                'inizio_settimana' => null,
+                'email' => $email,
+                'email_verificata_il' => now()->toImmutable(),
+                'lingua' => Testi::dellaRichiesta(self::header($richiesta, 'Accept-Language')),
+                'fuso_orario' => 'Europe/Rome',
+                'password' => Str::random(64),
+            ];
+            $this->accettaIDocumentiOspite($persona);
+        } elseif ($this->persone[$persona]['email_verificata_il'] === null) {
+            // Il codice prova che l'email è di chi chiama: la verifica, e la password scelta prima non vale più (AccessoConProvider::riconosce).
+            $this->persone[$persona]['email_verificata_il'] = now()->toImmutable();
+            $this->persone[$persona]['password'] = Str::random(64);
+        }
+
+        unset($this->codiciDiAccesso[$email]);
+        $accesso = self::id();
+        $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'codice'];
+
+        return [201, ['data' => [
+            'id' => $accesso,
+            'creato_il' => self::iso($this->accessi[$accesso]['creato_il']),
+            'gettone' => $this->emetti($accesso, null),
+            ...($this->annullaLEliminazione($persona) ? ['eliminazione_annullata' => true] : []),
+        ]]];
+    }
+
+    /** Il solo errore di un codice che non vale: 422 `dati_non_validi` su `#/codice`, uguale per ogni email e ogni corpo. */
+    private function codiceDiAccessoNonValido(): never
+    {
+        $this->testi->valida(['codice' => 'x'], ['codice' => [function (string $campo, mixed $valore, Closure $fail) {
+            $this->testi->dichiara($campo, 'non_valida');
+            $fail('regole.codice_di_accesso')->translate();
+        }]]);
+
+        throw new LogicException('Il codice di accesso non valido è sempre un errore.');
     }
 
     /** Chi si registra accetta i documenti in vigore insieme ai termini (Legale::accettaInVigore, #1699). */

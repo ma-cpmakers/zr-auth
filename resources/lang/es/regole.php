@@ -3,6 +3,7 @@
 // Los mensajes de las reglas de validación escritas aquí (app/Rules), en español: las mismas claves que lang/it/regole.php.
 
 return [
+    'codice_di_accesso' => 'El código no es válido: compruébalo o pide uno nuevo.',
     'cursore' => 'El campo :attribute no es un cursor de esta lista: usa el valor de successivo de la página anterior.',
     'chiave_idempotenza' => 'El encabezado Idempotency-Key admite de 1 a 255 caracteres ASCII visibles, sin espacios.',
     'if_match' => 'El encabezado If-Match admite `*` o uno o más entity-tags entre comillas separados por comas (como el `ETag` de una respuesta).',
