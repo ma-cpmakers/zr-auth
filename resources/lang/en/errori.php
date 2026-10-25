@@ -213,6 +213,26 @@ return [
         'title' => 'Ownership to hand over',
         'detail' => 'You own one or more workspaces that have other members (the problem carries `workspace_da_trasferire` next to the code, with id and name): while you do, you cannot delete the account. Hand the ownership to another member (`workspace.proprietario.modifica`) or delete those workspaces, then repeat the request. Nothing was written.',
     ],
+    'indirizzo_occupato' => [
+        'title' => 'Address already in use',
+        'detail' => 'The address is already in use: a Bookings page address is unique across all of Zeiras, a calendar address is unique within its page. The problem carries `proposta` next to the code, a free address; pick another and repeat the request. Nothing was written.',
+    ],
+    'pagina_presente' => [
+        'title' => 'Page already exists',
+        'detail' => 'You already have a booking page in this workspace: each member has only one. Read it with `bookings.pagine.elenca` (`mie=true`) and change it with `bookings.pagine.modifica`. Nothing was written.',
+    ],
+    'orario_non_disponibile' => [
+        'title' => 'Time not available',
+        'detail' => 'The chosen time is no longer free: the slot is full, the professional has another commitment that touches it (a booking on another calendar, a break). Read the slots again with `bookings.calendari.slot.elenca` and pick another. Nothing was written.',
+    ],
+    'prenotazioni_future' => [
+        'title' => 'Upcoming bookings exist',
+        'detail' => 'The calendar has confirmed bookings that have not started yet, and it cannot be deleted while they exist. Cancel them (`bookings.prenotazioni.modifica` with `stato: annullata`) or pause the calendar with `bookings.calendari.modifica`. Nothing was written.',
+    ],
+    'prenotazione_non_modificabile' => [
+        'title' => 'Booking cannot be changed',
+        'detail' => 'This booking is already cancelled, completed or marked as a no-show, and it no longer changes: a cancelled booking is not reopened, a new one is made. Nothing was written.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',

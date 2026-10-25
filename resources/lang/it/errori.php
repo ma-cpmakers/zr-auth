@@ -213,6 +213,26 @@ return [
         'title' => 'Proprietà da trasferire',
         'detail' => "Sei proprietario di uno o più workspace in cui ci sono altri membri (il problema porta accanto al codice `workspace_da_trasferire`, con id e nome): finché lo sei non puoi eliminare l'account. Passa la proprietà a un altro membro (`workspace.proprietario.modifica`) o elimina quei workspace, poi ripeti la richiesta. Il metodo non ha scritto niente.",
     ],
+    'indirizzo_occupato' => [
+        'title' => 'Indirizzo già in uso',
+        'detail' => 'L\'indirizzo è già in uso: quello di una pagina di Bookings è unico in tutta Zeiras, quello di un calendario è unico nella sua pagina. Il problema porta accanto al codice `proposta`, un indirizzo libero; scegline un altro e ripeti la richiesta. Il metodo non ha scritto niente.',
+    ],
+    'pagina_presente' => [
+        'title' => 'Pagina già presente',
+        'detail' => 'Hai già una pagina delle prenotazioni in questo workspace: ogni membro ne ha una sola. Rileggila con `bookings.pagine.elenca` (`mie=true`) e cambiala con `bookings.pagine.modifica`. Il metodo non ha scritto niente.',
+    ],
+    'orario_non_disponibile' => [
+        'title' => 'Orario non disponibile',
+        'detail' => "L'orario scelto non è più libero: lo slot è pieno, o il professionista ha un altro impegno che lo tocca (una prenotazione di un altro calendario, una pausa). Rileggi gli slot con `bookings.calendari.slot.elenca` e scegline un altro. Il metodo non ha scritto niente.",
+    ],
+    'prenotazioni_future' => [
+        'title' => 'Prenotazioni future presenti',
+        'detail' => 'Il calendario ha prenotazioni confermate che non sono ancora iniziate, e non si elimina finché ci sono. Annullale (`bookings.prenotazioni.modifica` con `stato: annullata`) o metti il calendario in pausa con `bookings.calendari.modifica`. Il metodo non ha scritto niente.',
+    ],
+    'prenotazione_non_modificabile' => [
+        'title' => 'Prenotazione non modificabile',
+        'detail' => 'Questa prenotazione è già annullata, svolta o segnata come non presentata, e non cambia più: una annullata non si riapre, si prenota di nuovo. Il metodo non ha scritto niente.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',
