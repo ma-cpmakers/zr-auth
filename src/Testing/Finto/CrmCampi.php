@@ -20,7 +20,7 @@ use Illuminate\Validation\Rule;
 trait CrmCampi
 {
     /** Gli oggetti del CRM che hanno campi (Catalogo::OGGETTI). */
-    private const CRM_OGGETTI_DEI_CAMPI = ['persona', 'organizzazione', 'trattativa'];
+    private const CRM_OGGETTI_DEI_CAMPI = ['persona', 'organizzazione', 'trattativa', 'fatturazione', 'spedizione'];
 
     /** Le sezioni vive di un oggetto, al più (Catalogo::TETTO_SEZIONI). */
     private const CRM_TETTO_DELLE_SEZIONI = 50;
@@ -75,6 +75,12 @@ trait CrmCampi
         'trattativa' => [
             ['codice' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
             ['codice' => 'dettagli', 'nome' => ['it' => 'Dettagli', 'en' => 'Details', 'es' => 'Detalles'], 'fissa' => false],
+        ],
+        'fatturazione' => [
+            ['codice' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
+        ],
+        'spedizione' => [
+            ['codice' => 'principali', 'nome' => ['it' => 'Principali', 'en' => 'Main', 'es' => 'Principales'], 'fissa' => true],
         ],
     ];
 
@@ -141,6 +147,8 @@ trait CrmCampi
             ['codice' => 'concorrente', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Concorrente', 'en' => 'Competitor', 'es' => 'Competidor'], 'sezione' => 'dettagli', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
             ['codice' => 'prossimo_passo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Prossimo passo', 'en' => 'Next step', 'es' => 'Próximo paso'], 'sezione' => 'dettagli', 'visibilita' => 'nascosto', 'indispensabile' => false, 'in_campi' => true],
         ],
+        'fatturazione' => [],
+        'spedizione' => [],
     ];
 
     /**
