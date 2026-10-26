@@ -119,7 +119,7 @@ it('un cliente ha al più venti elementi non archiviati: il ventunesimo è 409 l
     $ultimo = null;
 
     foreach (range(1, 20) as $n) {
-        $ultimo = riuscita(alFinto('POST', '/v1/crm/indirizzi-spedizione', indirizzoDiSpedizioneDelFinto($azienda, ['nome_indirizzo' => "Sede {$n}"]), $gettoni['carla']))->json('data.id');
+        $ultimo = alFinto('POST', '/v1/crm/indirizzi-spedizione', indirizzoDiSpedizioneDelFinto($azienda, ['nome_indirizzo' => "Sede {$n}"]), $gettoni['carla'])->json('data.id');
     }
 
     $oltre = alFinto('POST', '/v1/crm/indirizzi-spedizione', indirizzoDiSpedizioneDelFinto($azienda), $gettoni['carla']);
