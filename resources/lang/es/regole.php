@@ -17,6 +17,8 @@ return [
     'board_del_workspace' => 'En el workspace no hay un tablero con este id: los ids de los tableros los da board.board.elenca.',
     'lista_del_workspace' => 'En el workspace no hay una lista con este id: los ids de las listas los da board.board.mostra.',
     'tipo_della_board' => 'El tipo no es uno de los del método de este tablero (:tipi): board.board.mostra da los tipos admitidos en su campo `tipi`.',
+    'punti_di_storie_e_bug' => 'Los puntos solo se dan a una tarjeta de tipo `storia` o `bug`: establece primero el tipo con board.schede.modifica.',
+    'pronta_di_storie_e_bug' => 'Solo una tarjeta de tipo `storia` o `bug` se marca lista para el sprint: establece primero el tipo con board.schede.modifica.',
     'metodo_del_settore' => 'El método no es del sector del área de este tablero: construcción usa waterfall, digital usa scrum o scrumban.',
     'lista_da_rinominare' => 'Este tablero no tiene una lista sin archivar con este id (o la lista ya está nombrada arriba): board.board.mostra da los ids de las listas.',
     'blocca_vuole_un_limite' => 'Una lista sin límite no se puede bloquear: envía también `limite` (de 1 a 99).',

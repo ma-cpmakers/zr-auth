@@ -18,6 +18,8 @@ return [
     'board_del_workspace' => "Nel workspace non c'è una board con questo id: gli id delle board li dà board.board.elenca.",
     'lista_del_workspace' => "Nel workspace non c'è una lista con questo id: gli id delle liste li dà board.board.mostra.",
     'tipo_della_board' => 'Il tipo non è fra quelli del metodo di questa board (:tipi): i tipi ammessi li dà board.board.mostra nel campo `tipi`.',
+    'punti_di_storie_e_bug' => 'I punti si danno solo a una scheda di tipo `storia` o `bug`: imposta prima il tipo con board.schede.modifica.',
+    'pronta_di_storie_e_bug' => 'Solo una scheda di tipo `storia` o `bug` si segna pronta per lo sprint: imposta prima il tipo con board.schede.modifica.',
     'metodo_del_settore' => "Il metodo non è del settore dell'area di questa board: edilizia vuole waterfall, digitale scrum o scrumban.",
     'lista_da_rinominare' => 'Questa board non ha una lista non archiviata con questo id (o la lista è già nominata sopra): gli id delle liste li dà board.board.mostra.',
     'blocca_vuole_un_limite' => 'Una lista senza limite non si può bloccare: manda anche `limite` (da 1 a 99).',

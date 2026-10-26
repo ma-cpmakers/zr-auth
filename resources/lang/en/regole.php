@@ -17,6 +17,8 @@ return [
     'board_del_workspace' => 'There is no board with this id in the workspace: the ids of the boards are given by board.board.elenca.',
     'lista_del_workspace' => 'There is no list with this id in the workspace: the ids of the lists are given by board.board.mostra.',
     'tipo_della_board' => "The type is not one of the types of this board's method (:tipi): board.board.mostra gives the allowed types in its `tipi` field.",
+    'punti_di_storie_e_bug' => 'Points are only given to a card of type `storia` or `bug`: set the type first with board.schede.modifica.',
+    'pronta_di_storie_e_bug' => 'Only a card of type `storia` or `bug` can be marked ready for the sprint: set the type first with board.schede.modifica.',
     'metodo_del_settore' => "The method does not belong to the sector of this board's area: construction takes waterfall, digital takes scrum or scrumban.",
     'lista_da_rinominare' => 'This board has no unarchived list with this id (or the list is already named above): board.board.mostra gives the list ids.',
     'blocca_vuole_un_limite' => 'A list without a limit cannot be blocked: send `limite` too (from 1 to 99).',
