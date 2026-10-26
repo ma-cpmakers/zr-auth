@@ -185,4 +185,8 @@ return [
     'prenotazione_motivo_solo_annullata' => 'Il motivo si scrive solo annullando la prenotazione.',
     'ospite_prenotazione_un_gruppo' => 'Cambia una cosa sola per chiamata: l\'orario (`inizio`), l\'annullamento (`stato`) o i Termini (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => "Il messaggio si scrive solo con un cambio d'orario o con l'annullamento.",
+    'codice_fiscale_non_valido' => 'Questo codice fiscale non è valido per il paese del profilo: controlla le cifre e la lettera di controllo.',
+    'partita_iva_non_valida' => "Questa partita IVA non è valida per il paese del profilo: controlla le cifre e, per un paese dell'UE, il prefisso del paese.",
+    'predefinito_archiviato' => 'Un elemento archiviato non è il predefinito: ripristinalo (`archiviato: false`) prima di renderlo predefinito.',
+    'predefinito_non_si_toglie' => 'Il predefinito non si toglie: rendi predefinito un altro elemento e questo smette di esserlo.',
 ];

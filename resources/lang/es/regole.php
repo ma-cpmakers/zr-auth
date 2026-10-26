@@ -184,4 +184,8 @@ return [
     'prenotazione_motivo_solo_annullata' => 'El motivo se escribe solo al cancelar la reserva.',
     'ospite_prenotazione_un_gruppo' => 'Cambia una sola cosa por llamada: la hora (`inizio`), la cancelación (`stato`) o los Términos (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => 'El mensaje se escribe solo con un cambio de hora o al cancelar.',
+    'codice_fiscale_non_valido' => 'Este código fiscal no es válido para el país del perfil: revisa los dígitos y la letra de control.',
+    'partita_iva_non_valida' => 'Este número de IVA no es válido para el país del perfil: revisa los dígitos y, en un país de la UE, el prefijo del país.',
+    'predefinito_archiviato' => 'Un elemento archivado no es el predeterminado: restáuralo (`archiviato: false`) antes de hacerlo predeterminado.',
+    'predefinito_non_si_toglie' => 'El predeterminado no se quita: haz predeterminado otro elemento y este deja de serlo.',
 ];

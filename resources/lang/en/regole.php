@@ -184,4 +184,8 @@ return [
     'prenotazione_motivo_solo_annullata' => 'The reason is written only when cancelling the booking.',
     'ospite_prenotazione_un_gruppo' => 'Change one thing per call: the time (`inizio`), the cancellation (`stato`) or the Terms (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => 'The message is written only with a time change or a cancellation.',
+    'codice_fiscale_non_valido' => "This tax code is not valid for the profile's country: check the digits and the check letter.",
+    'partita_iva_non_valida' => "This VAT number is not valid for the profile's country: check the digits and, for an EU country, the country prefix.",
+    'predefinito_archiviato' => 'An archived item is not the default: restore it (`archiviato: false`) before making it the default.',
+    'predefinito_non_si_toglie' => 'The default cannot be removed: make another item the default and this one stops being it.',
 ];
