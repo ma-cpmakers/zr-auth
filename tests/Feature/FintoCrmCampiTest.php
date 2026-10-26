@@ -1041,3 +1041,37 @@ it('crm.campi: sensibile, genera_scadenza e avvisa si scrivono, tornano in elenc
         ->and($tipoVuoto->status())->toBe(422)
         ->and($standard->status())->toBe(422)->and($standard->json('errors.0.regola'))->toBe('campo_estraneo');
 });
+
+// #2694 (zr-crm #2691 M7, B1-B3): i valori di un campo «sensibile» li vedono solo il proprietario e gli amministratori. Che sia come nel backoffice lo prova il suo FintoTest.
+it('crm.persone: la chiave di un campo sensibile manca per un membro in ogni risposta, e la cronologia non ha i valori per nessuno (B1, B2)', function () {
+    [, $gettoni] = studioColCrm();
+    ['anna' => $anna, 'bruno' => $bruno, 'carla' => $carla] = $gettoni;
+    $sensibile = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Dato sanitario'], 'tipo' => 'testo', 'sensibile' => true, 'in_elenco' => true], $anna))->json('data.chiave');
+    $normale = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Soprannome'], 'tipo' => 'testo', 'in_elenco' => true], $anna))->json('data.chiave');
+    $id = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => [$sensibile => 'Allergia al nichel', $normale => 'Giuli']], $anna))->json('data.id');
+    riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => [$sensibile => 'Nessuna allergia']], $anna));
+
+    foreach (['anna' => $anna, 'bruno' => $bruno] as $token) {
+        expect(alFinto('GET', "/v1/crm/persone/{$id}", null, $token)->json("data.campi.{$sensibile}"))->toBe('Nessuna allergia')
+            ->and(alFinto('GET', '/v1/crm/persone', null, $token)->json("data.0.campi.{$sensibile}"))->toBe('Nessuna allergia');
+    }
+
+    $risposte = [
+        alFinto('GET', "/v1/crm/persone/{$id}", null, $carla), alFinto('GET', '/v1/crm/persone', null, $carla),
+        alFinto('PATCH', "/v1/crm/persone/{$id}", ['cognome' => 'Rossi'], $carla), alFinto('POST', '/v1/crm/persone', ['nome' => 'Marco', 'campi' => [$normale => 'Marcolino']], $carla),
+    ];
+
+    foreach ($risposte as $risposta) {
+        expect($risposta->status())->toBeLessThan(300, $risposta->body())->and($risposta->body())->not->toContain('allergia')->and($risposta->body())->not->toContain($sensibile);
+    }
+
+    expect(alFinto('GET', "/v1/crm/persone/{$id}", null, $carla)->json("data.campi.{$normale}"))->toBe('Giuli');
+
+    foreach ([$anna, $bruno, $carla] as $token) {
+        $voci = collect(alFinto('GET', "/v1/crm/persone/{$id}/cronologia", null, $token)->json('data'))->pluck('campi')->flatten(1)->where('campo', "campi.{$sensibile}");
+        expect($voci)->not->toBeEmpty()->and($voci->every(fn (array $voce) => $voce === ['campo' => "campi.{$sensibile}"]))->toBeTrue();
+    }
+
+    $scrittura = alFinto('POST', '/v1/crm/persone', ['nome' => 'Marco', 'campi' => [$sensibile => 'x']], $carla);
+    expect($scrittura->status())->toBe(422)->and($scrittura->json('errors.0.pointer'))->toBe("#/campi/{$sensibile}")->and($scrittura->json('errors.0.regola'))->toBe('campo_estraneo');
+});

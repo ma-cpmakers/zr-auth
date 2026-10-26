@@ -34,6 +34,9 @@ trait CrmValori
     /** I tipi i cui valori la cronologia dice anche di prima e di dopo (ValoriDeiCampi::CON_VALORI). */
     private const CRM_VALORI_NELLA_CRONOLOGIA = ['numero', 'valuta', 'percentuale', 'data', 'data_ora', 'si_no', 'elenco', 'scelta_multipla', 'membro'];
 
+    /** Chi chiama vede i valori dei campi «sensibili» (proprietario e amministratori): lo imposta conCrm() a ogni chiamata. */
+    private bool $vedeISensibiliCrm = false;
+
     /**
      * I campi «tuoi» di un oggetto, per chiave, nel loro ordine (posto, poi nascita).
      *
@@ -42,7 +45,9 @@ trait CrmValori
     private function campiTuoiCrm(string $workspace, string $oggetto): array
     {
         $this->campiDelWorkspaceCrm($workspace);
-        $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo' && ($campo['eliminato_il'] ?? null) === null);
+        // Un campo «sensibile» (#2694) non c'è per chi non è proprietario né amministratore: né i suoi valori né la sua chiave (ValoriDeiCampi::campiVisibili).
+        $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo' && ($campo['eliminato_il'] ?? null) === null
+            && ($this->vedeISensibiliCrm || ! ($campo['sensibile'] ?? false)));
         uasort($campi, fn (array $a, array $b) => $a['ord'] <=> $b['ord']);
 
         return array_map(fn (array $campo) => $this->conOpzioniDelloElencoCrm($campo), $campi);
@@ -159,6 +164,36 @@ trait CrmValori
         }
 
         return $fuori;
+    }
+
+    /**
+     * Le righe di una cronologia senza il valore di prima e di dopo dei campi «sensibili» di quegli oggetti, per tutti i ruoli (#2694, B2):
+     * resta `campo`, «<campo> modificato». Anche per le righe scritte prima che il campo fosse sensibile (ValoriDeiCampi::senzaValoriSensibili).
+     *
+     * @param  list<string>  $oggetti
+     * @param  list<array<string, mixed>>  $righe
+     * @return list<array<string, mixed>>
+     */
+    private function senzaValoriSensibiliCrm(string $workspace, array $oggetti, array $righe): array
+    {
+        $this->campiDelWorkspaceCrm($workspace);
+        $nomi = [];
+
+        foreach ($oggetti as $oggetto) {
+            foreach ($this->campiCrm[$workspace][$oggetto]['campi'] as $campo) {
+                if ($campo['origine'] === 'tuo' && ($campo['sensibile'] ?? false)) {
+                    $nomi[] = "campi.{$campo['codice']}";
+                }
+            }
+        }
+
+        foreach ($righe as $i => $riga) {
+            if ($nomi !== [] && is_array($riga['campi'] ?? null)) {
+                $righe[$i]['campi'] = array_map(fn (mixed $voce) => is_array($voce) && in_array($voce['campo'] ?? null, $nomi, true) ? ['campo' => $voce['campo']] : $voce, $riga['campi']);
+            }
+        }
+
+        return $righe;
     }
 
     /**
@@ -339,7 +374,7 @@ trait CrmValori
      * dopo come li dà l'API e il valore della riga (`null` toglie). Un valore uguale, o una rimozione di ciò che non c'è, non cambia.
      *
      * @param  array<string, mixed>  $valori
-     * @return array<string, array{tipo: string, prima: mixed, dopo: mixed, riga: mixed}>
+     * @return array<string, array{tipo: string, sensibile: bool, prima: mixed, dopo: mixed, riga: mixed}>
      */
     private function pianoDeiValoriCrm(string $workspace, string $oggetto, string $id, array $valori): array
     {
@@ -362,6 +397,7 @@ trait CrmValori
 
             $piano[$chiave] = [
                 'tipo' => $tipo,
+                'sensibile' => $campo['sensibile'] ?? false,
                 'prima' => $presente ? $this->valoreInUscitaCrm($workspace, $tipo, $prima) : null,
                 'dopo' => $riga === null ? null : $this->valoreInUscitaCrm($workspace, $tipo, $riga),
                 'riga' => $riga,
@@ -413,7 +449,7 @@ trait CrmValori
      * Le voci della cronologia di un piano, nell'ordine dei campi: `campi.<chiave>`, col valore di prima e di dopo solo per i tipi che
      * lo ammettono (Q2, zr-pm 13/10) e il solo nome per gli altri.
      *
-     * @param  array<string, array{tipo: string, prima: mixed, dopo: mixed, riga: mixed}>  $piano
+     * @param  array<string, array{tipo: string, sensibile: bool, prima: mixed, dopo: mixed, riga: mixed}>  $piano
      * @return list<array<string, mixed>>
      */
     private static function vociDeiValoriCrm(array $piano): array
@@ -421,7 +457,7 @@ trait CrmValori
         $voci = [];
 
         foreach ($piano as $chiave => $voce) {
-            $voci[] = in_array($voce['tipo'], self::CRM_VALORI_NELLA_CRONOLOGIA, true)
+            $voci[] = in_array($voce['tipo'], self::CRM_VALORI_NELLA_CRONOLOGIA, true) && ! $voce['sensibile']
                 ? ['campo' => "campi.{$chiave}", 'prima' => $voce['prima'], 'dopo' => $voce['dopo']]
                 : ['campo' => "campi.{$chiave}"];
         }

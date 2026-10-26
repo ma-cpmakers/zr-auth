@@ -441,6 +441,7 @@ trait Crm
     private function conCrm(Request $richiesta, array $ruoli = []): array
     {
         $chi = $this->conWorkspace($richiesta, $ruoli);
+        $this->vedeISensibiliCrm = in_array($this->membri[$chi['workspace']][$chi['persona']] ?? null, ['proprietario', 'amministratore'], true);
 
         if (! $this->appAttiva($chi['workspace'], 'crm')) {
             throw new Problema('app_non_attiva');
@@ -1332,7 +1333,9 @@ trait Crm
         $esito = $this->paginaCrm($richiesta, "{$lista}:{$riga['id']}", $righe, fn (array $una, array $altra) => [$altra['istante'], $altra['id']] <=> [$una['istante'], $una['id']], $voce);
         // Come il backoffice (ValoriDeiCampi::senzaEliminati): le voci `campi.<chiave>` di un campo «tuo» eliminato non escono, e una riga che
         // diceva solo di quelle esce intera; col ripristino tornano. Si toglie dopo la pagina, come là.
-        $esito[1]['data'] = $this->senzaCampiEliminatiCrm($chi['workspace'], ['persone' => 'persona', 'organizzazioni' => 'organizzazione', 'trattative' => 'trattativa'][$tipo], $esito[1]['data']);
+        $oggetto = ['persone' => 'persona', 'organizzazioni' => 'organizzazione', 'trattative' => 'trattativa'][$tipo];
+        $esito[1]['data'] = $this->senzaCampiEliminatiCrm($chi['workspace'], $oggetto, $esito[1]['data']);
+        $esito[1]['data'] = $this->senzaValoriSensibiliCrm($chi['workspace'], $tipo === 'persone' ? ['persona', 'trattativa'] : [$oggetto], $esito[1]['data']);
 
         if ($tipo === 'persone') {
             $esito[1]['trattative_fuori_finestra'] = max(0, count($collegate) - self::CRM_FINESTRA_DELLE_TRATTATIVE);
