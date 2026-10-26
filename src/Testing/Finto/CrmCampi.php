@@ -367,6 +367,8 @@ trait CrmCampi
                 $this->tettoInElencoCrm($chi['workspace'], $oggetto);
             }
 
+            $this->tipoDiScadenzaVivoCrm($chi['workspace'], $avanzate);
+
             foreach ($lista as $altro) {
                 if (self::nomeSimileCrm($altro['nome']['it'], null) === self::nomeSimileCrm($campi['nome']['it'], null)) {
                     throw $this->erroreCrm('nome.it', 'regole.campo_nome_duplicato', Regola::DUPLICATO);
@@ -387,6 +389,7 @@ trait CrmCampi
                 'opzioni' => $opzioni, 'elenco_id' => $elenco['id'] ?? null, 'obbligatorio' => $campi['obbligatorio'] ?? false,
                 'aiuto' => $avanzate['aiuto'] ?? null, 'predefinito' => $avanzate['predefinito'] ?? null, 'limiti' => $avanzate['limiti'] ?? null,
                 'in_elenco' => $avanzate['in_elenco'] ?? false, 'nel_crea' => $avanzate['nel_crea'] ?? false,
+                'sensibile' => $avanzate['sensibile'] ?? false, 'genera_scadenza' => $avanzate['genera_scadenza'] ?? null, 'avvisa' => $avanzate['avvisa'] ?? false,
                 'catalogo' => ['nome' => []], 'scritti' => array_filter($campi['nome'], fn ($nome) => is_string($nome) && $nome !== ''),
                 'visibilita' => $campi['visibilita'] ?? 'visibile', 'sezione_id' => $sezione,
                 'ord' => ($ordini === [] ? 0 : max($ordini)) + self::CRM_PASSO, 'indispensabile' => false, 'in_campi' => true,
@@ -579,7 +582,7 @@ trait CrmCampi
             $avanzate = $this->avanzateCrm($chi['workspace'], $campi, $voce['tipo'], $voce['opzioni'], $voce);
 
             foreach (self::CRM_AVANZATE as $chiave) {
-                if (array_key_exists($chiave, $avanzate) && ! self::avanzataUgualeCrm($avanzate[$chiave], $voce[$chiave] ?? ($chiave === 'in_elenco' || $chiave === 'nel_crea' ? false : null))) {
+                if (array_key_exists($chiave, $avanzate) && ! self::avanzataUgualeCrm($avanzate[$chiave], $voce[$chiave] ?? (in_array($chiave, ['in_elenco', 'nel_crea', 'sensibile', 'avvisa'], true) ? false : null))) {
                     $cambiati[] = $chiave;
                 }
             }
@@ -590,6 +593,8 @@ trait CrmCampi
         if (in_array('in_elenco', $cambiati, true) && ($avanzate['in_elenco'] ?? false) === true) {
             $this->tettoInElencoCrm($chi['workspace'], (string) $voce['oggetto']);
         }
+
+        $this->tipoDiScadenzaVivoCrm($chi['workspace'], $avanzate);
 
         $nome = $this->nomiNuoviCrm($voce['catalogo']['nome'], $voce['scritti'], $campi['nome'] ?? [], $voce['origine'] === 'tuo');
 
@@ -1211,6 +1216,9 @@ trait CrmCampi
             'limiti' => $campo['limiti'] ?? null,
             'in_elenco' => $campo['in_elenco'] ?? false,
             'nel_crea' => $campo['nel_crea'] ?? false,
+            'sensibile' => $campo['sensibile'] ?? false,
+            'genera_scadenza' => $campo['genera_scadenza'] ?? null,
+            'avvisa' => $campo['avvisa'] ?? false,
             'indispensabile' => $campo['indispensabile'],
             'in_campi' => $campo['in_campi'],
             'creato_il' => self::iso($campo['creato_il']),

@@ -56,7 +56,7 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
             'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null, 'opzioni_archiviate' => null, 'elenco_id' => null,
             'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
             'posizione' => 1, 'obbligatorio' => false, 'aiuto' => null, 'predefinito' => null, 'limiti' => null, 'in_elenco' => false, 'nel_crea' => false,
-            'indispensabile' => true, 'in_campi' => false,
+            'sensibile' => false, 'genera_scadenza' => null, 'avvisa' => false, 'indispensabile' => true, 'in_campi' => false,
             'creato_il' => '2026-10-13T00:00:00.000Z', 'aggiornato_il' => '2026-10-13T00:00:00.000Z', 'archiviato_il' => null, 'ripristinabile_fino' => null,
         ])
         ->and($persona['organizzazione_id']['sistema'])->toBe('organizzazione')
@@ -1003,4 +1003,41 @@ it('un testo_lungo non va in elenco: in_elenco true in crea o in modifica è 422
     expect($modifica->status())->toBe(422)->and($modifica->json('errors.0.pointer'))->toBe('#/in_elenco')->and($modifica->json('errors.0.regola'))->toBe('valore_non_ammesso');
     riuscita(alFinto('PATCH', '/v1/crm/campi/persona.storia', ['in_elenco' => false], $anna));
     riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Breve'], 'tipo' => 'testo', 'in_elenco' => true], $anna));
+});
+
+// #2693 (zr-crm #2691 M7, A1-A5): sensibile, genera_scadenza e avvisa di un campo «tuo». Che le risposte siano quelle del backoffice lo prova il suo FintoTest.
+it('crm.campi: sensibile, genera_scadenza e avvisa si scrivono, tornano in elenca e hanno le regole del backoffice (A1-A5)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    $tipo = riuscita(alFinto('POST', '/v1/crm/scadenze/tipi', ['nome' => 'Certificato medico'], $anna))->json('data.id');
+    $archiviato = riuscita(alFinto('POST', '/v1/crm/scadenze/tipi', ['nome' => 'Vecchio'], $anna))->json('data.id');
+    riuscita(alFinto('PATCH', "/v1/crm/scadenze/tipi/{$archiviato}", ['stato' => 'archiviato'], $anna));
+
+    $semplice = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Soprannome'], 'tipo' => 'testo'], $anna))->json('data');
+    $certificato = riuscita(alFinto('POST', '/v1/crm/campi', [
+        'oggetto' => 'persona', 'nome' => ['it' => 'Certificato medico'], 'tipo' => 'data', 'sensibile' => true, 'genera_scadenza' => ['tipo_id' => $tipo], 'avvisa' => true,
+    ], $anna))->json('data');
+
+    expect(array_intersect_key($semplice, array_flip(['sensibile', 'genera_scadenza', 'avvisa'])))->toBe(['sensibile' => false, 'genera_scadenza' => null, 'avvisa' => false])
+        ->and($certificato)->toMatchArray(['sensibile' => true, 'genera_scadenza' => ['tipo_id' => $tipo], 'avvisa' => true]);
+
+    $elenco = collect(alFinto('GET', '/v1/crm/campi?oggetto=persona', null, $anna)->json('data'))->keyBy('id');
+    expect($elenco['persona.cognome']['sensibile'])->toBeFalse()
+        ->and($elenco['persona.cognome']['genera_scadenza'])->toBeNull()
+        ->and($elenco[$certificato['id']]['genera_scadenza'])->toBe(['tipo_id' => $tipo]);
+
+    $tolta = riuscita(alFinto('PATCH', "/v1/crm/campi/{$certificato['id']}", ['genera_scadenza' => null, 'avvisa' => false], $anna));
+    expect($tolta->json('data.genera_scadenza'))->toBeNull()->and($tolta->json('data.avvisa'))->toBeFalse();
+
+    $nonData = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Nota breve'], 'tipo' => 'testo', 'genera_scadenza' => ['tipo_id' => $tipo]], $anna);
+    $nonDataAvvisa = alFinto('PATCH', "/v1/crm/campi/{$semplice['id']}", ['avvisa' => true], $anna);
+    $tipoArchiviato = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Scade'], 'tipo' => 'data', 'genera_scadenza' => ['tipo_id' => $archiviato]], $anna);
+    $tipoVuoto = alFinto('PATCH', "/v1/crm/campi/{$certificato['id']}", ['genera_scadenza' => []], $anna);
+    $standard = alFinto('PATCH', '/v1/crm/campi/persona.cognome', ['sensibile' => true], $anna);
+
+    expect($nonData->status())->toBe(422)->and($nonData->json('errors.0.pointer'))->toBe('#/genera_scadenza')->and($nonData->json('errors.0.regola'))->toBe('campo_vietato')
+        ->and($nonDataAvvisa->status())->toBe(422)->and($nonDataAvvisa->json('errors.0.pointer'))->toBe('#/avvisa')
+        ->and($tipoArchiviato->status())->toBe(422)->and($tipoArchiviato->json('errors.0.pointer'))->toBe('#/genera_scadenza/tipo_id')
+        ->and($tipoVuoto->status())->toBe(422)
+        ->and($standard->status())->toBe(422)->and($standard->json('errors.0.regola'))->toBe('campo_estraneo');
 });

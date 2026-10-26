@@ -5,14 +5,14 @@ namespace Zeiras\Auth\Testing\Finto;
 use Closure;
 
 /**
- * Le avanzate di un campo «tuo» del CRM nel backoffice finto (#2155, CRM-12 C2): `aiuto`, `predefinito`, `limiti`, `in_elenco` e
- * `nel_crea` di `crm.campi.crea` e `crm.campi.modifica`, con le regole e i pointer di `CampiController::avanzate` del backoffice.
+ * Le avanzate di un campo «tuo» del CRM nel backoffice finto (#2155, CRM-12 C2): `aiuto`, `predefinito`, `limiti`, `in_elenco`,
+ * `nel_crea`, `sensibile`, `genera_scadenza` e `avvisa` (#2693) di `crm.campi.crea` e `crm.campi.modifica`, con le regole e i pointer di `CampiController::avanzate` del backoffice.
  * `aiuto` e `limiti` sono un Merge Patch (`null` toglie una lingua o un limite, o tutto); il `predefinito` si giudica come un valore di
  * `campi` e il finto lo porta senza applicarlo; i limiti valgono per le scritture nuove di `campi` (CrmValori).
  */
 trait CrmAvanzate
 {
-    private const CRM_AVANZATE = ['aiuto', 'predefinito', 'limiti', 'in_elenco', 'nel_crea'];
+    private const CRM_AVANZATE = ['aiuto', 'predefinito', 'limiti', 'in_elenco', 'nel_crea', 'sensibile', 'genera_scadenza', 'avvisa'];
 
     private const CRM_AIUTO_MASSIMO = 200;
 
@@ -48,6 +48,10 @@ trait CrmAvanzate
             'predefinito' => ['sometimes', 'nullable'],
             'in_elenco' => ['filled', 'boolean:strict'],
             'nel_crea' => ['filled', 'boolean:strict'],
+            'sensibile' => ['filled', 'boolean:strict'],
+            'genera_scadenza' => ['sometimes', 'nullable', 'array', 'required_array_keys:tipo_id'],
+            'genera_scadenza.tipo_id' => ['string', 'max:26'],
+            'avvisa' => ['filled', 'boolean:strict'],
         ];
     }
 
@@ -87,13 +91,41 @@ trait CrmAvanzate
             throw $this->erroreCrm('in_elenco', 'regole.campo_testo_lungo_non_in_elenco', Regola::VALORE_NON_AMMESSO);
         }
 
-        foreach (['in_elenco', 'nel_crea'] as $chiave) {
+        // Una data genera una scadenza e si segnala solo se manca o è scaduta: due proprietà dei soli campi di tipo `data`.
+        if ($tipo !== 'data' && ($campi['genera_scadenza'] ?? null) !== null) {
+            throw $this->erroreCrm('genera_scadenza', 'regole.campo_genera_scadenza_non_data', Regola::CAMPO_VIETATO);
+        }
+
+        if ($tipo !== 'data' && ($campi['avvisa'] ?? false) === true) {
+            throw $this->erroreCrm('avvisa', 'regole.campo_avvisa_non_data', Regola::CAMPO_VIETATO);
+        }
+
+        foreach (['in_elenco', 'nel_crea', 'sensibile', 'avvisa'] as $chiave) {
             if (array_key_exists($chiave, $campi)) {
                 $nuove[$chiave] = $campi[$chiave];
             }
         }
 
+        if (array_key_exists('genera_scadenza', $campi)) {
+            $nuove['genera_scadenza'] = $campi['genera_scadenza'] === null ? null : ['tipo_id' => strtolower($campi['genera_scadenza']['tipo_id'])];
+        }
+
         return $nuove;
+    }
+
+    /**
+     * Il tipo di scadenza di `genera_scadenza` è uno attivo del workspace del gettone: uno di un altro workspace, archiviato o che non c'è è
+     * lo stesso `422` `non_trovato` su `#/genera_scadenza/tipo_id` (CampiController::tipoDiScadenzaVivo).
+     *
+     * @param  array<string, mixed>  $avanzate
+     */
+    private function tipoDiScadenzaVivoCrm(string $workspace, array $avanzate): void
+    {
+        $tipo = $avanzate['genera_scadenza']['tipo_id'] ?? null;
+
+        if ($tipo !== null && (! $this->esisteCrm('scadenzeTipi', $workspace, $tipo) || $this->crm['scadenzeTipi'][strtolower($tipo)]['stato'] !== 'attivo')) {
+            throw $this->erroreCrm('genera_scadenza.tipo_id', 'regole.campo_tipo_scadenza_non_valido', Regola::NON_TROVATO);
+        }
     }
 
     /**
