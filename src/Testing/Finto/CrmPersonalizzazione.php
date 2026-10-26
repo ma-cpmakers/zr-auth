@@ -339,6 +339,10 @@ trait CrmPersonalizzazione
                 continue;
             }
 
+            if (count($this->righeCrm('motivi', $workspace)) >= self::CRM_TETTI['motivi']) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['motivi']]);
+            }
+
             $vivi = $this->motiviViviCrm($workspace);
             $id = self::id();
             $ora = self::adessoCrm();
@@ -355,6 +359,10 @@ trait CrmPersonalizzazione
 
             if ($presente !== []) {
                 continue;
+            }
+
+            if (count($this->righeCrm('scadenzeTipi', $workspace)) >= self::CRM_SCADENZE_TIPI_TETTO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_TIPI_TETTO]);
             }
 
             $id = self::id();
