@@ -317,6 +317,10 @@ return [
         'title' => 'Time not available',
         'detail' => 'The chosen time is no longer free: the slot is full, the professional has another commitment that touches it (a booking on another calendar, a break). Read the slots again with `bookings.calendari.slot.elenca` and pick another. Nothing was written.',
     ],
+    'apertura_con_prenotazioni' => [
+        'title' => 'Opening has bookings',
+        'detail' => 'The opening has live bookings and cannot be deleted while they exist: bookings are never touched. Cancel them with `bookings.prenotazioni.modifica` (`stato: annullata`) or move them, then repeat the request. The method wrote nothing.',
+    ],
     'prenotazioni_future' => [
         'title' => 'Upcoming bookings exist',
         'detail' => 'The calendar has confirmed bookings that have not started yet, and it cannot be deleted while they exist. Cancel them (`bookings.prenotazioni.modifica` with `stato: annullata`) or pause the calendar with `bookings.calendari.modifica`. Nothing was written.',
