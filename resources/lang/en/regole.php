@@ -165,6 +165,7 @@ return [
     'prenotazione_calendario_non_trovato' => 'This calendar does not exist: pick one that `bookings.calendari.elenca` shows.',
     'prenotazione_calendario_senza_durata' => 'The item of this calendar has no duration: without it nothing can be booked.',
     'prenotazione_persona_non_trovata' => 'This contact does not exist: find it with `crm.persone.ricerca.crea` or create it with `crm.persone.crea`.',
+    'link_canale_senza_email' => 'This contact has no email: choose the `copia` channel, or add an email to the contact with `crm.persone.modifica`.',
     'prenotazione_posti_oltre' => 'A booking takes at most :massimo seats of this calendar.',
     'prenotazione_inizio_non_slot' => 'This is not a bookable start: pick one that `bookings.calendari.slot.elenca` shows.',
     'risposta_domanda_sconosciuta' => 'This is not a question of the calendar.',
