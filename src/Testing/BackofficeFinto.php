@@ -749,9 +749,12 @@ final class BackofficeFinto
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  array<string, mixed>|null  $cartella  una cartella di cartella() dello stesso workspace
+     * Il `metodo` (#2646: waterfall, scrum, scrumban o null) è quello che la board porta in board.board.elenca: il finto non controlla che
+     * vada col settore della cartella, come non modella le liste.
+     *
      * @return array{id: string, nome: string, cartella_id: string, stato: string}
      */
-    public function board(array $workspace, string $nome, ?array $cartella = null, string $stato = 'attiva'): array
+    public function board(array $workspace, string $nome, ?array $cartella = null, string $stato = 'attiva', ?string $metodo = null): array
     {
         $idWorkspace = $this->workspaceDelFinto($workspace);
 
@@ -773,7 +776,7 @@ final class BackofficeFinto
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
         $this->boards[$id] = [
-            'id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'cartella' => $idCartella, 'stato' => $stato, 'creata_il' => $ora, 'aggiornata_il' => $ora,
+            'id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'cartella' => $idCartella, 'metodo' => $metodo, 'stato' => $stato, 'creata_il' => $ora, 'aggiornata_il' => $ora,
             'chiusa_il' => $stato === 'chiusa' ? $ora : null, 'nel_cestino_il' => $stato === 'cestino' ? $ora : null,
         ];
 
@@ -1715,7 +1718,7 @@ final class BackofficeFinto
         foreach ($this->boards as $board) {
             if ($board['workspace'] === $chi['workspace'] && $board['stato'] === $stato) {
                 $voci[] = [
-                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'creata_il' => self::iso($board['creata_il']),
+                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'metodo' => $board['metodo'] ?? null, 'creata_il' => self::iso($board['creata_il']),
                     'aggiornata_il' => self::iso($board['aggiornata_il']), 'numero_schede' => $this->schedeDellaBoard($board['id']), 'descrizione' => null,
                     'sfondo' => 'neutral', 'stato' => $board['stato'], 'applica_regole' => true,
                     'chiusa_il' => $board['chiusa_il'] === null ? null : self::iso($board['chiusa_il']),
