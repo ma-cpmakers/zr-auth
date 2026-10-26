@@ -50,8 +50,15 @@ final class Sessione
      */
     public static function apri(array $accesso): void
     {
+        $gettone = $accesso['gettone'] ?? null;
+
+        // La forma sbagliata si rifiuta prima di toccare la sessione: né il segno della vecchia né l'id nuovo. La risposta OspiteDalLink di
+        // accessi.link.crea (un contatto senza account: `gettone` è un testo) ha il suo metodo, apriOspite().
+        if (! is_string($accesso['id'] ?? null) || ! is_array($gettone) || ! is_string($gettone['gettone'] ?? null) || ! is_string($gettone['scade_il'] ?? null) || ! is_array($gettone['utente'] ?? null)) {
+            throw new InvalidArgumentException("Sessione::apri() vuole i data di accessi.crea: l'accesso con il suo gettone e la persona. Per la risposta OspiteDalLink di accessi.link.crea (un contatto senza account) c'è Sessione::apriOspite().");
+        }
+
         self::controllaIlDriver();
-        $gettone = $accesso['gettone'];
         // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
         self::segnaLaVecchia();
 

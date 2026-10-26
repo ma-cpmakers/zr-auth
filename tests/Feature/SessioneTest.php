@@ -196,6 +196,21 @@ it('apriOspite rifiuta la forma di Accesso e una forma monca, e non scrive nient
         ->and(session()->has(Sessione::CHIAVE))->toBeFalse();
 })->with(['accesso', 'senza scade_il', 'senza prenotazione_id', 'gettone vuoto']);
 
+it('apri() con la forma OspiteDalLink o con una forma monca lancia un errore chiaro prima di toccare la sessione, e rimanda ad apriOspite() (#2709 F1.9, deve fallire se è un TypeError o se la sessione di prima è già segnata chiusa)', function (string $forma) {
+    $this->get('/pubblica');
+    $prima = session()->getId();
+    $dati = match ($forma) {
+        'OspiteDalLink' => ospiteDalLink(),
+        'senza id' => array_diff_key(accesso(), ['id' => 1]),
+        'senza gettone' => array_diff_key(accesso(), ['gettone' => 1]),
+        'senza utente' => ['gettone' => array_diff_key(accesso()['gettone'], ['utente' => 1])] + accesso(),
+    };
+
+    expect(fn () => Sessione::apri($dati))->toThrow(InvalidArgumentException::class, 'apriOspite')
+        ->and(session()->has(Sessione::CHIAVE))->toBeFalse()
+        ->and(session()->getId())->toBe($prima);
+})->with(['OspiteDalLink', 'senza id', 'senza gettone', 'senza utente']);
+
 it('apriOspite si rifiuta con la sessione nel cookie, come apri() (OS.1)', function () {
     config(['session.driver' => 'cookie']);
 

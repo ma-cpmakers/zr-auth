@@ -249,6 +249,10 @@ return [
         'title' => 'Change deadline passed',
         'detail' => "The deadline to change or cancel this booking online has passed. The problem carries `contatto`, the page's email and phone: write to the professional. The method wrote nothing.",
     ],
+    'prenotazioni_al_limite' => [
+        'title' => 'Too many active bookings',
+        'detail' => 'You already have the maximum number of active bookings with this professional (the problem carries `limite`): cancel one with `io.prenotazioni.modifica` (`stato: annullata`) to book another. The method wrote nothing.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',

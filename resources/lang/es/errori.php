@@ -249,6 +249,10 @@ return [
         'title' => 'Plazo para cambiar superado',
         'detail' => 'El plazo para cambiar o cancelar esta reserva en línea ha pasado. El problema lleva `contatto`, el correo y el teléfono de la página: escribe al profesional. El método no escribió nada.',
     ],
+    'prenotazioni_al_limite' => [
+        'title' => 'Demasiadas reservas activas',
+        'detail' => 'Ya tienes el máximo de reservas activas con este profesional (el problema lleva `limite`): cancela una con `io.prenotazioni.modifica` (`stato: annullata`) para reservar otra. El método no escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',
