@@ -462,6 +462,9 @@ final class BackofficeFinto
     /** @var array<string, CarbonImmutable> quando si archivia ogni workspace di cui il proprietario ha chiesto l'eliminazione, per id: il finto non archivia alla scadenza */
     private array $eliminazioni = [];
 
+    /** @var array<string, CarbonImmutable> fino a quando il tetto di un giro di email ogni 24 ore ferma la prossima, per «tipo:workspace» (`eliminato`, `ripristinato`): è `membri_avvisati` */
+    private array $avvisi = [];
+
     /** @var array<string, string> la persona che ha chiesto l'eliminazione di ogni workspace in eliminazione (`eliminato_da`, #2601), per id del workspace */
     private array $eliminatiDa = [];
 
@@ -5027,6 +5030,8 @@ final class BackofficeFinto
         $chi = $this->conWorkspace($richiesta, ['proprietario']);
         $workspace = $chi['workspace'];
 
+        $avvisati = false;
+
         if (! isset($this->eliminazioni[$workspace])) {
             $altri = array_filter(array_keys($this->membri), fn (string $id) => $id !== $workspace && isset($this->membri[$id][$chi['persona']]) && ! isset($this->eliminazioni[$id]));
 
@@ -5036,9 +5041,10 @@ final class BackofficeFinto
 
             $this->eliminazioni[$workspace] = now()->toImmutable()->startOfMillisecond()->addDays(30);
             $this->eliminatiDa[$workspace] = $chi['persona'];
+            $avvisati = $this->avvisaIMembri('eliminato', $workspace, array_keys($this->membri[$workspace] ?? []));
         }
 
-        return [202, ['data' => ['id' => $workspace, 'eliminazione_il' => self::iso($this->eliminazioni[$workspace])]], []];
+        return [202, ['data' => ['id' => $workspace, 'eliminazione_il' => self::iso($this->eliminazioni[$workspace]), 'membri_avvisati' => $avvisati]], []];
     }
 
     /**
@@ -5172,7 +5178,7 @@ final class BackofficeFinto
      * con la finestra scaduta o in cui è solo membro è lo stesso 404.
      *
      * @param  array<mixed>  $corpo
-     * @return array{int, null}
+     * @return array{int, array<string, mixed>}
      */
     private function ripristinaIlWorkspace(Request $richiesta, array $corpo, string $workspace): array
     {
@@ -5186,7 +5192,29 @@ final class BackofficeFinto
 
         unset($this->eliminazioni[$workspace], $this->eliminatiDa[$workspace], $this->eliminazioniConAccount[$workspace]);
 
-        return [204, null];
+        // Gli stessi membri che avevano saputo dell'eliminazione, tranne chi ripristina.
+        $altri = array_values(array_filter(array_keys($this->membri[$workspace] ?? []), fn (string $membro) => $membro !== $persona));
+
+        return [200, ['data' => ['membri_avvisati' => $this->avvisaIMembri('ripristinato', $workspace, $altri)]]];
+    }
+
+    /**
+     * Il giro di email ai membri (AvvisaMembroDelWorkspace): `true` se qualcuno c'è da avvisare e il tetto di un giro ogni 24 ore, per tipo e
+     * per workspace, non l'ha fermato; il finto non manda niente, tiene solo il conto di quando il tetto riapre.
+     *
+     * @param  list<string>  $membri
+     */
+    private function avvisaIMembri(string $tipo, string $workspace, array $membri): bool
+    {
+        $chiave = "{$tipo}:{$workspace}";
+
+        if ($membri === [] || (isset($this->avvisi[$chiave]) && $this->avvisi[$chiave]->isFuture())) {
+            return false;
+        }
+
+        $this->avvisi[$chiave] = now()->toImmutable()->addDay();
+
+        return true;
     }
 
     /**

@@ -29,7 +29,7 @@ it('il proprietario programma l\'eliminazione fra 30 giorni: il workspace sparis
     $risposta = alFinto('DELETE', '/v1/workspace', gettone: $anna);
 
     expect($risposta->status())->toBe(202)
-        ->and($risposta->json('data'))->toBe(['id' => $studio['id'], 'eliminazione_il' => '2026-11-14T12:00:00.000Z']);
+        ->and($risposta->json('data'))->toBe(['id' => $studio['id'], 'eliminazione_il' => '2026-11-14T12:00:00.000Z', 'membri_avvisati' => true]);
 
     $elenco = alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data');
     $eliminati = alFinto('GET', "/v1/aziende/{$studio['azienda_id']}/workspace?eliminati=true", gettone: $accesso)->json('data');
@@ -86,15 +86,15 @@ it('workspace.eliminazione.elimina, senza un\'eliminazione programmata, è 404 n
     expect($vecchio->status())->toBe(401)->and($vecchio->json('codice'))->toBe('gettone_non_valido');
 });
 
-it('io.workspace.eliminazione.elimina ripristina col gettone della persona (204): il workspace torna negli elenchi e i gettoni tornano validi (#2602)', function () {
+it('io.workspace.eliminazione.elimina ripristina col gettone della persona (200 con membri_avvisati): il workspace torna negli elenchi e i gettoni tornano validi (#2602)', function () {
     [$studio, , $anna, , , , $accesso] = conDueWorkspace();
     alFinto('DELETE', '/v1/workspace', gettone: $anna);
 
     $ripristinato = alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso);
     $elenco = collect(alFinto('GET', '/v1/io/workspace', gettone: $accesso)->json('data'))->keyBy('id');
 
-    expect($ripristinato->status())->toBe(204)
-        ->and($ripristinato->body())->toBe('')
+    expect($ripristinato->status())->toBe(200)
+        ->and($ripristinato->json())->toBe(['data' => ['membri_avvisati' => true]])
         ->and($elenco[$studio['id']]['eliminazione_il'])->toBeNull()
         ->and($elenco[$studio['id']]['eliminato_da'])->toBeNull()
         ->and(alFinto('GET', '/v1/io', gettone: $anna)->status())->toBe(200)
@@ -117,7 +117,7 @@ it('io.workspace.eliminazione.elimina: l\'amministratore ripristina, un membro o
     expect($ripristina($accessoCarla, $studio['id'])->status())->toBe(404)
         ->and($ripristina($accessoBruno, $altro['id'])->status())->toBe(404)
         ->and($ripristina($accesso, 'inventato')->status())->toBe(404)
-        ->and($ripristina($accessoBruno, $studio['id'])->status())->toBe(204);
+        ->and($ripristina($accessoBruno, $studio['id'])->status())->toBe(200);
 });
 
 it('con l\'eliminazione programmata le due accettazioni sono 409 workspace_in_eliminazione e i tre metodi del workspace 401; ripristinata tornano a valere (#2259, #2600)', function () {
@@ -271,4 +271,24 @@ it("l'ultimo workspace non si lascia né si elimina: il detail è lo stesso per 
         ->and($uscita->status())->toBe(409)
         ->and($uscita->json('detail'))->toBe($eliminazione->json('detail'))
         ->and($uscita->json('detail'))->toContain('lasci')->toContain('elimini')->toContain('io.workspace.eliminazione.elimina');
+});
+
+it('membri_avvisati è false quando il tetto di un giro di email ogni 24 ore ferma il secondo giro, e torna true dopo un giorno (#2636)', function () {
+    $this->travelTo('2026-10-26 12:00:00');
+    [$studio, , $anna, , , , $accesso] = conDueWorkspace();
+    $giro = function () use ($studio, $anna, $accesso) {
+        $eliminato = alFinto('DELETE', '/v1/workspace', gettone: $anna)->json('data.membri_avvisati');
+        $ripristinato = alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso)->json('data.membri_avvisati');
+
+        return [$eliminato, $ripristinato];
+    };
+
+    expect($giro())->toBe([true, true]);
+
+    // Il ripristino ridà il gettone: il secondo giro è dentro le 24 ore.
+    expect($giro())->toBe([false, false]);
+
+    $this->travelTo('2026-10-27 12:01:00');
+
+    expect($giro())->toBe([true, true]);
 });
