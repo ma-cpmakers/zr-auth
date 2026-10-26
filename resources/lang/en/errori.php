@@ -97,6 +97,22 @@ return [
         'title' => 'Board without a method',
         'detail' => 'This board has no working method (it was created without one, or its area has no sector), so there is no method to change: do not repeat the same request.',
     ],
+    'sprint_attivo' => [
+        'title' => 'Sprint is active',
+        'detail' => 'This board has an active sprint, and while it does no other sprint can be started and its start and length cannot change: close the active sprint first with board.sprint.chiusura.crea. Do not repeat the same request.',
+    ],
+    'sprint_chiuso' => [
+        'title' => 'Sprint is closed',
+        'detail' => 'This sprint is closed and no longer changes: do not repeat the request. board.sprint.elenca gives the sprints of the board.',
+    ],
+    'sprint_non_pianificato' => [
+        'title' => 'Sprint is not planned',
+        'detail' => 'Only a planned sprint can be started, and this one is already active or closed: do not repeat the same request.',
+    ],
+    'sprint_non_attivo' => [
+        'title' => 'Sprint is not active',
+        'detail' => 'Only an active sprint can be closed, and this one is still planned or already closed: do not repeat the same request.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'The owner cannot be touched',
         'detail' => 'A workspace has one owner and no method removes them or changes their role: do not repeat the request.',

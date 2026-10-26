@@ -746,6 +746,20 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `crm` spenta restano tutti con il motivo `non_leggibile` (il finto non ha i gettoni nati da un client della base: lì il backoffice
   lascia leggibili i contatti). Il doppione è `409` `record_gia_collegato`, il cinquantunesimo `409` `limite_raggiunto` con
   `limite` 50, un id che non c'è nel workspace `422` su `#/id`.
+- **Gli sprint.** `sprint($workspace, $board, $nome, 'pianificato'|'attivo'|'chiuso', $inizio, $durataSettimane, $obiettivo, $velocita, $unita)`
+  (#2664) fa nascere uno sprint di una board con il metodo `scrum` (una board per volta ha al più uno sprint attivo e uno
+  pianificato), e `scheda(…, sprint: $sprint['id'])` mette una scheda in uno sprint non chiuso della sua board. Rispondono
+  `board.sprint.elenca` (`GET /v1/board/sprint?board_id=`: l'attivo, il pianificato, poi i chiusi dal più recente, a cursore, con
+  `meta.velocita_media` e la sua unità), `board.sprint.crea` (`POST /v1/board/sprint` con `board_id` nel corpo, `Idempotency-Key`),
+  `board.sprint.modifica`, `board.sprint.avvio.crea` e `board.sprint.chiusura.crea` (sotto `/v1/board/sprint/{sprint}`), col gettone di un
+  workspace con l'app `pm`. Una board che non è Scrum è `409` `board_senza_metodo`, una chiusa o nel cestino (a chi scrive)
+  `409` `board_chiusa`; un secondo sprint pianificato è `409` `limite_raggiunto`, un avvio con uno attivo `409` `sprint_attivo`,
+  `inizio` o `durata_settimane` cambiati su un attivo `409` `sprint_attivo`, uno sprint chiuso `409` `sprint_chiuso`, un avvio
+  di uno non pianificato `409` `sprint_non_pianificato`, una chiusura di uno non attivo `409` `sprint_non_attivo`. La chiusura nomina
+  ogni scheda aperta dello sprint con la sua destinazione (`backlog` o `sprint_dopo`; `422` su `#/schede`, `#/schede/N/id` o
+  `#/schede/N/destinazione`), sposta le schede e registra la velocità: i punti delle completate se almeno una li ha, altrimenti il loro
+  numero. Le schede portano `sprint_id` e `nello_sprint_dal`; il finto non ha `board.schede.modifica`, quindi lo sprint di una scheda lo
+  cambia solo la chiusura. Il finto non tiene il registro dei movimenti e non emette gli eventi.
 - **Il widget di `accessi.crea`.** Come nel backoffice (`ZR_ACCESSI_TURNSTILE`, spento di default) il sesto tentativo di un'email in un
   minuto è `429` `troppe_richieste`. `accendiGradinoAccessi()` accende il gradino: dal sesto al trentesimo tentativo serve `turnstile`
   (con `accendiTurnstile()`; senza è `422` `turnstile_non_valido`) e il `429` viene oltre il trentesimo. La coppia (email, IP firmato)

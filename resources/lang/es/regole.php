@@ -204,4 +204,9 @@ return [
     'todo_scheda_della_lista' => 'La tarea de una lista de proyecto tiene la tarjeta de la lista: el campo :attribute no se cambia.',
     'todo_scheda_senza_lista' => 'Esta tarjeta aún no tiene su lista de tareas: créala con board.todo.liste.crea (tipo progetto) y luego envía lista_id.',
     'todo_lista_stesso_tipo' => 'Una tarea cambia de lista solo entre listas del mismo tipo: de personal a personal, de proyecto a proyecto.',
+    'sprint_della_scheda' => 'Este id no es el de un sprint sin cerrar de este tablero: board.sprint.elenca da los sprints del tablero.',
+    'sprint_chiuso_della_scheda' => 'Este sprint está cerrado, y una tarjeta no entra en un sprint cerrado: elige un sprint planificado o activo.',
+    'chiusura_scheda_mancante' => 'El cuerpo debe nombrar cada tarjeta abierta del sprint, con su destino: falta al menos una.',
+    'chiusura_scheda_non_aperta' => 'Esta no es una tarjeta abierta de este sprint, o el cuerpo la nombra dos veces: board.schede.elenca da las tarjetas del sprint con sprint_id.',
+    'chiusura_senza_sprint_dopo' => 'No hay un sprint planificado al que enviar la tarjeta: créalo con board.sprint.crea, o elige el destino `backlog`.',
 ];

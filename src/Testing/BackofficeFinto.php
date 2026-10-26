@@ -37,6 +37,7 @@ use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\SchedeCrm;
+use Zeiras\Auth\Testing\Finto\Sprint;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
 use Zeiras\Auth\Testing\Finto\Todo;
@@ -73,6 +74,7 @@ final class BackofficeFinto
     use CrmPreventivi;
     use CrmPreventiviPubblici;
     use SchedeCrm;
+    use Sprint;
     use CrmScadenze;
     use CrmValori;
     use Todo;
@@ -161,6 +163,11 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/crm/([^/]+)$#', 'board.schede.crm.elimina'],
+        ['GET', '#^/v1/board/sprint$#', 'board.sprint.elenca'],
+        ['POST', '#^/v1/board/sprint$#', 'board.sprint.crea'],
+        ['PATCH', '#^/v1/board/sprint/([^/]+)$#', 'board.sprint.modifica'],
+        ['POST', '#^/v1/board/sprint/([^/]+)/avvio$#', 'board.sprint.avvio.crea'],
+        ['POST', '#^/v1/board/sprint/([^/]+)/chiusura$#', 'board.sprint.chiusura.crea'],
         ['GET', '#^/v1/board/todo/liste$#', 'board.todo.liste.elenca'],
         ['POST', '#^/v1/board/todo/liste$#', 'board.todo.liste.crea'],
         ['PATCH', '#^/v1/board/todo/liste/([^/]+)$#', 'board.todo.liste.modifica'],
@@ -680,13 +687,13 @@ final class BackofficeFinto
      * completata o archiviata). Il `numero` parte da 1 per ogni board e non si riusa. Le schede di una stessa `$board` si
      * possono collegare fra loro; una scheda di un'altra board è «di un'altra board». `$board` è l'id di una board() o un nome
      * qualunque. `$scadenza` è un giorno `AAAA-MM-GG`; `$assegnatari` le persone (di workspace() o persona()) o i loro id; `$tipo` (#2661) il tipo che
-     * le letture danno alla scheda, come lo darebbe il backoffice: il finto non lo controlla contro i `tipi` della board, perché non modella i metodi. `$punti` e `$pronta` (#2706) la stima e il «pronta per lo sprint» che le letture danno alla scheda, senza controllare che il tipo sia una storia o un bug.
+     * le letture danno alla scheda, come lo darebbe il backoffice: il finto non lo controlla contro i `tipi` della board, perché non modella i metodi. `$punti` e `$pronta` (#2706) la stima e il «pronta per lo sprint» che le letture danno alla scheda, senza controllare che il tipo sia una storia o un bug. `$sprint` (#2664) l'id di uno sprint non chiuso di questa board, di sprint(): la scheda ci sta dal momento in cui nasce.
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  list<array<string, mixed>|string>  $assegnatari
      * @return array{id: string, board_id: string, numero: int, titolo: string}
      */
-    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null, ?int $punti = null, bool $pronta = false): array
+    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null, ?int $punti = null, bool $pronta = false, ?string $sprint = null): array
     {
         $idWorkspace = $workspace['id'] ?? null;
 
@@ -694,12 +701,16 @@ final class BackofficeFinto
             throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
         }
 
+        if ($sprint !== null && (($this->sprint[$sprint]['workspace'] ?? null) !== $idWorkspace || $this->sprint[$sprint]['board'] !== $board || $this->sprint[$sprint]['stato'] === 'chiuso')) {
+            throw new InvalidArgumentException('Lo sprint non è uno sprint non chiuso di questa board: nasce con sprint(), e la board è il suo id.');
+        }
+
         $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
         $cambiate = [];
         $posizione = $this->inCoda($idWorkspace, $board, $cambiate);
-        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'punti' => $punti, 'pronta' => $pronta, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'punti' => $punti, 'pronta' => $pronta, 'sprint_id' => $sprint, 'nello_sprint_dal' => $sprint === null ? null : $ora, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
         $this->versione([$id, ...$cambiate]);
 
@@ -1315,6 +1326,11 @@ final class BackofficeFinto
                 'board.schede.crm.elenca' => $this->elencaSchedeCrm($richiesta, $parametri[0]),
                 'board.schede.crm.crea' => $this->creaSchedaCrm($richiesta, $corpo, $parametri[0]),
                 'board.schede.crm.elimina' => $this->eliminaSchedaCrm($richiesta, $parametri[0], $parametri[1]),
+                'board.sprint.elenca' => $this->elencaSprint($richiesta),
+                'board.sprint.crea' => $this->creaSprint($richiesta, $corpo),
+                'board.sprint.modifica' => $this->modificaSprint($richiesta, $corpo, $parametri[0]),
+                'board.sprint.avvio.crea' => $this->avviaSprint($richiesta, $parametri[0]),
+                'board.sprint.chiusura.crea' => $this->chiudiSprint($richiesta, $corpo, $parametri[0]),
                 'board.todo.liste.elenca' => $this->elencaListeTodo($richiesta),
                 'board.todo.liste.crea' => $this->creaListaTodo($richiesta, $corpo),
                 'board.todo.liste.modifica' => $this->modificaListaTodo($richiesta, $corpo, $parametri[0]),
@@ -1523,6 +1539,8 @@ final class BackofficeFinto
             'tipo' => $scheda['tipo'] ?? null,
             'punti' => $scheda['punti'] ?? null,
             'pronta' => $scheda['pronta'] ?? false,
+            'sprint_id' => $scheda['sprint_id'] ?? null,
+            'nello_sprint_dal' => ($scheda['nello_sprint_dal'] ?? null) === null ? null : self::iso($scheda['nello_sprint_dal']),
             'etichette' => [],
             'assegnatari' => $scheda['assegnatari'],
             'numero_voci' => 0,
@@ -1533,7 +1551,7 @@ final class BackofficeFinto
             'archiviata_il' => $scheda['archiviata_il'] === null ? null : self::iso($scheda['archiviata_il']),
             'creata_il' => self::iso($scheda['creata_il']),
             'aggiornata_il' => self::iso($scheda['aggiornata_il']),
-            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 1])).'"',
+            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 2])).'"',
         ];
     }
 

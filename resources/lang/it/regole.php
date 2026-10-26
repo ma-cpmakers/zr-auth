@@ -205,4 +205,9 @@ return [
     'todo_scheda_della_lista' => 'Il to-do di una lista di progetto ha la scheda della lista: il campo :attribute non si cambia.',
     'todo_scheda_senza_lista' => 'Questa scheda non ha ancora la sua lista di to-do: creala con board.todo.liste.crea (tipo progetto) e poi manda lista_id.',
     'todo_lista_stesso_tipo' => 'Un to-do cambia lista solo fra liste dello stesso tipo: da una personale a una personale, da una di progetto a una di progetto.',
+    'sprint_della_scheda' => 'Questo id non è quello di uno sprint non chiuso di questa board: gli sprint della board li dà board.sprint.elenca.',
+    'sprint_chiuso_della_scheda' => 'Questo sprint è chiuso, e una scheda non entra in uno sprint chiuso: scegli uno sprint pianificato o attivo.',
+    'chiusura_scheda_mancante' => 'Il corpo deve nominare ogni scheda aperta dello sprint, con la sua destinazione: ne manca almeno una.',
+    'chiusura_scheda_non_aperta' => 'Questa non è una scheda aperta di questo sprint, o il corpo la nomina due volte: le schede dello sprint le dà board.schede.elenca con sprint_id.',
+    'chiusura_senza_sprint_dopo' => "Non c'è uno sprint pianificato dove mandare la scheda: crealo con board.sprint.crea, o scegli la destinazione `backlog`.",
 ];

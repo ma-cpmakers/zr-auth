@@ -204,4 +204,9 @@ return [
     'todo_scheda_della_lista' => "A to-do in a project list has the list's card: the :attribute field does not change.",
     'todo_scheda_senza_lista' => 'This card has no to-do list yet: create it with board.todo.liste.crea (tipo progetto), then send lista_id.',
     'todo_lista_stesso_tipo' => 'A to-do changes list only between lists of the same type: personal to personal, project to project.',
+    'sprint_della_scheda' => 'This id is not that of an unclosed sprint of this board: board.sprint.elenca gives the sprints of the board.',
+    'sprint_chiuso_della_scheda' => 'This sprint is closed, and a card does not enter a closed sprint: choose a planned or active sprint.',
+    'chiusura_scheda_mancante' => 'The body must name every open card of the sprint, with its destination: at least one is missing.',
+    'chiusura_scheda_non_aperta' => 'This is not an open card of this sprint, or the body names it twice: board.schede.elenca gives the cards of the sprint with sprint_id.',
+    'chiusura_senza_sprint_dopo' => 'There is no planned sprint to send the card to: create one with board.sprint.crea, or choose the destination `backlog`.',
 ];
