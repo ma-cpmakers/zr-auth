@@ -3,16 +3,16 @@
 // L'unione dei contatti nel finto (#2752, CRM-01 F8): ciò che un frontend vede dal suo lato. Che le risposte e gli errori siano quelli del
 // backoffice lo prova il suo FintoTest (confronta finto e backoffice sulle stesse chiamate).
 
-/** Due contatti che sembrano lo stesso, con note e attività su chi si unisce: [$gettoni, id di chi resta, id di chi si unisce]. */
+/** Due contatti che sembrano lo stesso, con note e attività su chi si unisce: [$gettoni, id di chi resta, id di chi si unisce, finto, workspace]. */
 function duePersoneDoppie(): array
 {
-    [, $gettoni] = studioColCrm();
+    [$finto, $gettoni, $studio] = studioColCrm();
     $resta = alFinto('POST', '/v1/crm/persone', ['nome' => 'Anna', 'cognome' => 'Rossi', 'ruolo' => 'Direttrice', 'email' => [['indirizzo' => 'anna@example.com', 'etichetta' => 'lavoro']], 'telefoni' => [['numero' => '+39 02 1234567', 'etichetta' => 'lavoro']]], $gettoni['carla'])->json('data.id');
     $unito = alFinto('POST', '/v1/crm/persone', ['nome' => 'Anna', 'cognome' => 'Rossi', 'ruolo' => 'CEO', 'email' => [['indirizzo' => 'a.rossi@example.com', 'etichetta' => 'lavoro']], 'telefoni' => [['numero' => '+39 02 1234567', 'etichetta' => 'altro']]], $gettoni['carla'])->json('data.id');
     alFinto('POST', '/v1/crm/note', ['persona_id' => $unito, 'testo' => 'Della prima'], $gettoni['carla']);
     alFinto('POST', '/v1/crm/attivita', ['tipo' => 'compito', 'titolo' => 'Richiamare', 'persona_id' => $unito], $gettoni['carla']);
 
-    return [$gettoni, $resta, $unito];
+    return [$gettoni, $resta, $unito, $finto, $studio];
 }
 
 /** Il corpo di un'unione, con le versioni che i due contatti hanno adesso. */
@@ -98,4 +98,19 @@ it('l\'annullamento rimette note, attività e campi a chi si era unito, una volt
         ->and(alFinto('GET', "/v1/crm/persone/{$unito}", null, $gettoni['anna'])->json('data.unito_in'))->toBeNull()
         ->and(alFinto('GET', "/v1/crm/persone/{$unito}", null, $gettoni['anna'])->json('data.email.0.indirizzo'))->toBe('a.rossi@example.com')
         ->and(alFinto('GET', '/v1/crm/persone/unioni/01k6zzzzzzzzzzzzzzzzzzzzzz', null, $gettoni['anna'])->json('codice'))->toBe('non_trovato');
+});
+
+it('un contatto con una scheda collegata non si unisce: 409 contatto_non_unibile con schede_collegate in blocchi, finché la scheda non lo scollega', function () {
+    [$gettoni, $resta, $unito, $finto, $studio] = duePersoneDoppie();
+    $finto->attivaApp($studio, 'pm', 'crm');
+    $scheda = $finto->scheda($studio, 'Scheda 1');
+    $collegamento = alFinto('POST', "/v1/board/schede/{$scheda['id']}/crm", ['tipo' => 'crm.persona', 'id' => $unito], $gettoni['anna'])->assertStatus(201)->json('data.id');
+
+    $risposta = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito), $gettoni['anna']);
+
+    expect($risposta->status())->toBe(409)->and($risposta->json('codice'))->toBe('contatto_non_unibile')->and($risposta->json('blocchi'))->toBe(['schede_collegate']);
+
+    alFinto('DELETE', "/v1/board/schede/{$scheda['id']}/crm/{$collegamento}", null, $gettoni['anna']);
+
+    expect(alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito), $gettoni['anna'])->status())->toBe(201);
 });

@@ -844,7 +844,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   spostamenti, le eliminazioni (da lì `404`), le importazioni (con `prova`, `simili` dei contatti e `Location` sul `201`), la loro lettura e il loro
   annullamento entro 24 ore (`409` `annullamento_scaduto` oltre), e l'anonimizzazione. I **doppioni** (`crm.persone.doppioni.elenca`, per telefono o per nome) e l'**unione** di due contatti (`crm.persone.unioni.crea`, `.mostra` e
   `.annullamento.crea`, #2752): `scelte` per i campi in conflitto, `versioni` con l'`ETag` di ognuno (`412` se cambiato), `unito_in` nel contatto che si è
-  unito, le righe `unita` e `unione_annullata` nella cronologia, annullabile 7 giorni; il finto non ha i `blocchi` di Bookings (`link_prenotazione`, `prenotazioni`). Le **sezioni** e i **campi** (`crm.sezioni.elenca`,
+  unito, le righe `unita` e `unione_annullata` nella cronologia, annullabile 7 giorni; il finto dice solo i `blocchi` delle scadenze, dei preventivi, degli acquisti, delle rate e delle `schede_collegate`: non ha quelli di Bookings (`link_prenotazione`, `prenotazioni`) né i profili di fatturazione e gli indirizzi di spedizione. Le **sezioni** e i **campi** (`crm.sezioni.elenca`,
   `crea`, `modifica` ed `elimina`, `crm.campi.elenca` e `modifica`, dalla v0.12.30) partono dal catalogo degli standard del backoffice
   (persona 24 campi in 6 sezioni, organizzazione 16 in 4, trattativa 11 in 2; «Principali» è fissa), con un nome `{it, en, es}`, la
   visibilità, la sezione e il posto: un campo `indispensabile` non si nasconde e non lascia «Principali» (`422` `campo_indispensabile`),

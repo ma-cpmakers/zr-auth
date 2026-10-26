@@ -447,7 +447,7 @@ trait CrmUnioni
 
     /**
      * Le parti, diverse da note, attività e opportunità, che un contatto ha e che l'unione non sa spostare: i nomi di `blocchi`, nell'ordine in
-     * cui si apriranno. Le parti di Bookings (`link_prenotazione`, `prenotazioni`) il finto non le ha.
+     * cui si apriranno. Il finto non ha le parti di Bookings (`link_prenotazione`, `prenotazioni`) né i profili di fatturazione e gli indirizzi di spedizione.
      *
      * @return list<string>
      */
@@ -458,7 +458,8 @@ trait CrmUnioni
         $nomi = [];
 
         foreach (['preventivi' => $vive('preventivi') !== [], 'scadenze' => $vive('scadenze') !== [], 'acquisti' => $acquisti !== [],
-            'rate' => array_filter($this->crm['rate'], fn (array $rata) => in_array($rata['acquisto_id'], $acquisti, true) && ! ($rata['eliminata'] ?? false)) !== []] as $nome => $presente) {
+            'rate' => array_filter($this->crm['rate'], fn (array $rata) => in_array($rata['acquisto_id'], $acquisti, true) && ! ($rata['eliminata'] ?? false)) !== [],
+            'schede_collegate' => array_filter($this->schedeCrm, fn (array $collegamento) => $collegamento['tipo'] === 'crm.persona' && $collegamento['record'] === $contatto) !== []] as $nome => $presente) {
             if ($presente) {
                 $nomi[] = $nome;
             }
