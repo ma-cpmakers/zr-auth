@@ -176,12 +176,13 @@ it('la Idempotency-Key ripete lo stesso 201 senza un secondo collegamento; con u
     $altra = contattoDelFinto($gettone, 'Marco');
     $percorso = "/v1/board/schede/{$scheda['id']}/crm";
 
-    $uno = alFinto('POST', $percorso, ['tipo' => 'crm.persona', 'id' => $persona], $gettone, null, ['Idempotency-Key' => 'chiave-1']);
-    $due = alFinto('POST', $percorso, ['tipo' => 'crm.persona', 'id' => $persona], $gettone, null, ['Idempotency-Key' => 'chiave-1']);
+    $chiave = ['Idempotency-Key' => str_repeat('a', 12)];
+    $uno = alFinto('POST', $percorso, ['tipo' => 'crm.persona', 'id' => $persona], $gettone, null, $chiave);
+    $due = alFinto('POST', $percorso, ['tipo' => 'crm.persona', 'id' => $persona], $gettone, null, $chiave);
 
     expect($uno->status())->toBe(201)->and($due->status())->toBe(201)->and($due->json('data.id'))->toBe($uno->json('data.id'));
     expect(count(alFinto('GET', $percorso, null, $gettone)->json('data')))->toBe(1);
-    expect(alFinto('POST', $percorso, ['tipo' => 'crm.persona', 'id' => $altra], $gettone, null, ['Idempotency-Key' => 'chiave-1'])->json('codice'))->toBe('chiave_idempotenza_riusata');
+    expect(alFinto('POST', $percorso, ['tipo' => 'crm.persona', 'id' => $altra], $gettone, null, $chiave)->json('codice'))->toBe('chiave_idempotenza_riusata');
 });
 
 it('il sessantunesimo collegamento in un minuto è 429 troppo_richieste (freno per persona)', function () {
