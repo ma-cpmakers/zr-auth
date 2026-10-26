@@ -524,12 +524,80 @@ trait CrmScadenze
     }
 
     /**
+     * La scadenza che segue un campo data con `genera_scadenza` (Scadenze::segui, #2696): per ogni valore cambiato di un contatto, la scadenza
+     * aperta di quel contatto per quel campo si aggiorna, nasce `attiva` di origine `campo` (preavvisi del tipo, responsabile del contatto) o,
+     * se il valore è tolto, si archivia (`eliminata`, da lì 404). Il tetto delle aperte è `limite_raggiunto`; un tipo archiviato non ne fa nascere.
+     * Il valore di un campo sensibile non entra nella cronologia.
+     *
+     * @param  array<string, array{tipo: string, sensibile: bool, prima: mixed, dopo: mixed, riga: mixed}>  $piano
+     */
+    private function seguiLeScadenzeDeiCampiCrm(string $workspace, string $persona, ?string $autore, array $piano): void
+    {
+        foreach ($this->campiTuoiCrm($workspace, 'persona', true) as $chiave => $campo) {
+            $tipoId = $campo['genera_scadenza']['tipo_id'] ?? null;
+
+            if (! isset($piano[$chiave]) || $campo['tipo'] !== 'data' || $tipoId === null) {
+                continue;
+            }
+
+            $data = $piano[$chiave]['dopo'];
+            $aperta = null;
+
+            foreach ($this->righeCrm('scadenze', $workspace) as $riga) {
+                if ($riga['persona_id'] === $persona && ($riga['campo_chiave'] ?? null) === $chiave && $riga['stato'] === 'attiva') {
+                    $aperta = $riga;
+                }
+            }
+
+            if ($data === null) {
+                if ($aperta !== null) {
+                    $this->crm['scadenze'][$aperta['id']]['eliminata'] = true;
+                }
+
+                continue;
+            }
+
+            if ($aperta !== null) {
+                $this->salvaCrm('scadenze', $aperta['id'], ['scade_il' => $data, 'preavviso_dal' => self::preavvisoDalCrm($data, $aperta['preavvisi'])]);
+
+                continue;
+            }
+
+            $tipo = $this->crm['scadenzeTipi'][$tipoId] ?? null;
+
+            if ($tipo === null || $tipo['stato'] === 'archiviato') {
+                continue;
+            }
+
+            $aperte = array_filter($this->righeCrm('scadenze', $workspace), fn (array $riga) => $riga['stato'] === 'attiva');
+
+            if (count($aperte) >= self::CRM_SCADENZE_APERTE_TETTO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_APERTE_TETTO]);
+            }
+
+            $id = self::id();
+            $ora = self::adessoCrm();
+            $this->crm['scadenze'][$id] = [
+                'id' => $id, 'workspace' => $workspace, 'tipo_id' => $tipo['id'], 'persona_id' => $persona, 'organizzazione_id' => null, 'acquisto_id' => null,
+                'campo_chiave' => $chiave, 'scade_il' => $data, 'preavvisi' => $tipo['preavvisi'], 'preavviso_dal' => self::preavvisoDalCrm($data, $tipo['preavvisi']),
+                'responsabile_id' => $this->crm['persone'][$persona]['responsabile_id'] ?? $autore, 'origine' => 'campo', 'stato' => 'attiva', 'chiusa_il' => null,
+                'motivo' => null, 'rinnovata_da' => null, 'creata_da' => $autore, 'creata_il' => $ora, 'aggiornata_il' => $ora,
+            ];
+            $this->rigaDellaScadenzaCrm($this->crm['scadenze'][$id], $autore, 'creata', null, ! ($campo['sensibile'] ?? false) && ! $tipo['sensibile']);
+        }
+    }
+
+    /**
      * La riga della cronologia dell'oggetto della scadenza (il contatto o l'azienda), con l'autore e l'id della scadenza (Scadenze::riga): il
      * `tipo` è `scadenza.<azione>`, le voci il tipo e la data, e per una chiusura il motivo solo se il tipo non è sensibile.
      */
-    private function rigaDellaScadenzaCrm(array $scadenza, string $autore, string $azione, ?string $motivo): void
+    private function rigaDellaScadenzaCrm(array $scadenza, ?string $autore, string $azione, ?string $motivo, bool $conLaData = true): void
     {
-        $voci = [['campo' => 'tipo_id', 'dopo' => $scadenza['tipo_id']], ['campo' => 'scade_il', 'dopo' => $scadenza['scade_il']]];
+        $voci = [['campo' => 'tipo_id', 'dopo' => $scadenza['tipo_id']]];
+
+        if ($conLaData) {
+            $voci[] = ['campo' => 'scade_il', 'dopo' => $scadenza['scade_il']];
+        }
 
         if ($motivo !== null && ! $this->crm['scadenzeTipi'][$scadenza['tipo_id']]['sensibile']) {
             $voci[] = ['campo' => 'motivo', 'dopo' => $motivo];

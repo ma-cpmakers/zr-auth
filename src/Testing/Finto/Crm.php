@@ -1949,7 +1949,9 @@ trait Crm
                 }
 
                 $id = $this->nascePersonaCrm($chi, $campi);
-                $this->scriviIValoriCrm('persona', $id, $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $id, $validati['campi'] ?? []));
+                $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $id, $validati['campi'] ?? []);
+                $this->scriviIValoriCrm('persona', $id, $piano);
+                $this->seguiLeScadenzeDeiCampiCrm($chi['workspace'], $id, $chi['persona'], $piano);
             } catch (\Throwable $errore) {
                 $this->crm = $prima;
 
@@ -2011,6 +2013,19 @@ trait Crm
         $this->contaIContattiCrm(null, false, $campi['organizzazione_id'], true);
 
         return $id;
+    }
+
+    /**
+     * Una riga di `crm.persone.importazioni.crea` (Persone::dellaRiga): le regole di un contatto nuovo e i `campi` come in `crm.persone.crea`,
+     * senza imporre gli obbligatori (#2696).
+     *
+     * @return array<string, mixed>
+     */
+    private function rigaDiPersonaCrm(array $riga, array $chi): array
+    {
+        $validata = $this->testi->validaCorpo($riga, [...$this->regolePersona($chi['workspace']), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', false)]);
+
+        return $this->nuovaPersonaCrm($validata, $chi['persona']) + ['campi' => $validata['campi'] ?? []];
     }
 
     /** @return array{int, array<string, mixed>} */
@@ -2112,6 +2127,7 @@ trait Crm
         }
 
         $this->scriviIValoriCrm('persona', $id, $piano);
+        $this->seguiLeScadenzeDeiCampiCrm($riga['workspace'], $id, $autore, $piano);
 
         // Cambiano solo le liste o i valori: il contatto si tocca comunque (Registro::segnala), e `touch` scrive l'ora, senza il
         // millisecondo in più che AP6 dà a un salvataggio con cambi.
@@ -2195,7 +2211,7 @@ trait Crm
             foreach (array_values($campi['righe']) as $indice => $riga) {
                 try {
                     $valida = $tipo === 'persone'
-                        ? $this->nuovaPersonaCrm($this->testi->validaCorpo($riga, $this->regolePersona($chi['workspace'])), $chi['persona'])
+                        ? $this->rigaDiPersonaCrm($riga, $chi)
                         : $this->rigaDiOrganizzazioneCrm($riga, $chi['workspace']);
                 } catch (Problema $problema) {
                     $esiti[$indice] = $problema->codice === 'dati_non_validi' ? $this->rigaRifiutataCrm($indice, $problema) : throw $problema;
@@ -2264,6 +2280,12 @@ trait Crm
 
                 foreach ($nuove as $indice => $valida) {
                     $esiti[$indice]['id'] = $tipo === 'persone' ? $this->nascePersonaCrm($chi, $valida, $importazione) : $this->nasceOrganizzazione($chi, $valida, $importazione);
+
+                    if ($tipo === 'persone') {
+                        $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $esiti[$indice]['id'], $valida['campi'] ?? []);
+                        $this->scriviIValoriCrm('persona', $esiti[$indice]['id'], $piano);
+                        $this->seguiLeScadenzeDeiCampiCrm($chi['workspace'], $esiti[$indice]['id'], $chi['persona'], $piano);
+                    }
                 }
             }
 
