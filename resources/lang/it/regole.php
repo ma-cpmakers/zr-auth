@@ -21,6 +21,7 @@ return [
     'passaggio_della_board' => 'Uno di questi id non è di una lista attiva di questa board, o è la lista stessa: gli id delle liste li dà board.board.mostra.',
     'passaggio_per_posizione' => "Una posizione dei passaggi non è nell'elenco `liste` di questo corpo, o è quella della lista stessa: le posizioni partono da 0.",
     'passaggio_doppio' => 'Una posizione compare due volte nei passaggi.',
+    'board_metodo_con_cartella' => 'Questa board ha un metodo che la cartella non ammette: scegli una cartella dello stesso settore.',
     'lista_della_board' => 'Questa lista non è della stessa board della scheda: gli id delle liste li dà board.board.mostra.',
     'scheda_della_board' => 'Questa scheda non è della stessa board: gli id delle schede li dà board.schede.elenca.',
     'record_del_crm' => "Nel workspace non c'è un record del CRM di questo tipo con questo id: gli id li danno crm.persone.ricerca.crea, crm.organizzazioni.ricerca.crea e crm.trattative.ricerca.crea.",

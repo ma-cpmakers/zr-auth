@@ -20,6 +20,7 @@ return [
     'passaggio_della_board' => 'Uno de estos ids no es de una lista activa de este tablero, o es la lista misma: los ids de las listas los da board.board.mostra.',
     'passaggio_per_posizione' => 'Una posición de los passaggi no está en la lista `liste` de este cuerpo, o es la de la propia lista: las posiciones empiezan en 0.',
     'passaggio_doppio' => 'Una posición aparece dos veces en los passaggi.',
+    'board_metodo_con_cartella' => 'Este tablero tiene un método que la carpeta no admite: elige una carpeta del mismo sector.',
     'lista_della_board' => 'Esta lista no es del mismo tablero que la tarjeta: los ids de las listas los da board.board.mostra.',
     'scheda_della_board' => 'Esta tarjeta no es del mismo tablero: los ids de las tarjetas los da board.schede.elenca.',
     'record_del_crm' => 'En el workspace no hay un registro del CRM de este tipo con este id: los ids los dan crm.persone.ricerca.crea, crm.organizzazioni.ricerca.crea y crm.trattative.ricerca.crea.',

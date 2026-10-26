@@ -20,6 +20,7 @@ return [
     'passaggio_della_board' => 'One of these ids is not an active list of this board, or is the list itself: the ids of the lists are given by board.board.mostra.',
     'passaggio_per_posizione' => 'A position in the passaggi is not in the `liste` array of this body, or is the list itself: positions start at 0.',
     'passaggio_doppio' => 'A position appears twice in the passaggi.',
+    'board_metodo_con_cartella' => 'This board has a method the folder does not allow: pick a folder in the same sector.',
     'lista_della_board' => 'This list is not of the same board as the card: the ids of the lists are given by board.board.mostra.',
     'scheda_della_board' => 'This card is not of the same board: the ids of the cards are given by board.schede.elenca.',
     'record_del_crm' => 'There is no CRM record of this type with this id in the workspace: the ids come from crm.persone.ricerca.crea, crm.organizzazioni.ricerca.crea and crm.trattative.ricerca.crea.',
