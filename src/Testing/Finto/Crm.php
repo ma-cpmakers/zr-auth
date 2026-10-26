@@ -9,6 +9,7 @@ use DateTimeZone;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -858,6 +859,7 @@ trait Crm
             'persone' => [
                 'stati' => self::vociCrm($testo('stato')), 'responsabile' => self::idCrm($testo('responsabile_id')), 'archiviate' => $vero('archiviati') === true,
                 'ricerca' => null, 'email' => null, 'organizzazione' => self::idCrm($testo('organizzazione_id')), 'id' => self::idDelFiltroCrm($testo('id')),
+                'non_frequentante' => $vero('non_frequentante') === true,
             ],
             'organizzazioni' => [
                 'stati' => self::vociCrm($testo('stato')), 'responsabile' => self::idCrm($testo('responsabile_id')), 'archiviate' => $vero('archiviate') === true,
@@ -893,6 +895,12 @@ trait Crm
                     'id' => $this->regolaDelFiltroPerId(), 'stato' => $voci('stato', self::CRM_STATI),
                     'responsabile_id' => ['sometimes', 'nullable', 'string', 'max:64'], 'organizzazione_id' => ['sometimes', 'nullable', 'string', 'max:64'],
                     'archiviati' => $siONo,
+                    // PersoneElencaRequest: `true` vuole l'app Bookings accesa nel workspace.
+                    'non_frequentante' => ['bail', ...$siONo, function (string $campo, mixed $valore, Closure $fail) use ($chi) {
+                        if ($valore === 'true' && ! $this->appAttiva($chi['workspace'], 'bookings')) {
+                            $this->rifiutaCrm($fail, $campo, Regola::VALORE_NON_AMMESSO, 'validation.in', ['attribute' => 'non_frequentante']);
+                        }
+                    }],
                 ],
                 'organizzazioni' => [
                     'id' => $this->regolaDelFiltroPerId(), 'stato' => $voci('stato', self::CRM_STATI),
@@ -1141,6 +1149,11 @@ trait Crm
             ]) : null,
         ];
 
+        // I filtri speciali che l'elenco dei contatti offre nel workspace (#2711).
+        if ($conCampi && $tipo === 'persone') {
+            $corpo['filtri_disponibili'] = $this->appAttiva($workspace, 'bookings') ? ['non_frequentante'] : [];
+        }
+
         if ($chiesta['totale']) {
             $conteggio = count(array_filter($this->righeCrm($tipo, $workspace), fn (array $riga) => $this->tieneCrm($tipo, $workspace, $chiesta['filtri'], $riga)));
             $corpo['totale'] = min($conteggio, self::CRM_TETTO_DEL_TOTALE);
@@ -1160,6 +1173,34 @@ trait Crm
      * @param  array<string, mixed>  $filtri
      * @param  array<string, mixed>  $riga
      */
+    /**
+     * Apre l'app Bookings nel workspace, come l'anteprima del backoffice (`ZR_BOOKINGS_ANTEPRIMA`) e app.modifica: il catalogo del finto la dà
+     * «in_arrivo» (app.modifica la rifiuta e apps.elenca la mostra così), ma `crm.persone.elenca` la vede accesa e offre `non_frequentante` (#2711).
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     */
+    public function conBookings(array $workspace): self
+    {
+        $id = $workspace['id'] ?? null;
+
+        if (! is_string($id) || ! isset($this->workspace[$id])) {
+            throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
+        }
+
+        $this->attive[$id]['bookings'] = true;
+        $this->anteprime[$id]['bookings'] = true;
+
+        return $this;
+    }
+
+    /** Persone::filtrata, «non frequentante»: una lezione viva (confermata o svolta) da 14 giorni fa in poi. */
+    private function haUnaLezioneCrm(string $persona): bool
+    {
+        $dal = now()->toImmutable()->subDays(14);
+
+        return array_filter($this->prenotazioniBookings, fn (array $riga) => $riga['persona'] === $persona && in_array($riga['stato'], ['confermata', 'svolta'], true) && $riga['inizio'] >= $dal) !== [];
+    }
+
     /** Organizzazioni::formeDelTermine: una parola com'è, senza le due lettere del paese davanti a una partita IVA e senza `www.` davanti a un dominio. */
     private static function formeDelTermineCrm(string $parola): array
     {
@@ -1192,7 +1233,8 @@ trait Crm
             'persone' => $uguale('organizzazione', 'organizzazione_id')
                 && array_filter($parole, fn (string $parola) => ! $contiene($riga['nome'], $parola) && ! $contiene($riga['cognome'], $parola)
                     && ! $contiene($riga['organizzazione_id'] === null ? null : ($this->crm['organizzazioni'][$riga['organizzazione_id']]['nome'] ?? null), $parola)) === []
-                && ($filtri['email'] === null || $this->personaConEmailCrm($workspace, $filtri['email']) === $riga['id']),
+                && ($filtri['email'] === null || $this->personaConEmailCrm($workspace, $filtri['email']) === $riga['id'])
+                && (! ($filtri['non_frequentante'] ?? false) || ! $this->haUnaLezioneCrm($riga['id'])),
             'organizzazioni' => array_filter($parole, fn (string $parola) => ! $contiene($riga['nome'], $parola)
                 && array_filter(self::formeDelTermineCrm($parola), fn (string $forma) => $contiene($riga['partita_iva'] ?? null, $forma) || $contiene($riga['dominio'] ?? null, $forma)) === []) === [],
             'trattative' => $uguale('pipeline', 'pipeline_id') && $uguale('fase', 'fase_id') && $uguale('persona', 'persona_id') && $uguale('organizzazione', 'organizzazione_id')

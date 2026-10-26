@@ -20,6 +20,7 @@ use Random\Randomizer;
 use SensitiveParameter;
 use stdClass;
 use Zeiras\Auth\Eventi\Firma;
+use Zeiras\Auth\Testing\Finto\BookingsPrenotazioni;
 use Zeiras\Auth\Testing\Finto\Crm;
 use Zeiras\Auth\Testing\Finto\CrmAcquisti;
 use Zeiras\Auth\Testing\Finto\CrmAvanzate;
@@ -81,6 +82,7 @@ final class BackofficeFinto
 {
     use BoardFunzioni;
     use BoardRuoliEpiche;
+    use BookingsPrenotazioni;
     use NotifichePreferenze;
     use Crm;
     use CrmAcquisti;
@@ -658,6 +660,9 @@ final class BackofficeFinto
 
     /** @var array<string, array<string, true>> le app che il workspace ha attivato (app.modifica), per workspace e per codice */
     private array $attive = [];
+
+    /** @var array<string, array<string, true>> le app non ancora disponibili nel catalogo che il workspace ha in anteprima (conBookings), per workspace e per codice */
+    private array $anteprime = [];
 
     /** @var array<string, array<string, bool>> workspace → persona → ha nascosto la guida dei primi passi (#1664); assente = false */
     private array $primiPassiNascosti = [];
@@ -5704,7 +5709,7 @@ final class BackofficeFinto
     /** Se il workspace ha l'app attiva (AppNelWorkspace::attiva): disponibile nel catalogo e attivata da lui. */
     private function appAttiva(string $workspace, string $app): bool
     {
-        return (self::CATALOGO[$app] ?? null) === 'disponibile' && isset($this->attive[$workspace][$app]);
+        return ((self::CATALOGO[$app] ?? null) === 'disponibile' || isset($this->anteprime[$workspace][$app])) && isset($this->attive[$workspace][$app]);
     }
 
     /** @return array{codice: string, stato: string, nome: array<string, string>} un'app come la dà il backoffice (Forme::app) */
