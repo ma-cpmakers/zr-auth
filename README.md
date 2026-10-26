@@ -739,7 +739,13 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   quelle rispondono `board.schede.mostra`, `board.schede.completamento.crea`, `board.schede.completamento.elimina`,
   `board.schede.collegamenti.elenca`, `board.schede.collegamenti.crea` e `board.schede.collegamenti.elimina` (col gettone di un
   workspace con l'app `pm`). `collegamenti.elimina` toglie l'attesa anche verso una scheda archiviata; è `409` `scheda_archiviata` solo
-  se è archiviata la scheda del percorso.
+  se è archiviata la scheda del percorso. Rispondono anche `board.schede.crm.elenca`, `board.schede.crm.crea` e
+  `board.schede.crm.elimina` (#2419): i collegamenti di una scheda a un contatto, un'azienda o un'opportunità del CRM del finto
+  (`tipo` `crm.persona`, `crm.organizzazione` o `crm.trattativa`, e l'`id` del record). L'elenco dà `titolo`, `contesto` e `motivo`
+  letti oggi dal CRM del finto; un contatto anonimizzato resta in lista con `titolo` e `contesto` a `null` e il `motivo`, e con l'app
+  `crm` spenta restano tutti con il motivo `non_leggibile` (il finto non ha i gettoni nati da un client della base: lì il backoffice
+  lascia leggibili i contatti). Il doppione è `409` `record_gia_collegato`, il cinquantunesimo `409` `limite_raggiunto` con
+  `limite` 50, un id che non c'è nel workspace `422` su `#/id`.
 - **Il widget di `accessi.crea`.** Come nel backoffice (`ZR_ACCESSI_TURNSTILE`, spento di default) il sesto tentativo di un'email in un
   minuto è `429` `troppe_richieste`. `accendiGradinoAccessi()` accende il gradino: dal sesto al trentesimo tentativo serve `turnstile`
   (con `accendiTurnstile()`; senza è `422` `turnstile_non_valido`) e il `429` viene oltre il trentesimo. La coppia (email, IP firmato)

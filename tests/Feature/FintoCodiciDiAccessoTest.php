@@ -68,7 +68,8 @@ it('accessi.codici.verifica.crea: per una persona che c\'è fa entrare e verific
 it('i documenti ospite: l\'ospite li vede e li accetta, con una versione nuova ogni metodo è 403, e chi accetta i documenti dei workspace non è più un ospite (#2478, T2.7)', function () {
     $finto = BackofficeFinto::attiva()
         ->documentiLegali(['termini-d-uso' => ['versione' => 'bozza-0.1', 'in_vigore_dal' => '2026-10-11', 'impronta' => '73ca77acbe0a4b7264e287bbbee56238ba1145b9bf4c5cc7ecd063e9969f08fd']])
-        ->documentiOspite(OSPITI_DI_PROVA);
+        ->documentiOspite(OSPITI_DI_PROVA)
+        ->consenti('@example.com');
     alFinto('POST', '/v1/accessi/codici', ['email' => 'olga@example.com']);
     $gettone = alFinto('POST', '/v1/accessi/codici/verifica', ['email' => 'olga@example.com', 'codice' => $finto->ultimoCodice('olga@example.com'), 'nome' => 'Olga', 'cognome' => 'Ospite', 'termini_accettati' => true])
         ->json('data.gettone.gettone');
@@ -87,4 +88,39 @@ it('i documenti ospite: l\'ospite li vede e li accetta, con una versione nuova o
     expect(alFinto('POST', '/v1/legale/accettazioni', ['documento' => 'termini-d-uso', 'versione' => 'bozza-0.1'], $gettone)->status())->toBe(201)
         ->and(array_column(alFinto('GET', '/v1/legale/documenti', gettone: $gettone)->json('data'), 'documento'))->toBe(['termini-d-uso'])
         ->and(alFinto('GET', '/v1/io/workspace', gettone: $gettone)->status())->toBe(200);
+});
+
+it('un ospite fuori dalla lista e senza invito non accetta i documenti dei workspace: 403 registrazione_non_aperta; con la lista, un invito vivo o la registrazione aperta passa (#2574)', function () {
+    $finto = BackofficeFinto::attiva()
+        ->documentiLegali(['termini-d-uso' => ['versione' => 'bozza-0.1', 'in_vigore_dal' => '2026-10-11', 'impronta' => '73ca77acbe0a4b7264e287bbbee56238ba1145b9bf4c5cc7ecd063e9969f08fd']])
+        ->documentiOspite(OSPITI_DI_PROVA);
+    $accetta = ['documento' => 'termini-d-uso', 'versione' => 'bozza-0.1'];
+    $ospite = function (string $email) use ($finto): string {
+        alFinto('POST', '/v1/accessi/codici', ['email' => $email]);
+
+        return alFinto('POST', '/v1/accessi/codici/verifica', ['email' => $email, 'codice' => $finto->ultimoCodice($email), 'nome' => 'Olga', 'cognome' => 'Ospite', 'termini_accettati' => true])
+            ->json('data.gettone.gettone');
+    };
+
+    $fuori = $ospite('fuori@fuori-lista.it');
+    $rifiuto = alFinto('POST', '/v1/legale/accettazioni', $accetta, $fuori);
+    expect(esito($rifiuto))->toBe([403, 'registrazione_non_aperta'])
+        ->and(array_column(alFinto('GET', '/v1/legale/documenti', gettone: $fuori)->json('data'), 'documento'))->toBe(['condizioni-ospite'])
+        ->and(esito(alFinto('GET', '/v1/io/workspace', gettone: $fuori)))->toBe([403, 'accettazione_richiesta']);
+
+    // Un invito vivo per quell'email, di un workspace qualsiasi.
+    $anna = $finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
+    $studio = $finto->workspace('Studio', $anna);
+    $accessoDiAnna = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/legale/accettazioni', $accetta, $accessoDiAnna);
+    $gettoneDiAnna = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accessoDiAnna)->json('data.gettone');
+    expect(alFinto('POST', '/v1/workspace/inviti', ['email' => 'fuori@fuori-lista.it', 'ruolo' => 'membro'], $gettoneDiAnna)->status())->toBe(201)
+        ->and(alFinto('POST', '/v1/legale/accettazioni', $accetta, $fuori)->status())->toBe(201);
+
+    // Un'altra email: la lista per indirizzo, poi per dominio.
+    $finto->consenti('lista@fuori-lista.it');
+    expect(alFinto('POST', '/v1/legale/accettazioni', $accetta, $ospite('lista@fuori-lista.it'))->status())->toBe(201);
+
+    $finto->consenti('@dominio-consentito.it');
+    expect(alFinto('POST', '/v1/legale/accettazioni', $accetta, $ospite('x@dominio-consentito.it'))->status())->toBe(201);
 });

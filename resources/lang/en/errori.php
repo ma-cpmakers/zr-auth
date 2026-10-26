@@ -119,7 +119,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Limit reached',
-        'detail' => 'The resource already has the maximum allowed: 100 active boards (300 active and closed, 1000 counting those in the bin) and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 50 members per workspace (counting live invitations), 10 outgoing and 50 incoming links per card (counting completed or archived cards too; `limite` and `direzione` say which). Free a slot (close a board or, with 1000 in all counting the bin, wait for one in the bin to be archived; archive a list or a card, remove a label, an item or a link, revoke an invitation) and try again.',
+        'detail' => 'The resource already has the maximum allowed: 100 active boards (300 active and closed, 1000 counting those in the bin) and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 50 members per workspace (counting live invitations), 10 outgoing and 50 incoming links per card (counting completed or archived cards too; `limite` and `direzione` say which), 50 links to CRM records per card. Free a slot (close a board or, with 1000 in all counting the bin, wait for one in the bin to be archived; archive a list or a card, remove a label, an item, a link or a CRM link, revoke an invitation) and try again.',
     ],
     'esportazione_in_corso' => [
         'title' => 'Export in progress',
@@ -308,6 +308,14 @@ return [
     'collegamento_esistente' => [
         'title' => 'Link already exists',
         'detail' => 'The card already waits for that card: do not repeat the request. You can find the link in board.schede.collegamenti.elenca.',
+    ],
+    'record_gia_collegato' => [
+        'title' => 'Record already linked',
+        'detail' => 'This card is already linked to that CRM record: do not repeat the request. You will find the link in board.schede.crm.elenca.',
+    ],
+    'lista_gia_esistente' => [
+        'title' => 'List already exists',
+        'detail' => 'This card already has its to-do list: a second one is not created. The list id is in `lista_id`; you also find it with board.todo.liste.elenca and `scheda_id`.',
     ],
     'collegamento_circolare' => [
         'title' => 'Circular link',

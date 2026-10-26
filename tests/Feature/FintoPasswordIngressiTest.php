@@ -207,7 +207,7 @@ it("lo scambio di un workspace con l'eliminazione programmata è la stessa verif
         ->and($rifiuto->json())->toBe($sconosciuto->json());
 
     // Il ripristino riapre il workspace, ma il codice di prima è consumato; uno nuovo scambia.
-    expect(alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso)->status())->toBe(204);
+    expect(alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso)->status())->toBe(200);
     $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
     expect(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore])->status())->toBe(422);
 

@@ -36,8 +36,10 @@ use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
+use Zeiras\Auth\Testing\Finto\SchedeCrm;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
+use Zeiras\Auth\Testing\Finto\Todo;
 
 /**
  * Il backoffice finto, per i test dei frontend (nota 5721): risponde alle chiamate di /v1 come zr-backoffice, senza rete
@@ -70,8 +72,10 @@ final class BackofficeFinto
     use CrmPersonalizzazione;
     use CrmPreventivi;
     use CrmPreventiviPubblici;
+    use SchedeCrm;
     use CrmScadenze;
     use CrmValori;
+    use Todo;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
     public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';
@@ -154,6 +158,21 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/collegamenti/([^/]+)$#', 'board.schede.collegamenti.elimina'],
+        ['GET', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.elenca'],
+        ['POST', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/crm/([^/]+)$#', 'board.schede.crm.elimina'],
+        ['GET', '#^/v1/board/todo/liste$#', 'board.todo.liste.elenca'],
+        ['POST', '#^/v1/board/todo/liste$#', 'board.todo.liste.crea'],
+        ['PATCH', '#^/v1/board/todo/liste/([^/]+)$#', 'board.todo.liste.modifica'],
+        ['GET', '#^/v1/board/todo/elementi$#', 'board.todo.elementi.elenca'],
+        ['POST', '#^/v1/board/todo/elementi$#', 'board.todo.elementi.crea'],
+        ['GET', '#^/v1/board/todo/elementi/([^/]+)$#', 'board.todo.elementi.mostra'],
+        ['PATCH', '#^/v1/board/todo/elementi/([^/]+)$#', 'board.todo.elementi.modifica'],
+        ['DELETE', '#^/v1/board/todo/elementi/([^/]+)$#', 'board.todo.elementi.elimina'],
+        ['POST', '#^/v1/board/todo/elementi/([^/]+)/completamento$#', 'board.todo.elementi.completamento.crea'],
+        ['DELETE', '#^/v1/board/todo/elementi/([^/]+)/completamento$#', 'board.todo.elementi.completamento.elimina'],
+        ['GET', '#^/v1/board/todo/riepilogo$#', 'board.todo.riepilogo.mostra'],
+        ['GET', '#^/v1/board/todo/tag$#', 'board.todo.tag.elenca'],
         ['GET', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.elenca'],
         ['POST', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.crea'],
         ['PATCH', '#^/v1/board/board/([^/]+)/viste/([^/]+)$#', 'board.board.viste.modifica'],
@@ -308,7 +327,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -442,6 +461,9 @@ final class BackofficeFinto
 
     /** @var array<string, CarbonImmutable> quando si archivia ogni workspace di cui il proprietario ha chiesto l'eliminazione, per id: il finto non archivia alla scadenza */
     private array $eliminazioni = [];
+
+    /** @var array<string, CarbonImmutable> fino a quando il tetto di un giro di email ogni 24 ore ferma la prossima, per «tipo:workspace» (`eliminato`, `ripristinato`): è `membri_avvisati` */
+    private array $avvisi = [];
 
     /** @var array<string, string> la persona che ha chiesto l'eliminazione di ogni workspace in eliminazione (`eliminato_da`, #2601), per id del workspace */
     private array $eliminatiDa = [];
@@ -1286,6 +1308,21 @@ final class BackofficeFinto
                 'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
                 'board.schede.collegamenti.crea' => $this->creaCollegamento($richiesta, $corpo, $parametri[0]),
                 'board.schede.collegamenti.elimina' => $this->eliminaCollegamento($richiesta, $parametri[0], $parametri[1]),
+                'board.schede.crm.elenca' => $this->elencaSchedeCrm($richiesta, $parametri[0]),
+                'board.schede.crm.crea' => $this->creaSchedaCrm($richiesta, $corpo, $parametri[0]),
+                'board.schede.crm.elimina' => $this->eliminaSchedaCrm($richiesta, $parametri[0], $parametri[1]),
+                'board.todo.liste.elenca' => $this->elencaListeTodo($richiesta),
+                'board.todo.liste.crea' => $this->creaListaTodo($richiesta, $corpo),
+                'board.todo.liste.modifica' => $this->modificaListaTodo($richiesta, $corpo, $parametri[0]),
+                'board.todo.elementi.elenca' => $this->elencaElementiTodo($richiesta),
+                'board.todo.elementi.crea' => $this->creaElementoTodo($richiesta, $corpo),
+                'board.todo.elementi.mostra' => $this->mostraElementoTodo($richiesta, $parametri[0]),
+                'board.todo.elementi.modifica' => $this->modificaElementoTodo($richiesta, $corpo, $parametri[0]),
+                'board.todo.elementi.elimina' => $this->eliminaElementoTodo($richiesta, $parametri[0]),
+                'board.todo.elementi.completamento.crea' => $this->completamentoCreaTodo($richiesta, $parametri[0]),
+                'board.todo.elementi.completamento.elimina' => $this->completamentoEliminaTodo($richiesta, $parametri[0]),
+                'board.todo.riepilogo.mostra' => $this->riepilogoTodo($richiesta),
+                'board.todo.tag.elenca' => $this->tagTodo($richiesta),
                 'board.board.viste.elenca' => $this->elencaViste($richiesta, $parametri[0]),
                 'board.board.viste.crea' => $this->creaVista($richiesta, $corpo, $parametri[0]),
                 'board.board.viste.modifica' => $this->modificaVista($richiesta, $corpo, $parametri[0], $parametri[1]),
@@ -2856,7 +2893,9 @@ final class BackofficeFinto
 
     /**
      * legale.accettazioni.crea (LegaleController::accettazioniCrea): la persona del gettone accetta la versione in vigore di un
-     * documento: 201 la prima volta, 200 con la stessa riga se la ripete. Un documento o una versione fuori vigore è 422.
+     * documento: 201 la prima volta, 200 con la stessa riga se la ripete. Un documento o una versione fuori vigore è 422. Un ospite
+     * che accetta un documento dei workspace (#2574) vuole la registrazione aperta, l'email nella lista dei consentiti o un invito vivo
+     * per quell'email: senza, 403 registrazione_non_aperta e nessuna accettazione.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -2865,7 +2904,8 @@ final class BackofficeFinto
     {
         $chi = $this->autentica($richiesta);
         $documento = $corpo['documento'] ?? null;
-        $documenti = $this->documentiLegali + ($this->eUnOspite($chi['persona']) ? $this->documentiOspite : []);
+        $ospite = $this->eUnOspite($chi['persona']);
+        $documenti = $this->documentiLegali + ($ospite ? $this->documentiOspite : []);
         $versione = is_string($documento) ? ($documenti[$documento]['versione'] ?? null) : null;
 
         $campi = $this->testi->validaStretta($corpo, [
@@ -2874,11 +2914,27 @@ final class BackofficeFinto
         ]);
         $this->frena('legale-accettazioni:'.$chi['persona'], self::FRENI['legale_accettazioni_per_persona'], self::ORA);
 
+        if ($ospite && isset($this->documentiLegali[$campi['documento']]) && ! $this->puoDiventareUtente($chi['persona'])) {
+            throw new Problema('registrazione_non_aperta');
+        }
+
         $chiave = $campi['documento'].'@'.$campi['versione'];
         $nuova = ! isset($this->accettazioni[$chi['persona']][$chiave]);
         $this->accettazioni[$chi['persona']][$chiave] ??= self::iso(now());
 
         return [$nuova ? 201 : 200, ['data' => ['documento' => $campi['documento'], 'versione' => $campi['versione'], 'accettata_il' => $this->accettazioni[$chi['persona']][$chiave]]]];
+    }
+
+    /**
+     * Se un ospite può diventare utente dei workspace (Legale::puoDiventareUtente, #2574): la registrazione aperta o l'email nella lista
+     * dei consentiti (consente()), o un invito vivo per quell'email, di un workspace qualsiasi.
+     */
+    private function puoDiventareUtente(string $persona): bool
+    {
+        $email = $this->persone[$persona]['email'];
+
+        return $this->consente($email)
+            || array_filter($this->inviti, fn (array $invito) => $invito['email'] === $email && $invito['scade']->gt(now())) !== [];
     }
 
     /**
@@ -4974,6 +5030,8 @@ final class BackofficeFinto
         $chi = $this->conWorkspace($richiesta, ['proprietario']);
         $workspace = $chi['workspace'];
 
+        $avvisati = false;
+
         if (! isset($this->eliminazioni[$workspace])) {
             $altri = array_filter(array_keys($this->membri), fn (string $id) => $id !== $workspace && isset($this->membri[$id][$chi['persona']]) && ! isset($this->eliminazioni[$id]));
 
@@ -4983,9 +5041,10 @@ final class BackofficeFinto
 
             $this->eliminazioni[$workspace] = now()->toImmutable()->startOfMillisecond()->addDays(30);
             $this->eliminatiDa[$workspace] = $chi['persona'];
+            $avvisati = $this->avvisaIMembri('eliminato', $workspace, array_keys($this->membri[$workspace] ?? []));
         }
 
-        return [202, ['data' => ['id' => $workspace, 'eliminazione_il' => self::iso($this->eliminazioni[$workspace])]], []];
+        return [202, ['data' => ['id' => $workspace, 'eliminazione_il' => self::iso($this->eliminazioni[$workspace]), 'membri_avvisati' => $avvisati]], []];
     }
 
     /**
@@ -5119,7 +5178,7 @@ final class BackofficeFinto
      * con la finestra scaduta o in cui è solo membro è lo stesso 404.
      *
      * @param  array<mixed>  $corpo
-     * @return array{int, null}
+     * @return array{int, array<string, mixed>}
      */
     private function ripristinaIlWorkspace(Request $richiesta, array $corpo, string $workspace): array
     {
@@ -5133,7 +5192,29 @@ final class BackofficeFinto
 
         unset($this->eliminazioni[$workspace], $this->eliminatiDa[$workspace], $this->eliminazioniConAccount[$workspace]);
 
-        return [204, null];
+        // Gli stessi membri che avevano saputo dell'eliminazione, tranne chi ripristina.
+        $altri = array_values(array_filter(array_keys($this->membri[$workspace] ?? []), fn (string $membro) => $membro !== $persona));
+
+        return [200, ['data' => ['membri_avvisati' => $this->avvisaIMembri('ripristinato', $workspace, $altri)]]];
+    }
+
+    /**
+     * Il giro di email ai membri (AvvisaMembroDelWorkspace): `true` se qualcuno c'è da avvisare e il tetto di un giro ogni 24 ore, per tipo e
+     * per workspace, non l'ha fermato; il finto non manda niente, tiene solo il conto di quando il tetto riapre.
+     *
+     * @param  list<string>  $membri
+     */
+    private function avvisaIMembri(string $tipo, string $workspace, array $membri): bool
+    {
+        $chiave = "{$tipo}:{$workspace}";
+
+        if ($membri === [] || (isset($this->avvisi[$chiave]) && $this->avvisi[$chiave]->isFuture())) {
+            return false;
+        }
+
+        $this->avvisi[$chiave] = now()->toImmutable()->addDay();
+
+        return true;
     }
 
     /**
