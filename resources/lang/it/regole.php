@@ -18,6 +18,8 @@ return [
     'board_del_workspace' => "Nel workspace non c'è una board con questo id: gli id delle board li dà board.board.elenca.",
     'lista_del_workspace' => "Nel workspace non c'è una lista con questo id: gli id delle liste li dà board.board.mostra.",
     'tipo_della_board' => 'Il tipo non è fra quelli del metodo di questa board (:tipi): i tipi ammessi li dà board.board.mostra nel campo `tipi`.',
+    'metodo_del_settore' => "Il metodo non è del settore dell'area di questa board: edilizia vuole waterfall, digitale scrum o scrumban.",
+    'lista_da_rinominare' => 'Questa board non ha una lista non archiviata con questo id (o la lista è già nominata sopra): gli id delle liste li dà board.board.mostra.',
     'blocca_vuole_un_limite' => 'Una lista senza limite non si può bloccare: manda anche `limite` (da 1 a 99).',
     'passaggio_della_board' => 'Uno di questi id non è di una lista attiva di questa board, o è la lista stessa: gli id delle liste li dà board.board.mostra.',
     'passaggio_per_posizione' => "Una posizione dei passaggi non è nell'elenco `liste` di questo corpo, o è quella della lista stessa: le posizioni partono da 0.",

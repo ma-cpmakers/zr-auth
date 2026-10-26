@@ -93,6 +93,10 @@ return [
         'title' => 'Sector with boards',
         'detail' => 'This folder still has active or closed boards, so its sector cannot be changed from construction to digital or removed: do not repeat the same request.',
     ],
+    'board_senza_metodo' => [
+        'title' => 'Board without a method',
+        'detail' => 'This board has no working method (it was created without one, or its area has no sector), so there is no method to change: do not repeat the same request.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'The owner cannot be touched',
         'detail' => 'A workspace has one owner and no method removes them or changes their role: do not repeat the request.',

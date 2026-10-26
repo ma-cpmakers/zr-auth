@@ -93,6 +93,10 @@ return [
         'title' => 'Sector con tableros',
         'detail' => 'Esta carpeta todavía tiene tableros activos o cerrados, y su sector no se puede cambiar de construcción a digital ni quitar: no repitas la misma solicitud.',
     ],
+    'board_senza_metodo' => [
+        'title' => 'Tablero sin método',
+        'detail' => 'Este tablero no tiene un método de trabajo (nació sin él, o su área no tiene sector), así que no hay un método que cambiar: no repitas la misma solicitud.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'El propietario no se toca',
         'detail' => 'Un workspace tiene un solo propietario y ningún método lo quita ni le cambia el rol: no repitas la solicitud.',

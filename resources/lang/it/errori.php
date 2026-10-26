@@ -93,6 +93,10 @@ return [
         'title' => 'Settore con board',
         'detail' => 'Questa cartella ha ancora delle board attive o chiuse, e il suo settore non si cambia da edilizia a digitale né si toglie: non ripetere la richiesta uguale.',
     ],
+    'board_senza_metodo' => [
+        'title' => 'Board senza metodo',
+        'detail' => "Questa board non ha un metodo di lavoro (è nata senza, o la sua area non ha un settore), quindi non c'è un metodo da cambiare: non ripetere la richiesta uguale.",
+    ],
     'proprietario_intoccabile' => [
         'title' => 'Il proprietario non si tocca',
         'detail' => 'Il proprietario del workspace è uno solo e nessun metodo lo toglie né ne cambia il ruolo: non ripetere la richiesta.',
