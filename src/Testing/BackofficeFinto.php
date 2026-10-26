@@ -2843,7 +2843,9 @@ final class BackofficeFinto
 
     /**
      * legale.accettazioni.crea (LegaleController::accettazioniCrea): la persona del gettone accetta la versione in vigore di un
-     * documento: 201 la prima volta, 200 con la stessa riga se la ripete. Un documento o una versione fuori vigore è 422.
+     * documento: 201 la prima volta, 200 con la stessa riga se la ripete. Un documento o una versione fuori vigore è 422. Un ospite
+     * che accetta un documento dei workspace (#2574) vuole la registrazione aperta, l'email nella lista dei consentiti o un invito vivo
+     * per quell'email: senza, 403 registrazione_non_aperta e nessuna accettazione.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -2852,7 +2854,8 @@ final class BackofficeFinto
     {
         $chi = $this->autentica($richiesta);
         $documento = $corpo['documento'] ?? null;
-        $documenti = $this->documentiLegali + ($this->eUnOspite($chi['persona']) ? $this->documentiOspite : []);
+        $ospite = $this->eUnOspite($chi['persona']);
+        $documenti = $this->documentiLegali + ($ospite ? $this->documentiOspite : []);
         $versione = is_string($documento) ? ($documenti[$documento]['versione'] ?? null) : null;
 
         $campi = $this->testi->validaStretta($corpo, [
@@ -2861,11 +2864,27 @@ final class BackofficeFinto
         ]);
         $this->frena('legale-accettazioni:'.$chi['persona'], self::FRENI['legale_accettazioni_per_persona'], self::ORA);
 
+        if ($ospite && isset($this->documentiLegali[$campi['documento']]) && ! $this->puoDiventareUtente($chi['persona'])) {
+            throw new Problema('registrazione_non_aperta');
+        }
+
         $chiave = $campi['documento'].'@'.$campi['versione'];
         $nuova = ! isset($this->accettazioni[$chi['persona']][$chiave]);
         $this->accettazioni[$chi['persona']][$chiave] ??= self::iso(now());
 
         return [$nuova ? 201 : 200, ['data' => ['documento' => $campi['documento'], 'versione' => $campi['versione'], 'accettata_il' => $this->accettazioni[$chi['persona']][$chiave]]]];
+    }
+
+    /**
+     * Se un ospite può diventare utente dei workspace (Legale::puoDiventareUtente, #2574): la registrazione aperta o l'email nella lista
+     * dei consentiti (consente()), o un invito vivo per quell'email, di un workspace qualsiasi.
+     */
+    private function puoDiventareUtente(string $persona): bool
+    {
+        $email = $this->persone[$persona]['email'];
+
+        return $this->consente($email)
+            || array_filter($this->inviti, fn (array $invito) => $invito['email'] === $email && $invito['scade']->gt(now())) !== [];
     }
 
     /**
