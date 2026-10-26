@@ -184,4 +184,10 @@ return [
     'prenotazione_motivo_solo_annullata' => 'The reason is written only when cancelling the booking.',
     'ospite_prenotazione_un_gruppo' => 'Change one thing per call: the time (`inizio`), the cancellation (`stato`) or the Terms (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => 'The message is written only with a time change or a cancellation.',
+    'calendario_del_collegamento' => 'This calendar does not belong to this connection: calendar ids come from bookings.collegamenti.calendari.elenca.',
+    'calendario_di_sola_lettura' => 'This calendar is read-only: events cannot be written to it. Pick one you can write to.',
+    'finestra_obbligatoria' => 'The :attribute parameter is required: the window runs from `dal` (included) to `al` (excluded).',
+    'finestra_formato' => 'The :attribute parameter wants an ISO 8601 date with a time zone, for example 2026-11-02T00:00:00+01:00.',
+    'finestra_al_dopo_dal' => 'The al parameter must be after dal.',
+    'finestra_troppo_larga' => 'The window is at most 62 days: shorten al.',
 ];

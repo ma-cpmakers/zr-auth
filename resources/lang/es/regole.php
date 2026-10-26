@@ -184,4 +184,10 @@ return [
     'prenotazione_motivo_solo_annullata' => 'El motivo se escribe solo al cancelar la reserva.',
     'ospite_prenotazione_un_gruppo' => 'Cambia una sola cosa por llamada: la hora (`inizio`), la cancelación (`stato`) o los Términos (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => 'El mensaje se escribe solo con un cambio de hora o al cancelar.',
+    'calendario_del_collegamento' => 'Este calendario no es de esta conexión: los id de los calendarios los da bookings.collegamenti.calendari.elenca.',
+    'calendario_di_sola_lettura' => 'Este calendario es de solo lectura: no se pueden escribir eventos en él. Elige uno en el que puedas escribir.',
+    'finestra_obbligatoria' => 'El parámetro :attribute es obligatorio: la ventana va de `dal` (incluido) a `al` (excluido).',
+    'finestra_formato' => 'El parámetro :attribute quiere una fecha ISO 8601 con zona horaria, por ejemplo 2026-11-02T00:00:00+01:00.',
+    'finestra_al_dopo_dal' => 'El parámetro al debe ser posterior a dal.',
+    'finestra_troppo_larga' => 'La ventana es de 62 días como máximo: acorta al.',
 ];

@@ -253,6 +253,14 @@ return [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',
     ],
+    'permessi_mancanti' => [
+        'title' => 'Permessi mancanti',
+        'detail' => 'Il consenso al calendario non ha dato tutto ciò che serve a Bookings: guarda `non_concessi` accanto al codice (`occupato`: l\'elenco dei calendari, `eventi`: leggere e scrivere gli impegni). Non è stato collegato niente: ripeti «Collega» e lascia attivi tutti i permessi richiesti.',
+    ],
+    'account_gia_collegato' => [
+        'title' => 'Account già collegato',
+        'detail' => 'Hai già collegato un altro account di questo provider: ogni membro ne ha uno solo per provider. Scollegalo con bookings.collegamenti.elimina prima di collegare quello nuovo. Il metodo non ha scritto niente.',
+    ],
     'ultima_opzione' => [
         'title' => 'Ultima opzione',
         'detail' => 'Questa è l\'ultima opzione viva del campo, e un campo a elenco o a scelta multipla ne ha sempre almeno una. Aggiungine un\'altra con crm.campi.opzioni.crea e poi togli questa. Il metodo non ha scritto niente.',

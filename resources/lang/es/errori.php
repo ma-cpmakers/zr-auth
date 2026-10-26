@@ -253,6 +253,14 @@ return [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',
     ],
+    'permessi_mancanti' => [
+        'title' => 'Permisos que faltan',
+        'detail' => 'El consentimiento del calendario no dio todo lo que Bookings necesita: mira `non_concessi` junto al código (`occupato`: la lista de calendarios, `eventi`: leer y escribir los eventos). No se conectó nada: repite «Conectar» y deja activos todos los permisos pedidos.',
+    ],
+    'account_gia_collegato' => [
+        'title' => 'Cuenta ya conectada',
+        'detail' => 'Ya conectaste otra cuenta de este proveedor: cada miembro tiene una por proveedor. Desconéctala con bookings.collegamenti.elimina antes de conectar la nueva. No se escribió nada.',
+    ],
     'ultima_opzione' => [
         'title' => 'Última opción',
         'detail' => 'Esta es la última opción viva del campo, y un campo de lista o de selección múltiple siempre tiene al menos una. Añade otra con crm.campi.opzioni.crea y luego quita esta. No se escribió nada.',
