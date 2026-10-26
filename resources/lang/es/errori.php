@@ -113,6 +113,14 @@ return [
         'title' => 'Sprint no activo',
         'detail' => 'Solo se cierra un sprint activo, y este todavía está planificado o ya está cerrado: no repitas la misma solicitud.',
     ],
+    'ruolo_gia_assegnato' => [
+        'title' => 'Rol ya asignado',
+        'detail' => 'Otra lista de este tablero, no archivada, ya tiene este rol: quita antes el rol a esa lista, o archívala. No repitas la misma solicitud.',
+    ],
+    'nessuna_pianificazione' => [
+        'title' => 'Nada que planificar',
+        'detail' => 'No hay nada que llevar a la lista `pronte`: el tablero no tiene una lista `backlog` y una `pronte` (con el rol, no archivadas), o el umbral de `pronte` es 0, o `pronte` ya tiene las tarjetas del umbral, o el backlog no tiene tarjetas abiertas. No repitas la misma solicitud.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'El propietario no se toca',
         'detail' => 'Un workspace tiene un solo propietario y ningún método lo quita ni le cambia el rol: no repitas la solicitud.',

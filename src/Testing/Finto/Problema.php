@@ -38,6 +38,8 @@ final class Problema extends RuntimeException
         'sprint_chiuso' => 409,
         'sprint_non_pianificato' => 409,
         'sprint_non_attivo' => 409,
+        'ruolo_gia_assegnato' => 409,
+        'nessuna_pianificazione' => 409,
         'limite_raggiunto' => 409,
         'prenotazioni_al_limite' => 409,
         'crediti_esauriti' => 409,

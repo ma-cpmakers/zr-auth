@@ -113,6 +113,14 @@ return [
         'title' => 'Sprint non attivo',
         'detail' => 'Si chiude solo uno sprint attivo, e questo è ancora pianificato o già chiuso: non ripetere la richiesta uguale.',
     ],
+    'ruolo_gia_assegnato' => [
+        'title' => 'Ruolo già assegnato',
+        'detail' => 'In questa board un\'altra lista, non archiviata, ha già questo ruolo: togli prima il ruolo a quella, o archiviala. Non ripetere la richiesta uguale.',
+    ],
+    'nessuna_pianificazione' => [
+        'title' => 'Niente da pianificare',
+        'detail' => 'Non c\'è niente da portare nelle pronte: la board non ha una lista `backlog` e una `pronte` (col ruolo, non archiviate), oppure la soglia delle pronte è 0, oppure le pronte hanno già le schede della soglia, oppure il backlog non ha schede aperte. Non ripetere la richiesta uguale.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'Il proprietario non si tocca',
         'detail' => 'Il proprietario del workspace è uno solo e nessun metodo lo toglie né ne cambia il ruolo: non ripetere la richiesta.',

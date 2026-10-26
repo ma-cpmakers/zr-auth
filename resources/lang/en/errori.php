@@ -113,6 +113,14 @@ return [
         'title' => 'Sprint is not active',
         'detail' => 'Only an active sprint can be closed, and this one is still planned or already closed: do not repeat the same request.',
     ],
+    'ruolo_gia_assegnato' => [
+        'title' => 'Role already assigned',
+        'detail' => 'Another list in this board, not archived, already has this role: take the role off that list first, or archive it. Do not repeat the same request.',
+    ],
+    'nessuna_pianificazione' => [
+        'title' => 'Nothing to plan',
+        'detail' => 'There is nothing to move into the ready list: the board has no `backlog` list and `pronte` list (with the role, not archived), or the threshold of the ready list is 0, or the ready list already has the cards of its threshold, or the backlog has no open cards. Do not repeat the same request.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'The owner cannot be touched',
         'detail' => 'A workspace has one owner and no method removes them or changes their role: do not repeat the request.',

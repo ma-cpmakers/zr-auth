@@ -762,6 +762,13 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   cambia solo la chiusura. Il finto non tiene il registro dei movimenti e non emette gli eventi. `board.sprint.andamento.mostra` (#2665) dà la serie
   che il test semina con `andamento($sprint, $giorni, 'punti'|'schede')` (i cinque interi cumulativi di ogni giorno, come li dà il backoffice), vuota in `schede` senza
   semina: il finto non la calcola.
+- **La pianificazione e il flusso di Scrumban.** `board.board.pianificazione.crea` (`POST /v1/board/board/{board}/pianificazione`, #2666) risponde
+  `201` con le schede che il test semina con `pianificazione($board, [['id' => …, 'lista_id' => …, 'posizione' => …]])` (le consuma: senza, o dopo, `409`
+  `nessuna_pianificazione`); `board.board.flusso.mostra` (`GET /v1/board/board/{board}/flusso?da=&a=`) dà il flusso seminato con
+  `flusso($board, ['lead_time' => …, 'throughput' => …, 'cumulativo' => …, 'senza_storia' => …])`, o quello vuoto del periodo (`da` e `a` come nel backoffice:
+  al più 90 giorni, per default gli ultimi 30, `422` sul parametro `da` o `a`), con l'`ETag` ma senza il `304`. Una board che non è Scrumban è `409`
+  `board_senza_metodo`. Il finto non ha le liste: `ruolo` e `soglia` non ci sono, e `scheda(…, orizzonte: '3_mesi'|'6_mesi'|'1_anno')` dà l'`orizzonte` che le
+  letture portano.
 - **Il widget di `accessi.crea`.** Come nel backoffice (`ZR_ACCESSI_TURNSTILE`, spento di default) il sesto tentativo di un'email in un
   minuto è `429` `troppe_richieste`. `accendiGradinoAccessi()` accende il gradino: dal sesto al trentesimo tentativo serve `turnstile`
   (con `accendiTurnstile()`; senza è `422` `turnstile_non_valido`) e il `429` viene oltre il trentesimo. La coppia (email, IP firmato)
