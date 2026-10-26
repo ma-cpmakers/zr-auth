@@ -89,6 +89,10 @@ return [
         'title' => 'Carpeta no vacía',
         'detail' => 'Esta carpeta todavía tiene tableros, y solo se puede eliminar vacía: mueve o quita antes sus tableros.',
     ],
+    'settore_con_board' => [
+        'title' => 'Sector con tableros',
+        'detail' => 'Esta carpeta todavía tiene tableros activos o cerrados, y su sector no se puede cambiar de construcción a digital ni quitar: no repitas la misma solicitud.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'El propietario no se toca',
         'detail' => 'Un workspace tiene un solo propietario y ningún método lo quita ni le cambia el rol: no repitas la solicitud.',
