@@ -321,6 +321,10 @@ return [
         'title' => "Prenotazioni sull'apertura",
         'detail' => "L'apertura ha prenotazioni vive e non si elimina finché ci sono: le prenotazioni non si toccano. Annullale con `bookings.prenotazioni.modifica` (`stato: annullata`) o spostale, poi ripeti la richiesta. Il metodo non ha scritto niente.",
     ],
+    'aperture_non_possibili' => [
+        'title' => 'Aperture non create',
+        'detail' => 'Nessuna delle aperture chiesta si può creare, o con `solo_possibili: false` almeno una non si può: il problema porta `non_creati`, un elenco di `inizio` e `motivo`. Correggi o togli quegli inizi, oppure togli `solo_possibili: false` per aprire quelli possibili. Il metodo non ha scritto niente.',
+    ],
     'prenotazioni_future' => [
         'title' => 'Prenotazioni future presenti',
         'detail' => 'Il calendario ha prenotazioni confermate che non sono ancora iniziate, e non si elimina finché ci sono. Annullale (`bookings.prenotazioni.modifica` con `stato: annullata`) o metti il calendario in pausa con `bookings.calendari.modifica`. Il metodo non ha scritto niente.',

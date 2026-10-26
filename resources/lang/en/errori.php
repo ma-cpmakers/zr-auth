@@ -321,6 +321,10 @@ return [
         'title' => 'Opening has bookings',
         'detail' => 'The opening has live bookings and cannot be deleted while they exist: bookings are never touched. Cancel them with `bookings.prenotazioni.modifica` (`stato: annullata`) or move them, then repeat the request. The method wrote nothing.',
     ],
+    'aperture_non_possibili' => [
+        'title' => 'Openings not created',
+        'detail' => 'None of the requested openings can be created, or with `solo_possibili: false` at least one cannot: the problem carries `non_creati`, a list of `inizio` and `motivo`. Fix or drop those starts, or drop `solo_possibili: false` to open the possible ones. The method wrote nothing.',
+    ],
     'prenotazioni_future' => [
         'title' => 'Upcoming bookings exist',
         'detail' => 'The calendar has confirmed bookings that have not started yet, and it cannot be deleted while they exist. Cancel them (`bookings.prenotazioni.modifica` with `stato: annullata`) or pause the calendar with `bookings.calendari.modifica`. Nothing was written.',
