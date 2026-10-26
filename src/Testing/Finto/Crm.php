@@ -1849,7 +1849,7 @@ trait Crm
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
             'creato_da' => $riga['creato_da'],
-            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'persona', $riga['id'])] : ($inElenco ? ['campi' => $this->valoriInElencoCrm($riga['workspace'], 'persona', $riga['id'])] : [])),
+            ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'persona', $riga['id']), 'avvisi' => $this->avvisiDiCrm($riga['workspace'], $riga['id'])] : ($inElenco ? ['campi' => $this->valoriInElencoCrm($riga['workspace'], 'persona', $riga['id']), 'avvisi' => $this->avvisiDiCrm($riga['workspace'], $riga['id'])] : [])),
         ];
     }
 

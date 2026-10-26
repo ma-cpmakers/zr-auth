@@ -42,12 +42,12 @@ trait CrmValori
      *
      * @return array<string, array<string, mixed>>
      */
-    private function campiTuoiCrm(string $workspace, string $oggetto): array
+    private function campiTuoiCrm(string $workspace, string $oggetto, bool $ancheSensibili = false): array
     {
         $this->campiDelWorkspaceCrm($workspace);
         // Un campo «sensibile» (#2694) non c'è per chi non è proprietario né amministratore: né i suoi valori né la sua chiave (ValoriDeiCampi::campiVisibili).
         $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo' && ($campo['eliminato_il'] ?? null) === null
-            && ($this->vedeISensibiliCrm || ! ($campo['sensibile'] ?? false)));
+            && ($ancheSensibili || $this->vedeISensibiliCrm || ! ($campo['sensibile'] ?? false)));
         uasort($campi, fn (array $a, array $b) => $a['ord'] <=> $b['ord']);
 
         return array_map(fn (array $campo) => $this->conOpzioniDelloElencoCrm($campo), $campi);
@@ -350,6 +350,34 @@ trait CrmValori
         }
 
         return (object) $valori;
+    }
+
+    /**
+     * Gli avvisi di un contatto (#2695, ValoriDeiCampi::avvisiDi): i campi «tuoi» di tipo `data` con `avvisa` il cui valore manca o è prima
+     * di oggi. Solo `{campo, motivo}`, per ogni ruolo e anche per un campo sensibile. Il finto conta «oggi» come per gli acquisti.
+     *
+     * @return list<array{campo: string, motivo: string}>
+     */
+    private function avvisiDiCrm(string $workspace, string $id): array
+    {
+        $avvisi = [];
+        $oggi = self::oggiAcquistoCrm();
+
+        foreach ($this->campiTuoiCrm($workspace, 'persona', true) as $chiave => $campo) {
+            if ($campo['tipo'] !== 'data' || ! ($campo['avvisa'] ?? false)) {
+                continue;
+            }
+
+            $data = $this->crm['valori']['persona'][$id][$chiave] ?? null;
+
+            if ($data === null) {
+                $avvisi[] = ['campo' => (string) $chiave, 'motivo' => 'manca'];
+            } elseif ((string) $data < $oggi) {
+                $avvisi[] = ['campo' => (string) $chiave, 'motivo' => 'scaduto'];
+            }
+        }
+
+        return $avvisi;
     }
 
     /**

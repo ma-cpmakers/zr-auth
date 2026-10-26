@@ -1075,3 +1075,26 @@ it('crm.persone: la chiave di un campo sensibile manca per un membro in ogni ris
     $scrittura = alFinto('POST', '/v1/crm/persone', ['nome' => 'Marco', 'campi' => [$sensibile => 'x']], $carla);
     expect($scrittura->status())->toBe(422)->and($scrittura->json('errors.0.pointer'))->toBe("#/campi/{$sensibile}")->and($scrittura->json('errors.0.regola'))->toBe('campo_estraneo');
 });
+
+// #2695 (zr-crm #2691 Q5, C1-C4): avvisi in mostra e in elenca. Che sia come nel backoffice lo prova il suo FintoTest.
+it('crm.persone: avvisi dice quali campi data con avvisa mancano o sono scaduti, uguale per i tre ruoli e anche per un campo sensibile (C1-C4)', function () {
+    [, $gettoni] = studioColCrm();
+    ['anna' => $anna, 'carla' => $carla] = $gettoni;
+    $certificato = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Certificato'], 'tipo' => 'data', 'avvisa' => true, 'sensibile' => true], $anna))->json('data.chiave');
+    riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Senza avviso'], 'tipo' => 'data'], $anna));
+    $senza = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia'], $anna));
+    $scaduto = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Marco', 'campi' => [$certificato => '2020-01-01']], $anna));
+    $valido = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Anna', 'campi' => [$certificato => '2999-01-01']], $anna));
+
+    expect($senza->json('data.avvisi'))->toBe([['campo' => $certificato, 'motivo' => 'manca']])
+        ->and($scaduto->json('data.avvisi'))->toBe([['campo' => $certificato, 'motivo' => 'scaduto']])
+        ->and($valido->json('data.avvisi'))->toBe([]);
+
+    foreach ([$anna, $carla] as $token) {
+        $righe = collect(alFinto('GET', '/v1/crm/persone', null, $token)->json('data'))->keyBy('id');
+
+        expect($righe[$scaduto->json('data.id')]['avvisi'])->toBe([['campo' => $certificato, 'motivo' => 'scaduto']])
+            ->and($righe[$valido->json('data.id')]['avvisi'])->toBe([])
+            ->and(alFinto('GET', '/v1/crm/persone/'.$senza->json('data.id'), null, $token)->json('data.avvisi'))->toBe([['campo' => $certificato, 'motivo' => 'manca']]);
+    }
+});
