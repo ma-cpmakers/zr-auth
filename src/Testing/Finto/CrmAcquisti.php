@@ -42,6 +42,9 @@ trait CrmAcquisti
 
     private const CRM_CONSUMO_NOTA = 500;
 
+    /** Gli stati di un consumo (Consumo::STATI, #2656): quello a mano nasce `usato`. */
+    private const CRM_CONSUMO_STATI = ['prenotato', 'usato', 'restituito'];
+
     private const CRM_CONSUMO_QUANTITA = 100;
 
     /**
@@ -249,7 +252,7 @@ trait CrmAcquisti
             $consumo = [
                 'id' => self::id(), 'workspace' => $chi['workspace'], 'acquisto_id' => $riga['id'], 'quantita' => $quantita,
                 'svolto_il' => isset($campi['svolto_il']) ? self::istanteCrm($campi['svolto_il']) : self::adessoCrm(),
-                'origine' => 'manuale', 'nota' => $campi['nota'] ?? null, 'creato_da' => $chi['persona'], 'creato_il' => self::adessoCrm(),
+                'origine' => 'manuale', 'stato' => 'usato', 'prenotazione_id' => null, 'nota' => $campi['nota'] ?? null, 'creato_da' => $chi['persona'], 'creato_il' => self::adessoCrm(),
             ];
             $this->crm['consumi'][$consumo['id']] = $consumo;
             $this->salvaCrm('acquisti', $riga['id'], ['crediti_usati' => $riga['crediti_usati'] + $quantita]);
@@ -259,7 +262,8 @@ trait CrmAcquisti
     }
 
     /**
-     * crm.acquisti.consumi.elenca: i consumi di un acquisto dal più recente (`svolto_il`, poi `id`, decrescenti), a cursore.
+     * crm.acquisti.consumi.elenca: i consumi di un acquisto dal più recente (`svolto_il`, poi `id`, decrescenti), a cursore; `stato=` ne tiene uno solo
+     * (`prenotato`, `usato`, `restituito`; un altro valore è 422). Il finto non modella Bookings: ogni consumo è `usato` e senza prenotazione (#2656).
      *
      * @return array{int, array<string, mixed>}
      */
@@ -267,7 +271,11 @@ trait CrmAcquisti
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('acquisti', $chi['workspace'], $id);
-        $righe = array_values(array_filter($this->crm['consumi'], fn (array $consumo) => $consumo['acquisto_id'] === $riga['id']));
+        $query = $this->testi->validaQuery(self::query($richiesta), [
+            'stato' => ['bail', 'sometimes', 'string', Rule::in(self::CRM_CONSUMO_STATI)],
+        ]);
+        $righe = array_values(array_filter($this->crm['consumi'], fn (array $consumo) => $consumo['acquisto_id'] === $riga['id']
+            && (! isset($query['stato']) || ($consumo['stato'] ?? 'usato') === $query['stato'])));
 
         return $this->paginaCrm(
             $richiesta,
@@ -331,6 +339,8 @@ trait CrmAcquisti
             'quantita' => $consumo['quantita'],
             'svolto_il' => self::iso($consumo['svolto_il']),
             'origine' => $consumo['origine'],
+            'stato' => $consumo['stato'] ?? 'usato',
+            'prenotazione_id' => $consumo['prenotazione_id'] ?? null,
             'nota' => $consumo['nota'],
             'creato_da' => $consumo['creato_da'],
             'creato_il' => self::iso($consumo['creato_il']),
