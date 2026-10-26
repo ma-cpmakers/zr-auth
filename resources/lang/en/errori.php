@@ -333,6 +333,14 @@ return [
         'title' => 'Too many active bookings',
         'detail' => 'You already have the maximum number of active bookings with this professional (the problem carries `limite`): cancel one with `io.prenotazioni.modifica` (`stato: annullata`) to book another. The method wrote nothing.',
     ],
+    'trasferimento_impossibile' => [
+        'title' => 'Transfer not possible',
+        'detail' => 'At least one booking cannot move to the other professional: the calendar with the same Catalog item is missing (`calendario_mancante`) or the time is taken (`orario_occupato`). The problem carries `non_spostate`, a list of `prenotazione_id` and `motivo`. The method wrote nothing: move the others by sending `solo_possibili: true`, or fix the calendars and repeat.',
+    ],
+    'termine_scaduto' => [
+        'title' => 'Transfer deadline passed',
+        'detail' => 'More than 7 days have passed since the professional left the workspace: their bookings can no longer be moved. The method wrote nothing.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',
