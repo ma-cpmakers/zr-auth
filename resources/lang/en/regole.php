@@ -22,6 +22,7 @@ return [
     'passaggio_doppio' => 'A position appears twice in the passaggi.',
     'lista_della_board' => 'This list is not of the same board as the card: the ids of the lists are given by board.board.mostra.',
     'scheda_della_board' => 'This card is not of the same board: the ids of the cards are given by board.schede.elenca.',
+    'record_del_crm' => 'There is no CRM record of this type with this id in the workspace: the ids come from crm.persone.ricerca.crea, crm.organizzazioni.ricerca.crea and crm.trattative.ricerca.crea.',
     'una_posizione_o_un_ancora' => 'The body wants exactly one of posizione and dopo_scheda_id, not none and not both.',
     'lista_della_stessa_board' => 'This list is not of the same board as the list to move: the ids of the lists are given by board.board.mostra.',
     'una_posizione_o_una_lista' => 'The body wants exactly one of posizione and dopo_lista_id, not none and not both.',
