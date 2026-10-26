@@ -253,6 +253,14 @@ return [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',
     ],
+    'permessi_mancanti' => [
+        'title' => 'Missing permissions',
+        'detail' => 'The calendar consent did not grant everything Bookings needs: see `non_concessi` next to the code (`occupato`: the list of calendars, `eventi`: reading and writing events). Nothing was connected: repeat "Connect" and leave every requested permission on.',
+    ],
+    'account_gia_collegato' => [
+        'title' => 'Account already connected',
+        'detail' => 'You have already connected another account of this provider: each member has one per provider. Disconnect it with bookings.collegamenti.elimina before connecting the new one. Nothing was written.',
+    ],
     'ultima_opzione' => [
         'title' => 'Last option',
         'detail' => 'This is the field\'s last live option, and a list or multiple-choice field always has at least one. Add another with crm.campi.opzioni.crea and then remove this one. Nothing was written.',

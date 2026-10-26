@@ -185,4 +185,10 @@ return [
     'prenotazione_motivo_solo_annullata' => 'Il motivo si scrive solo annullando la prenotazione.',
     'ospite_prenotazione_un_gruppo' => 'Cambia una cosa sola per chiamata: l\'orario (`inizio`), l\'annullamento (`stato`) o i Termini (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => "Il messaggio si scrive solo con un cambio d'orario o con l'annullamento.",
+    'calendario_del_collegamento' => 'Questo calendario non è di questo collegamento: gli id dei calendari li dà bookings.collegamenti.calendari.elenca.',
+    'calendario_di_sola_lettura' => 'Questo calendario è di sola lettura: non ci si possono scrivere gli eventi. Scegline uno su cui puoi scrivere.',
+    'finestra_obbligatoria' => 'Il parametro :attribute è obbligatorio: la finestra va da `dal` (compreso) ad `al` (escluso).',
+    'finestra_formato' => 'Il parametro :attribute vuole una data ISO 8601 con fuso, per esempio 2026-11-02T00:00:00+01:00.',
+    'finestra_al_dopo_dal' => "Il parametro al dev'essere dopo dal.",
+    'finestra_troppo_larga' => 'La finestra è al più di 62 giorni: accorcia al.',
 ];

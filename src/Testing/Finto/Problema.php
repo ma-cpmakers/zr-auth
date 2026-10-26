@@ -29,6 +29,7 @@ final class Problema extends RuntimeException
         'gia_membro' => 409,
         'invito_esistente' => 409,
         'collegamento_esistente' => 409,
+        'account_gia_collegato' => 409,
         'scheda_archiviata' => 409,
         'limite_raggiunto' => 409,
         'crediti_esauriti' => 409,
@@ -73,6 +74,7 @@ final class Problema extends RuntimeException
         'chiave_idempotenza_riusata' => 422,
         'verifica_non_riuscita' => 422,
         'email_del_provider_non_verificata' => 422,
+        'permessi_mancanti' => 422,
         'turnstile_non_valido' => 422,
         'troppe_richieste' => 429,
         'servizio_non_disponibile' => 503,
@@ -82,7 +84,7 @@ final class Problema extends RuntimeException
     /**
      * @param  list<array{detail: string, regola: string, pointer?: string, parameter?: string}>  $errori  per `dati_non_validi`, e solo per lui
      * @param  array<string, string>  $header  per `troppe_richieste` Retry-After, in secondi
-     * @param  array<string, mixed>  $estensioni  i membri estesi del problema: `limite` e `direzione` di `limite_raggiunto`, `mancanti` di `accettazione_richiesta`, `accordo` del 422 su `accordo_trattamento_dati_accettato`
+     * @param  array<string, mixed>  $estensioni  i membri estesi del problema: `limite` e `direzione` di `limite_raggiunto`, `mancanti` di `accettazione_richiesta`, `accordo` del 422 su `accordo_trattamento_dati_accettato`, `non_concessi` di `permessi_mancanti`
      * @param  ?string  $verifica  per `verifica_non_riuscita`, e solo per lui: l'operazione di cui il `detail` dice il caso
      *                             (`email`, `password`, `ingresso`, `invito`, `registrazione`, `provider`)
      */
