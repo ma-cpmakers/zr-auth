@@ -220,8 +220,10 @@ trait Todo
     // ———————————————————————————————————————— To-do
 
     /**
-     * board.todo.elementi.elenca (TodoElementiController::elenca): una vista (`oggi`, `settimana`, `tutti`, `fatti`) oppure una lista
-     * (aperti, o fatti con `fatti=true`) nell'ordine chiesto, in forma breve e a cursore. Il cursore vale per un solo filtro e un solo ordine.
+     * board.todo.elementi.elenca (TodoElementiController::elenca): una vista (`oggi`, `settimana`, `tutti`, `fatti`), una lista
+     * (aperti, o fatti con `fatti=true`), una scheda oppure `assegnato_a` (`me` o l'id di chi chiama: i to-do delle liste di progetto assegnati a
+     * lui, aperti o fatti con `fatti=true`), nell'ordine chiesto, in forma breve e a cursore; con `totale=true` anche quanti sono, fino a
+     * diecimila. Il cursore vale per un solo filtro e un solo ordine.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -231,16 +233,23 @@ trait Todo
         $grezza = self::query($richiesta);
         $ha = fn (string $campo): bool => array_key_exists($campo, $grezza);
         $regole = [
-            'vista' => ['bail', 'required_without_all:lista_id,scheda_id', 'string', Rule::in(self::TODO_VISTE), 'prohibits:lista_id,scheda_id'],
-            'scheda_id' => ['bail', 'required_without_all:vista,lista_id', 'string', 'max:64', $this->schedaDelWorkspaceTodo($chi)],
-            'lista_id' => ['bail', 'required_without_all:vista,scheda_id', 'string', 'max:64', 'prohibits:scheda_id', function (string $attributo, mixed $valore, Closure $rifiuta) use ($chi) {
+            'vista' => ['bail', 'required_without_all:lista_id,scheda_id,assegnato_a', 'string', Rule::in(self::TODO_VISTE), 'prohibits:lista_id,scheda_id,assegnato_a'],
+            'scheda_id' => ['bail', 'required_without_all:vista,lista_id,assegnato_a', 'string', 'max:64', 'prohibits:assegnato_a', $this->schedaDelWorkspaceTodo($chi)],
+            'lista_id' => ['bail', 'required_without_all:vista,scheda_id,assegnato_a', 'string', 'max:64', 'prohibits:scheda_id,assegnato_a', function (string $attributo, mixed $valore, Closure $rifiuta) use ($chi) {
                 if (! $this->haListaTodo($chi, (string) $valore)) {
                     $this->testi->dichiara($attributo, Regola::NON_TROVATO);
                     $rifiuta('regole.lista_del_todo')->translate(['attribute' => $this->testi->nome($attributo)]);
                 }
             }],
+            'assegnato_a' => ['bail', 'required_without_all:vista,lista_id,scheda_id', 'string', 'max:64', function (string $attributo, mixed $valore, Closure $rifiuta) use ($chi) {
+                if ($valore !== 'me' && $valore !== $chi['persona']) {
+                    $this->testi->dichiara($attributo, Regola::VALORE_NON_AMMESSO);
+                    $rifiuta('regole.todo_assegnato_a_chi_chiama')->translate(['attribute' => $this->testi->nome($attributo)]);
+                }
+            }],
+            'totale' => ['sometimes', 'string', Rule::in(['true', 'false'])],
             'fatti' => ['bail', 'sometimes', 'string', Rule::in(['true', 'false']), function (string $attributo, mixed $valore, Closure $rifiuta) use ($ha) {
-                if ($valore === 'true' && ! $ha('lista_id')) {
+                if ($valore === 'true' && ! $ha('lista_id') && ! $ha('assegnato_a')) {
                     $this->testi->dichiara($attributo, Regola::CAMPO_VIETATO);
                     $rifiuta('regole.todo_fatti_con_lista')->translate(['attribute' => $this->testi->nome($attributo)]);
                 }
@@ -255,20 +264,23 @@ trait Todo
         $vista = $grezza['vista'] ?? null;
         $listaId = $grezza['lista_id'] ?? null;
         $schedaId = $grezza['scheda_id'] ?? null;
+        $assegnati = isset($grezza['assegnato_a']);
         $fatti = ($grezza['fatti'] ?? null) === 'true';
-        $modo = is_string($vista) ? $vista : (is_string($schedaId) ? 'scheda' : ($fatti ? 'fatti' : (string) ($grezza['ordine'] ?? 'posizione')));
-        $lista = 'board.todo.elementi.elenca|'.json_encode(array_map(fn (string $campo) => $grezza[$campo] ?? null, ['vista', 'lista_id', 'scheda_id', 'fatti', 'ordine']), JSON_THROW_ON_ERROR);
-        $voci = function () use ($chi, $vista, $listaId, $schedaId, $fatti) {
+        $modo = is_string($vista) ? $vista : (is_string($schedaId) ? 'scheda' : ($assegnati ? ($fatti ? 'fatti' : 'giorno') : ($fatti ? 'fatti' : (string) ($grezza['ordine'] ?? 'posizione'))));
+        $lista = 'board.todo.elementi.elenca|'.json_encode(array_map(fn (string $campo) => $grezza[$campo] ?? null, ['vista', 'lista_id', 'scheda_id', 'assegnato_a', 'fatti', 'ordine']), JSON_THROW_ON_ERROR);
+        $totale = 0;
+        $voci = function () use ($chi, $vista, $listaId, $schedaId, $fatti, $assegnati, &$totale) {
             $oggi = $this->oggiTodo($chi['persona']);
             $righe = array_filter(
                 $this->elementiVisibiliTodo($chi),
-                fn (array $e) => $this->inVistaTodo($e, is_string($vista) ? $vista : null, is_string($listaId) ? strtolower($listaId) : null, is_string($schedaId) ? $schedaId : null, $fatti, $oggi, $chi['persona']),
+                fn (array $e) => $this->inVistaTodo($e, is_string($vista) ? $vista : null, is_string($listaId) ? strtolower($listaId) : null, is_string($schedaId) ? $schedaId : null, $fatti, $oggi, $chi['persona'], $assegnati),
             );
+            $totale = count($righe);
 
             return array_map(fn (array $e) => $this->voceElementoTodo($e, false), array_values($righe));
         };
 
-        return $this->pagina(
+        [$stato, $corpo] = $this->pagina(
             $richiesta,
             $lista,
             'id',
@@ -279,6 +291,17 @@ trait Todo
                 : null,
             regole: $regole,
         );
+
+        // Con `totale=true` anche quanti sono, qualunque siano `limite` e cursore: fino a 10.000, oltre `totale_almeno`.
+        if (($grezza['totale'] ?? null) === 'true') {
+            $corpo['totale'] = min($totale, 10000);
+
+            if ($totale > 10000) {
+                $corpo['totale_almeno'] = true;
+            }
+        }
+
+        return [$stato, $corpo];
     }
 
     /**
@@ -460,7 +483,8 @@ trait Todo
 
     /**
      * board.todo.riepilogo.mostra (TodoRiepilogoController::mostra): i numeri del To-do della persona: oggi nel suo fuso, in ritardo, di
-     * oggi, settimana (da domani a fra sette giorni), aperti, fatti e per ogni lista non archiviata, nell'ordine delle liste.
+     * oggi, settimana (da domani a fra sette giorni), aperti, fatti, assegnati (i to-do aperti di progetto assegnati a chi chiama) e per ogni
+     * lista non archiviata, nell'ordine delle liste.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -471,7 +495,7 @@ trait Todo
         $oggi = $this->oggiTodo($chi['persona']);
         $giorno = $oggi->format('Y-m-d');
         $fra7 = $oggi->addDays(7)->format('Y-m-d');
-        $totali = ['in_ritardo' => 0, 'di_oggi' => 0, 'settimana' => 0, 'aperti' => 0, 'fatti' => 0];
+        $totali = ['in_ritardo' => 0, 'di_oggi' => 0, 'settimana' => 0, 'aperti' => 0, 'fatti' => 0, 'assegnati' => 0];
         $liste = [];
 
         foreach ($this->listeCoinvolteTodo($chi) as $lista) {
@@ -484,6 +508,8 @@ trait Todo
             $totali['settimana'] += count(array_filter($miei, fn (array $e) => $e['giorno'] !== null && $e['giorno'] > $giorno && $e['giorno'] <= $fra7));
             $totali['aperti'] += count($aperti);
             $totali['fatti'] += count($dellaLista) - count($aperti);
+            // I to-do aperti di una lista di progetto assegnati a chi chiama: il numero di `board.todo.elementi.elenca?assegnato_a=me`.
+            $totali['assegnati'] += $lista['tipo'] === 'progetto' ? count(array_filter($aperti, fn (array $e) => $e['assegnato'] === $chi['persona'])) : 0;
             $liste[] = ['lista_id' => $lista['id'], 'aperti' => count($aperti), 'fatti' => count($dellaLista) - count($aperti)];
         }
 
@@ -1037,14 +1063,18 @@ trait Todo
 
     /**
      * Se un to-do è nella lettura chiesta: una vista (i personali della persona e i suoi di progetto, cioè assegnati a lei), una lista
-     * (aperti, o fatti con `fatti=true`) o una scheda (aperti e fatti).
+     * (aperti, o fatti con `fatti=true`), una scheda (aperti e fatti) o gli assegnati a chi chiama (di progetto, aperti o fatti con `fatti=true`).
      *
      * @param  array<string, mixed>  $e
      */
-    private function inVistaTodo(array $e, ?string $vista, ?string $lista, ?string $scheda, bool $fatti, CarbonImmutable $oggi, string $persona): bool
+    private function inVistaTodo(array $e, ?string $vista, ?string $lista, ?string $scheda, bool $fatti, CarbonImmutable $oggi, string $persona, bool $assegnati = false): bool
     {
         if ($scheda !== null) {
             return $e['scheda'] === $scheda;
+        }
+
+        if ($assegnati) {
+            return $this->todoListe[$e['lista']]['tipo'] === 'progetto' && $e['assegnato'] === $persona && ($fatti ? $e['fatto_il'] !== null : $e['fatto_il'] === null);
         }
 
         if ($vista === null) {
