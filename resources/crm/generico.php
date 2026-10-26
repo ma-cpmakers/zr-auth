@@ -9,7 +9,7 @@ return [
     'versione' => 1,
     'variante' => null,
     // Come il pack si presenta in `crm.personalizzazioni.*` (P2, #2674): nome e descrizione nelle tre lingue, le varianti che si possono
-    // scegliere (`chiave` e `nome` nelle tre lingue) e cosa cambia installandolo rispetto al «generico» (il generico non cambia niente).
+    // scegliere (`chiave` e `nome` nelle tre lingue) Cosa cambia installandolo lo calcola il finto dai dati del pack: il generico non cambia niente.
     'nome' => ['it' => 'Generico', 'en' => 'General', 'es' => 'General'],
     'descrizione' => [
         'it' => 'Il CRM com\'è: contatti, aziende, trattative, attività, catalogo, preventivi e scadenze, senza un settore.',
@@ -17,7 +17,6 @@ return [
         'es' => 'El CRM tal cual: contactos, empresas, oportunidades, actividades, catálogo, presupuestos y vencimientos, sin sector.',
     ],
     'varianti' => [],
-    'cambia' => ['vocabolario_chiavi' => [], 'pipeline' => [], 'campi' => [], 'catalogo_bozza' => [], 'tipi_scadenza' => []],
     // Il cliente è una persona o un'azienda: la voce «Contatti» o «Aziende» del CRM parte da qui.
     'tipo_cliente_predefinito' => 'persona',
 
