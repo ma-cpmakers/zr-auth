@@ -5,7 +5,6 @@ namespace Zeiras\Auth\Testing\Finto;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\Client\Request;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -176,7 +175,7 @@ trait Todo
         }
 
         if ($cambi !== []) {
-            $this->todoListe[$id] = [...$lista, ...$cambi, 'aggiornata_il' => now()->toImmutable()->startOfMillisecond()];
+            $this->todoListe[$id] = [...$lista, ...$cambi, 'aggiornata_il' => $this->dopoTodo($lista['aggiornata_il'])];
         }
 
         $voce = $this->voceListaTodo($this->todoListe[$id]);
@@ -392,7 +391,7 @@ trait Todo
         $cambiati = array_filter($cambi, fn (mixed $valore, string $campo) => $valore !== $corrente[$campo], ARRAY_FILTER_USE_BOTH);
 
         if ($cambiati !== []) {
-            $this->todoElementi[$id] = [...$corrente, ...$cambiati, 'aggiornato_il' => now()->toImmutable()->startOfMillisecond()];
+            $this->todoElementi[$id] = [...$corrente, ...$cambiati, 'aggiornato_il' => $this->dopoTodo($corrente['aggiornato_il'])];
         }
 
         $voce = $this->voceElementoTodo($this->todoElementi[$id]);
@@ -428,7 +427,7 @@ trait Todo
         $this->scrivibileTodo($this->todoListe[$corrente['lista']]);
 
         if ($corrente['fatto_il'] === null) {
-            $ora = now()->toImmutable()->startOfMillisecond();
+            $ora = $this->dopoTodo($corrente['aggiornato_il']);
             $this->todoElementi[$id] = [...$corrente, 'fatto_il' => $ora, 'aggiornato_il' => $ora];
         }
 
@@ -451,7 +450,7 @@ trait Todo
 
         if ($corrente['fatto_il'] !== null) {
             $this->tettoDegliApertiTodo($corrente['lista']);
-            $this->todoElementi[$id] = [...$corrente, 'fatto_il' => null, 'aggiornato_il' => now()->toImmutable()->startOfMillisecond()];
+            $this->todoElementi[$id] = [...$corrente, 'fatto_il' => null, 'aggiornato_il' => $this->dopoTodo($corrente['aggiornato_il'])];
         }
 
         $voce = $this->voceElementoTodo($this->todoElementi[$id]);
@@ -515,7 +514,7 @@ trait Todo
             $visti = [];
 
             foreach ($elemento['tag'] as $tag) {
-                $chiave = Str::lower(Str::ascii($tag));
+                $chiave = self::tagPiegatoTodo($tag);
 
                 if (isset($visti[$chiave])) {
                     continue;
@@ -727,6 +726,23 @@ trait Todo
         }
 
         return $salvati;
+    }
+
+    /** L'istante di una scrittura (NelRegistro::istanteDopo, AP6): adesso, e almeno un millisecondo dopo quello che la riga aveva. */
+    private function dopoTodo(CarbonImmutable $prima): CarbonImmutable
+    {
+        $ora = now()->toImmutable()->startOfMillisecond();
+
+        return $ora->lessThanOrEqualTo($prima) ? $prima->addMillisecond() : $ora;
+    }
+
+    /** Un tag nella forma con cui si confronta e si conta (Todo::tagPiegato, SomiglianzaDiNomi::piega): senza spazi ai bordi, senza segni, piegato. */
+    private static function tagPiegatoTodo(string $tag): string
+    {
+        $tag = trim($tag);
+        $scomposto = \Normalizer::normalize($tag, \Normalizer::FORM_D);
+
+        return mb_convert_case(preg_replace('/\p{Mn}+/u', '', is_string($scomposto) ? $scomposto : $tag) ?? $tag, MB_CASE_FOLD, 'UTF-8');
     }
 
     /** Oggi, a mezzanotte, nel fuso della persona. */

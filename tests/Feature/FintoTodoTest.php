@@ -370,6 +370,37 @@ test('i tag: per usi decrescenti e poi per nome, senza distinguere maiuscole e a
         ->and($conParametro->json('errors.0.regola'))->toBe('campo_estraneo');
 });
 
+test('i tag: Łódź e lodz, Øl e ol sono tag diversi, come nel backoffice (SomiglianzaDiNomi::piega toglie i segni, non traslittera) (TG.2)', function () {
+    [, $gettoni] = studioColTodo();
+    $gettone = $gettoni['anna'];
+
+    nuovoTodo($gettone, ['titolo' => '1', 'tag' => ['Łódź', 'Øl']]);
+    nuovoTodo($gettone, ['titolo' => '2', 'tag' => ['lodz', 'ol']]);
+
+    $usi = collect(alFinto('GET', '/v1/board/todo/tag', null, $gettone)->json('data'))->pluck('usi', 'nome')->all();
+
+    // deve fallire se: il finto unisce Łódź a lodz e Øl a ol
+    expect($usi)->toEqual(['lodz' => 1, 'Łódź' => 1, 'ol' => 1, 'Øl' => 1]);
+});
+
+test('sotto tempo congelato ogni scrittura alza l\'ETag di un millisecondo almeno: modifica e completamento non lasciano il vecchio (TT.5, AP6)', function () {
+    $this->freezeTime();
+    [, $gettoni] = studioColTodo();
+    $gettone = $gettoni['anna'];
+    $id = nuovoTodo($gettone, ['titolo' => 'Uno']);
+    $percorso = "/v1/board/todo/elementi/{$id}";
+    $primo = alFinto('GET', $percorso, null, $gettone)->header('ETag');
+
+    $modificato = alFinto('PATCH', $percorso, ['titolo' => 'Due'], $gettone, intestazioni: ['If-Match' => $primo]);
+    $fatto = alFinto('POST', "{$percorso}/completamento", null, $gettone);
+
+    // deve fallire se: un secondo PATCH con l'ETag letto prima passa ancora (nel backoffice è 412)
+    expect($modificato->status())->toBe(200)
+        ->and($modificato->header('ETag'))->not->toBe($primo)
+        ->and($fatto->header('ETag'))->not->toBe($modificato->header('ETag'))
+        ->and(alFinto('PATCH', $percorso, ['titolo' => 'Tre'], $gettone, intestazioni: ['If-Match' => $primo])->status())->toBe(412);
+});
+
 test('l\'ETag di un to-do è forte e uguale a ogni lettura; If-None-Match lo riconosce (304); If-Match vecchio è 412 prima del corpo (TT.1)', function () {
     [, $gettoni] = studioColTodo();
     $gettone = $gettoni['anna'];

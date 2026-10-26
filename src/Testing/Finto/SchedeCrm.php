@@ -93,6 +93,8 @@ trait SchedeCrm
             $id = self::id();
             $this->schedeCrm[$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'scheda' => $mia['id'], 'tipo' => $tipo, 'record' => $record, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'creato_da' => $chi['persona']];
 
+            $this->tocca($mia['id']);
+
             return [201, ['data' => $this->voceSchedaCrm($this->schedeCrm[$id], $chi['workspace'])], ['Location' => "/v1/board/schede/{$mia['id']}/crm/{$id}"]];
         });
     }
@@ -119,6 +121,7 @@ trait SchedeCrm
         }
 
         unset($this->schedeCrm[$collegamento]);
+        $this->tocca($mia['id']);
 
         return [204, null];
     }
