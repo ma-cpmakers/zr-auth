@@ -444,8 +444,8 @@ trait CrmProfili
         if ($area === 'nazionale') {
             $manca['codice_fiscale'] = $riga['paese'] === 'IT' && $riga['codice_fiscale'] === null && in_array($tipo, ['privato', 'professionista', 'ente_pubblico'], true);
             $manca['partita_iva'] = $riga['partita_iva'] === null && $impresa;
-            $manca['codice_destinatario'] = $impresa && $riga['codice_destinatario'] === null && $riga['pec'] === null;
-            $manca['codice_univoco_ufficio'] = $tipo === 'ente_pubblico' && $riga['codice_univoco_ufficio'] === null;
+            $manca['codice_destinatario'] = $riga['paese'] === 'IT' && $impresa && $riga['codice_destinatario'] === null && $riga['pec'] === null;
+            $manca['codice_univoco_ufficio'] = $riga['paese'] === 'IT' && $tipo === 'ente_pubblico' && $riga['codice_univoco_ufficio'] === null;
         } elseif ($area === 'ue') {
             $manca['partita_iva'] = $riga['partita_iva'] === null && ! $privato;
         } else {
