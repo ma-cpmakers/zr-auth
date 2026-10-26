@@ -17,6 +17,7 @@ return [
     'cartella_del_workspace' => "Nel workspace non c'è una cartella con questo id: gli id delle cartelle li dà board.cartelle.elenca.",
     'board_del_workspace' => "Nel workspace non c'è una board con questo id: gli id delle board li dà board.board.elenca.",
     'lista_del_workspace' => "Nel workspace non c'è una lista con questo id: gli id delle liste li dà board.board.mostra.",
+    'tipo_della_board' => 'Il tipo non è fra quelli del metodo di questa board (:tipi): i tipi ammessi li dà board.board.mostra nel campo `tipi`.',
     'blocca_vuole_un_limite' => 'Una lista senza limite non si può bloccare: manda anche `limite` (da 1 a 99).',
     'passaggio_della_board' => 'Uno di questi id non è di una lista attiva di questa board, o è la lista stessa: gli id delle liste li dà board.board.mostra.',
     'passaggio_per_posizione' => "Una posizione dei passaggi non è nell'elenco `liste` di questo corpo, o è quella della lista stessa: le posizioni partono da 0.",

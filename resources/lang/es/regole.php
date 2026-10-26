@@ -16,6 +16,7 @@ return [
     'cartella_del_workspace' => 'En el workspace no hay una carpeta con este id: los ids de las carpetas los da board.cartelle.elenca.',
     'board_del_workspace' => 'En el workspace no hay un tablero con este id: los ids de los tableros los da board.board.elenca.',
     'lista_del_workspace' => 'En el workspace no hay una lista con este id: los ids de las listas los da board.board.mostra.',
+    'tipo_della_board' => 'El tipo no es uno de los del método de este tablero (:tipi): board.board.mostra da los tipos admitidos en su campo `tipi`.',
     'blocca_vuole_un_limite' => 'Una lista sin límite no se puede bloquear: envía también `limite` (de 1 a 99).',
     'passaggio_della_board' => 'Uno de estos ids no es de una lista activa de este tablero, o es la lista misma: los ids de las listas los da board.board.mostra.',
     'passaggio_per_posizione' => 'Una posición de los passaggi no está en la lista `liste` de este cuerpo, o es la de la propia lista: las posiciones empiezan en 0.',

@@ -543,7 +543,7 @@ final class BackofficeFinto
     /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, autore: ?string, risorsa_nome: ?string, board: ?array{id: string, nome: string}, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable, ultima_azione_il: CarbonImmutable, azioni: int}> le notifiche (notifica()), per id */
     private array $notifiche = [];
 
-    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable, versione?: int}> le schede (scheda()), per id */
+    /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, tipo?: ?string, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable, versione?: int}> le schede (scheda()), per id */
     private array $schede = [];
 
     /** @var array<string, int> il numero della versione di ogni board (#1941), che sale a ogni scrittura che cambia delle sue schede */
@@ -679,13 +679,14 @@ final class BackofficeFinto
      * modella boards, liste né schede vere, solo il minimo che le attese guardano (la board, il numero, il titolo, se è
      * completata o archiviata). Il `numero` parte da 1 per ogni board e non si riusa. Le schede di una stessa `$board` si
      * possono collegare fra loro; una scheda di un'altra board è «di un'altra board». `$board` è l'id di una board() o un nome
-     * qualunque. `$scadenza` è un giorno `AAAA-MM-GG`; `$assegnatari` le persone (di workspace() o persona()) o i loro id.
+     * qualunque. `$scadenza` è un giorno `AAAA-MM-GG`; `$assegnatari` le persone (di workspace() o persona()) o i loro id; `$tipo` (#2661) il tipo che
+     * le letture danno alla scheda, come lo darebbe il backoffice: il finto non lo controlla contro i `tipi` della board, perché non modella i metodi.
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  list<array<string, mixed>|string>  $assegnatari
      * @return array{id: string, board_id: string, numero: int, titolo: string}
      */
-    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = []): array
+    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null): array
     {
         $idWorkspace = $workspace['id'] ?? null;
 
@@ -698,7 +699,7 @@ final class BackofficeFinto
         $ora = now()->toImmutable()->startOfMillisecond();
         $cambiate = [];
         $posizione = $this->inCoda($idWorkspace, $board, $cambiate);
-        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
         $this->versione([$id, ...$cambiate]);
 
@@ -1519,6 +1520,7 @@ final class BackofficeFinto
             'inizio' => null,
             'scadenza' => $scheda['scadenza'],
             'copertina' => null,
+            'tipo' => $scheda['tipo'] ?? null,
             'etichette' => [],
             'assegnatari' => $scheda['assegnatari'],
             'numero_voci' => 0,

@@ -16,6 +16,7 @@ return [
     'cartella_del_workspace' => 'There is no folder with this id in the workspace: the ids of the folders are given by board.cartelle.elenca.',
     'board_del_workspace' => 'There is no board with this id in the workspace: the ids of the boards are given by board.board.elenca.',
     'lista_del_workspace' => 'There is no list with this id in the workspace: the ids of the lists are given by board.board.mostra.',
+    'tipo_della_board' => "The type is not one of the types of this board's method (:tipi): board.board.mostra gives the allowed types in its `tipi` field.",
     'blocca_vuole_un_limite' => 'A list without a limit cannot be blocked: send `limite` too (from 1 to 99).',
     'passaggio_della_board' => 'One of these ids is not an active list of this board, or is the list itself: the ids of the lists are given by board.board.mostra.',
     'passaggio_per_posizione' => 'A position in the passaggi is not in the `liste` array of this body, or is the list itself: positions start at 0.',
