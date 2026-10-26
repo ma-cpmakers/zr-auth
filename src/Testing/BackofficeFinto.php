@@ -498,7 +498,7 @@ final class BackofficeFinto
     /** @var array<string, array{codice: string, tentativi: int, scade: int}> i codici di accesso (accessi.codici.crea) in attesa, per email: la persona può non esserci */
     private array $codiciDiAccesso = [];
 
-    /** @var array<string, array{persona: string, prenotazione: string, scade: int, usato: bool}> i link monouso di Bookings (accessi.link.crea), per codice */
+    /** @var array<string, array{persona: ?string, prenotazione: string, scade: int, usato: bool}> i link monouso di Bookings (accessi.link.crea), per codice */
     private array $linkDiAccesso = [];
 
     /** @var array<string, array{versione: string, in_vigore_dal: string, impronta: string}> i documenti «ospite» in vigore (config/legale.php, `ospiti`): vuoto è l'interruttore spento */
@@ -1109,6 +1109,19 @@ final class BackofficeFinto
         $persona = $this->conEmail(self::normalizza($email)) ?? throw new LogicException("Nessuna persona con l'email {$email}: il link è di una persona che c'è.");
         $codice = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
         $this->linkDiAccesso[$codice] = ['persona' => $persona, 'prenotazione' => $prenotazione, 'scade' => ($scadeIl ?? now()->toImmutable()->addDay())->getTimestamp(), 'usato' => false];
+
+        return $codice;
+    }
+
+    /**
+     * Un link monouso di Bookings per un contatto del CRM senza account (LinkDiAccesso::emettiPerContatto) e la sua prenotazione: il codice
+     * in chiaro. Con accessi.link.crea dà OspiteDalLink (il gettone, la scadenza e la `prenotazione_id`: nessun accesso, nessuna persona). Vale
+     * fino a `$scadeIl` (un giorno da adesso se manca) e una volta sola.
+     */
+    public function linkOspite(string $prenotazione, ?CarbonImmutable $scadeIl = null): string
+    {
+        $codice = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $this->linkDiAccesso[$codice] = ['persona' => null, 'prenotazione' => $prenotazione, 'scade' => ($scadeIl ?? now()->toImmutable()->addDay())->getTimestamp(), 'usato' => false];
 
         return $codice;
     }
@@ -5740,7 +5753,7 @@ final class BackofficeFinto
      * gettone che non è di Zeiras, sconosciuto, scaduto, di un accesso chiuso, o di un workspace di cui la persona non è
      * più membro, o di un workspace con l'eliminazione programmata (#2600), 401 gettone_non_valido. Da qui si risponde nella lingua della persona, anche negli errori.
      *
-     * @return array{persona: string, accesso: string, workspace: ?string}
+     * @return array{persona: ?string, accesso: string, workspace: ?string}
      */
     private function autentica(Request $richiesta): array
     {
@@ -5758,7 +5771,7 @@ final class BackofficeFinto
             throw new Problema('gettone_non_valido', header: ['WWW-Authenticate' => 'Bearer realm="zeiras", error="invalid_token"']);
         }
 
-        $this->testi->usa($this->persone[$accesso['utente']]['lingua']);
+        $this->testi->usa($accesso['utente'] === null ? 'it' : $this->persone[$accesso['utente']]['lingua']);
 
         // Il freno del gettone (FrenoPerGettone), dopo la guardia: oltre il tetto in un minuto 429, e la chiamata frenata
         // non conta.
@@ -5776,7 +5789,10 @@ final class BackofficeFinto
         }
 
         // L'accettazione obbligatoria (middleware Accettazione, #1699): dopo il freno del gettone e prima del workspace e dei modelli.
-        $this->richiedeLeAccettazioni($accesso['utente']);
+        // Un ospite senza account non ha una persona che accetti: del suo gettone passa solo l'uscita, già decisa sopra.
+        if ($accesso['utente'] !== null) {
+            $this->richiedeLeAccettazioni($accesso['utente']);
+        }
 
         return ['persona' => $accesso['utente'], 'accesso' => $riga['accesso'], 'workspace' => $riga['workspace']];
     }
@@ -5978,11 +5994,26 @@ final class BackofficeFinto
         $dati = $this->testi->validaStretta($corpo, ['codice' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{16,128}$/D']]);
         $link = $this->linkDiAccesso[$dati['codice']] ?? null;
 
-        if ($link === null || $link['usato'] || $link['scade'] <= now()->getTimestamp() || ! isset($this->persone[$link['persona']])) {
+        if ($link === null || $link['usato'] || $link['scade'] <= now()->getTimestamp() || ($link['persona'] !== null && ! isset($this->persone[$link['persona']]))) {
             throw new Problema('non_trovato');
         }
 
         $this->linkDiAccesso[$dati['codice']]['usato'] = true;
+
+        // Il contatto senza account (OspiteDalLink): un gettone di sola lettura per la sua prenotazione, due ore, senza accesso né persona.
+        if ($link['persona'] === null) {
+            $accesso = self::id();
+            $this->accessi[$accesso] = ['utente' => null, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'link', 'ospite' => true];
+            $gettone = 'zr_'.Str::random(48);
+            $this->gettoni[$gettone] = ['accesso' => $accesso, 'workspace' => null, 'prenotazione' => $link['prenotazione']];
+
+            return [201, ['data' => [
+                'gettone' => $gettone,
+                'scade_il' => self::iso($this->scadenza($this->accessi[$accesso])),
+                'prenotazione_id' => $link['prenotazione'],
+            ]]];
+        }
+
         $accesso = self::id();
         $this->accessi[$accesso] = ['utente' => $link['persona'], 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'link'];
 
@@ -6131,7 +6162,7 @@ final class BackofficeFinto
     /** @param  array{utente: string, creato_il: CarbonImmutable, chiuso: bool}  $accesso */
     private function scadenza(array $accesso): CarbonImmutable
     {
-        return $accesso['creato_il']->addHours(self::ORE);
+        return $accesso['creato_il']->addHours(($accesso['ospite'] ?? false) ? 2 : self::ORE);
     }
 
     /** @return array<string, mixed> le regole di email e password dei metodi senza gettone */

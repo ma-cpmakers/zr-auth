@@ -184,6 +184,7 @@ return [
     'prenotazione_stato_prima_della_fine' => 'Una prenotazione si segna svolta o non presentata solo dopo la sua fine.',
     'prenotazione_inizio_e_stato' => 'Sposta la prenotazione o cambiane lo stato, non le due cose insieme.',
     'prenotazione_motivo_solo_annullata' => 'Il motivo si scrive solo annullando la prenotazione.',
+    'ospite_prenotazione_un_gruppo' => 'Cambia una cosa sola per chiamata: l\'orario (`inizio`), l\'annullamento (`stato`) o i Termini (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => "Il messaggio si scrive solo con un cambio d'orario o con l'annullamento.",
     'lista_del_todo' => 'Non hai una lista del To-do con questo id: gli id delle tue liste li dà board.todo.liste.elenca.',
     'todo_giorno_fuori_intervallo' => 'Il giorno di un to-do sta fra 2000-01-01 e 2100-12-31.',

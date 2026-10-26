@@ -183,6 +183,7 @@ return [
     'prenotazione_stato_prima_della_fine' => 'Una reserva se marca como realizada o no presentada solo después de terminar.',
     'prenotazione_inizio_e_stato' => 'Mueve la reserva o cambia su estado, no las dos cosas a la vez.',
     'prenotazione_motivo_solo_annullata' => 'El motivo se escribe solo al cancelar la reserva.',
+    'ospite_prenotazione_un_gruppo' => 'Cambia una sola cosa por llamada: la hora (`inizio`), la cancelación (`stato`) o los Términos (`termini`).',
     'prenotazione_messaggio_solo_con_cambio' => 'El mensaje se escribe solo con un cambio de hora o al cancelar.',
     'lista_del_todo' => 'No tienes una lista del To-do con este id: board.todo.liste.elenca da los ids de tus listas.',
     'todo_giorno_fuori_intervallo' => 'El día de una tarea está entre 2000-01-01 y 2100-12-31.',

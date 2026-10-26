@@ -1,5 +1,6 @@
 <?php
 
+use Carbon\CarbonImmutable;
 use Zeiras\Auth\Testing\BackofficeFinto;
 
 // #2479: il finto di accessi.link.crea. Che le risposte e gli errori siano quelli del backoffice lo prova il FintoTest del backoffice (G67).
@@ -64,4 +65,35 @@ it('accessi.link.crea: un gettone di accessi.crea non ha ambito e apre i metodi 
     $gettone = alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->json('data.gettone.gettone');
 
     expect(alFinto('GET', '/v1/io', null, $gettone)->status())->toBe(200);
+});
+
+// #2681: il contatto del CRM senza account. Che la forma sia quella del contratto lo prova il FintoTest del backoffice.
+
+it('accessi.link.crea: il link di un contatto senza account dà OspiteDalLink — gettone, scade_il e prenotazione_id, nessun accesso né persona (#2681, T1.3)', function () {
+    $finto = BackofficeFinto::attiva();
+    $codice = $finto->linkOspite('01k6r2s4a8c2e6g0j4m8p2r6t0');
+
+    $entrata = alFinto('POST', '/v1/accessi/link', ['codice' => $codice]);
+
+    expect($entrata->status())->toBe(201)
+        ->and(array_keys($entrata->json('data')))->toBe(['gettone', 'scade_il', 'prenotazione_id'])
+        ->and($entrata->json('data.gettone'))->toBeString()->toMatch('/^zr_[A-Za-z0-9]{48}$/')
+        ->and($entrata->json('data.prenotazione_id'))->toBe('01k6r2s4a8c2e6g0j4m8p2r6t0')
+        ->and(CarbonImmutable::parse($entrata->json('data.scade_il'))->diffInMinutes(now(), true))->toBeBetween(118, 121);
+});
+
+it('accessi.link.crea: il gettone dell\'ospite apre solo l\'uscita, che lo chiude; usato e scaduto sono 404 non_trovato (#2681, T1.3)', function () {
+    $finto = BackofficeFinto::attiva();
+    $codice = $finto->linkOspite('01k6r2s4a8c2e6g0j4m8p2r6t0');
+    $scaduto = $finto->linkOspite('01k6r2s4a8c2e6g0j4m8p2r6t0', now()->toImmutable()->subSecond());
+    $gettone = alFinto('POST', '/v1/accessi/link', ['codice' => $codice])->json('data.gettone');
+
+    foreach ([['GET', '/v1/io'], ['GET', '/v1/accessi'], ['POST', '/v1/io/workspace']] as [$metodo, $percorso]) {
+        expect(esito(alFinto($metodo, $percorso, $metodo === 'POST' ? [] : null, $gettone)))->toBe([403, 'permesso_negato']);
+    }
+
+    expect(alFinto('DELETE', '/v1/accessi/corrente', null, $gettone)->status())->toBe(204)
+        ->and(esito(alFinto('DELETE', '/v1/accessi/corrente', null, $gettone)))->toBe([401, 'gettone_non_valido'])
+        ->and(esito(alFinto('POST', '/v1/accessi/link', ['codice' => $codice])))->toBe([404, 'non_trovato'])
+        ->and(esito(alFinto('POST', '/v1/accessi/link', ['codice' => $scaduto])))->toBe([404, 'non_trovato']);
 });

@@ -5,6 +5,7 @@ namespace Zeiras\Auth;
 use Illuminate\Session\CookieSessionHandler;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use InvalidArgumentException;
 use RuntimeException;
 use Zeiras\Auth\Errori\SessioneNelBrowser;
 
@@ -66,6 +67,43 @@ final class Sessione
     }
 
     /**
+     * Apre la sessione di un ospite coi `data` di accessi.link.crea nella forma OspiteDalLink: il contatto del CRM senza account che ha
+     * aperto il link della sua prenotazione. Non c'è un accesso né una persona di Zeiras: la sessione tiene il gettone al posto di quello
+     * dell'accesso (`Api::persona()` lo manda), la prenotazione del link (`ospite()`), la scadenza, e `utente()`, `accesso()`,
+     * `workspace()` e `ruolo()` sono null. Il backoffice lo lascia solo sulla sua prenotazione e sull'uscita
+     * (`accessi.corrente.elimina`); ogni altro metodo risponde 403. L'id della sessione è nuovo e quella di prima è distrutta, come per `apri()`.
+     * Una forma che non è quella (un `gettone` che non è un testo, la scadenza o la prenotazione che mancano) lancia
+     * InvalidArgumentException e non scrive niente: la risposta di un contatto con un account, `AccessoDalLink`, si apre con `apri()`.
+     *
+     * @param  array<string, mixed>  $ospite
+     */
+    public static function apriOspite(array $ospite): void
+    {
+        $gettone = $ospite['gettone'] ?? null;
+        $scadeIl = $ospite['scade_il'] ?? null;
+        $prenotazione = $ospite['prenotazione_id'] ?? null;
+
+        if (! is_string($gettone) || $gettone === '' || ! is_string($scadeIl) || $scadeIl === '' || ! is_string($prenotazione) || $prenotazione === '') {
+            throw new InvalidArgumentException("La sessione dell'ospite vuole la forma OspiteDalLink: gettone, scade_il e prenotazione_id, tutti testi.");
+        }
+
+        self::controllaIlDriver();
+        // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
+        self::segnaLaVecchia();
+
+        session()->regenerate(true);
+        session()->put(self::CHIAVE, [
+            'accesso' => null,
+            'gettoni' => ['accesso' => $gettone],
+            'scade_il' => $scadeIl,
+            'utente' => null,
+            'workspace' => null,
+            'ruolo' => null,
+            'ospite' => ['prenotazione_id' => $prenotazione],
+        ]);
+    }
+
+    /**
      * Entra in un workspace coi `data` della risposta di gettoni.crea (lo schema Gettone): da qui Api::workspace() manda
      * il gettone di quel workspace. Il gettone dell'accesso, se c'è, resta, ma solo se è della stessa persona: se lo scambio
      * dà un'altra persona (il ricevitore dell'ingresso), l'accesso e i gettoni di prima si scartano.
@@ -76,6 +114,11 @@ final class Sessione
     {
         self::controllaIlDriver();
         $stato = self::stato() ?? ['accesso' => null, 'gettoni' => []];
+
+        // Il gettone di un ospite vale per la sua prenotazione e basta: non resta accanto a quello di un workspace.
+        if (isset($stato['ospite'])) {
+            $stato = ['accesso' => null, 'gettoni' => []];
+        }
 
         if (isset($stato['utente']['id']) && $stato['utente']['id'] !== ($gettone['utente']['id'] ?? null)) {
             $stato = ['accesso' => null, 'gettoni' => []];
@@ -107,7 +150,8 @@ final class Sessione
     {
         $stato = self::stato();
 
-        if ($stato === null || ! self::aperta()) {
+        // Un ospite non è in un workspace: non c'è da dove uscire, e la sua sessione resta com'è.
+        if ($stato === null || ! self::aperta() || isset($stato['ospite'])) {
             return;
         }
 
@@ -190,6 +234,12 @@ final class Sessione
     public static function utente(): ?array
     {
         return self::aperta() ? self::stato()['utente'] : null;
+    }
+
+    /** @return array{prenotazione_id: string}|null la prenotazione del link, se la sessione è di un ospite senza account (`apriOspite()`) */
+    public static function ospite(): ?array
+    {
+        return self::aperta() ? (self::stato()['ospite'] ?? null) : null;
     }
 
     /** @return array<string, mixed>|null il workspace in cui la persona è entrata */
@@ -294,7 +344,7 @@ final class Sessione
         return Cache::store(config('session.block_store'))->has(self::chiave($id));
     }
 
-    /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string}|null */
+    /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: ?array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string, ospite?: array{prenotazione_id: string}}|null */
     private static function stato(): ?array
     {
         $stato = session(self::CHIAVE);

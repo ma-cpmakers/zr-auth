@@ -120,6 +120,11 @@ Sessione::apri($accesso['data']);            // il gettone dell'accesso; l'id de
 $gettone = Api::persona()->post('/v1/gettoni', ['workspace_id' => $id]);
 Sessione::entra($gettone['data']);           // da qui Api::workspace() manda il gettone di quel workspace
 
+// Il link di Bookings (accessi.link.crea): la risposta ha una di due forme. Con un account è AccessoDalLink (come Accesso, più `prenotazione_id`) e si apre
+// con Sessione::apri(); per un contatto del CRM senza account è OspiteDalLink — {gettone: testo, scade_il, prenotazione_id}, nessun accesso né persona —
+// e si apre con Sessione::apriOspite(). Lo si riconosce da `is_array($data['gettone'])`.
+Sessione::apriOspite($data);   // utente(), accesso(), workspace() e ruolo() sono null; ospite() dà ['prenotazione_id' => …]; il backoffice lo lascia solo sulla sua prenotazione e sull'uscita
+
 Sessione::lascia();     // dopo workspace.uscita.crea, se non c'è un altro workspace: toglie workspace, ruolo e gettone del workspace e tiene l'accesso; senza sessione non fa niente
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
 Sessione::workspace();  // {id, nome, slug}; null prima di entra()
