@@ -2543,6 +2543,21 @@ trait Crm
             return [200, ['data' => ['attivita_eliminate' => 0, 'opportunita_rinominate' => 0]]];
         }
 
+        [$eliminate, $rinominate] = $this->anonimizzaIlContattoCrm($chi, $persona);
+
+        return [200, ['data' => ['attivita_eliminate' => $eliminate, 'opportunita_rinominate' => $rinominate]]];
+    }
+
+    /**
+     * Il lavoro di Anonimizzazione::della su un contatto, e poi su chi si era unito in lui con un'unione non annullata (Anonimizzazione::uniti,
+     * #2752): sono la stessa persona.
+     *
+     * @param  array<string, mixed>  $chi
+     * @param  array<string, mixed>  $persona
+     * @return array{int, int} le attività eliminate e le opportunità rinominate di questo contatto
+     */
+    private function anonimizzaIlContattoCrm(array $chi, array $persona): array
+    {
         $ora = self::adessoCrm();
         $this->crm['persone'][$persona['id']] = [
             ...$persona, 'nome' => null, 'cognome' => null, 'ruolo' => null, 'professione' => null, 'fonte' => null, 'email' => [], 'telefoni' => [],
@@ -2609,7 +2624,13 @@ trait Crm
 
         $this->cambioCrm('persone', $persona['id'], $chi['persona'], 'anonimizzata', []);
 
-        return [200, ['data' => ['attivita_eliminate' => $eliminate, 'opportunita_rinominate' => $rinominate]]];
+        foreach ($this->crm['unioni'] as $unione) {
+            if ($unione['resta_id'] === $persona['id'] && $unione['annullata_il'] === null && $this->crm['persone'][$unione['unito_id']]['anonimizzata_il'] === null) {
+                $this->anonimizzaIlContattoCrm($chi, $this->crm['persone'][$unione['unito_id']]);
+            }
+        }
+
+        return [$eliminate, $rinominate];
     }
 
     // ———————————————————————————————————————— Motivi di perdita

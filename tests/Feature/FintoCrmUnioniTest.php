@@ -114,3 +114,15 @@ it('un contatto con una scheda collegata non si unisce: 409 contatto_non_unibile
 
     expect(alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito), $gettoni['anna'])->status())->toBe(201);
 });
+
+it('l\'oblio di chi resta anonimizza anche chi si era unito in lui, e l\'unione non si annulla più (409)', function () {
+    [$gettoni, $resta, $unito] = duePersoneDoppie();
+    $unione = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'resta']]), $gettoni['anna'])->assertStatus(201)->json('data.id');
+
+    expect(alFinto('POST', "/v1/crm/persone/{$resta}/anonimizzazione", null, $gettoni['anna'])->status())->toBe(200);
+
+    $letto = alFinto('GET', "/v1/crm/persone/{$unito}", null, $gettoni['anna']);
+
+    expect($letto->json('data.anonimizzata_il'))->not->toBeNull()->and($letto->json('data.nome'))->toBeNull()
+        ->and(alFinto('POST', "/v1/crm/persone/unioni/{$unione}/annullamento", null, $gettoni['anna'])->json('codice'))->toBe('contatto_non_unibile');
+});
