@@ -198,4 +198,10 @@ return [
     'todo_scheda_della_lista' => 'La tarea de una lista de proyecto tiene la tarjeta de la lista: el campo :attribute no se cambia.',
     'todo_scheda_senza_lista' => 'Esta tarjeta aún no tiene su lista de tareas: créala con board.todo.liste.crea (tipo progetto) y luego envía lista_id.',
     'todo_lista_stesso_tipo' => 'Una tarea cambia de lista solo entre listas del mismo tipo: de personal a personal, de proyecto a proyecto.',
+    'persona_non_esiste' => 'Este contacto no está en el workspace: búscalo con `crm.persone.ricerca.crea`.',
+    'unione_scelta_mancante' => 'Los dos contactos tienen un valor distinto en este campo: indica en `scelte` cuál conservar, `resta` o `unito`.',
+    'unione_scelta_inutile' => 'No hay nada que elegir en este campo: los dos contactos tienen el mismo valor, o no es un campo que se elija.',
+    'unione_elemento_estraneo' => 'Este valor no es de ninguno de los dos contactos: la lista final solo tiene valores del contacto que se queda o del que se une.',
+    'unione_elemento_doppio' => 'Este valor ya está en la lista: cada valor aparece una vez.',
+    'unione_troppi_elementi' => 'La lista tiene demasiados valores: como máximo :massimo.',
 ];

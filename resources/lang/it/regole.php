@@ -199,4 +199,10 @@ return [
     'todo_scheda_della_lista' => 'Il to-do di una lista di progetto ha la scheda della lista: il campo :attribute non si cambia.',
     'todo_scheda_senza_lista' => 'Questa scheda non ha ancora la sua lista di to-do: creala con board.todo.liste.crea (tipo progetto) e poi manda lista_id.',
     'todo_lista_stesso_tipo' => 'Un to-do cambia lista solo fra liste dello stesso tipo: da una personale a una personale, da una di progetto a una di progetto.',
+    'persona_non_esiste' => 'Questo contatto non c\'è nel workspace: cercalo con `crm.persone.ricerca.crea`.',
+    'unione_scelta_mancante' => 'I due contatti hanno un valore diverso in questo campo: scrivi in `scelte` quale tenere, `resta` o `unito`.',
+    'unione_scelta_inutile' => 'Questo campo non ha da scegliere: i due contatti hanno lo stesso valore, o non è un campo che si sceglie.',
+    'unione_elemento_estraneo' => 'Questo valore non è di nessuno dei due contatti: la lista finale ha solo valori di chi resta o di chi si unisce.',
+    'unione_elemento_doppio' => 'Questo valore è già nella lista: ogni valore compare una volta.',
+    'unione_troppi_elementi' => 'La lista ha troppi valori: al più :massimo.',
 ];

@@ -198,4 +198,10 @@ return [
     'todo_scheda_della_lista' => "A to-do in a project list has the list's card: the :attribute field does not change.",
     'todo_scheda_senza_lista' => 'This card has no to-do list yet: create it with board.todo.liste.crea (tipo progetto), then send lista_id.',
     'todo_lista_stesso_tipo' => 'A to-do changes list only between lists of the same type: personal to personal, project to project.',
+    'persona_non_esiste' => 'This contact is not in the workspace: find it with `crm.persone.ricerca.crea`.',
+    'unione_scelta_mancante' => 'The two contacts have a different value in this field: say in `scelte` which one to keep, `resta` or `unito`.',
+    'unione_scelta_inutile' => 'There is nothing to choose in this field: the two contacts have the same value, or it is not a field that can be chosen.',
+    'unione_elemento_estraneo' => 'This value belongs to neither contact: the final list only has values of the contact that stays or the one being merged.',
+    'unione_elemento_doppio' => 'This value is already in the list: each value appears once.',
+    'unione_troppi_elementi' => 'The list has too many values: at most :massimo.',
 ];

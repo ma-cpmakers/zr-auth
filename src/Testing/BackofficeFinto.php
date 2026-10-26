@@ -31,6 +31,7 @@ use Zeiras\Auth\Testing\Finto\CrmPersonalizzazione;
 use Zeiras\Auth\Testing\Finto\CrmPreventivi;
 use Zeiras\Auth\Testing\Finto\CrmPreventiviPubblici;
 use Zeiras\Auth\Testing\Finto\CrmScadenze;
+use Zeiras\Auth\Testing\Finto\CrmUnioni;
 use Zeiras\Auth\Testing\Finto\CrmValori;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
@@ -74,6 +75,7 @@ final class BackofficeFinto
     use CrmPreventiviPubblici;
     use SchedeCrm;
     use CrmScadenze;
+    use CrmUnioni;
     use CrmValori;
     use Todo;
 

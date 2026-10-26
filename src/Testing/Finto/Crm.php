@@ -25,6 +25,10 @@ trait Crm
         ['GET', '#^/v1/crm/persone$#', 'crm.persone.elenca'],
         ['POST', '#^/v1/crm/persone/ricerca$#', 'crm.persone.ricerca.crea'],
         ['POST', '#^/v1/crm/persone/importazioni$#', 'crm.persone.importazioni.crea'],
+        ['GET', '#^/v1/crm/persone/doppioni$#', 'crm.persone.doppioni.elenca'],
+        ['POST', '#^/v1/crm/persone/unioni$#', 'crm.persone.unioni.crea'],
+        ['GET', '#^/v1/crm/persone/unioni/([^/]+)$#', 'crm.persone.unioni.mostra'],
+        ['POST', '#^/v1/crm/persone/unioni/([^/]+)/annullamento$#', 'crm.persone.unioni.annullamento.crea'],
         ['GET', '#^/v1/crm/persone/esportazione$#', 'crm.persone.esportazione.mostra'],
         ['POST', '#^/v1/crm/persone$#', 'crm.persone.crea'],
         ['GET', '#^/v1/crm/persone/([^/]+)$#', 'crm.persone.mostra'],
@@ -256,7 +260,7 @@ trait Crm
      *
      * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'unioni' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -287,6 +291,10 @@ trait Crm
             'crm.persone.importazioni.crea' => $this->importaCrm($richiesta, $corpo, 'persone', $operazione),
             'crm.persone.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'persone', $parametri[0], $operazione),
             'crm.persone.anonimizzazione.crea' => $this->anonimizzaCrm($richiesta, $parametri[0]),
+            'crm.persone.doppioni.elenca' => $this->elencaDoppioniCrm($richiesta),
+            'crm.persone.unioni.crea' => $this->creaUnioneCrm($richiesta, $corpo),
+            'crm.persone.unioni.mostra' => $this->mostraUnioneCrm($richiesta, $parametri[0]),
+            'crm.persone.unioni.annullamento.crea' => $this->annullaUnioneCrm($richiesta, $corpo, $parametri[0]),
             'crm.importazioni.elenca' => $this->elencaImportazioniCrm($richiesta),
             'crm.importazioni.mostra' => [200, ['data' => $this->voceImportazioneCrm($this->importazioneCrm($this->conCrm($richiesta, ['proprietario', 'amministratore'])['workspace'], $parametri[0]))]],
             'crm.importazioni.annullamento.crea' => $this->annullaImportazioneCrm($richiesta, $corpo, $parametri[0]),
@@ -537,11 +545,11 @@ trait Crm
     }
 
     /** Una riga della cronologia di un contatto, un'azienda o una trattativa, con l'autore della scrittura. */
-    private function cambioCrm(string $tipo, string $id, ?string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null, ?string $scadenza = null): void
+    private function cambioCrm(string $tipo, string $id, ?string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null, ?string $scadenza = null, ?string $altra = null, ?string $unione = null): void
     {
         $this->crm['cambi'][] = [
             'id' => self::id(), 'tipo_risorsa' => $tipo, 'risorsa' => $id, 'tipo' => $cambio, 'autore_id' => $autore, 'istante' => self::adessoCrm(),
-            'campi' => $campi, 'importazione_id' => $importazione, 'attivita_id' => $attivita, 'scadenza_id' => $scadenza,
+            'campi' => $campi, 'importazione_id' => $importazione, 'attivita_id' => $attivita, 'scadenza_id' => $scadenza, 'altra_persona_id' => $altra, 'unione_id' => $unione,
         ];
     }
 
@@ -1260,7 +1268,7 @@ trait Crm
                 return [
                     'id' => $cambio['id'], 'tipo' => $cambio['tipo'] === 'creata' ? 'trattativa.creata' : 'trattativa.'.self::esitoCrm($cambio),
                     'autore_id' => $cambio['autore_id'], 'istante' => self::iso($cambio['istante']), 'campi' => [], 'importazione_id' => null,
-                    'attivita_id' => null, 'scadenza_id' => null, 'trattativa_id' => $cambio['risorsa'],
+                    'attivita_id' => null, 'scadenza_id' => null, 'altra_persona_id' => null, 'unione_id' => null, 'trattativa_id' => $cambio['risorsa'],
                 ];
             }
 
@@ -1274,7 +1282,8 @@ trait Crm
                 ] : $campo, $voce['campi']);
             }
 
-            return $voce + ($tipo === 'trattative' ? [] : ['importazione_id' => $cambio['importazione_id']]) + ['attivita_id' => $cambio['attivita_id']] + ($tipo === 'trattative' ? [] : ['scadenza_id' => $cambio['scadenza_id']]);
+            return $voce + ($tipo === 'trattative' ? [] : ['importazione_id' => $cambio['importazione_id']]) + ['attivita_id' => $cambio['attivita_id']] + ($tipo === 'trattative' ? [] : ['scadenza_id' => $cambio['scadenza_id']])
+                + ($tipo === 'persone' ? ['altra_persona_id' => $cambio['altra_persona_id'], 'unione_id' => $cambio['unione_id']] : []);
         };
         $esito = $this->paginaCrm($richiesta, "{$lista}:{$riga['id']}", $righe, fn (array $una, array $altra) => [$altra['istante'], $altra['id']] <=> [$una['istante'], $una['id']], $voce);
         // Come il backoffice (ValoriDeiCampi::senzaEliminati): le voci `campi.<chiave>` di un campo «tuo» eliminato non escono, e una riga che
@@ -1751,6 +1760,7 @@ trait Crm
             'professione' => $riga['professione'] ?? null,
             'organizzazione_id' => $riga['organizzazione_id'],
             'organizzazione' => $azienda === null ? null : ['id' => $azienda['id'], 'nome' => $azienda['nome'], 'archiviata_il' => self::isoCrm($azienda['archiviata_il'])],
+            'unito_in' => $this->unitoInCrm($riga['id']),
             'email' => $riga['email'],
             'telefoni' => $riga['telefoni'],
             'stato' => $riga['stato'],
