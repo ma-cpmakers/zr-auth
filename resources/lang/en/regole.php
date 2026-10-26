@@ -154,6 +154,8 @@ return [
     'voce_non_esiste' => 'There is no entry with this id in the workspace catalogue: crm.catalogo.elenca gives their ids.',
     'tipo_scadenza_non_esiste' => 'There is no deadline type with this id in the workspace: crm.scadenze.tipi.elenca gives their ids.',
     'tipo_scadenza_archiviato' => 'The deadline type is archived: a new deadline is created on an active type.',
+    'scadenza_data_dell_acquisto' => "The date of a deadline born from a purchase is set by the purchase: change the purchase's start date instead.",
+    'tipo_scadenza_di_sistema' => 'The system type cannot be archived: its name and notice days can be changed.',
     'acquisto_non_esiste' => 'There is no purchase with this id in the workspace: crm.acquisti.elenca gives their ids.',
     'indirizzo_riservato' => 'This address is reserved for Bookings: pick another.',
     'pagina_pubblicare_senza_contatto' => 'To publish the page a contact is needed: write an email or a phone number in `contatto`.',

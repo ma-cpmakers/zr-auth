@@ -88,7 +88,7 @@ trait CrmScadenze
             $this->crm['scadenzeTipi'][$id] = [
                 'id' => $id, 'workspace' => $chi['workspace'], 'nome' => $campi['nome'],
                 'preavvisi' => self::preavvisiOrdinatiCrm($campi['preavvisi'] ?? self::CRM_SCADENZE_PREAVVISI_DI_PARTENZA),
-                'ricorrenza_mesi' => $campi['ricorrenza_mesi'] ?? null, 'sensibile' => $campi['sensibile'] ?? false, 'stato' => 'attivo',
+                'ricorrenza_mesi' => $campi['ricorrenza_mesi'] ?? null, 'sensibile' => $campi['sensibile'] ?? false, 'sistema' => null, 'stato' => 'attivo',
                 'creato_il' => $ora, 'aggiornato_il' => $ora,
             ];
             $voce = $this->voceScadenzaTipoCrm($this->crm['scadenzeTipi'][$id]);
@@ -110,6 +110,12 @@ trait CrmScadenze
         $riga = $this->rigaCrm('scadenzeTipi', $chi['workspace'], $id);
         $this->pretendiLaVersioneCrm($richiesta, $this->vocePulitaDelTipoCrm($riga));
         $campi = $this->modificaCrm($corpo, $this->regoleDelTipoDiScadenzaCrm(false));
+
+        // Il tipo di sistema lo tiene il backoffice: si rinomina e si cambia, non si archivia.
+        if (($riga['sistema'] ?? null) !== null && ($campi['stato'] ?? null) === 'archiviato') {
+            throw $this->erroreCrm('stato', 'regole.tipo_scadenza_di_sistema', Regola::CAMPO_VIETATO);
+        }
+
         $dopo = [
             'nome' => $campi['nome'] ?? $riga['nome'],
             'preavvisi' => array_key_exists('preavvisi', $campi) ? self::preavvisiOrdinatiCrm($campi['preavvisi']) : $riga['preavvisi'],
@@ -130,6 +136,78 @@ trait CrmScadenze
         $voce = $this->voceScadenzaTipoCrm($this->crm['scadenzeTipi'][$riga['id']]);
 
         return [200, ['data' => $voce], ['ETag' => $voce['etag']]];
+    }
+
+    /**
+     * Il tipo di sistema `acquisto` del workspace (ScadenzeDegliAcquisti::tipo): quello che c'è, o il tipo attivo che ha già il nome «Fine
+     * abbonamento / validità» (diventa lui, coi suoi preavvisi), o uno nuovo con i preavvisi 30 e 7.
+     *
+     * @return array<string, mixed>
+     */
+    private function tipoDelleScadenzeDegliAcquistiCrm(string $workspace): array
+    {
+        $nome = 'Fine abbonamento / validità';
+        $tipi = $this->righeCrm('scadenzeTipi', $workspace);
+
+        foreach ($tipi as $tipo) {
+            if (($tipo['sistema'] ?? null) === 'acquisto') {
+                return $tipo;
+            }
+        }
+
+        foreach ($tipi as $tipo) {
+            if ($tipo['stato'] === 'attivo' && self::nomeSimileCrm($tipo['nome'], null) === self::nomeSimileCrm($nome, null)) {
+                $this->salvaCrm('scadenzeTipi', $tipo['id'], ['sistema' => 'acquisto']);
+
+                return $this->crm['scadenzeTipi'][$tipo['id']];
+            }
+        }
+
+        $id = self::id();
+        $ora = self::adessoCrm();
+        $this->crm['scadenzeTipi'][$id] = [
+            'id' => $id, 'workspace' => $workspace, 'nome' => $nome, 'preavvisi' => [30, 7], 'ricorrenza_mesi' => null, 'sensibile' => false,
+            'sistema' => 'acquisto', 'stato' => 'attivo', 'creato_il' => $ora, 'aggiornato_il' => $ora,
+        ];
+
+        return $this->crm['scadenzeTipi'][$id];
+    }
+
+    /**
+     * La scadenza «Fine abbonamento / validità» di un acquisto appena nato, se ha un `valido_fino_al` (ScadenzeDegliAcquisti::nasce): origine
+     * `acquisto`, la data dell'acquisto, i preavvisi del tipo di sistema, come responsabile quello del contatto o chi registra. Il tetto delle
+     * scadenze aperte non vale. La cronologia del contatto riceve `scadenza.creata`.
+     */
+    private function nasceLaScadenzaDiUnAcquistoCrm(array $acquisto, array $persona, string $autore): void
+    {
+        if ($acquisto['valido_fino_al'] === null) {
+            return;
+        }
+
+        $tipo = $this->tipoDelleScadenzeDegliAcquistiCrm($acquisto['workspace']);
+        $preavvisi = self::preavvisiOrdinatiCrm($tipo['preavvisi']);
+        $id = self::id();
+        $ora = self::adessoCrm();
+        $this->crm['scadenze'][$id] = [
+            'id' => $id, 'workspace' => $acquisto['workspace'], 'tipo_id' => $tipo['id'], 'persona_id' => $persona['id'], 'organizzazione_id' => null,
+            'acquisto_id' => $acquisto['id'], 'scade_il' => $acquisto['valido_fino_al'], 'preavvisi' => $preavvisi,
+            'preavviso_dal' => self::preavvisoDalCrm($acquisto['valido_fino_al'], $preavvisi),
+            'responsabile_id' => $persona['responsabile_id'] ?? $autore,
+            'origine' => 'acquisto', 'stato' => 'attiva', 'chiusa_il' => null, 'motivo' => null, 'rinnovata_da' => null,
+            'creata_da' => $autore, 'creata_il' => $ora, 'aggiornata_il' => $ora,
+        ];
+        $this->rigaDellaScadenzaCrm($this->crm['scadenze'][$id], $autore, 'creata', null);
+    }
+
+    /** Porta la scadenza ancora aperta dell'acquisto al suo `valido_fino_al` di adesso (ScadenzeDegliAcquisti::sposta); una rinnovata o chiusa non si tocca. */
+    private function spostaLaScadenzaDiUnAcquistoCrm(array $acquisto): void
+    {
+        foreach ($this->crm['scadenze'] as $id => $scadenza) {
+            if (($scadenza['acquisto_id'] ?? null) === $acquisto['id'] && $scadenza['origine'] === 'acquisto' && $scadenza['stato'] === 'attiva' && ! ($scadenza['eliminata'] ?? false)
+                && $acquisto['valido_fino_al'] !== null && $scadenza['scade_il'] !== $acquisto['valido_fino_al']) {
+                $this->salvaCrm('scadenze', $id, ['scade_il' => $acquisto['valido_fino_al'], 'preavviso_dal' => self::preavvisoDalCrm($acquisto['valido_fino_al'], $scadenza['preavvisi'])]);
+            }
+        }
     }
 
     /**
@@ -303,6 +381,11 @@ trait CrmScadenze
         ]);
         self::controllaCheSiaApertaCrm($riga);
 
+        // La data di una scadenza nata da un acquisto la decide l'acquisto, anche se il valore mandato è quello di adesso.
+        if ($riga['origine'] === 'acquisto' && array_key_exists('scade_il', $campi)) {
+            throw $this->erroreCrm('scade_il', 'regole.scadenza_data_dell_acquisto', Regola::CAMPO_VIETATO);
+        }
+
         $dopo = [
             'scade_il' => $campi['scade_il'] ?? $riga['scade_il'],
             'preavvisi' => array_key_exists('preavvisi', $campi) ? self::preavvisiOrdinatiCrm($campi['preavvisi']) : $riga['preavvisi'],
@@ -361,7 +444,7 @@ trait CrmScadenze
             $nuova = self::id();
             $ora = self::adessoCrm();
             $this->crm['scadenze'][$nuova] = [
-                ...$riga, 'id' => $nuova, 'scade_il' => $campi['scade_il'], 'preavviso_dal' => self::preavvisoDalCrm($campi['scade_il'], $riga['preavvisi']),
+                ...$riga, 'id' => $nuova, 'origine' => 'manuale', 'scade_il' => $campi['scade_il'], 'preavviso_dal' => self::preavvisoDalCrm($campi['scade_il'], $riga['preavvisi']),
                 'stato' => 'attiva', 'chiusa_il' => null, 'motivo' => null, 'rinnovata_da' => null,
                 'creata_da' => $riga['creata_da'], 'creata_il' => $ora, 'aggiornata_il' => $ora,
             ];
@@ -433,7 +516,7 @@ trait CrmScadenze
     {
         return [
             'id' => $riga['id'], 'nome' => $riga['nome'], 'preavvisi' => $riga['preavvisi'], 'ricorrenza_mesi' => $riga['ricorrenza_mesi'],
-            'sensibile' => $riga['sensibile'], 'stato' => $riga['stato'],
+            'sensibile' => $riga['sensibile'], 'sistema' => ($riga['sistema'] ?? null) !== null, 'stato' => $riga['stato'],
             'creato_il' => self::iso($riga['creato_il']), 'aggiornato_il' => self::iso($riga['aggiornato_il']),
         ];
     }

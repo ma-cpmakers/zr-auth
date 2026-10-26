@@ -155,6 +155,8 @@ return [
     'voce_non_esiste' => 'Nel catalogo del workspace non c\'è una voce con questo id: gli id delle voci li dà crm.catalogo.elenca.',
     'tipo_scadenza_non_esiste' => "Nel workspace non c'è un tipo di scadenza con questo id: gli id dei tipi li dà crm.scadenze.tipi.elenca.",
     'tipo_scadenza_archiviato' => 'Il tipo di scadenza è archiviato: una scadenza nuova si crea su un tipo attivo.',
+    'scadenza_data_dell_acquisto' => "La data di una scadenza nata da un acquisto la decide l'acquisto: si cambia con la data di inizio dell'acquisto.",
+    'tipo_scadenza_di_sistema' => 'Il tipo di sistema non si archivia: si può rinominare e cambiare i preavvisi.',
     'acquisto_non_esiste' => "Nel workspace non c'è un acquisto con questo id: gli id degli acquisti li dà crm.acquisti.elenca.",
     'indirizzo_riservato' => 'Questo indirizzo è riservato a Bookings: scegline un altro.',
     'pagina_pubblicare_senza_contatto' => "Per pubblicare la pagina serve un contatto: scrivi un'email o un telefono in `contatto`.",

@@ -154,6 +154,8 @@ return [
     'voce_non_esiste' => 'En el catálogo del workspace no hay una entrada con este id: crm.catalogo.elenca da sus ids.',
     'tipo_scadenza_non_esiste' => 'En el workspace no hay un tipo de vencimiento con este id: crm.scadenze.tipi.elenca da sus ids.',
     'tipo_scadenza_archiviato' => 'El tipo de vencimiento está archivado: un vencimiento nuevo se crea sobre un tipo activo.',
+    'scadenza_data_dell_acquisto' => 'La fecha de un vencimiento nacido de una compra la decide la compra: se cambia con la fecha de inicio de la compra.',
+    'tipo_scadenza_di_sistema' => 'El tipo de sistema no se archiva: se puede renombrar y cambiar los avisos.',
     'acquisto_non_esiste' => 'En el workspace no hay una compra con este id: crm.acquisti.elenca da sus ids.',
     'indirizzo_riservato' => 'Esta dirección está reservada a Bookings: elige otra.',
     'pagina_pubblicare_senza_contatto' => 'Para publicar la página hace falta un contacto: escribe un correo o un teléfono en `contatto`.',
