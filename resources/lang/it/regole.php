@@ -64,6 +64,8 @@ return [
     'responsabile_del_workspace' => 'Questa persona non è un membro del workspace: gli id dei membri li dà workspace.membri.elenca.',
     'azienda_o_azienda_nuova' => "Un contatto ha un'azienda che c'è (organizzazione_id) o una che nasce con lui (organizzazione_nuova), non tutte e due.",
     'organizzazione_non_esiste' => "L'azienda del contatto non esiste in questo workspace.",
+    'paga_per_non_esiste' => "Chi paga per il contatto non esiste in questo workspace: dev'essere l'id di un contatto o di un'azienda.",
+    'paga_per_se_stesso' => "Un contatto non paga per sé stesso: paga_per_id dev'essere un altro contatto o un'azienda.",
     'email_doppia' => 'Questo indirizzo compare due volte nella lista.',
     'valuta_del_workspace' => "La valuta dev'essere quella del CRM del workspace (:valuta): la dà crm.impostazioni.mostra.",
     'fase_della_pipeline' => "Nella pipeline non c'è una fase con questo id: gli id delle fasi li dà crm.pipeline.mostra.",
