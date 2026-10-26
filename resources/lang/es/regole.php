@@ -184,4 +184,11 @@ return [
     'prenotazione_inizio_e_stato' => 'Mueve la reserva o cambia su estado, no las dos cosas a la vez.',
     'prenotazione_motivo_solo_annullata' => 'El motivo se escribe solo al cancelar la reserva.',
     'prenotazione_messaggio_solo_con_cambio' => 'El mensaje se escribe solo con un cambio de hora o al cancelar.',
+    'lista_del_todo' => 'No tienes una lista del To-do con este id: board.todo.liste.elenca da los ids de tus listas.',
+    'todo_giorno_fuori_intervallo' => 'El día de una tarea está entre 2000-01-01 y 2100-12-31.',
+    'todo_ora_senza_giorno' => 'La hora necesita un día: manda también el día, o quita la hora.',
+    'todo_posizione' => 'El campo :attribute no se escribe: para poner una tarea en otro sitio usa dopo_id (y lista_id si cambia de lista).',
+    'todo_dopo_id' => 'El campo :attribute lleva el id de otra tarea tuya, de la lista donde la tarea termina; null la pone la primera.',
+    'todo_fatti_con_lista' => 'fatti=true se usa solo con lista_id.',
+    'todo_ordine_con_lista' => 'Con vista el orden es el de la vista: ordine se usa solo con lista_id.',
 ];

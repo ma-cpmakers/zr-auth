@@ -39,6 +39,7 @@ use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\SchedeCrm;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
+use Zeiras\Auth\Testing\Finto\Todo;
 
 /**
  * Il backoffice finto, per i test dei frontend (nota 5721): risponde alle chiamate di /v1 come zr-backoffice, senza rete
@@ -74,6 +75,7 @@ final class BackofficeFinto
     use SchedeCrm;
     use CrmScadenze;
     use CrmValori;
+    use Todo;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
     public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';
@@ -159,6 +161,18 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/crm/([^/]+)$#', 'board.schede.crm.elimina'],
+        ['GET', '#^/v1/board/todo/liste$#', 'board.todo.liste.elenca'],
+        ['POST', '#^/v1/board/todo/liste$#', 'board.todo.liste.crea'],
+        ['PATCH', '#^/v1/board/todo/liste/([^/]+)$#', 'board.todo.liste.modifica'],
+        ['GET', '#^/v1/board/todo/elementi$#', 'board.todo.elementi.elenca'],
+        ['POST', '#^/v1/board/todo/elementi$#', 'board.todo.elementi.crea'],
+        ['GET', '#^/v1/board/todo/elementi/([^/]+)$#', 'board.todo.elementi.mostra'],
+        ['PATCH', '#^/v1/board/todo/elementi/([^/]+)$#', 'board.todo.elementi.modifica'],
+        ['DELETE', '#^/v1/board/todo/elementi/([^/]+)$#', 'board.todo.elementi.elimina'],
+        ['POST', '#^/v1/board/todo/elementi/([^/]+)/completamento$#', 'board.todo.elementi.completamento.crea'],
+        ['DELETE', '#^/v1/board/todo/elementi/([^/]+)/completamento$#', 'board.todo.elementi.completamento.elimina'],
+        ['GET', '#^/v1/board/todo/riepilogo$#', 'board.todo.riepilogo.mostra'],
+        ['GET', '#^/v1/board/todo/tag$#', 'board.todo.tag.elenca'],
         ['GET', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.elenca'],
         ['POST', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.crea'],
         ['PATCH', '#^/v1/board/board/([^/]+)/viste/([^/]+)$#', 'board.board.viste.modifica'],
@@ -313,7 +327,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -1281,6 +1295,18 @@ final class BackofficeFinto
                 'board.schede.crm.elenca' => $this->elencaSchedeCrm($richiesta, $parametri[0]),
                 'board.schede.crm.crea' => $this->creaSchedaCrm($richiesta, $corpo, $parametri[0]),
                 'board.schede.crm.elimina' => $this->eliminaSchedaCrm($richiesta, $parametri[0], $parametri[1]),
+                'board.todo.liste.elenca' => $this->elencaListeTodo($richiesta),
+                'board.todo.liste.crea' => $this->creaListaTodo($richiesta, $corpo),
+                'board.todo.liste.modifica' => $this->modificaListaTodo($richiesta, $corpo, $parametri[0]),
+                'board.todo.elementi.elenca' => $this->elencaElementiTodo($richiesta),
+                'board.todo.elementi.crea' => $this->creaElementoTodo($richiesta, $corpo),
+                'board.todo.elementi.mostra' => $this->mostraElementoTodo($richiesta, $parametri[0]),
+                'board.todo.elementi.modifica' => $this->modificaElementoTodo($richiesta, $corpo, $parametri[0]),
+                'board.todo.elementi.elimina' => $this->eliminaElementoTodo($richiesta, $parametri[0]),
+                'board.todo.elementi.completamento.crea' => $this->completamentoCreaTodo($richiesta, $parametri[0]),
+                'board.todo.elementi.completamento.elimina' => $this->completamentoEliminaTodo($richiesta, $parametri[0]),
+                'board.todo.riepilogo.mostra' => $this->riepilogoTodo($richiesta),
+                'board.todo.tag.elenca' => $this->tagTodo($richiesta),
                 'board.board.viste.elenca' => $this->elencaViste($richiesta, $parametri[0]),
                 'board.board.viste.crea' => $this->creaVista($richiesta, $corpo, $parametri[0]),
                 'board.board.viste.modifica' => $this->modificaVista($richiesta, $corpo, $parametri[0], $parametri[1]),

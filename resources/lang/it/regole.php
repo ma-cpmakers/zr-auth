@@ -185,4 +185,11 @@ return [
     'prenotazione_inizio_e_stato' => 'Sposta la prenotazione o cambiane lo stato, non le due cose insieme.',
     'prenotazione_motivo_solo_annullata' => 'Il motivo si scrive solo annullando la prenotazione.',
     'prenotazione_messaggio_solo_con_cambio' => "Il messaggio si scrive solo con un cambio d'orario o con l'annullamento.",
+    'lista_del_todo' => 'Non hai una lista del To-do con questo id: gli id delle tue liste li dà board.todo.liste.elenca.',
+    'todo_giorno_fuori_intervallo' => 'Il giorno di un to-do sta fra 2000-01-01 e 2100-12-31.',
+    'todo_ora_senza_giorno' => "L'ora vuole un giorno: dai anche il giorno, o togli l'ora.",
+    'todo_posizione' => 'Il campo :attribute non si scrive: per mettere un to-do in un altro posto usa dopo_id (e lista_id se cambia lista).',
+    'todo_dopo_id' => "Il campo :attribute vuole l'id di un altro to-do tuo, della lista dove il to-do va a finire; null lo mette in testa.",
+    'todo_fatti_con_lista' => 'fatti=true si usa solo con lista_id.',
+    'todo_ordine_con_lista' => "Con vista l'ordine è quello della vista: ordine si usa solo con lista_id.",
 ];
