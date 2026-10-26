@@ -341,17 +341,12 @@ trait CrmCampi
                 'sezione_id' => ['filled', 'string', 'max:40'],
                 'visibilita' => ['filled', 'string', Rule::in(['visibile', 'nascosto'])],
                 'obbligatorio' => ['filled', 'boolean:strict'],
-                'opzioni' => ['sometimes', 'array', 'max:'.self::CRM_OPZIONI_MASSIME],
-                'opzioni.*' => ['array'],
-                'opzioni.*.nome' => ['required', 'array'],
-                'opzioni.*.nome.it' => ['bail', 'required', 'string', 'max:'.self::CRM_NOME_DI_UNA_SEZIONE, new NomeScritto],
-                'opzioni.*.nome.en' => $this->regoleDiUnNomeCrm(),
-                'opzioni.*.nome.es' => $this->regoleDiUnNomeCrm(),
-                'opzioni.*.colore' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            ] + $this->regoleDelleAvanzateCrm());
-            $opzioni = $this->opzioniDelCampoCrm($campi);
+            ] + $this->regoleDelleOpzioniCrm($corpo) + $this->regoleDelleAvanzateCrm());
+            $elencoId = $this->elencoDelCampoCrm($campi);
+            $opzioni = $elencoId === null ? $this->opzioniDelCampoCrm($campi) : null;
             $avanzate = $this->avanzateCrm($chi['workspace'], $campi, $campi['tipo'], $opzioni, null);
             $oggetto = $campi['oggetto'];
+            $elenco = $elencoId === null ? null : $this->elencoPerUnCampoCrm($chi['workspace'], $elencoId);
             $this->campiDelWorkspaceCrm($chi['workspace']);
             $lista = $this->campiDiUnOggettoCrm($chi['workspace'], $oggetto);
 
@@ -380,7 +375,7 @@ trait CrmCampi
             $ora = self::adessoCrm();
             $this->campiCrm[$chi['workspace']][$oggetto]['campi'][$chiave] = [
                 'id' => "{$oggetto}.{$chiave}", 'oggetto' => $oggetto, 'codice' => $chiave, 'origine' => 'tuo', 'tipo' => $campi['tipo'], 'sistema' => null,
-                'opzioni' => $opzioni, 'obbligatorio' => $campi['obbligatorio'] ?? false,
+                'opzioni' => $opzioni, 'elenco_id' => $elenco['id'] ?? null, 'obbligatorio' => $campi['obbligatorio'] ?? false,
                 'aiuto' => $avanzate['aiuto'] ?? null, 'predefinito' => $avanzate['predefinito'] ?? null, 'limiti' => $avanzate['limiti'] ?? null,
                 'in_elenco' => $avanzate['in_elenco'] ?? false, 'nel_crea' => $avanzate['nel_crea'] ?? false,
                 'catalogo' => ['nome' => []], 'scritti' => array_filter($campi['nome'], fn ($nome) => is_string($nome) && $nome !== ''),
@@ -392,6 +387,69 @@ trait CrmCampi
 
             return [201, ['data' => $this->voceCampoCrm($nuovo)], ['Location' => "/v1/crm/campi/{$oggetto}.{$chiave}"]];
         });
+    }
+
+    /**
+     * Le regole di `opzioni` (CampiController::regoleDelleOpzioni): una lista di opzioni proprie o, per un elenco condiviso, un oggetto
+     * col solo `elenco_id`. Un oggetto con delle chiavi è il secondo modo, e ogni altra chiave dentro è 422 `campo_estraneo`; una lista,
+     * vuota o no, è il primo.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array<string, list<mixed>>
+     */
+    private function regoleDelleOpzioniCrm(array $corpo): array
+    {
+        $date = $corpo['opzioni'] ?? null;
+
+        if (is_array($date) && $date !== [] && ! array_is_list($date)) {
+            return ['opzioni' => ['array'], 'opzioni.elenco_id' => ['required', 'string', 'max:40']];
+        }
+
+        return [
+            'opzioni' => ['sometimes', 'array', 'max:'.self::CRM_OPZIONI_MASSIME],
+            'opzioni.*' => ['array'],
+            'opzioni.*.nome' => ['required', 'array'],
+            'opzioni.*.nome.it' => ['bail', 'required', 'string', 'max:'.self::CRM_NOME_DI_UNA_SEZIONE, new NomeScritto],
+            'opzioni.*.nome.en' => $this->regoleDiUnNomeCrm(),
+            'opzioni.*.nome.es' => $this->regoleDiUnNomeCrm(),
+            'opzioni.*.colore' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+        ];
+    }
+
+    /**
+     * L'id dell'elenco condiviso che il campo usa (`opzioni: {elenco_id}`), in minuscolo; `null` se le opzioni sono proprie o non ci
+     * sono. Un tipo senza opzioni non ne prende nemmeno uno: 422 `campo_vietato`.
+     *
+     * @param  array<string, mixed>  $campi
+     */
+    private function elencoDelCampoCrm(array $campi): ?string
+    {
+        $date = $campi['opzioni'] ?? null;
+
+        if (! is_array($date) || ! isset($date['elenco_id'])) {
+            return null;
+        }
+
+        if (! in_array($campi['tipo'], ['elenco', 'scelta_multipla'], true)) {
+            throw $this->erroreCrm('opzioni', 'regole.campo_opzioni_non_ammesse', Regola::CAMPO_VIETATO);
+        }
+
+        return strtolower((string) $date['elenco_id']);
+    }
+
+    /**
+     * La riga del campo con le opzioni che ha davvero: quelle dell'elenco condiviso che usa, com'è adesso, altrimenti le sue proprie.
+     *
+     * @param  array<string, mixed>  $campo
+     * @return array<string, mixed>
+     */
+    private function conOpzioniDelloElencoCrm(array $campo): array
+    {
+        if (($campo['elenco_id'] ?? null) !== null) {
+            $campo['opzioni'] = $this->valoriDiUnElencoCrm($campo['elenco_id']);
+        }
+
+        return $campo;
     }
 
     /**
@@ -781,7 +839,7 @@ trait CrmCampi
         $this->campiDelWorkspaceCrm($workspace);
         [$voce] = $this->trovaCampoCrm($workspace, $id);
 
-        if ($voce['origine'] !== 'tuo' || ! in_array($voce['tipo'], ['elenco', 'scelta_multipla'], true)) {
+        if ($voce['origine'] !== 'tuo' || ! in_array($voce['tipo'], ['elenco', 'scelta_multipla'], true) || ($voce['elenco_id'] ?? null) !== null) {
             throw new Problema('non_trovato');
         }
 
@@ -1011,6 +1069,7 @@ trait CrmCampi
             $campi[$i]['posto'] = $contati[$campo['sezione_id']];
             $campi[$i]['nome'] = self::nomiCrm($campo['catalogo']['nome'], $campo['scritti']);
             $campi[$i]['workspace'] = $workspace;
+            $campi[$i] = $this->conOpzioniDelloElencoCrm($campi[$i]);
         }
 
         return $campi;
@@ -1035,6 +1094,7 @@ trait CrmCampi
             $eliminati[$i]['posto'] = $i + 1;
             $eliminati[$i]['nome'] = self::nomiCrm($campo['catalogo']['nome'], $campo['scritti']);
             $eliminati[$i]['workspace'] = $workspace;
+            $eliminati[$i] = $this->conOpzioniDelloElencoCrm($eliminati[$i]);
         }
 
         return $eliminati;
@@ -1131,6 +1191,7 @@ trait CrmCampi
         ] + ($campo['tipo'] === 'sistema' ? ['sistema' => $campo['sistema']] : []) + [
             'opzioni' => self::opzioniVisibiliCrm($campo['opzioni'] ?? null),
             'opzioni_archiviate' => self::opzioniArchiviateCrm($campo['opzioni'] ?? null),
+            'elenco_id' => $campo['elenco_id'] ?? null,
             'nome' => $campo['nome'],
             'visibilita' => $campo['visibilita'],
             'sezione_id' => $campo['sezione_id'],

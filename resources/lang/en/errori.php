@@ -257,6 +257,10 @@ return [
         'title' => 'Last option',
         'detail' => 'This is the field\'s last live option, and a list or multiple-choice field always has at least one. Add another with crm.campi.opzioni.crea and then remove this one. Nothing was written.',
     ],
+    'elenco_in_uso' => [
+        'title' => 'List in use',
+        'detail' => 'At least one live CRM field uses this shared list of values, and a list in use cannot be archived. The problem carries `campi`, the ids of the fields that use it: delete them with crm.campi.elimina, or archive only the values you no longer need with crm.elenchi.modifica. Nothing was written.',
+    ],
     'sezione_di_sistema' => [
         'title' => 'System section',
         'detail' => "“Principali” (Main) is the fixed section of an object's fields: it cannot be renamed, moved or deleted. Nothing was written.",

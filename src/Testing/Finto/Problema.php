@@ -61,6 +61,7 @@ final class Problema extends RuntimeException
         'annullamento_scaduto' => 409,
         'campo_di_sistema' => 409,
         'ultima_opzione' => 409,
+        'elenco_in_uso' => 409,
         'sezione_di_sistema' => 409,
         'sezione_non_vuota' => 409,
         'ultimo_workspace' => 409,
