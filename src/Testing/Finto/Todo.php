@@ -73,9 +73,21 @@ trait Todo
     private function elencaListeTodo(Request $richiesta): array
     {
         $chi = $this->conPm($richiesta);
+        $grezza = self::query($richiesta);
+        $estranei = array_diff(array_map('strval', array_keys($grezza)), ['scheda_id']);
+        $this->testi->validaQuery($grezza, array_fill_keys($estranei, [function (string $attributo, mixed $valore, Closure $rifiuta) {
+            $this->testi->dichiara($attributo, Regola::CAMPO_ESTRANEO);
+            $rifiuta('validation.prohibited')->translate(['attribute' => $this->testi->nome($attributo)]);
+        }]) + ['scheda_id' => ['sometimes', 'string', 'max:64', $this->schedaDelWorkspaceTodo($chi)]]);
         $this->personaleTodo($chi);
 
-        return [200, ['data' => array_map($this->voceListaTodo(...), $this->listeDellaPersonaTodo($chi))]];
+        if (isset($grezza['scheda_id'])) {
+            $liste = array_values(array_filter($this->todoListe, fn (array $l) => $l['workspace'] === $chi['workspace'] && $l['tipo'] === 'progetto' && $l['scheda'] === $grezza['scheda_id'] && ! $l['archiviata']));
+        } else {
+            $liste = $this->listeCoinvolteTodo($chi);
+        }
+
+        return [200, ['data' => array_map($this->voceListaTodo(...), $liste)]];
     }
 
     /**
@@ -92,9 +104,32 @@ trait Todo
         return $this->conIdempotenza($richiesta, 'board.todo.liste.crea', $chi, $corpo, function () use ($chi, $corpo) {
             $this->frena('board.todo.liste.crea:persona:'.$chi['persona'].':'.$chi['workspace'], self::FRENI['board_todo_liste_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, $this->regoleListaTodo(true));
+            $progetto = ($campi['tipo'] ?? 'personale') === 'progetto';
+            $scheda = $campi['scheda_id'] ?? null;
+
+            if ($progetto && $scheda === null) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.todo_lista_progetto_vuole_scheda'), 'regola' => Regola::OBBLIGATORIO, 'pointer' => '#/scheda_id']]);
+            }
+
+            if (! $progetto && $scheda !== null) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.todo_lista_personale_senza_scheda', ['attribute' => 'scheda_id']), 'regola' => Regola::CAMPO_VIETATO, 'pointer' => '#/scheda_id']]);
+            }
+
             $this->personaleTodo($chi);
 
-            if (count($this->listeDellaPersonaTodo($chi)) >= self::TODO_LISTE_TETTO) {
+            if ($progetto) {
+                $laScheda = $this->schedaDelCampoTodo($chi, (string) $scheda);
+
+                if ($laScheda['archiviata_il'] !== null) {
+                    throw new Problema('scheda_archiviata');
+                }
+
+                $esistente = array_values(array_filter($this->todoListe, fn (array $l) => $l['workspace'] === $chi['workspace'] && $l['tipo'] === 'progetto' && $l['scheda'] === $laScheda['id']))[0] ?? null;
+
+                if ($esistente !== null) {
+                    throw new Problema('lista_gia_esistente', estensioni: ['lista_id' => $esistente['id']]);
+                }
+            } elseif (count($this->listeDellaPersonaTodo($chi)) >= self::TODO_LISTE_TETTO) {
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::TODO_LISTE_TETTO]);
             }
 
@@ -102,8 +137,9 @@ trait Todo
             $ora = now()->toImmutable()->startOfMillisecond();
             $this->todoListe[$id] = [
                 'id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'nome' => trim((string) $campi['nome']),
-                'colore' => $campi['colore'] ?? 'neutral', 'tipo' => 'personale', 'predefinita' => false, 'ordine' => 'posizione',
-                'posizione' => $this->inCodaTodo(array_column($this->listeDellaPersonaTodo($chi), 'posizione')),
+                'colore' => $campi['colore'] ?? 'neutral', 'tipo' => $progetto ? 'progetto' : 'personale', 'predefinita' => false, 'ordine' => 'posizione',
+                'scheda' => $progetto ? $laScheda['id'] : null, 'board' => $progetto ? $laScheda['board'] : null,
+                'posizione' => $progetto ? 0 : $this->inCodaTodo(array_column($this->listeDellaPersonaTodo($chi), 'posizione')),
                 'archiviata' => false, 'creata_il' => $ora, 'aggiornata_il' => $ora,
             ];
             $voce = $this->voceListaTodo($this->todoListe[$id]);
@@ -124,6 +160,7 @@ trait Todo
     {
         $chi = $this->conPm($richiesta);
         $lista = $this->listaDelPercorsoTodo($chi, $id);
+        $this->scrivibileTodo($lista);
         $this->pretendiLaVersioneCrm($richiesta, $this->versioneTodo($lista, 'aggiornata_il'));
         $campi = $this->modificaTodo($corpo, $this->regoleListaTodo(false), ['nome', 'colore', 'ordine']);
         $cambi = [];
@@ -157,8 +194,9 @@ trait Todo
         return [
             'nome' => ['bail', $creazione ? 'required' : 'filled', 'string', 'max:'.self::TODO_NOME, new NomeScritto],
             'colore' => ['bail', 'sometimes', Rule::in(self::TODO_COLORI)],
-            ...($creazione ? [] : ['ordine' => ['bail', 'sometimes', Rule::in(self::TODO_ORDINI)]]),
-            'tipo' => [$this->rifiutaIlCampoTodo('regole.campo_di_nessun_metodo')],
+            ...($creazione
+                ? ['tipo' => ['bail', 'sometimes', 'string', Rule::in(['personale', 'progetto'])], 'scheda_id' => ['bail', 'sometimes', 'string', 'max:64']]
+                : ['ordine' => ['bail', 'sometimes', Rule::in(self::TODO_ORDINI)], 'tipo' => [$this->rifiutaIlCampoTodo('regole.campo_di_nessun_metodo')], 'scheda_id' => [$this->rifiutaIlCampoTodo('regole.campo_di_nessun_metodo')]]),
             'predefinita' => [$this->rifiutaIlCampoTodo('regole.campo_di_nessun_metodo')],
             'posizione' => [$this->rifiutaIlCampoTodo('regole.campo_di_nessun_metodo')],
         ];
@@ -174,7 +212,7 @@ trait Todo
     {
         return [
             'id' => $lista['id'], 'nome' => $lista['nome'], 'colore' => $lista['colore'], 'tipo' => $lista['tipo'],
-            'predefinita' => $lista['predefinita'], 'ordine' => $lista['ordine'], 'posizione' => $lista['posizione'],
+            'scheda_id' => $lista['scheda'] ?? null, 'board_id' => $lista['board'] ?? null, 'predefinita' => $lista['predefinita'], 'ordine' => $lista['ordine'], 'posizione' => $lista['posizione'],
             'creata_il' => self::iso($lista['creata_il']), 'aggiornata_il' => self::iso($lista['aggiornata_il']),
             'etag' => self::etagCrm($this->versioneTodo($lista, 'aggiornata_il')),
         ];
@@ -194,8 +232,9 @@ trait Todo
         $grezza = self::query($richiesta);
         $ha = fn (string $campo): bool => array_key_exists($campo, $grezza);
         $regole = [
-            'vista' => ['bail', 'required_without:lista_id', 'string', Rule::in(self::TODO_VISTE), 'prohibits:lista_id'],
-            'lista_id' => ['bail', 'required_without:vista', 'string', 'max:64', function (string $attributo, mixed $valore, Closure $rifiuta) use ($chi) {
+            'vista' => ['bail', 'required_without_all:lista_id,scheda_id', 'string', Rule::in(self::TODO_VISTE), 'prohibits:lista_id,scheda_id'],
+            'scheda_id' => ['bail', 'required_without_all:vista,lista_id', 'string', 'max:64', $this->schedaDelWorkspaceTodo($chi)],
+            'lista_id' => ['bail', 'required_without_all:vista,scheda_id', 'string', 'max:64', 'prohibits:scheda_id', function (string $attributo, mixed $valore, Closure $rifiuta) use ($chi) {
                 if (! $this->haListaTodo($chi, (string) $valore)) {
                     $this->testi->dichiara($attributo, Regola::NON_TROVATO);
                     $rifiuta('regole.lista_del_todo')->translate(['attribute' => $this->testi->nome($attributo)]);
@@ -216,14 +255,15 @@ trait Todo
         ];
         $vista = $grezza['vista'] ?? null;
         $listaId = $grezza['lista_id'] ?? null;
+        $schedaId = $grezza['scheda_id'] ?? null;
         $fatti = ($grezza['fatti'] ?? null) === 'true';
-        $modo = is_string($vista) ? $vista : ($fatti ? 'fatti' : (string) ($grezza['ordine'] ?? 'posizione'));
-        $lista = 'board.todo.elementi.elenca|'.json_encode(array_map(fn (string $campo) => $grezza[$campo] ?? null, ['vista', 'lista_id', 'fatti', 'ordine']), JSON_THROW_ON_ERROR);
-        $voci = function () use ($chi, $vista, $listaId, $fatti) {
+        $modo = is_string($vista) ? $vista : (is_string($schedaId) ? 'scheda' : ($fatti ? 'fatti' : (string) ($grezza['ordine'] ?? 'posizione')));
+        $lista = 'board.todo.elementi.elenca|'.json_encode(array_map(fn (string $campo) => $grezza[$campo] ?? null, ['vista', 'lista_id', 'scheda_id', 'fatti', 'ordine']), JSON_THROW_ON_ERROR);
+        $voci = function () use ($chi, $vista, $listaId, $schedaId, $fatti) {
             $oggi = $this->oggiTodo($chi['persona']);
             $righe = array_filter(
-                $this->elementiDellaPersonaTodo($chi),
-                fn (array $e) => $this->inVistaTodo($e, is_string($vista) ? $vista : null, is_string($listaId) ? strtolower($listaId) : null, $fatti, $oggi),
+                $this->elementiVisibiliTodo($chi),
+                fn (array $e) => $this->inVistaTodo($e, is_string($vista) ? $vista : null, is_string($listaId) ? strtolower($listaId) : null, is_string($schedaId) ? $schedaId : null, $fatti, $oggi, $chi['persona']),
             );
 
             return array_map(fn (array $e) => $this->voceElementoTodo($e, false), array_values($righe));
@@ -235,7 +275,7 @@ trait Todo
             'id',
             $voci,
             fn (array $voce) => $this->chiaveTodo($this->todoElementi[$voce['id']], $modo),
-            fn (string $id) => isset($this->todoElementi[$id]) && $this->todoElementi[$id]['persona'] === $chi['persona'] && $this->todoElementi[$id]['workspace'] === $chi['workspace']
+            fn (string $id) => isset($this->todoElementi[$id]) && $this->todoElementi[$id]['workspace'] === $chi['workspace'] && $this->haListaTodo($chi, $this->todoElementi[$id]['lista'])
                 ? $this->chiaveTodo($this->todoElementi[$id], $modo)
                 : null,
             regole: $regole,
@@ -258,13 +298,19 @@ trait Todo
             $campi = $this->testi->validaCorpo($corpo, $this->regoleElementoTodo(true));
             $this->oraSenzaGiornoTodo($campi['giorno'] ?? null, $campi['ora'] ?? null);
             $personale = $this->personaleTodo($chi);
-            $lista = isset($campi['lista_id']) ? $this->listaDelCampoTodo($chi, (string) $campi['lista_id']) : $personale;
+            $lista = match (true) {
+                isset($campi['lista_id']) => $this->listaDelCampoTodo($chi, (string) $campi['lista_id']),
+                isset($campi['scheda_id']) => $this->listaDellaSchedaTodo($chi, (string) $campi['scheda_id']),
+                default => $personale,
+            };
+            $this->scrivibileTodo($lista);
+            $legami = $this->legamiTodo($chi, $lista, $campi);
             $this->tettoDegliApertiTodo($lista['id']);
 
             $id = self::id();
             $ora = now()->toImmutable()->startOfMillisecond();
             $this->todoElementi[$id] = [
-                'id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'lista' => $lista['id'],
+                'id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'lista' => $lista['id'], 'scheda' => $legami['scheda'], 'assegnato' => $legami['assegnato'],
                 'titolo' => trim((string) $campi['titolo']), 'note' => $campi['note'] ?? null, 'giorno' => $campi['giorno'] ?? null, 'ora' => $campi['ora'] ?? null,
                 'tag' => $this->tagSenzaDoppioniTodo($campi['tag'] ?? []), 'colore' => $campi['colore'] ?? 'neutral',
                 'posizione' => $this->posizioneTodo($lista['id'], null, null, false), 'fatto_il' => null, 'archiviato' => false,
@@ -307,8 +353,15 @@ trait Todo
     {
         $chi = $this->conPm($richiesta);
         $corrente = $this->elementoDelPercorsoTodo($chi, $id);
+        $arrivo = isset($corpo['lista_id']) && is_string($corpo['lista_id']) && strtolower($corpo['lista_id']) !== $corrente['lista'] ? $this->listaDelCampoTodo($chi, $corpo['lista_id']) : null;
+        $this->scrivibileTodo($this->todoListe[$corrente['lista']]);
+
+        if ($arrivo !== null) {
+            $this->scrivibileTodo($arrivo);
+        }
+
         $this->pretendiLaVersioneCrm($richiesta, $this->versioneTodo($corrente, 'aggiornato_il'));
-        $campi = $this->modificaTodo($corpo, $this->regoleElementoTodo(false), ['titolo', 'lista_id', 'giorno', 'ora', 'tag', 'note', 'colore', 'dopo_id']);
+        $campi = $this->modificaTodo($corpo, $this->regoleElementoTodo(false), ['titolo', 'lista_id', 'giorno', 'ora', 'tag', 'note', 'colore', 'assegnato_a', 'scheda_id', 'dopo_id']);
         $cambi = [];
 
         if (array_key_exists('titolo', $campi)) {
@@ -334,6 +387,7 @@ trait Todo
         $cambi['giorno'] = $giorno;
         $cambi['ora'] = $ora;
         $cambi += $this->collocaTodo($chi, $corrente, $campi);
+        $cambi += $this->legamiCambiatiTodo($chi, $corrente, $campi, $cambi['lista'] ?? null);
 
         $cambiati = array_filter($cambi, fn (mixed $valore, string $campo) => $valore !== $corrente[$campo], ARRAY_FILTER_USE_BOTH);
 
@@ -354,7 +408,8 @@ trait Todo
     private function eliminaElementoTodo(Request $richiesta, string $id): array
     {
         $chi = $this->conPm($richiesta);
-        $this->elementoDelPercorsoTodo($chi, $id);
+        $corrente = $this->elementoDelPercorsoTodo($chi, $id);
+        $this->scrivibileTodo($this->todoListe[$corrente['lista']]);
         $this->todoElementi[$id]['archiviato'] = true;
 
         return [204, null];
@@ -370,6 +425,7 @@ trait Todo
     {
         $chi = $this->conPm($richiesta);
         $corrente = $this->elementoDelPercorsoTodo($chi, $id);
+        $this->scrivibileTodo($this->todoListe[$corrente['lista']]);
 
         if ($corrente['fatto_il'] === null) {
             $ora = now()->toImmutable()->startOfMillisecond();
@@ -391,6 +447,7 @@ trait Todo
     {
         $chi = $this->conPm($richiesta);
         $corrente = $this->elementoDelPercorsoTodo($chi, $id);
+        $this->scrivibileTodo($this->todoListe[$corrente['lista']]);
 
         if ($corrente['fatto_il'] !== null) {
             $this->tettoDegliApertiTodo($corrente['lista']);
@@ -418,12 +475,14 @@ trait Todo
         $totali = ['in_ritardo' => 0, 'di_oggi' => 0, 'settimana' => 0, 'aperti' => 0, 'fatti' => 0];
         $liste = [];
 
-        foreach ($this->listeDellaPersonaTodo($chi) as $lista) {
-            $dellaLista = array_filter($this->elementiDellaPersonaTodo($chi), fn (array $e) => $e['lista'] === $lista['id']);
+        foreach ($this->listeCoinvolteTodo($chi) as $lista) {
+            $dellaLista = array_filter($this->elementiVisibiliTodo($chi), fn (array $e) => $e['lista'] === $lista['id']);
             $aperti = array_filter($dellaLista, fn (array $e) => $e['fatto_il'] === null);
-            $totali['in_ritardo'] += count(array_filter($aperti, fn (array $e) => $e['giorno'] !== null && $e['giorno'] < $giorno));
-            $totali['di_oggi'] += count(array_filter($aperti, fn (array $e) => $e['giorno'] === $giorno));
-            $totali['settimana'] += count(array_filter($aperti, fn (array $e) => $e['giorno'] !== null && $e['giorno'] > $giorno && $e['giorno'] <= $fra7));
+            // Le finestre di giorni sono quelle delle viste: in una lista di progetto contano i soli to-do assegnati a chi chiama.
+            $miei = array_filter($aperti, fn (array $e) => $lista['tipo'] === 'personale' || $e['assegnato'] === $chi['persona']);
+            $totali['in_ritardo'] += count(array_filter($miei, fn (array $e) => $e['giorno'] !== null && $e['giorno'] < $giorno));
+            $totali['di_oggi'] += count(array_filter($miei, fn (array $e) => $e['giorno'] === $giorno));
+            $totali['settimana'] += count(array_filter($miei, fn (array $e) => $e['giorno'] !== null && $e['giorno'] > $giorno && $e['giorno'] <= $fra7));
             $totali['aperti'] += count($aperti);
             $totali['fatti'] += count($dellaLista) - count($aperti);
             $liste[] = ['lista_id' => $lista['id'], 'aperti' => count($aperti), 'fatti' => count($dellaLista) - count($aperti)];
@@ -496,7 +555,13 @@ trait Todo
         $cambi = [];
 
         if (isset($campi['lista_id']) && strtolower((string) $campi['lista_id']) !== $corrente['lista']) {
-            $destinazione = $this->listaDelCampoTodo($chi, (string) $campi['lista_id'])['id'];
+            $arrivo = $this->listaDelCampoTodo($chi, (string) $campi['lista_id']);
+
+            if ($arrivo['tipo'] !== $this->todoListe[$corrente['lista']]['tipo']) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.todo_lista_stesso_tipo'), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => '#/lista_id']]);
+            }
+
+            $destinazione = $arrivo['id'];
             $cambiaLista = true;
 
             if ($corrente['fatto_il'] === null) {
@@ -509,7 +574,7 @@ trait Todo
 
             if ($campi['dopo_id'] !== null) {
                 $trovato = $this->todoElementi[strtolower((string) $campi['dopo_id'])] ?? null;
-                $ancora = $trovato !== null && $trovato['persona'] === $chi['persona'] && $trovato['workspace'] === $chi['workspace'] && ! $trovato['archiviato']
+                $ancora = $trovato !== null && $trovato['workspace'] === $chi['workspace'] && ! $trovato['archiviato']
                     && $trovato['lista'] === $destinazione && $trovato['id'] !== $corrente['id']
                     ? $trovato
                     : throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.todo_dopo_id', ['attribute' => 'dopo_id']), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => '#/dopo_id']]);
@@ -540,6 +605,8 @@ trait Todo
         return [
             'titolo' => ['bail', $creazione ? 'required' : 'filled', 'string', 'max:'.self::TODO_TITOLO, new NomeScritto],
             'lista_id' => ['bail', 'filled', 'string', 'max:64'],
+            'scheda_id' => ['bail', 'sometimes', 'nullable', 'string', 'max:64'],
+            'assegnato_a' => ['bail', 'sometimes', 'nullable', 'string', 'max:64'],
             'giorno' => ['bail', 'sometimes', ...($creazione ? [] : ['nullable']), 'string', 'date_format:Y-m-d', function (string $attributo, mixed $valore, Closure $rifiuta) {
                 if (is_string($valore) && ($valore < self::TODO_GIORNO_MINIMO || $valore > self::TODO_GIORNO_MASSIMO)) {
                     $this->testi->dichiara($attributo, Regola::FUORI_INTERVALLO);
@@ -566,7 +633,7 @@ trait Todo
     private function voceElementoTodo(array $e, bool $intero = true): array
     {
         return [
-            'id' => $e['id'], 'lista_id' => $e['lista'], 'titolo' => $e['titolo'],
+            'id' => $e['id'], 'lista_id' => $e['lista'], 'scheda_id' => $e['scheda'] ?? null, 'assegnato_a' => $e['assegnato'] ?? null, 'titolo' => $e['titolo'],
             ...($intero ? ['note' => $e['note'] ?? ''] : []),
             'fatto_il' => $e['fatto_il'] === null ? null : self::iso($e['fatto_il']), 'giorno' => $e['giorno'], 'ora' => $e['ora'],
             'tag' => $e['tag'], 'colore' => $e['colore'], 'posizione' => $e['posizione'],
@@ -688,7 +755,7 @@ trait Todo
         return $this->todoListe[$id] = [
             'id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'],
             'nome' => self::TODO_NOMI_PERSONALE[$this->persone[$chi['persona']]['lingua'] ?? 'it'] ?? self::TODO_NOMI_PERSONALE['it'],
-            'colore' => 'neutral', 'tipo' => 'personale', 'predefinita' => true, 'ordine' => 'posizione', 'posizione' => self::TODO_PASSO,
+            'colore' => 'neutral', 'tipo' => 'personale', 'scheda' => null, 'board' => null, 'predefinita' => true, 'ordine' => 'posizione', 'posizione' => self::TODO_PASSO,
             'archiviata' => false, 'creata_il' => $ora, 'aggiornata_il' => $ora,
         ];
     }
@@ -716,7 +783,7 @@ trait Todo
     {
         $lista = $this->todoListe[strtolower($id)] ?? null;
 
-        return $lista !== null && $lista['workspace'] === $chi['workspace'] && $lista['persona'] === $chi['persona'] && ! $lista['archiviata'];
+        return $lista !== null && $lista['workspace'] === $chi['workspace'] && ($lista['tipo'] === 'progetto' || $lista['persona'] === $chi['persona']) && ! $lista['archiviata'];
     }
 
     /**
@@ -755,7 +822,7 @@ trait Todo
     {
         $elemento = $this->todoElementi[strtolower($id)] ?? null;
 
-        return $elemento !== null && $elemento['workspace'] === $chi['workspace'] && $elemento['persona'] === $chi['persona'] && ! $elemento['archiviato']
+        return $elemento !== null && $elemento['workspace'] === $chi['workspace'] && ! $elemento['archiviato'] && $this->haListaTodo($chi, $elemento['lista'])
             ? $elemento
             : throw new Problema('non_trovato');
     }
@@ -775,14 +842,203 @@ trait Todo
     }
 
     /**
-     * Se un to-do è nella lettura chiesta: una vista, o una lista (aperti, o fatti con `fatti=true`).
+     * Le liste non archiviate che la persona vede di default: le personali (come listeDellaPersonaTodo) e le `progetto` in cui è coinvolta,
+     * cioè quelle che ha creato o in cui ha un to-do assegnato, per data di nascita.
+     *
+     * @param  array{persona: string, workspace: string, accesso: string}  $chi
+     * @return list<array<string, mixed>>
+     */
+    private function listeCoinvolteTodo(array $chi): array
+    {
+        $progetto = array_values(array_filter($this->todoListe, fn (array $l) => $l['workspace'] === $chi['workspace'] && $l['tipo'] === 'progetto' && ! $l['archiviata']
+            && ($l['persona'] === $chi['persona'] || array_filter($this->todoElementi, fn (array $e) => $e['lista'] === $l['id'] && ! $e['archiviato'] && $e['assegnato'] === $chi['persona']) !== [])));
+        usort($progetto, fn (array $una, array $altra) => [self::iso($una['creata_il']), $una['id']] <=> [self::iso($altra['creata_il']), $altra['id']]);
+
+        return [...$this->listeDellaPersonaTodo($chi), ...$progetto];
+    }
+
+    /**
+     * I to-do non eliminati delle liste che la persona legge (le sue personali e ogni lista `progetto` del workspace), in liste non archiviate.
+     *
+     * @param  array{persona: string, workspace: string, accesso: string}  $chi
+     * @return list<array<string, mixed>>
+     */
+    private function elementiVisibiliTodo(array $chi): array
+    {
+        return array_values(array_filter(
+            $this->todoElementi,
+            fn (array $e) => $e['workspace'] === $chi['workspace'] && ! $e['archiviato'] && $this->haListaTodo($chi, $e['lista']),
+        ));
+    }
+
+    /** Una regola che rifiuta una `scheda_id` che non è una scheda del workspace (422 `non_trovato` sul parametro o sul campo). */
+    private function schedaDelWorkspaceTodo(array $chi): Closure
+    {
+        return function (string $attributo, mixed $valore, Closure $rifiuta) use ($chi) {
+            if (($this->schede[(string) $valore]['workspace'] ?? null) !== $chi['workspace']) {
+                $this->testi->dichiara($attributo, Regola::NON_TROVATO);
+                $rifiuta('regole.scheda_del_workspace')->translate(['attribute' => $this->testi->nome($attributo)]);
+            }
+        };
+    }
+
+    /**
+     * La scheda di un campo del corpo (`scheda_id`): una che non è del workspace o che non c'è è 422 `non_trovato` sul campo, mai 404.
+     *
+     * @param  array{persona: string, workspace: string, accesso: string}  $chi
+     * @return array<string, mixed>
+     */
+    private function schedaDelCampoTodo(array $chi, string $id): array
+    {
+        $scheda = $this->schede[$id] ?? null;
+
+        return $scheda !== null && $scheda['workspace'] === $chi['workspace']
+            ? $scheda
+            : throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.scheda_del_workspace'), 'regola' => Regola::NON_TROVATO, 'pointer' => '#/scheda_id']]);
+    }
+
+    /**
+     * La lista `progetto` della scheda di un to-do che nasce senza `lista_id`: 422 sul campo se la scheda non c'è o non ha ancora la sua lista.
+     *
+     * @param  array{persona: string, workspace: string, accesso: string}  $chi
+     * @return array<string, mixed>
+     */
+    private function listaDellaSchedaTodo(array $chi, string $scheda): array
+    {
+        $this->schedaDelCampoTodo($chi, $scheda);
+
+        return array_values(array_filter($this->todoListe, fn (array $l) => $l['workspace'] === $chi['workspace'] && $l['tipo'] === 'progetto' && $l['scheda'] === $scheda && ! $l['archiviata']))[0]
+            ?? throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.todo_scheda_senza_lista'), 'regola' => Regola::NON_TROVATO, 'pointer' => '#/scheda_id']]);
+    }
+
+    /**
+     * Si può scrivere nella lista: una `progetto` vuole la scheda non archiviata (409 `scheda_archiviata`); una personale non ha niente da
+     * controllare. Il finto non modella le colonne né lo stato delle board.
+     *
+     * @param  array<string, mixed>  $lista
+     */
+    private function scrivibileTodo(array $lista): void
+    {
+        if ($lista['tipo'] === 'progetto' && ($this->schede[$lista['scheda']]['archiviata_il'] ?? null) !== null) {
+            throw new Problema('scheda_archiviata');
+        }
+    }
+
+    /** 422 `campo_vietato` sul campo, col testo che dice perché. */
+    private function campoVietatoTodo(string $campo, string $testo): Problema
+    {
+        return new Problema('dati_non_validi', [['detail' => $this->testi->testo($testo, ['attribute' => $campo]), 'regola' => Regola::CAMPO_VIETATO, 'pointer' => "#/{$campo}"]]);
+    }
+
+    /** Un membro del workspace (qualunque ruolo): altrimenti 422 `non_trovato` sul campo dato. */
+    private function membroTodo(array $chi, string $id, string $campo): string
+    {
+        if (! isset($this->membri[$chi['workspace']][$id])) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => Regola::NON_TROVATO, 'pointer' => "#/{$campo}"]]);
+        }
+
+        return $id;
+    }
+
+    /**
+     * La scheda e l'assegnato di un to-do che nasce nella lista data (Todo::legami).
+     *
+     * @param  array{persona: string, workspace: string, accesso: string}  $chi
+     * @param  array<string, mixed>  $lista
+     * @param  array<string, mixed>  $campi
+     * @return array{scheda: ?string, assegnato: ?string}
+     */
+    private function legamiTodo(array $chi, array $lista, array $campi): array
+    {
+        $scheda = isset($campi['scheda_id']) ? (string) $campi['scheda_id'] : null;
+        $assegnato = isset($campi['assegnato_a']) ? (string) $campi['assegnato_a'] : null;
+
+        if ($lista['tipo'] === 'progetto') {
+            if ($scheda !== null && $scheda !== $lista['scheda']) {
+                throw $this->campoVietatoTodo('scheda_id', 'regole.todo_scheda_della_lista');
+            }
+
+            return ['scheda' => $lista['scheda'], 'assegnato' => $assegnato === null ? null : $this->membroTodo($chi, $assegnato, 'assegnato_a')];
+        }
+
+        if ($assegnato !== null) {
+            throw $this->campoVietatoTodo('assegnato_a', 'regole.todo_assegnato_solo_progetto');
+        }
+
+        if ($scheda !== null) {
+            $this->schedaDelCampoTodo($chi, $scheda);
+        }
+
+        return ['scheda' => $scheda, 'assegnato' => null];
+    }
+
+    /**
+     * I legami che una modifica cambia (Todo::legamiCambiati): `scheda_id` e `assegnato_a`; spostato in una lista `progetto`, il to-do prende
+     * la scheda della lista.
+     *
+     * @param  array{persona: string, workspace: string, accesso: string}  $chi
+     * @param  array<string, mixed>  $corrente
+     * @param  array<string, mixed>  $campi
+     * @return array<string, ?string>
+     */
+    private function legamiCambiatiTodo(array $chi, array $corrente, array $campi, ?string $arrivo): array
+    {
+        $lista = $this->todoListe[$arrivo ?? $corrente['lista']];
+        $cambi = [];
+
+        if (array_key_exists('scheda_id', $campi)) {
+            if ($lista['tipo'] === 'progetto') {
+                if ($campi['scheda_id'] !== $lista['scheda']) {
+                    throw $this->campoVietatoTodo('scheda_id', 'regole.todo_scheda_della_lista');
+                }
+            } else {
+                if ($campi['scheda_id'] !== null) {
+                    $this->schedaDelCampoTodo($chi, (string) $campi['scheda_id']);
+                }
+
+                $cambi['scheda'] = $campi['scheda_id'];
+            }
+        }
+
+        if (array_key_exists('assegnato_a', $campi)) {
+            if ($campi['assegnato_a'] !== null) {
+                if ($lista['tipo'] !== 'progetto') {
+                    throw $this->campoVietatoTodo('assegnato_a', 'regole.todo_assegnato_solo_progetto');
+                }
+
+                $this->membroTodo($chi, (string) $campi['assegnato_a'], 'assegnato_a');
+            }
+
+            $cambi['assegnato'] = $campi['assegnato_a'];
+        }
+
+        if ($lista['tipo'] === 'progetto' && $arrivo !== null) {
+            $cambi['scheda'] = $lista['scheda'];
+        }
+
+        return $cambi;
+    }
+
+    /**
+     * Se un to-do è nella lettura chiesta: una vista (i personali della persona e i suoi di progetto, cioè assegnati a lei), una lista
+     * (aperti, o fatti con `fatti=true`) o una scheda (aperti e fatti).
      *
      * @param  array<string, mixed>  $e
      */
-    private function inVistaTodo(array $e, ?string $vista, ?string $lista, bool $fatti, CarbonImmutable $oggi): bool
+    private function inVistaTodo(array $e, ?string $vista, ?string $lista, ?string $scheda, bool $fatti, CarbonImmutable $oggi, string $persona): bool
     {
+        if ($scheda !== null) {
+            return $e['scheda'] === $scheda;
+        }
+
         if ($vista === null) {
             return $e['lista'] === $lista && ($fatti ? $e['fatto_il'] !== null : $e['fatto_il'] === null);
+        }
+
+        $dellaLista = $this->todoListe[$e['lista']];
+
+        if ($dellaLista['tipo'] === 'progetto' ? $e['assegnato'] !== $persona : ($dellaLista['persona'] !== $persona || $e['persona'] !== $persona)) {
+            return false;
         }
 
         $giorno = $oggi->format('Y-m-d');
@@ -810,7 +1066,9 @@ trait Todo
 
         return match ($modo) {
             'oggi', 'settimana', 'giorno' => [$giorno, $ora, $posizione, $e['id']],
-            'tutti' => [sprintf('%012d', $this->todoListe[$e['lista']]['posizione']), $posizione, $e['id']],
+            'tutti' => [$this->todoListe[$e['lista']]['tipo'] === 'personale' ? '0' : '1', sprintf('%012d', $this->todoListe[$e['lista']]['posizione']), $posizione, $e['id']],
+            // Prima la lista `progetto` della scheda, poi i to-do personali collegati.
+            'scheda' => [$this->todoListe[$e['lista']]['tipo'] === 'progetto' ? '0' : '1', $posizione, $e['id']],
             // Il più recente per primo: l'istante in millisecondi, capovolto.
             'fatti' => [sprintf('%020d', 99999999999999 - (int) $e['fatto_il']->format('Uv')), $e['id']],
             'colore' => [(string) self::TODO_ORDINE_COLORI[$e['colore']], $posizione, $e['id']],

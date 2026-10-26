@@ -313,6 +313,10 @@ return [
         'title' => 'Record già collegato',
         'detail' => 'Questa scheda è già collegata a quel record del CRM: non ripetere la richiesta. Il collegamento lo trovi in board.schede.crm.elenca.',
     ],
+    'lista_gia_esistente' => [
+        'title' => 'Lista già presente',
+        'detail' => "Questa scheda ha già la sua lista di to-do: non ne nasce una seconda. L'id della lista è in `lista_id`; la trovi anche con board.todo.liste.elenca e `scheda_id`.",
+    ],
     'collegamento_circolare' => [
         'title' => 'Collegamento circolare',
         'detail' => 'Una scheda non può aspettare sé stessa, né una scheda che a sua volta la aspetta, direttamente o attraverso altre: scegli un\'altra scheda, o togli prima l\'attesa che chiude il giro.',

@@ -313,6 +313,10 @@ return [
         'title' => 'Registro ya vinculado',
         'detail' => 'Esta tarjeta ya está vinculada a ese registro del CRM: no repitas la solicitud. El vínculo está en board.schede.crm.elenca.',
     ],
+    'lista_gia_esistente' => [
+        'title' => 'Lista ya existente',
+        'detail' => 'Esta tarjeta ya tiene su lista de tareas: no se crea una segunda. El id de la lista está en `lista_id`; también la encuentras con board.todo.liste.elenca y `scheda_id`.',
+    ],
     'collegamento_circolare' => [
         'title' => 'Vínculo circular',
         'detail' => 'Una tarjeta no puede esperarse a sí misma, ni esperar a una tarjeta que a su vez la espera, directamente o a través de otras: elige otra tarjeta, o quita antes el vínculo que cierra el ciclo.',

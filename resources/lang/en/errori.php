@@ -313,6 +313,10 @@ return [
         'title' => 'Record already linked',
         'detail' => 'This card is already linked to that CRM record: do not repeat the request. You will find the link in board.schede.crm.elenca.',
     ],
+    'lista_gia_esistente' => [
+        'title' => 'List already exists',
+        'detail' => 'This card already has its to-do list: a second one is not created. The list id is in `lista_id`; you also find it with board.todo.liste.elenca and `scheda_id`.',
+    ],
     'collegamento_circolare' => [
         'title' => 'Circular link',
         'detail' => 'A card cannot wait for itself, nor for a card that waits for it in turn, directly or through other cards: choose another card, or first remove the link that closes the loop.',
