@@ -186,3 +186,34 @@ it('un codice dell\'ingresso scade dopo 60 secondi (T1.5)', function () {
 
     expect(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
 });
+
+it("lo scambio di un workspace con l'eliminazione programmata è la stessa verifica_non_riuscita, e dopo il ripristino un codice nuovo scambia (#2682)", function () {
+    $finto = BackofficeFinto::attiva()->ritorno('pm', RITORNO_DI_PM);
+    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $studio = $finto->workspace('Studio', $anna);
+    $finto->workspace('Altro', $anna);
+    $finto->attivaApp($studio, 'pm');
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
+    $verificatore = str_repeat('v', 64);
+    $codice = alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('data.codice');
+    $sconosciuto = alFinto('POST', '/v1/ingressi/scambio', ['codice' => str_repeat('c', 43), 'verificatore' => $verificatore]);
+
+    expect(alFinto('DELETE', '/v1/workspace', gettone: $gettone)->status())->toBe(202);
+
+    // deve fallire se: il finto scambia un ingresso per un workspace in eliminazione, o la risposta differisce da quella di un codice sbagliato
+    $rifiuto = alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore]);
+    expect($rifiuto->status())->toBe(422)
+        ->and($rifiuto->json())->toBe($sconosciuto->json());
+
+    // Il ripristino riapre il workspace, ma il codice di prima è consumato; uno nuovo scambia.
+    expect(alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso)->status())->toBe(204);
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
+    expect(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore])->status())->toBe(422);
+
+    $nuovo = alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('data.codice');
+    $scambio = alFinto('POST', '/v1/ingressi/scambio', ['codice' => $nuovo, 'verificatore' => $verificatore]);
+
+    expect($scambio->status())->toBe(201)
+        ->and($scambio->json('data.workspace.id'))->toBe($studio['id']);
+});

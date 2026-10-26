@@ -4290,7 +4290,7 @@ final class BackofficeFinto
 
         return $this->pagina($richiesta, 'aziende.workspace.elenca'.($eliminati ? ':eliminati' : ''), 'id', $voci, self::perNomeEId(...),
             fn (string $id) => isset($this->workspace[$id]) ? self::perNomeEId($this->workspace[$id]) : null,
-            regole: ['eliminati' => ['sometimes', 'string', 'in:true,false']]);
+            regole: ['eliminati' => ['sometimes', 'in:true,false', 'string']]);
     }
 
     /**
@@ -4647,7 +4647,9 @@ final class BackofficeFinto
         $accesso = $this->accessi[$ingresso['accesso']] ?? null;
 
         if ($accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now())
-            || ! isset($this->membri[$ingresso['workspace']][$accesso['utente']]) || ! $this->appAttiva($ingresso['workspace'], $ingresso['app'])) {
+            || ! isset($this->membri[$ingresso['workspace']][$accesso['utente']]) || ! $this->appAttiva($ingresso['workspace'], $ingresso['app'])
+            // Come gettoni.crea, lo scambio non riapre un workspace con l'eliminazione programmata (#2682): il codice è già consumato.
+            || isset($this->eliminazioni[$ingresso['workspace']])) {
             throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
         }
 

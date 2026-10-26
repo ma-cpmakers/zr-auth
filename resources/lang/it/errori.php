@@ -255,11 +255,11 @@ return [
     ],
     'ultimo_workspace' => [
         'title' => 'Ultimo workspace',
-        'detail' => "Questo è l'ultimo workspace vivo della persona che chiama, e non si elimina: una persona ha sempre almeno un workspace. Creane un altro con io.workspace.crea, o annulla l'eliminazione dell'altro con workspace.eliminazione.elimina. Il metodo non ha scritto niente.",
+        'detail' => "Questo è l'ultimo workspace vivo della persona che chiama: non lo lasci e non lo elimini, perché una persona ha sempre almeno un workspace. Creane un altro con io.workspace.crea, o ripristina l'altro in eliminazione con io.workspace.eliminazione.elimina. Il metodo non ha scritto niente.",
     ],
     'workspace_in_eliminazione' => [
         'title' => 'Workspace in eliminazione',
-        'detail' => "Questo workspace ha l'eliminazione programmata e non accetta più inviti: né nuovi, né reinviati, né dal link, né quelli già spediti. Chiedi al proprietario del workspace di annullarla con workspace.eliminazione.elimina, poi ripeti: gli inviti già spediti tornano validi fino alla loro scadenza. Il metodo non ha scritto niente.",
+        'detail' => "Questo workspace è in eliminazione: per tutti è come se non ci fosse, e chi usa un codice d'invito o un link che lo riguarda riceve questo 409. Chi ne era proprietario o amministratore lo ripristina con io.workspace.eliminazione.elimina (col gettone della persona) entro la data eliminazione_il, poi ripeti la richiesta: gli inviti già spediti tornano validi fino alla loro scadenza. Il metodo non ha scritto niente.",
     ],
     'ultima_fase' => [
         'title' => 'Ultima fase',

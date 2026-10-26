@@ -255,11 +255,11 @@ return [
     ],
     'ultimo_workspace' => [
         'title' => 'Último workspace',
-        'detail' => 'Este es el último workspace vivo de la persona que llama y no se elimina: una persona siempre tiene al menos un workspace. Crea otro con io.workspace.crea, o cancela la eliminación del otro con workspace.eliminazione.elimina. El método no escribió nada.',
+        'detail' => 'Este es el último workspace vivo de la persona que llama: no se puede abandonar ni eliminar, porque una persona siempre tiene al menos un workspace. Crea otro con io.workspace.crea, o restaura el otro que está en eliminación con io.workspace.eliminazione.elimina. El método no escribió nada.',
     ],
     'workspace_in_eliminazione' => [
         'title' => 'Workspace en eliminación',
-        'detail' => 'Este workspace tiene la eliminación programada y ya no admite invitaciones: ni nuevas, ni reenviadas, ni por el enlace, ni las ya enviadas. Pide al propietario (proprietario) del workspace que la cancele con workspace.eliminazione.elimina y vuelve a intentarlo: las invitaciones ya enviadas vuelven a valer hasta su caducidad. El método no escribió nada.',
+        'detail' => 'Este workspace está en eliminación: para todos es como si no existiera, y quien usa un código de invitación o un enlace que lo concierne recibe este 409. Quien era su propietario (proprietario) o administrador (amministratore) lo restaura con io.workspace.eliminazione.elimina (con el token de la persona) antes de la fecha eliminazione_il y vuelve a intentarlo: las invitaciones ya enviadas vuelven a valer hasta su caducidad. El método no escribió nada.',
     ],
     'ultima_fase' => [
         'title' => 'Última fase',
