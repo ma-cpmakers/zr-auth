@@ -89,10 +89,12 @@ trait CrmPersonalizzazione
             $this->crmInstallazioni[$chi['workspace']] = ['pack' => $pack['chiave'], 'variante' => $campi['variante'] ?? null, 'versione' => $pack['versione'], 'creata_il' => self::adessoCrm()];
             $fatta = $this->crmInstallazioni[$chi['workspace']];
 
-            // Come il backoffice (InstallaIlPack): le pipeline, i motivi, i tipi di scadenza e il catalogo del pack, o tutto o niente.
+            // Come il backoffice: la pipeline di partenza intatta si archivia solo se il pack porta le sue (#2707); poi le pipeline, i motivi, i
+            // tipi di scadenza e il catalogo del pack (InstallaIlPack), o tutto o niente.
             $prima = $this->crm;
 
             try {
+                $archiviate = ($pack['pipeline'] ?? []) === [] ? [] : $this->archiviaLePipelineDiPartenzaCrm($chi['workspace']);
                 $this->installaDatiDelPackCrm($chi, $pack);
             } catch (Problema $errore) {
                 $this->crm = $prima;
@@ -104,6 +106,7 @@ trait CrmPersonalizzazione
             return [201, ['data' => [
                 'pack' => ['chiave' => $fatta['pack'], 'versione' => $fatta['versione'], 'variante' => $fatta['variante']],
                 'installata_il' => self::iso($fatta['creata_il']),
+                'pipeline_archiviate' => $archiviate,
             ]], ['Location' => '/v1/crm/personalizzazione']];
         });
     }
@@ -509,9 +512,56 @@ trait CrmPersonalizzazione
         return ! isset($this->crmInstallazioni[$workspace]) && ! $this->conDatiCrm($workspace);
     }
 
-    /** Se il CRM ha dati di una qualsiasi delle sue funzioni. */
+    /**
+     * Se una pipeline è ancora come è nata da partenza.crea (Pipelines::intattaDiPartenza): segnata, non archiviata, mai toccata (`aggiornata_il`
+     * uguale a `creata_il`: ogni scrittura di una fase la fa crescere), con le fasi non eliminate e senza nessuna trattativa.
+     *
+     * @param  array<string, mixed>  $pipeline
+     */
+    private function pipelineIntattaDiPartenzaCrm(array $pipeline): bool
+    {
+        if (! ($pipeline['di_partenza'] ?? false) || $pipeline['archiviata_il'] !== null || self::iso($pipeline['aggiornata_il']) !== self::iso($pipeline['creata_il'])) {
+            return false;
+        }
+
+        $fasiToccate = array_filter($this->crm['fasi'], fn (array $fase) => $fase['pipeline_id'] === $pipeline['id'] && ($fase['eliminata'] ?? false));
+        $trattative = array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['pipeline_id'] === $pipeline['id']);
+
+        return $fasiToccate === [] && $trattative === [];
+    }
+
+    /**
+     * Archivia le pipeline intatte di partenza del workspace (Pipelines::archiviaLeDiPartenza) e dice quali, con id e nome.
+     *
+     * @return list<array{id: string, nome: string}>
+     */
+    private function archiviaLePipelineDiPartenzaCrm(string $workspace): array
+    {
+        $archiviate = [];
+        $vive = array_filter($this->righeCrm('pipeline', $workspace), fn (array $pipeline) => $pipeline['di_partenza'] ?? false);
+        usort($vive, fn (array $una, array $altra) => [$una['creata_il'], $una['id']] <=> [$altra['creata_il'], $altra['id']]);
+
+        foreach ($vive as $pipeline) {
+            if (! $this->pipelineIntattaDiPartenzaCrm($pipeline)) {
+                continue;
+            }
+
+            $this->crm['pipeline'][$pipeline['id']]['archiviata_il'] = self::adessoCrm();
+            $archiviate[] = ['id' => $pipeline['id'], 'nome' => $pipeline['nome']];
+        }
+
+        return $archiviate;
+    }
+
+    /** Se il CRM ha dati di una qualsiasi delle sue funzioni, o una pipeline creata o toccata dalla persona (#2707). */
     private function conDatiCrm(string $workspace): bool
     {
+        foreach ($this->righeCrm('pipeline', $workspace) as $pipeline) {
+            if (! $this->pipelineIntattaDiPartenzaCrm($pipeline)) {
+                return true;
+            }
+        }
+
         foreach (array_keys($this->packCrm($workspace)['funzioni']) as $funzione) {
             if ($this->datiDellaFunzioneCrm($workspace, $funzione) !== []) {
                 return true;

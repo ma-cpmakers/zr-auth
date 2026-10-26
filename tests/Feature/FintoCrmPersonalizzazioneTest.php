@@ -276,3 +276,47 @@ it('il pacchetto personal_trainer: l\'anteprima dice i nomi e le chiavi, e l\'in
         ->and($funzioni['preventivi'])->toBeFalse()->and($funzioni['documenti'])->toBeTrue()
         ->and($vocabolario['testo'])->toBe('Pacchetti e abbonamenti')->and($vocabolario['personalizzato'])->toBeFalse();
 });
+
+it('la pipeline di partenza intatta si archivia all\'installazione di un pacchetto con pipeline; una creata o toccata dalla persona blocca (#2707)', function () {
+    $corpo = ['nome' => 'Pipeline', 'fasi' => [['nome' => 'Uno', 'probabilita' => 10], ['nome' => 'Due', 'probabilita' => 50]]];
+
+    // Intatta: si archivia, e la risposta dice quale.
+    [, $gettoni] = studioColCrm();
+    $partenza = alFinto('POST', '/v1/crm/pipeline/partenza', $corpo, $gettoni['anna'])->json('data');
+    expect(alFinto('GET', '/v1/crm/personalizzazione', null, $gettoni['anna'])->json('data.installabile'))->toBeTrue();
+
+    $fatta = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'personal_trainer'], $gettoni['anna']);
+
+    expect($fatta->status())->toBe(201)
+        ->and($fatta->json('data.pipeline_archiviate'))->toBe([['id' => $partenza['id'], 'nome' => 'Pipeline']])
+        ->and(array_column(alFinto('GET', '/v1/crm/pipeline', null, $gettoni['anna'])->json('data'), 'nome'))->toBe(['Potenziali clienti', 'Personal training'])
+        ->and(array_column(alFinto('GET', '/v1/crm/pipeline?archiviate=true', null, $gettoni['anna'])->json('data'), 'id'))->toBe([$partenza['id']]);
+
+    // Il pacchetto generico non porta pipeline: non archivia niente.
+    [, $gettoni] = studioColCrm();
+    $partenza = alFinto('POST', '/v1/crm/pipeline/partenza', $corpo, $gettoni['anna'])->json('data');
+    $generico = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'generico'], $gettoni['anna']);
+
+    expect($generico->status())->toBe(201)->and($generico->json('data.pipeline_archiviate'))->toBe([])
+        ->and(alFinto('GET', "/v1/crm/pipeline/{$partenza['id']}", null, $gettoni['anna'])->json('data.archiviata_il'))->toBeNull();
+
+    // Creata dalla persona: il CRM non è vuoto.
+    [, $gettoni] = studioColCrm();
+    alFinto('POST', '/v1/crm/pipeline', $corpo, $gettoni['anna']);
+    $rifiutata = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'personal_trainer'], $gettoni['anna']);
+
+    expect(alFinto('GET', '/v1/crm/personalizzazione', null, $gettoni['anna'])->json('data.installabile'))->toBeFalse()
+        ->and($rifiutata->status())->toBe(409)->and($rifiutata->json('codice'))->toBe('personalizzazione_con_dati');
+
+    // Di partenza ma toccata (una fase rinominata), o con lo stesso nome riscritto (non cambia niente).
+    [, $gettoni] = studioColCrm();
+    $partenza = alFinto('POST', '/v1/crm/pipeline/partenza', $corpo, $gettoni['anna'])->json('data');
+    alFinto('PATCH', "/v1/crm/pipeline/{$partenza['id']}", ['nome' => 'Pipeline'], $gettoni['anna']);
+    expect(alFinto('GET', '/v1/crm/personalizzazione', null, $gettoni['anna'])->json('data.installabile'))->toBeTrue();
+
+    alFinto('PATCH', '/v1/crm/fasi/'.$partenza['fasi'][0]['id'], ['nome' => 'Primo'], $gettoni['anna']);
+    $toccata = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'personal_trainer'], $gettoni['anna']);
+
+    expect(alFinto('GET', '/v1/crm/personalizzazione', null, $gettoni['anna'])->json('data.installabile'))->toBeFalse()
+        ->and($toccata->status())->toBe(409)->and($toccata->json('codice'))->toBe('personalizzazione_con_dati');
+});
