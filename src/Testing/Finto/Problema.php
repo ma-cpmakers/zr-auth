@@ -33,6 +33,7 @@ final class Problema extends RuntimeException
         'scheda_archiviata' => 409,
         'lista_gia_esistente' => 409,
         'limite_raggiunto' => 409,
+        'prenotazioni_al_limite' => 409,
         'crediti_esauriti' => 409,
         'acquisto_scaduto' => 409,
         'rata_pagata' => 409,

@@ -249,6 +249,10 @@ return [
         'title' => 'Termine per cambiare superato',
         'detail' => "Il termine per cambiare o annullare questa prenotazione online è passato. Il problema porta `contatto`, l'email e il telefono della pagina: scrivi al professionista. Il metodo non ha scritto niente.",
     ],
+    'prenotazioni_al_limite' => [
+        'title' => 'Troppe prenotazioni attive',
+        'detail' => "Hai già il massimo di prenotazioni attive con questo professionista (il problema porta `limite`): annullane una con `io.prenotazioni.modifica` (`stato: annullata`) per prenotarne un'altra. Il metodo non ha scritto niente.",
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',

@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\AssertionFailedError;
 use Zeiras\Auth\Errori\SessioneNelBrowser;
@@ -195,6 +196,27 @@ it('apriOspite rifiuta la forma di Accesso e una forma monca, e non scrive nient
     expect(fn () => Sessione::apriOspite($dati))->toThrow(InvalidArgumentException::class)
         ->and(session()->has(Sessione::CHIAVE))->toBeFalse();
 })->with(['accesso', 'senza scade_il', 'senza prenotazione_id', 'gettone vuoto']);
+
+it('apri() con la forma OspiteDalLink o con una forma monca lancia un errore chiaro prima di toccare la sessione, e rimanda ad apriOspite() (#2709 F1.9, deve fallire se è un TypeError o se la sessione di prima è già segnata chiusa)', function (string $forma) {
+    // Una persona è già dentro: così il segno della vecchia (segnaLaVecchia) avrebbe qualcosa da segnare, se la forma si controllasse dopo.
+    Sessione::apri(accesso());
+    session()->save();
+    $prima = session()->getId();
+    $dati = match ($forma) {
+        'OspiteDalLink' => ospiteDalLink(),
+        'senza id' => array_diff_key(accesso(), ['id' => 1]),
+        'senza gettone' => array_diff_key(accesso(), ['gettone' => 1]),
+        'senza utente' => ['gettone' => array_diff_key(accesso()['gettone'], ['utente' => 1])] + accesso(),
+        'senza scade_il' => ['gettone' => array_diff_key(accesso()['gettone'], ['scade_il' => 1])] + accesso(),
+        'senza il testo del gettone' => ['gettone' => array_diff_key(accesso()['gettone'], ['gettone' => 1])] + accesso(),
+    };
+
+    expect(fn () => Sessione::apri($dati))->toThrow(InvalidArgumentException::class, 'apriOspite')
+        ->and(session()->has(Sessione::CHIAVE))->toBeTrue()
+        ->and(session()->getId())->toBe($prima)
+        ->and(Sessione::eChiusa($prima))->toBeFalse()
+        ->and(Cache::store(config('session.block_store'))->has('zr-auth:sessione-chiusa:'.hash('sha256', $prima)))->toBeFalse();
+})->with(['OspiteDalLink', 'senza id', 'senza gettone', 'senza utente', 'senza scade_il', 'senza il testo del gettone']);
 
 it('apriOspite si rifiuta con la sessione nel cookie, come apri() (OS.1)', function () {
     config(['session.driver' => 'cookie']);
