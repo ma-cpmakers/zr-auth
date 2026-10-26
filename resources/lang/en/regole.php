@@ -186,6 +186,8 @@ return [
     'prenotazione_messaggio_solo_con_cambio' => 'The message is written only with a time change or a cancellation.',
     'codice_fiscale_non_valido' => "This tax code is not valid for the profile's country: check the digits and the check letter.",
     'partita_iva_non_valida' => "This VAT number is not valid for the profile's country: check the digits and, for an EU country, the country prefix.",
+    'vies_senza_partita_iva' => 'The profile has no VAT number: add one before checking it with VIES.',
+    'vies_paese_non_ue' => "VIES only checks VAT numbers of EU countries: this profile's country is not one.",
     'predefinito_archiviato' => 'An archived item is not the default: restore it (`archiviato: false`) before making it the default.',
     'predefinito_non_si_toglie' => 'The default cannot be removed: make another item the default and this one stops being it.',
 ];

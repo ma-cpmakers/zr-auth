@@ -731,6 +731,11 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   resto dell'indirizzo, lo `stato` di 10 minuti usa-e-getta e la sfida PKCE sono quelli del backoffice. Una persona nuova
   vuole `termini_accettati`; con Google e LinkedIn nasce anche a registrazione chiusa (dal backoffice del 10/10, #1554), con
   Facebook solo se la registrazione la ammette (`consenti()`).
+- **Il VIES.** `crm.profili-fatturazione.verifica-vies.crea` verifica la partita IVA UE di un profilo. Il VIES finto non chiama nessuno: di norma
+  ogni numero è `non_valida`, `viesValide(['IT01234567897' => ['nome' => 'Rossi Srl', 'indirizzo' => "Via Roma 1\n20121 Milano"]])` dice quali
+  riconosce (e la `proposta` che dà, mai scritta sul profilo; `[]` per un paese che non dà nome e indirizzo), e `guastaVies()` lo fa non
+  rispondere: `da_verificare`, con il profilo salvato comunque. I nuovi tentativi in background e il freno della verifica non ci sono. Cambiare
+  `paese` o `partita_iva` di un profilo, o l'oblio del contatto, riporta l'esito a `non_verificata`.
 - **Le schede.** Il finto non modella board né liste: `scheda($workspace, $titolo, $board)` fa nascere una scheda con il minimo che
   le attese guardano, e `segnaScheda($scheda, 'completata'|'archiviata')` la completa o la archivia. Ogni board ha una lista sola
   (`lista_id` `lista-di-prova`): la scheda nasce in fondo con la sua `posizione` (1024, 2048, …), e `board.schede.spostamento.crea`

@@ -187,6 +187,8 @@ return [
     'prenotazione_messaggio_solo_con_cambio' => "Il messaggio si scrive solo con un cambio d'orario o con l'annullamento.",
     'codice_fiscale_non_valido' => 'Questo codice fiscale non è valido per il paese del profilo: controlla le cifre e la lettera di controllo.',
     'partita_iva_non_valida' => "Questa partita IVA non è valida per il paese del profilo: controlla le cifre e, per un paese dell'UE, il prefisso del paese.",
+    'vies_senza_partita_iva' => 'Il profilo non ha una partita IVA: scrivila prima di verificarla presso il VIES.',
+    'vies_paese_non_ue' => "Il VIES verifica solo le partite IVA dei paesi dell'UE: il paese di questo profilo non lo è.",
     'predefinito_archiviato' => 'Un elemento archiviato non è il predefinito: ripristinalo (`archiviato: false`) prima di renderlo predefinito.',
     'predefinito_non_si_toglie' => 'Il predefinito non si toglie: rendi predefinito un altro elemento e questo smette di esserlo.',
 ];
