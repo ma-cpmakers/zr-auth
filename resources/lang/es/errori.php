@@ -121,6 +121,22 @@ return [
         'title' => 'Nada que planificar',
         'detail' => 'No hay nada que llevar a la lista `pronte`: el tablero no tiene una lista `backlog` y una `pronte` (con el rol, no archivadas), o el umbral de `pronte` es 0, o `pronte` ya tiene las tarjetas del umbral, o el backlog no tiene tarjetas abiertas. No repitas la misma solicitud.',
     ],
+    'sprint_non_chiuso' => [
+        'title' => 'Sprint no cerrado',
+        'detail' => 'La retrospectiva se abre sobre el sprint cerrado: este sigue planificado o activo. Ciérralo con `board.sprint.chiusura.crea` y repite la petición.',
+    ],
+    'retrospettiva_esistente' => [
+        'title' => 'Retrospectiva ya abierta',
+        'detail' => 'Este sprint ya tiene su retrospectiva, una sola: el tablero está en `retrospettiva_board_id` del sprint. No repitas la petición.',
+    ],
+    'voto_gia_dato' => [
+        'title' => 'Voto ya dado',
+        'detail' => 'Ya votaste esta tarjeta: un voto por persona y tarjeta. Para cambiar de idea quítalo con `board.schede.voti.elimina`. No repitas la misma petición.',
+    ],
+    'scheda_non_di_retrospettiva' => [
+        'title' => 'Tarjeta que no es de una retrospectiva',
+        'detail' => 'Solo se vota una tarjeta de un tablero nacido de `board.sprint.retrospettiva.crea`: esta es de otro tablero. No repitas la petición.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'El propietario no se toca',
         'detail' => 'Un workspace tiene un solo propietario y ningún método lo quita ni le cambia el rol: no repitas la solicitud.',

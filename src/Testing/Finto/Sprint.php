@@ -487,6 +487,7 @@ trait Sprint
             'avviato_il' => $sprint['avviato_il'] === null ? null : self::iso($sprint['avviato_il']),
             'chiuso_il' => $sprint['chiuso_il'] === null ? null : self::iso($sprint['chiuso_il']),
             'obiettivo_raggiunto' => $sprint['obiettivo_raggiunto'],
+            'retrospettiva_board_id' => $sprint['retrospettiva_board'] ?? null,
             'velocita' => $sprint['velocita'],
             'velocita_unita' => $sprint['velocita_unita'],
             'creata_il' => self::iso($sprint['creata_il']),

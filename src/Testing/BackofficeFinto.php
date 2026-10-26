@@ -36,6 +36,7 @@ use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
+use Zeiras\Auth\Testing\Finto\Retrospettiva;
 use Zeiras\Auth\Testing\Finto\SchedeCrm;
 use Zeiras\Auth\Testing\Finto\Scrumban;
 use Zeiras\Auth\Testing\Finto\Sprint;
@@ -75,6 +76,7 @@ final class BackofficeFinto
     use CrmPreventivi;
     use CrmPreventiviPubblici;
     use SchedeCrm;
+    use Retrospettiva;
     use Scrumban;
     use Sprint;
     use CrmScadenze;
@@ -171,6 +173,10 @@ final class BackofficeFinto
         ['POST', '#^/v1/board/sprint/([^/]+)/avvio$#', 'board.sprint.avvio.crea'],
         ['POST', '#^/v1/board/sprint/([^/]+)/chiusura$#', 'board.sprint.chiusura.crea'],
         ['GET', '#^/v1/board/sprint/([^/]+)/andamento$#', 'board.sprint.andamento.mostra'],
+        ['POST', '#^/v1/board/sprint/([^/]+)/retrospettiva$#', 'board.sprint.retrospettiva.crea'],
+        ['GET', '#^/v1/board/schede/([^/]+)/voti$#', 'board.schede.voti.elenca'],
+        ['POST', '#^/v1/board/schede/([^/]+)/voti$#', 'board.schede.voti.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/voti$#', 'board.schede.voti.elimina'],
         ['POST', '#^/v1/board/board/([^/]+)/pianificazione$#', 'board.board.pianificazione.crea'],
         ['GET', '#^/v1/board/board/([^/]+)/flusso$#', 'board.board.flusso.mostra'],
         ['GET', '#^/v1/board/todo/liste$#', 'board.todo.liste.elenca'],
@@ -694,12 +700,13 @@ final class BackofficeFinto
      * qualunque. `$scadenza` è un giorno `AAAA-MM-GG`; `$assegnatari` le persone (di workspace() o persona()) o i loro id; `$tipo` (#2661) il tipo che
      * le letture danno alla scheda, come lo darebbe il backoffice: il finto non lo controlla contro i `tipi` della board, perché non modella i metodi. `$punti` e `$pronta` (#2706) la stima e il «pronta per lo sprint» che le letture danno alla scheda, senza controllare che il tipo sia una storia o un bug. `$sprint` (#2664) l'id di uno sprint non chiuso di questa board, di sprint(): la scheda ci sta dal momento in cui nasce.
      * `$orizzonte` (#2666) è l'orizzonte della scheda del backlog di una board Scrumban che le letture danno: `3_mesi`, `6_mesi`, `1_anno` o nessuno.
+     * `$dallaScheda` (#2667) è l'id di una scheda non archiviata di una retrospettiva da cui nasce questa: le letture la danno in `dalla_scheda_id`, e quella d'origine la nomina in `trasformata_in`.
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  list<array<string, mixed>|string>  $assegnatari
      * @return array{id: string, board_id: string, numero: int, titolo: string}
      */
-    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null, ?int $punti = null, bool $pronta = false, ?string $sprint = null, ?string $orizzonte = null): array
+    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null, ?int $punti = null, bool $pronta = false, ?string $sprint = null, ?string $orizzonte = null, ?string $dallaScheda = null): array
     {
         $idWorkspace = $workspace['id'] ?? null;
 
@@ -715,12 +722,16 @@ final class BackofficeFinto
             throw new InvalidArgumentException("L'orizzonte «{$orizzonte}» non c'è: sono 3_mesi, 6_mesi e 1_anno.");
         }
 
+        if ($dallaScheda !== null && (($this->schede[$dallaScheda]['workspace'] ?? null) !== $idWorkspace || $this->schede[$dallaScheda]['archiviata_il'] !== null || $this->sprintDellaRetrospettiva($this->schede[$dallaScheda]['board']) === null)) {
+            throw new InvalidArgumentException('La scheda d\'origine non è una scheda non archiviata di una retrospettiva di questo workspace: nasce con scheda() sulla board di retrospettiva.crea.');
+        }
+
         $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
         $cambiate = [];
         $posizione = $this->inCoda($idWorkspace, $board, $cambiate);
-        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'punti' => $punti, 'pronta' => $pronta, 'orizzonte' => $orizzonte, 'sprint_id' => $sprint, 'nello_sprint_dal' => $sprint === null ? null : $ora, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'punti' => $punti, 'pronta' => $pronta, 'orizzonte' => $orizzonte, 'dalla_scheda' => $dallaScheda, 'sprint_id' => $sprint, 'nello_sprint_dal' => $sprint === null ? null : $ora, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
         $this->versione([$id, ...$cambiate]);
 
@@ -1342,6 +1353,10 @@ final class BackofficeFinto
                 'board.sprint.avvio.crea' => $this->avviaSprint($richiesta, $parametri[0]),
                 'board.sprint.chiusura.crea' => $this->chiudiSprint($richiesta, $corpo, $parametri[0]),
                 'board.sprint.andamento.mostra' => $this->mostraAndamentoSprint($richiesta, $parametri[0]),
+                'board.sprint.retrospettiva.crea' => $this->creaRetrospettiva($richiesta, $corpo, $parametri[0]),
+                'board.schede.voti.elenca' => $this->elencaVoti($richiesta, $parametri[0]),
+                'board.schede.voti.crea' => $this->votaScheda($richiesta, $corpo, $parametri[0]),
+                'board.schede.voti.elimina' => $this->togliVoto($richiesta, $parametri[0]),
                 'board.board.pianificazione.crea' => $this->pianificaBoard($richiesta, $corpo, $parametri[0]),
                 'board.board.flusso.mostra' => $this->mostraFlusso($richiesta, $parametri[0]),
                 'board.todo.liste.elenca' => $this->elencaListeTodo($richiesta),
@@ -1555,6 +1570,9 @@ final class BackofficeFinto
             'orizzonte' => $scheda['orizzonte'] ?? null,
             'sprint_id' => $scheda['sprint_id'] ?? null,
             'nello_sprint_dal' => ($scheda['nello_sprint_dal'] ?? null) === null ? null : self::iso($scheda['nello_sprint_dal']),
+            'dalla_scheda_id' => $scheda['dalla_scheda'] ?? null,
+            'trasformata_in' => $this->trasformataIn($scheda['id']),
+            'voti' => count($this->voti[$scheda['id']] ?? []),
             'etichette' => [],
             'assegnatari' => $scheda['assegnatari'],
             'numero_voci' => 0,
@@ -1565,7 +1583,7 @@ final class BackofficeFinto
             'archiviata_il' => $scheda['archiviata_il'] === null ? null : self::iso($scheda['archiviata_il']),
             'creata_il' => self::iso($scheda['creata_il']),
             'aggiornata_il' => self::iso($scheda['aggiornata_il']),
-            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 3])).'"',
+            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 4])).'"',
         ];
     }
 

@@ -121,6 +121,22 @@ return [
         'title' => 'Niente da pianificare',
         'detail' => 'Non c\'è niente da portare nelle pronte: la board non ha una lista `backlog` e una `pronte` (col ruolo, non archiviate), oppure la soglia delle pronte è 0, oppure le pronte hanno già le schede della soglia, oppure il backlog non ha schede aperte. Non ripetere la richiesta uguale.',
     ],
+    'sprint_non_chiuso' => [
+        'title' => 'Sprint non chiuso',
+        'detail' => 'La retrospettiva si apre sullo sprint chiuso: questo è ancora pianificato o attivo. Chiudilo con `board.sprint.chiusura.crea` e poi ripeti la richiesta.',
+    ],
+    'retrospettiva_esistente' => [
+        'title' => 'Retrospettiva già aperta',
+        'detail' => 'Questo sprint ha già la sua retrospettiva, una sola: la board è in `retrospettiva_board_id` dello sprint. Non ripetere la richiesta.',
+    ],
+    'voto_gia_dato' => [
+        'title' => 'Voto già dato',
+        'detail' => 'Hai già votato questa scheda: un voto per persona e scheda. Per cambiare idea toglilo con `board.schede.voti.elimina`. Non ripetere la richiesta uguale.',
+    ],
+    'scheda_non_di_retrospettiva' => [
+        'title' => 'Scheda non di una retrospettiva',
+        'detail' => 'Si vota solo una scheda di una board nata da `board.sprint.retrospettiva.crea`: questa è di un\'altra board. Non ripetere la richiesta.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'Il proprietario non si tocca',
         'detail' => 'Il proprietario del workspace è uno solo e nessun metodo lo toglie né ne cambia il ruolo: non ripetere la richiesta.',

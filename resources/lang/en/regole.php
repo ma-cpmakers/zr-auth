@@ -27,6 +27,7 @@ return [
     'orizzonte_del_backlog' => 'The horizon belongs to the cards in the `backlog` list: move the card there first, or send `orizzonte: null`.',
     'orizzonte_di_scrumban' => 'A horizon exists only in a Scrumban board: here send `orizzonte: null` or leave it out.',
     'periodo_del_flusso' => 'The period runs from `da` to `a`, both included, and lasts at most 90 days: `da` is not after `a`.',
+    'dalla_scheda_di_retrospettiva' => 'The source card must be a card of a retrospective, not archived.',
     'ruolo_azioni_fisso' => 'The `azioni` role comes from the retrospective and cannot be changed or removed.',
     'soglia_delle_pronte' => 'The threshold belongs to a list with the `pronte` role: for this one send `soglia: 0`, or give it the `pronte` role in the same request.',
     'soglia_di_scrumban' => 'The threshold exists only on the `pronte` lists of a Scrumban board: here send `soglia: 0` or leave it out.',

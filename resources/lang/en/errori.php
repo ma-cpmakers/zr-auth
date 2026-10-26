@@ -121,6 +121,22 @@ return [
         'title' => 'Nothing to plan',
         'detail' => 'There is nothing to move into the ready list: the board has no `backlog` list and `pronte` list (with the role, not archived), or the threshold of the ready list is 0, or the ready list already has the cards of its threshold, or the backlog has no open cards. Do not repeat the same request.',
     ],
+    'sprint_non_chiuso' => [
+        'title' => 'Sprint not closed',
+        'detail' => 'The retrospective opens on a closed sprint: this one is still planned or active. Close it with `board.sprint.chiusura.crea`, then repeat the request.',
+    ],
+    'retrospettiva_esistente' => [
+        'title' => 'Retrospective already open',
+        'detail' => 'This sprint already has its retrospective, only one: the board is in the sprint\'s `retrospettiva_board_id`. Do not repeat the request.',
+    ],
+    'voto_gia_dato' => [
+        'title' => 'Vote already cast',
+        'detail' => 'You already voted this card: one vote per person and card. To change your mind take it off with `board.schede.voti.elimina`. Do not repeat the same request.',
+    ],
+    'scheda_non_di_retrospettiva' => [
+        'title' => 'Card not in a retrospective',
+        'detail' => 'Only a card of a board made by `board.sprint.retrospettiva.crea` can be voted: this one belongs to another board. Do not repeat the request.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'The owner cannot be touched',
         'detail' => 'A workspace has one owner and no method removes them or changes their role: do not repeat the request.',

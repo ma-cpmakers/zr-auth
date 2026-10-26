@@ -27,6 +27,7 @@ return [
     'orizzonte_del_backlog' => 'El horizonte es de las tarjetas de la lista `backlog`: mueve antes la tarjeta allí, o envía `orizzonte: null`.',
     'orizzonte_di_scrumban' => 'El horizonte existe solo en un tablero Scrumban: aquí envía `orizzonte: null` o no lo envíes.',
     'periodo_del_flusso' => 'El periodo va de `da` a `a`, ambos incluidos, y dura como máximo 90 días: `da` no es posterior a `a`.',
+    'dalla_scheda_di_retrospettiva' => 'La tarjeta de origen debe ser una tarjeta de una retrospectiva, no archivada.',
     'ruolo_azioni_fisso' => 'El rol `azioni` lo da la retrospectiva y no se cambia ni se quita.',
     'soglia_delle_pronte' => 'El umbral es de una lista con rol `pronte`: en esta envía `soglia: 0`, o dale el rol `pronte` en la misma solicitud.',
     'soglia_di_scrumban' => 'El umbral existe solo en las listas `pronte` de un tablero Scrumban: aquí envía `soglia: 0` o no lo envíes.',

@@ -28,6 +28,7 @@ return [
     'orizzonte_del_backlog' => 'L\'orizzonte è delle schede nella lista `backlog`: sposta prima la scheda lì, oppure manda `orizzonte: null`.',
     'orizzonte_di_scrumban' => 'L\'orizzonte c\'è solo in una board Scrumban: qui manda `orizzonte: null` o non mandarlo.',
     'periodo_del_flusso' => 'Il periodo va da `da` ad `a`, estremi compresi, e dura al più 90 giorni: `da` non viene dopo `a`.',
+    'dalla_scheda_di_retrospettiva' => 'La scheda d\'origine dev\'essere una scheda di una retrospettiva, non archiviata.',
     'ruolo_azioni_fisso' => 'Il ruolo `azioni` lo dà la retrospettiva e non si cambia né si toglie.',
     'soglia_delle_pronte' => 'La soglia è di una lista con ruolo `pronte`: su questa manda `soglia: 0`, oppure dalle il ruolo `pronte` nella stessa richiesta.',
     'soglia_di_scrumban' => 'La soglia c\'è solo nelle liste `pronte` di una board Scrumban: qui manda `soglia: 0` o non mandarla.',

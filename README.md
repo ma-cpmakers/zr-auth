@@ -769,6 +769,14 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   al più 90 giorni, per default gli ultimi 30, `422` sul parametro `da` o `a`), con l'`ETag` ma senza il `304`. Una board che non è Scrumban è `409`
   `board_senza_metodo`. Il finto non ha le liste: `ruolo` e `soglia` non ci sono, e `scheda(…, orizzonte: '3_mesi'|'6_mesi'|'1_anno')` dà l'`orizzonte` che le
   letture portano.
+- **La retrospettiva, i voti e `trasformata_in`.** `board.sprint.retrospettiva.crea` (`POST /v1/board/sprint/{sprint}/retrospettiva`, #2667) fa nascere, su uno sprint
+  `chiuso` di `sprint()`, la board della retrospettiva (senza metodo, nella cartella della board dello sprint) con tre liste nella lingua della richiesta, la terza col
+  ruolo `azioni`: `201` con la board intera e `retrospettiva_di`, `Location`, e lo sprint porta `retrospettiva_board_id`. Un campo nel corpo è `422`; `409` `sprint_non_chiuso`,
+  `retrospettiva_esistente`, `board_chiusa`. Il finto non ha board.board.mostra né board.liste.*, non applica i tetti e non ha la lista come risorsa: le schede della
+  retrospettiva le semina il test con `scheda($workspace, 'Titolo', $idDellaBoardDellaRetrospettiva)`. `board.schede.voti.elenca|crea|elimina` (`/v1/board/schede/{scheda}/voti`)
+  votano quelle schede: un voto per persona (`409` `voto_gia_dato`), `201` col voto e `200` col voto tolto, la scheda intera con `voti` aggiornato e un'`aggiornata_il` nuova;
+  una scheda di un'altra board è `409` `scheda_non_di_retrospettiva`, una archiviata `409` `scheda_archiviata`. `scheda(…, dallaScheda: $azione['id'])` dà alla scheda nuova
+  `dalla_scheda_id`, e l'azione dice in `trasformata_in` gli id delle figlie non archiviate, nell'ordine di nascita; il finto non ha `board.schede.crea`, quindi la figlia si semina.
 - **Il widget di `accessi.crea`.** Come nel backoffice (`ZR_ACCESSI_TURNSTILE`, spento di default) il sesto tentativo di un'email in un
   minuto è `429` `troppe_richieste`. `accendiGradinoAccessi()` accende il gradino: dal sesto al trentesimo tentativo serve `turnstile`
   (con `accendiTurnstile()`; senza è `422` `turnstile_non_valido`) e il `429` viene oltre il trentesimo. La coppia (email, IP firmato)
