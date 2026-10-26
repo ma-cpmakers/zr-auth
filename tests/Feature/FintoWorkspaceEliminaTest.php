@@ -276,7 +276,7 @@ it("l'ultimo workspace non si lascia né si elimina: il detail è lo stesso per 
 it('membri_avvisati è false quando il tetto di un giro di email ogni 24 ore ferma il secondo giro, e torna true dopo un giorno (#2636)', function () {
     $this->travelTo('2026-10-26 12:00:00');
     [$studio, , $anna, , , , $accesso] = conDueWorkspace();
-    $giro = function () use ($studio, $anna, $accesso) {
+    $giro = function () use ($studio, &$anna, &$accesso) {
         $eliminato = alFinto('DELETE', '/v1/workspace', gettone: $anna)->json('data.membri_avvisati');
         $ripristinato = alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso)->json('data.membri_avvisati');
 
@@ -288,7 +288,10 @@ it('membri_avvisati è false quando il tetto di un giro di email ogni 24 ore fer
     // Il ripristino ridà il gettone: il secondo giro è dentro le 24 ore.
     expect($giro())->toBe([false, false]);
 
+    // Un giorno dopo i gettoni sono scaduti: la persona entra di nuovo.
     $this->travelTo('2026-10-27 12:01:00');
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $anna = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
 
     expect($giro())->toBe([true, true]);
 });

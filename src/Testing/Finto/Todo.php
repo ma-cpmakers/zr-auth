@@ -768,7 +768,7 @@ trait Todo
      */
     private function listeDellaPersonaTodo(array $chi): array
     {
-        $liste = array_values(array_filter($this->todoListe, fn (array $l) => $l['workspace'] === $chi['workspace'] && $l['persona'] === $chi['persona'] && ! $l['archiviata']));
+        $liste = array_values(array_filter($this->todoListe, fn (array $l) => $l['workspace'] === $chi['workspace'] && $l['persona'] === $chi['persona'] && $l['tipo'] === 'personale' && ! $l['archiviata']));
         usort($liste, fn (array $una, array $altra) => [$altra['predefinita'], $una['posizione'], $una['id']] <=> [$una['predefinita'], $altra['posizione'], $altra['id']]);
 
         return $liste;

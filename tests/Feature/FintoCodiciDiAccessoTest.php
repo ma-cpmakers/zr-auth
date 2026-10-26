@@ -111,7 +111,9 @@ it('un ospite fuori dalla lista e senza invito non accetta i documenti dei works
     // Un invito vivo per quell'email, di un workspace qualsiasi.
     $anna = $finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
     $studio = $finto->workspace('Studio', $anna);
-    $gettoneDiAnna = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
+    $accessoDiAnna = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/legale/accettazioni', $accetta, $accessoDiAnna);
+    $gettoneDiAnna = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accessoDiAnna)->json('data.gettone');
     expect(alFinto('POST', '/v1/workspace/inviti', ['email' => 'fuori@fuori-lista.it', 'ruolo' => 'membro'], $gettoneDiAnna)->status())->toBe(201)
         ->and(alFinto('POST', '/v1/legale/accettazioni', $accetta, $fuori)->status())->toBe(201);
 
