@@ -31,6 +31,9 @@ trait Sprint
     /** @var array<string, array<string, mixed>> gli sprint per id */
     private array $sprint = [];
 
+    /** @var array<string, array{unita: string, giorni: list<array<string, mixed>>}> le serie seminate dal test, per id dello sprint */
+    private array $andamenti = [];
+
     /**
      * Uno sprint per i test: nasce `pianificato`, `attivo` (avviato il giorno dell'inizio) o `chiuso` (alla fine della sua durata) (con `$velocita` e la sua unità, `punti` o `schede`). La board è di
      * board() e va con il metodo `scrum`; come nel backoffice una board ha al più uno sprint attivo e uno pianificato.
@@ -74,6 +77,57 @@ trait Sprint
         ];
 
         return ['id' => $id, 'board_id' => $idBoard, 'nome' => $nome, 'stato' => $stato];
+    }
+
+    /**
+     * Semina la serie di uno sprint, come la darebbe `board.sprint.andamento.mostra` (#2665): il finto non tiene il registro dei movimenti né il
+     * flusso delle schede da cui il backoffice la calcola. Ogni giorno ha `data` e i cinque interi cumulativi `pianificato`, `aggiunto`, `rimosso`,
+     * `completato` e `rimasto`; `$unita` è `punti` o `schede`. Senza semina la serie è vuota, in `schede`.
+     *
+     * @param  array{id: string}  $sprint  uno sprint di sprint()
+     * @param  list<array{data: string, pianificato: int, aggiunto: int, rimosso: int, completato: int, rimasto: int}>  $giorni
+     */
+    public function andamento(array $sprint, array $giorni, string $unita = 'punti'): self
+    {
+        if (! isset($this->sprint[$sprint['id']])) {
+            throw new InvalidArgumentException('Lo sprint non è del finto: nasce con sprint().');
+        }
+
+        if (! in_array($unita, ['punti', 'schede'], true)) {
+            throw new InvalidArgumentException("L'unità «{$unita}» non c'è: sono punti e schede.");
+        }
+
+        foreach ($giorni as $giorno) {
+            if (array_keys($giorno) !== ['data', 'pianificato', 'aggiunto', 'rimosso', 'completato', 'rimasto']) {
+                throw new InvalidArgumentException('Un giorno ha data, pianificato, aggiunto, rimosso, completato e rimasto, in quest\'ordine.');
+            }
+        }
+
+        $this->andamenti[$sprint['id']] = ['unita' => $unita, 'giorni' => $giorni];
+
+        return $this;
+    }
+
+    /**
+     * board.sprint.andamento.mostra (SprintAndamentoController::mostra): la serie seminata di uno sprint, o vuota. Uno sprint di un altro workspace,
+     * o che non c'è, è 404; una board che non è Scrum 409 `board_senza_metodo`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraAndamentoSprint(Request $richiesta, string $id): array
+    {
+        $chi = $this->conPm($richiesta);
+        $sprint = $this->sprint[$id] ?? null;
+
+        if ($sprint === null || $sprint['workspace'] !== $chi['workspace']) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->sprintScrum($this->boards[$sprint['board']]);
+        $voce = $this->andamenti[$id] ?? ['unita' => 'schede', 'giorni' => []];
+        $fine = CarbonImmutable::parse($sprint['inizio'])->addDays($sprint['durata_settimane'] * 7 - 1)->toDateString();
+
+        return [200, ['data' => ['sprint_id' => $id, 'unita' => $voce['unita'], 'inizio' => $sprint['inizio'], 'fine' => $fine, 'giorni' => $voce['giorni']]]];
     }
 
     /**

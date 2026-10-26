@@ -286,3 +286,25 @@ it('con l\'app pm spenta ogni metodo è 403 app_non_attiva; la Idempotency-Key r
     expect(alFinto('GET', "/v1/board/sprint?board_id={$board['id']}", null, $gettone)->json('codice'))->toBe('app_non_attiva')
         ->and(alFinto('POST', '/v1/board/sprint', $corpo, $gettone)->json('codice'))->toBe('app_non_attiva');
 });
+
+it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine, giorni), vuota senza semina; 404 per uno sprint che non c\'è o di un altro workspace; 409 se la board non è Scrum', function () {
+    [$finto, $studio, $board, $gettone] = conLaBoardScrum();
+    $sprint = $finto->sprint($studio, $board, 'In corso', 'attivo', '2026-10-12');
+    $vuoto = $finto->sprint($studio, $board, 'Dopo', 'pianificato', '2026-10-26');
+    $giorni = [
+        ['data' => '2026-10-12', 'pianificato' => 8, 'aggiunto' => 0, 'rimosso' => 0, 'completato' => 0, 'rimasto' => 8],
+        ['data' => '2026-10-13', 'pianificato' => 8, 'aggiunto' => 2, 'rimosso' => 0, 'completato' => 3, 'rimasto' => 7],
+    ];
+    $finto->andamento($sprint, $giorni);
+
+    $serie = alFinto('GET', "/v1/board/sprint/{$sprint['id']}/andamento", null, $gettone);
+
+    expect($serie->status())->toBe(200)
+        ->and(array_keys($serie->json('data')))->toBe(['sprint_id', 'unita', 'inizio', 'fine', 'giorni'])
+        ->and($serie->json('data'))->toMatchArray(['sprint_id' => $sprint['id'], 'unita' => 'punti', 'inizio' => '2026-10-12', 'fine' => '2026-10-25', 'giorni' => $giorni])
+        ->and(alFinto('GET', "/v1/board/sprint/{$vuoto['id']}/andamento", null, $gettone)->json('data'))->toMatchArray(['unita' => 'schede', 'giorni' => []])
+        ->and(alFinto('GET', '/v1/board/sprint/01k6w9a1c3e5g7j9m1p3r5t7v9/andamento', null, $gettone)->status())->toBe(404);
+
+    expect(fn () => $finto->andamento($sprint, [['data' => '2026-10-12']]))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $finto->andamento($sprint, [], 'ore'))->toThrow(InvalidArgumentException::class);
+});

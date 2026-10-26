@@ -759,7 +759,9 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   ogni scheda aperta dello sprint con la sua destinazione (`backlog` o `sprint_dopo`; `422` su `#/schede`, `#/schede/N/id` o
   `#/schede/N/destinazione`), sposta le schede e registra la velocità: i punti delle completate se almeno una li ha, altrimenti il loro
   numero. Le schede portano `sprint_id` e `nello_sprint_dal`; il finto non ha `board.schede.modifica`, quindi lo sprint di una scheda lo
-  cambia solo la chiusura. Il finto non tiene il registro dei movimenti e non emette gli eventi.
+  cambia solo la chiusura. Il finto non tiene il registro dei movimenti e non emette gli eventi. `board.sprint.andamento.mostra` (#2665) dà la serie
+  che il test semina con `andamento($sprint, $giorni, 'punti'|'schede')` (i cinque interi cumulativi di ogni giorno, come li dà il backoffice), vuota in `schede` senza
+  semina: il finto non la calcola.
 - **Il widget di `accessi.crea`.** Come nel backoffice (`ZR_ACCESSI_TURNSTILE`, spento di default) il sesto tentativo di un'email in un
   minuto è `429` `troppe_richieste`. `accendiGradinoAccessi()` accende il gradino: dal sesto al trentesimo tentativo serve `turnstile`
   (con `accendiTurnstile()`; senza è `422` `turnstile_non_valido`) e il `429` viene oltre il trentesimo. La coppia (email, IP firmato)
