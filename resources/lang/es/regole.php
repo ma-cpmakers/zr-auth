@@ -220,6 +220,8 @@ return [
     'chiusura_senza_sprint_dopo' => 'No hay un sprint planificado al que enviar la tarjeta: créalo con board.sprint.crea, o elige el destino `backlog`.',
     'codice_fiscale_non_valido' => 'Este código fiscal no es válido para el país del perfil: revisa los dígitos y la letra de control.',
     'partita_iva_non_valida' => 'Este número de IVA no es válido para el país del perfil: revisa los dígitos y, en un país de la UE, el prefijo del país.',
+    'vies_senza_partita_iva' => 'El perfil no tiene número de IVA: añádelo antes de verificarlo en el VIES.',
+    'vies_paese_non_ue' => 'El VIES solo verifica números de IVA de países de la UE: el país de este perfil no lo es.',
     'predefinito_archiviato' => 'Un elemento archivado no es el predeterminado: restáuralo (`archiviato: false`) antes de hacerlo predeterminado.',
     'predefinito_non_si_toglie' => 'El predeterminado no se quita: haz predeterminado otro elemento y este deja de serlo.',
     'persona_non_esiste' => 'Este contacto no está en el workspace: búscalo con `crm.persone.ricerca.crea`.',

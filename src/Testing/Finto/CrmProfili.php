@@ -8,13 +8,14 @@ use Illuminate\Validation\Rule;
 
 /**
  * I profili di fatturazione e gli indirizzi di spedizione dei clienti del CRM nel backoffice finto (#2751, CRM-01 F5-F7):
- * `crm.profili-fatturazione.elenca`, `ricerca.crea`, `crea`, `mostra`, `modifica` e `crm.indirizzi-spedizione.elenca`, `crea`, `mostra`,
- * `modifica`, con le regole, i pointer, l'ordine e gli errori di `ProfiliFatturazioneController`, `IndirizziSpedizioneController` e
+ * `crm.profili-fatturazione.elenca`, `ricerca.crea`, `crea`, `mostra`, `modifica`, `verifica-vies.crea` (#2754) e
+ * `crm.indirizzi-spedizione.elenca`, `crea`, `mostra`, `modifica`, con le regole, i pointer, l'ordine e gli errori di `ProfiliFatturazioneController`, `IndirizziSpedizioneController` e
  * `App\Crm\DelCliente` del backoffice. Il cliente è un contatto o un'azienda (uno solo); il primo elemento di un cliente è il predefinito, e
  * uno solo lo è fra i non archiviati; non si elimina, si archivia con `archiviato`; al più 20 non archiviati per cliente. `area_fiscale`,
  * `stato` e `mancano` di un profilo si calcolano sul paese dell'azienda del workspace di adesso. Leggono e scrivono i tre ruoli. Non c'è lo
- * storico (non si legge dall'API) e non ci sono i freni (della creazione del CRM e della ricerca): se ne accorge solo chi li prova contro il
- * backoffice vero. L'`ETag` non è lo stesso valore del backoffice: conta la forma.
+ * storico (non si legge dall'API) e non ci sono i freni (della creazione del CRM, della ricerca e della verifica VIES): se ne accorge solo chi li
+ * prova contro il backoffice vero. Il VIES è finto: `viesValide()` dice quali partite IVA riconosce e con quale nome e indirizzo, ogni altra è
+ * `non_valida`, e `guastaVies()` lo fa non rispondere (`da_verificare`); i nuovi tentativi in background non ci sono, come i lavori in coda. L'`ETag` non è lo stesso valore del backoffice: conta la forma.
  */
 trait CrmProfili
 {
@@ -24,6 +25,16 @@ trait CrmProfili
     private const CRM_PROFILI_TETTO = 20;
 
     private const CRM_PROFILI_EMAIL = 5;
+
+    /**
+     * Il VIES finto: le partite IVA (col prefisso del paese) che riconosce, con il nome e l'indirizzo che dà.
+     *
+     * @var array<string, array{nome: ?string, indirizzo: ?string}>
+     */
+    private array $viesValide = [];
+
+    /** Il VIES che non risponde: ogni verifica è `da_verificare`. */
+    private bool $viesGuasto = false;
 
     /** Ciò che può mancare per fatturare, nell'ordine del contratto (ProfiliFatturazione::MANCANO). */
     private const CRM_PROFILI_MANCANO = ['intestatario', 'indirizzo.via', 'indirizzo.cap', 'indirizzo.citta', 'indirizzo.provincia', 'codice_fiscale', 'partita_iva', 'codice_destinatario', 'codice_univoco_ufficio', 'identificativo_estero'];
@@ -42,6 +53,34 @@ trait CrmProfili
 
     /** I dati personali che nessuna query di un elenco ammette (ClienteElencaRequest::VIETATI). */
     private const CRM_PROFILI_VIETATI = ['q', 'codice_fiscale', 'partita_iva', 'nome', 'cognome', 'email', 'telefono', 'testo', 'intestatario', 'pec'];
+
+    // ———————————————————————————————————————— Il VIES finto
+
+    /**
+     * Le partite IVA che il VIES finto riconosce: `valida` per ognuna, con la proposta di ragione sociale e indirizzo (`nome`, `indirizzo`: testo libero,
+     * `null` se un paese non li rende noti); ogni altra è `non_valida`. Sostituisce l'elenco di prima e riaccende il VIES se era guasto.
+     *
+     * @param  array<string, array{nome?: ?string, indirizzo?: ?string}>  $numeri  la partita IVA col prefisso del paese (`IT01234567897`) => ciò che il VIES dà
+     */
+    public function viesValide(array $numeri): self
+    {
+        $this->viesValide = [];
+        $this->viesGuasto = false;
+
+        foreach ($numeri as $numero => $dati) {
+            $this->viesValide[Fiscale::compatta((string) $numero)] = ['nome' => $dati['nome'] ?? null, 'indirizzo' => $dati['indirizzo'] ?? null];
+        }
+
+        return $this;
+    }
+
+    /** Il VIES che non risponde: la verifica è `da_verificare`, come nel backoffice per un timeout o un guasto della Commissione. */
+    public function guastaVies(bool $guasto = true): self
+    {
+        $this->viesGuasto = $guasto;
+
+        return $this;
+    }
 
     // ———————————————————————————————————————— Elenco e ricerca
 
@@ -215,6 +254,7 @@ trait CrmProfili
                 ...$this->colonneDellIndirizzoCrm(is_array($campi['indirizzo'] ?? null) ? $campi['indirizzo'] : [], true),
                 'email_fatture' => array_map('strtolower', array_values($campi['email_fatture'] ?? [])),
                 'lingua' => $campi['lingua'] ?? null,
+                'vies_esito' => 'non_verificata', 'vies_verificato_il' => null,
                 'predefinito' => $predefinito, 'archiviata_il' => null, 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
             ];
             $voce = $this->voceProfiloFatturazioneCrm($this->crm['profili'][$id], $this->paeseDelWorkspaceCrm($chi['workspace']));
@@ -259,6 +299,40 @@ trait CrmProfili
         $voce = $this->voceProfiloFatturazioneCrm($this->crm['profili'][$riga['id']], $paese);
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
+    }
+
+    /**
+     * crm.profili-fatturazione.verifica-vies.crea (ProfiliFatturazioneController::verificaViesCrea): la partita IVA UE del profilo presso il VIES finto.
+     * Un profilo senza partita IVA, o di un paese fuori dall'UE, è 422 sul pointer `#/partita_iva`. 200 col profilo (`vies` aggiornato) e
+     * `proposta`, senza scriverla; `da_verificare` se il VIES è guasto, e il profilo si salva comunque. Non ci sono i freni né i nuovi tentativi.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function verificaViesProfiloCrm(Request $richiesta, string $id): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $riga = $this->rigaCrm('profili', $chi['workspace'], $id);
+
+        if ($riga['partita_iva'] === null || ! Fiscale::ue($riga['paese'])) {
+            $chiave = $riga['partita_iva'] === null ? 'vies_senza_partita_iva' : 'vies_paese_non_ue';
+
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.'.$chiave), 'regola' => Regola::CAMPO_INDISPENSABILE, 'pointer' => '#/partita_iva']]);
+        }
+
+        $this->contattoCollegabileCrm($riga['persona_id']);
+        $dato = $this->viesValide[$riga['partita_iva']] ?? null;
+        $esito = match (true) {
+            $this->viesGuasto => 'da_verificare',
+            $dato !== null => 'valida',
+            default => 'non_valida',
+        };
+
+        $this->salvaCrm('profili', $riga['id'], ['vies_esito' => $esito, 'vies_verificato_il' => $esito === 'da_verificare' ? null : self::adessoCrm()]);
+
+        $voce = $this->voceProfiloFatturazioneCrm($this->crm['profili'][$riga['id']], $this->paeseDelWorkspaceCrm($chi['workspace']));
+        $proposta = $esito === 'valida' && ($dato['nome'] !== null || $dato['indirizzo'] !== null) ? ['intestatario' => $dato['nome'], 'indirizzo' => $dato['indirizzo']] : null;
+
+        return [200, ['data' => $voce, 'proposta' => $proposta], ['ETag' => self::etagCrm($voce)]];
     }
 
     /**
@@ -383,6 +457,11 @@ trait CrmProfili
             }
         }
 
+        // Un altro numero, o lo stesso in un altro paese, non è quello che il VIES ha verificato.
+        if (($dopo['paese'] ?? $riga['paese']) !== $riga['paese'] || ($dopo['partita_iva'] ?? $riga['partita_iva']) !== $riga['partita_iva']) {
+            $dopo += ['vies_esito' => 'non_verificata', 'vies_verificato_il' => null];
+        }
+
         return $dopo;
     }
 
@@ -457,7 +536,7 @@ trait CrmProfili
 
     /**
      * Lo schema ProfiloFatturazione (Forme::profiloFatturazione): il cliente è `persona_id` o `organizzazione_id`, l'altro `null`;
-     * `area_fiscale`, `stato` e `mancano` sul paese dell'azienda del workspace; `vies` dice che il numero non è stato verificato.
+     * `area_fiscale`, `stato` e `mancano` sul paese dell'azienda del workspace; `vies` dice se il numero è stato verificato presso il VIES.
      *
      * @param  array<string, mixed>  $riga
      * @return array<string, mixed>
@@ -494,7 +573,7 @@ trait CrmProfili
             'area_fiscale' => $area,
             'stato' => $mancano === [] ? 'completo' : 'incompleto',
             'mancano' => $mancano,
-            'vies' => ['esito' => 'non_verificata', 'verificato_il' => null],
+            'vies' => ['esito' => $riga['vies_esito'], 'verificato_il' => self::isoCrm($riga['vies_verificato_il'])],
             'archiviato_il' => self::isoCrm($riga['archiviata_il']),
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
@@ -834,7 +913,7 @@ trait CrmProfili
             foreach ($this->crm[$tipo] as $id => $riga) {
                 if ($riga['persona_id'] === $persona) {
                     $this->crm[$tipo][$id] = [
-                        ...$riga, ...array_fill_keys($colonne, null), ...($tipo === 'profili' ? ['email_fatture' => []] : []),
+                        ...$riga, ...array_fill_keys($colonne, null), ...($tipo === 'profili' ? ['email_fatture' => [], 'vies_esito' => 'non_verificata', 'vies_verificato_il' => null] : []),
                         'predefinito' => false, 'archiviata_il' => $riga['archiviata_il'] ?? $ora, 'aggiornato_il' => $ora,
                     ];
                 }

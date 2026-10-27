@@ -296,3 +296,86 @@ it('un profilo o un indirizzo di un altro workspace, o che non c\'è, è 404 con
         ->and($estraneo->json('detail'))->toBe($manca->json('detail'))
         ->and($indirizzoEstraneo->status())->toBe(404);
 });
+
+it('la verifica VIES: valida con la proposta (non scritta sul profilo), non_valida per un numero che il VIES non riconosce, da_verificare se è guasto; il profilo non si blocca mai (VI.1)', function () {
+    [$finto, $gettoni] = studioColCrm();
+    $azienda = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $gettoni['carla'])->json('data.id');
+    $creato = alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda), $gettoni['carla']);
+    $profilo = $creato->json('data.id');
+    $url = "/v1/crm/profili-fatturazione/{$profilo}/verifica-vies";
+
+    $sconosciuta = alFinto('POST', $url, null, $gettoni['carla']);
+    $finto->viesValide(['it 123 45678-903' => ['nome' => 'ROSSI SRL', 'indirizzo' => "VIA ROMA 1\n20121 MILANO MI"]]);
+    $valida = alFinto('POST', $url, null, $gettoni['carla']);
+    $riletta = alFinto('GET', "/v1/crm/profili-fatturazione/{$profilo}", null, $gettoni['anna']);
+    $finto->guastaVies();
+    $guasta = alFinto('POST', $url, null, $gettoni['bruno']);
+
+    expect($sconosciuta->status())->toBe(200)
+        ->and($sconosciuta->json('data.vies.esito'))->toBe('non_valida')
+        ->and($sconosciuta->json('data.vies.verificato_il'))->not->toBeNull()
+        ->and($sconosciuta->json('proposta'))->toBeNull()
+        ->and($valida->status())->toBe(200)
+        ->and($valida->json('data.vies.esito'))->toBe('valida')
+        ->and($valida->json('proposta'))->toBe(['intestatario' => 'ROSSI SRL', 'indirizzo' => "VIA ROMA 1\n20121 MILANO MI"])
+        ->and($valida->json('data.intestatario'))->toBe('Rossi Srl')
+        ->and($valida->header('ETag'))->not->toBe($creato->header('ETag'))
+        ->and($riletta->json('data.vies'))->toBe($valida->json('data.vies'))
+        ->and($guasta->status())->toBe(200)
+        ->and($guasta->json('data.vies'))->toBe(['esito' => 'da_verificare', 'verificato_il' => null])
+        ->and($guasta->json('proposta'))->toBeNull()
+        ->and($guasta->json('data.partita_iva'))->toBe('IT'.PARTITA_IVA_DEL_FINTO);
+});
+
+it('la verifica VIES di un paese che non dà nome e indirizzo ha la proposta a null (VI.2)', function () {
+    [$finto, $gettoni] = studioColCrm();
+    $azienda = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $gettoni['carla'])->json('data.id');
+    $profilo = alFinto('POST', '/v1/crm/profili-fatturazione', ['organizzazione_id' => $azienda, 'tipo_intestatario' => 'azienda', 'paese' => 'DE', 'partita_iva' => 'DE123456789'], $gettoni['carla'])->json('data.id');
+    $finto->viesValide(['DE123456789' => []]);
+
+    $risposta = alFinto('POST', "/v1/crm/profili-fatturazione/{$profilo}/verifica-vies", null, $gettoni['carla']);
+
+    expect($risposta->json('data.vies.esito'))->toBe('valida')->and($risposta->json('proposta'))->toBeNull();
+});
+
+it('un profilo senza partita IVA, o di un paese fuori dall\'UE, è 422 sul pointer della partita IVA e non si verifica (VI.3)', function () {
+    [, $gettoni] = studioColCrm();
+    $azienda = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $gettoni['carla'])->json('data.id');
+    $senza = alFinto('POST', '/v1/crm/profili-fatturazione', ['organizzazione_id' => $azienda, 'tipo_intestatario' => 'azienda', 'paese' => 'IT'], $gettoni['carla'])->json('data.id');
+    $fuori = alFinto('POST', '/v1/crm/profili-fatturazione', ['organizzazione_id' => $azienda, 'tipo_intestatario' => 'azienda', 'paese' => 'US', 'partita_iva' => 'AB123456'], $gettoni['carla'])->json('data.id');
+
+    foreach ([$senza, $fuori] as $id) {
+        $risposta = alFinto('POST', "/v1/crm/profili-fatturazione/{$id}/verifica-vies", null, $gettoni['carla']);
+
+        expect($risposta->status())->toBe(422)
+            ->and($risposta->json('codice'))->toBe('dati_non_validi')
+            ->and($risposta->json('errors.0.pointer'))->toBe('#/partita_iva')
+            ->and($risposta->json('errors.0.regola'))->toBe('campo_indispensabile');
+    }
+});
+
+it('cambiare il paese o la partita IVA riporta il VIES a non_verificata; un altro campo non lo tocca (VI.4)', function () {
+    [$finto, $gettoni] = studioColCrm();
+    $azienda = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $gettoni['carla'])->json('data.id');
+    $profilo = alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda), $gettoni['carla'])->json('data.id');
+    $finto->viesValide(['IT'.PARTITA_IVA_DEL_FINTO => []]);
+    alFinto('POST', "/v1/crm/profili-fatturazione/{$profilo}/verifica-vies", null, $gettoni['carla']);
+
+    $altro = alFinto('PATCH', "/v1/crm/profili-fatturazione/{$profilo}", ['intestatario' => 'Rossi 2 Srl'], $gettoni['carla']);
+    $numero = alFinto('PATCH', "/v1/crm/profili-fatturazione/{$profilo}", ['partita_iva' => '01234567897'], $gettoni['carla']);
+
+    expect($altro->json('data.vies.esito'))->toBe('valida')
+        ->and($numero->json('data.vies'))->toBe(['esito' => 'non_verificata', 'verificato_il' => null]);
+});
+
+it('l\'oblio del contatto riporta a non_verificata il VIES dei suoi profili (VI.5)', function () {
+    [$finto, $gettoni] = studioColCrm();
+    $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia'], $gettoni['carla'])->json('data.id');
+    $profilo = alFinto('POST', '/v1/crm/profili-fatturazione', ['persona_id' => $persona, 'tipo_intestatario' => 'professionista', 'paese' => 'IT', 'partita_iva' => PARTITA_IVA_DEL_FINTO], $gettoni['carla'])->json('data.id');
+    $finto->viesValide(['IT'.PARTITA_IVA_DEL_FINTO => []]);
+    alFinto('POST', "/v1/crm/profili-fatturazione/{$profilo}/verifica-vies", null, $gettoni['carla']);
+
+    alFinto('POST', "/v1/crm/persone/{$persona}/anonimizzazione", null, $gettoni['anna']);
+
+    expect(alFinto('GET', "/v1/crm/profili-fatturazione/{$profilo}", null, $gettoni['anna'])->json('data.vies'))->toBe(['esito' => 'non_verificata', 'verificato_il' => null]);
+});

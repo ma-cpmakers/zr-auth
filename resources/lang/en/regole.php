@@ -220,6 +220,8 @@ return [
     'chiusura_senza_sprint_dopo' => 'There is no planned sprint to send the card to: create one with board.sprint.crea, or choose the destination `backlog`.',
     'codice_fiscale_non_valido' => "This tax code is not valid for the profile's country: check the digits and the check letter.",
     'partita_iva_non_valida' => "This VAT number is not valid for the profile's country: check the digits and, for an EU country, the country prefix.",
+    'vies_senza_partita_iva' => 'The profile has no VAT number: add one before checking it with VIES.',
+    'vies_paese_non_ue' => "VIES only checks VAT numbers of EU countries: this profile's country is not one.",
     'predefinito_archiviato' => 'An archived item is not the default: restore it (`archiviato: false`) before making it the default.',
     'predefinito_non_si_toglie' => 'The default cannot be removed: make another item the default and this one stops being it.',
     'persona_non_esiste' => 'This contact is not in the workspace: find it with `crm.persone.ricerca.crea`.',
