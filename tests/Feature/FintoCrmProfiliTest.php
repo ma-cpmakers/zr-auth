@@ -402,9 +402,9 @@ it('i campi «tuoi» valgono per i profili e gli indirizzi: oggetti fatturazione
     $carla = $gettoni['carla'];
     $azienda = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $carla)->json('data.id');
     $sezioni = alFinto('GET', '/v1/crm/sezioni?oggetto=fatturazione', null, $carla);
-    $sigla = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'fatturazione', 'nome' => ['it' => 'Sigla'], 'tipo' => 'testo', 'in_elenco' => true], $carla);
-    alFinto('POST', '/v1/crm/campi', ['oggetto' => 'fatturazione', 'nome' => ['it' => 'Nota'], 'tipo' => 'testo'], $carla);
-    alFinto('POST', '/v1/crm/campi', ['oggetto' => 'spedizione', 'nome' => ['it' => 'Orario'], 'tipo' => 'testo'], $carla);
+    $sigla = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'fatturazione', 'nome' => ['it' => 'Sigla'], 'tipo' => 'testo', 'in_elenco' => true], $gettoni['anna']);
+    alFinto('POST', '/v1/crm/campi', ['oggetto' => 'fatturazione', 'nome' => ['it' => 'Nota'], 'tipo' => 'testo'], $gettoni['anna']);
+    alFinto('POST', '/v1/crm/campi', ['oggetto' => 'spedizione', 'nome' => ['it' => 'Orario'], 'tipo' => 'testo'], $gettoni['anna']);
 
     expect(collect($sezioni->json('data'))->pluck('id')->all())->toBe(['fatturazione.principali'])
         ->and($sigla->status())->toBe(201)
