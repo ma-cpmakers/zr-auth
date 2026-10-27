@@ -29,7 +29,7 @@ it('un elenco nasce con 201, Location ed ETag; i valori hanno posizione da 1, co
 
     $creato = alFinto('POST', '/v1/crm/elenchi', [
         'nome' => ['it' => 'Livelli', 'en' => 'Levels'],
-        'valori' => [['chiave' => 'alfa', 'nome' => ['it' => 'Alfa'], 'colore' => '#A1B2C3'], ['chiave' => 'beta', 'nome' => ['it' => 'Beta', 'es' => 'Beta es']]],
+        'valori' => [['chiave' => crmValore('alfa'), 'nome' => ['it' => 'Alfa'], 'colore' => '#A1B2C3'], ['chiave' => crmValore('beta'), 'nome' => ['it' => 'Beta', 'es' => 'Beta es']]],
     ], $gettoni['anna']);
     $elenco = $creato->json('data');
 
@@ -68,9 +68,9 @@ it('il corpo sbagliato è 422 col suo pointer e non scrive niente (EF.1)', funct
         [['nome' => ['en' => 'Levels']], '#/nome/it'],
         [['nome' => $nome, 'altro' => 1], '#/altro'],
         [['nome' => $nome, 'valori' => [['nome' => ['it' => 'Alfa']]]], '#/valori/0/chiave'],
-        [['nome' => $nome, 'valori' => [['chiave' => 'Alfa Uno', 'nome' => ['it' => 'Alfa']]]], '#/valori/0/chiave'],
-        [['nome' => $nome, 'valori' => [['chiave' => 'alfa', 'nome' => ['it' => 'Alfa'], 'colore' => 'verde']]], '#/valori/0/colore'],
-        [['nome' => $nome, 'valori' => [['chiave' => 'alfa', 'nome' => ['it' => 'Alfa']], ['chiave' => 'alfa', 'nome' => ['it' => 'Beta']]]], '#/valori/1/chiave'],
+        [['nome' => $nome, 'valori' => [['chiave' => crmValore('Alfa Uno'), 'nome' => ['it' => 'Alfa']]]], '#/valori/0/chiave'],
+        [['nome' => $nome, 'valori' => [['chiave' => crmValore('alfa'), 'nome' => ['it' => 'Alfa'], 'colore' => 'verde']]], '#/valori/0/colore'],
+        [['nome' => $nome, 'valori' => [['chiave' => crmValore('alfa'), 'nome' => ['it' => 'Alfa']], ['chiave' => crmValore('alfa'), 'nome' => ['it' => 'Beta']]]], '#/valori/1/chiave'],
     ];
 
     foreach ($casi as [$corpo, $pointer]) {
@@ -87,7 +87,7 @@ it('i valori di una modifica sono un merge: si aggiunge in fondo, si cambia per 
     $elenco = elencoDelFinto($gettoni['anna']);
     $beta = collect($elenco['valori'])->firstWhere('chiave', 'beta');
 
-    $r = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['valori' => [['chiave' => 'delta', 'nome' => ['it' => 'Delta'], 'colore' => '#00FF00']]], $gettoni['anna']);
+    $r = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['valori' => [['chiave' => crmValore('delta'), 'nome' => ['it' => 'Delta'], 'colore' => '#00FF00']]], $gettoni['anna']);
 
     expect($r->status())->toBe(200)
         ->and(array_column($r->json('data.valori'), 'chiave'))->toBe(['alfa', 'beta', 'gamma', 'delta'])
@@ -100,10 +100,10 @@ it('i valori di una modifica sono un merge: si aggiunge in fondo, si cambia per 
         ->and(collect($r->json('data.valori'))->firstWhere('chiave', 'beta'))->toMatchArray(['id' => $beta['id'], 'nome' => ['it' => 'Beta due', 'en' => 'Beta two', 'es' => null], 'posizione' => 1]);
 
     $errori = [
-        [['valori' => [['id' => $beta['id'], 'chiave' => 'altra']]], '#/valori/0/chiave'],
+        [['valori' => [['id' => $beta['id'], 'chiave' => crmValore('altra')]]], '#/valori/0/chiave'],
         [['valori' => [['id' => '01k6w6a2c4e6g8j0m2p4r6t8v1', 'nome' => ['it' => 'X']]]], '#/valori/0/id'],
-        [['valori' => [['chiave' => 'epsilon']]], '#/valori/0/nome/it'],
-        [['valori' => ['chiave' => 'epsilon']], '#/valori'],
+        [['valori' => [['chiave' => crmValore('epsilon')]]], '#/valori/0/nome/it'],
+        [['valori' => ['chiave' => crmValore('epsilon')]], '#/valori'],
         [['nome' => ['it' => null]], '#/nome/it'],
         [['altro' => 1], '#/altro'],
     ];
@@ -129,7 +129,7 @@ it('archiviare un valore lo porta in fondo con posizione null; ripristinarlo lo 
         ->and($r->json('data.valori.2.archiviato_il'))->not->toBeNull();
 
     $conPosto = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['valori' => [['id' => $alfa['id'], 'archiviato' => true, 'posizione' => 1]]], $gettoni['anna']);
-    $nuovoArchiviato = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['valori' => [['chiave' => 'nuovo', 'nome' => ['it' => 'Nuovo'], 'archiviato' => true]]], $gettoni['anna']);
+    $nuovoArchiviato = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['valori' => [['chiave' => crmValore('nuovo'), 'nome' => ['it' => 'Nuovo'], 'archiviato' => true]]], $gettoni['anna']);
 
     expect($conPosto->status())->toBe(422)->and($conPosto->json('errors.0.pointer'))->toBe('#/valori/0/posizione')
         ->and($nuovoArchiviato->status())->toBe(422)->and($nuovoArchiviato->json('errors.0.pointer'))->toBe('#/valori/0/archiviato');
@@ -149,11 +149,11 @@ it('i valori sono al più 500, archiviati compresi, e gli elenchi 200 per worksp
     }
 
     $grande = elencoDelFinto($gettoni['anna'], 'Grande', $valori);
-    $r = alFinto('PATCH', "/v1/crm/elenchi/{$grande['id']}", ['valori' => [['chiave' => 'v501', 'nome' => ['it' => 'Valore 501']]]], $gettoni['anna']);
+    $r = alFinto('PATCH', "/v1/crm/elenchi/{$grande['id']}", ['valori' => [['chiave' => crmValore('v501'), 'nome' => ['it' => 'Valore 501']]]], $gettoni['anna']);
 
     expect($r->status())->toBe(409)->and($r->json('codice'))->toBe('limite_raggiunto')->and($r->json('limite'))->toBe(500)
         ->and(alFinto('PATCH', "/v1/crm/elenchi/{$grande['id']}", ['valori' => [['id' => $grande['valori'][0]['id'], 'archiviato' => true]]], $gettoni['anna'])->status())->toBe(200)
-        ->and(alFinto('PATCH', "/v1/crm/elenchi/{$grande['id']}", ['valori' => [['chiave' => 'v501', 'nome' => ['it' => 'Valore 501']]]], $gettoni['anna'])->status())->toBe(409);
+        ->and(alFinto('PATCH', "/v1/crm/elenchi/{$grande['id']}", ['valori' => [['chiave' => crmValore('v501'), 'nome' => ['it' => 'Valore 501']]]], $gettoni['anna'])->status())->toBe(409);
 
     for ($i = 2; $i <= 200; $i++) {
         expect(alFinto('POST', '/v1/crm/elenchi', ['nome' => ['it' => "Elenco {$i}"]], $gettoni['anna'])->status())->toBe(201);
@@ -187,7 +187,7 @@ it('mostra dà l\'ETag e 304 con If-None-Match; modifica con If-Match vecchio è
     $elenco = elencoDelFinto($gettoni['anna']);
     $etag = alFinto('GET', "/v1/crm/elenchi/{$elenco['id']}", null, $gettoni['anna'])->header('ETag');
 
-    $nessunCambio = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['nome' => ['it' => 'Livelli'], 'valori' => [['chiave' => 'alfa', 'nome' => ['it' => 'Alfa']]]], $gettoni['anna']);
+    $nessunCambio = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['nome' => ['it' => 'Livelli'], 'valori' => [['chiave' => crmValore('alfa'), 'nome' => ['it' => 'Alfa']]]], $gettoni['anna']);
     $nuovo = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['nome' => ['it' => 'Uno']], $gettoni['anna'], null, ['If-Match' => $etag]);
     $vecchio = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['nome' => ['it' => 'Due']], $gettoni['anna'], null, ['If-Match' => $etag]);
 
