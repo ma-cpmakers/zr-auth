@@ -211,4 +211,8 @@ return [
     'chiusura_scheda_mancante' => 'Il corpo deve nominare ogni scheda aperta dello sprint, con la sua destinazione: ne manca almeno una.',
     'chiusura_scheda_non_aperta' => 'Questa non è una scheda aperta di questo sprint, o il corpo la nomina due volte: le schede dello sprint le dà board.schede.elenca con sprint_id.',
     'chiusura_senza_sprint_dopo' => "Non c'è uno sprint pianificato dove mandare la scheda: crealo con board.sprint.crea, o scegli la destinazione `backlog`.",
+    'codice_fiscale_non_valido' => 'Questo codice fiscale non è valido per il paese del profilo: controlla le cifre e la lettera di controllo.',
+    'partita_iva_non_valida' => "Questa partita IVA non è valida per il paese del profilo: controlla le cifre e, per un paese dell'UE, il prefisso del paese.",
+    'predefinito_archiviato' => 'Un elemento archiviato non è il predefinito: ripristinalo (`archiviato: false`) prima di renderlo predefinito.',
+    'predefinito_non_si_toglie' => 'Il predefinito non si toglie: rendi predefinito un altro elemento e questo smette di esserlo.',
 ];

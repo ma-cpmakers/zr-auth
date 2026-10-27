@@ -140,6 +140,15 @@ trait Crm
         ['GET', '#^/v1/crm/impostazioni$#', 'crm.impostazioni.mostra'],
         ['PATCH', '#^/v1/crm/impostazioni$#', 'crm.impostazioni.modifica'],
         ['GET', '#^/v1/crm/utilizzo$#', 'crm.utilizzo.mostra'],
+        ['GET', '#^/v1/crm/profili-fatturazione$#', 'crm.profili-fatturazione.elenca'],
+        ['POST', '#^/v1/crm/profili-fatturazione$#', 'crm.profili-fatturazione.crea'],
+        ['POST', '#^/v1/crm/profili-fatturazione/ricerca$#', 'crm.profili-fatturazione.ricerca.crea'],
+        ['GET', '#^/v1/crm/profili-fatturazione/([^/]+)$#', 'crm.profili-fatturazione.mostra'],
+        ['PATCH', '#^/v1/crm/profili-fatturazione/([^/]+)$#', 'crm.profili-fatturazione.modifica'],
+        ['GET', '#^/v1/crm/indirizzi-spedizione$#', 'crm.indirizzi-spedizione.elenca'],
+        ['POST', '#^/v1/crm/indirizzi-spedizione$#', 'crm.indirizzi-spedizione.crea'],
+        ['GET', '#^/v1/crm/indirizzi-spedizione/([^/]+)$#', 'crm.indirizzi-spedizione.mostra'],
+        ['PATCH', '#^/v1/crm/indirizzi-spedizione/([^/]+)$#', 'crm.indirizzi-spedizione.modifica'],
     ];
 
     /** Gli stati di un contatto e di un'azienda (Persona::STATI, Organizzazione::STATI). */
@@ -257,7 +266,7 @@ trait Crm
      *
      * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'profili' => [], 'indirizzi' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -389,6 +398,15 @@ trait Crm
             'crm.impostazioni.mostra' => [200, ['data' => ['valuta' => $this->valutaCrm($this->conCrm($richiesta)['workspace'])]]],
             'crm.impostazioni.modifica' => $this->modificaImpostazioniCrm($richiesta, $corpo, $amministra),
             'crm.utilizzo.mostra' => $this->utilizzoCrm($richiesta),
+            'crm.profili-fatturazione.elenca' => $this->elencaDelClienteCrm($richiesta, 'profili', $operazione),
+            'crm.profili-fatturazione.crea' => $this->creaProfiloFatturazioneCrm($richiesta, $corpo),
+            'crm.profili-fatturazione.ricerca.crea' => $this->ricercaProfiliCrm($richiesta, $corpo, $operazione),
+            'crm.profili-fatturazione.mostra' => $this->mostraProfiloFatturazioneCrm($richiesta, $parametri[0]),
+            'crm.profili-fatturazione.modifica' => $this->modificaProfiloFatturazioneCrm($richiesta, $corpo, $parametri[0]),
+            'crm.indirizzi-spedizione.elenca' => $this->elencaDelClienteCrm($richiesta, 'indirizzi', $operazione),
+            'crm.indirizzi-spedizione.crea' => $this->creaIndirizzoSpedizioneCrm($richiesta, $corpo),
+            'crm.indirizzi-spedizione.mostra' => $this->mostraIndirizzoSpedizioneCrm($richiesta, $parametri[0]),
+            'crm.indirizzi-spedizione.modifica' => $this->modificaIndirizzoSpedizioneCrm($richiesta, $corpo, $parametri[0]),
             default => throw new LogicException("Il finto non fa {$operazione}."),
         };
     }
@@ -521,7 +539,7 @@ trait Crm
         }
 
         if ($cambiata) {
-            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti', 'rate', 'pagamenti', 'preventivi', 'scadenzeTipi'], true) ? 'aggiornato_il' : 'aggiornata_il';
+            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti', 'rate', 'pagamenti', 'preventivi', 'scadenzeTipi', 'profili', 'indirizzi'], true) ? 'aggiornato_il' : 'aggiornata_il';
             $riga[$colonna] = self::dopoCrm($riga[$colonna]);
             $this->crm[$tipo][$id] = $riga;
         }
@@ -2562,6 +2580,7 @@ trait Crm
         $this->dimenticaIPagamentiCrm($persona['id']);
         $this->dimenticaIPreventiviCrm($persona['id']);
         $this->dimenticaLeScadenzeCrm($persona['id']);
+        $this->dimenticaIProfiliCrm($persona['id']);
 
         foreach ($this->crm['note'] as $nota => $riga) {
             if ($riga['persona_id'] === $persona['id']) {

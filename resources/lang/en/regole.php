@@ -210,4 +210,8 @@ return [
     'chiusura_scheda_mancante' => 'The body must name every open card of the sprint, with its destination: at least one is missing.',
     'chiusura_scheda_non_aperta' => 'This is not an open card of this sprint, or the body names it twice: board.schede.elenca gives the cards of the sprint with sprint_id.',
     'chiusura_senza_sprint_dopo' => 'There is no planned sprint to send the card to: create one with board.sprint.crea, or choose the destination `backlog`.',
+    'codice_fiscale_non_valido' => "This tax code is not valid for the profile's country: check the digits and the check letter.",
+    'partita_iva_non_valida' => "This VAT number is not valid for the profile's country: check the digits and, for an EU country, the country prefix.",
+    'predefinito_archiviato' => 'An archived item is not the default: restore it (`archiviato: false`) before making it the default.',
+    'predefinito_non_si_toglie' => 'The default cannot be removed: make another item the default and this one stops being it.',
 ];

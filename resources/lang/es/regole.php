@@ -210,4 +210,8 @@ return [
     'chiusura_scheda_mancante' => 'El cuerpo debe nombrar cada tarjeta abierta del sprint, con su destino: falta al menos una.',
     'chiusura_scheda_non_aperta' => 'Esta no es una tarjeta abierta de este sprint, o el cuerpo la nombra dos veces: board.schede.elenca da las tarjetas del sprint con sprint_id.',
     'chiusura_senza_sprint_dopo' => 'No hay un sprint planificado al que enviar la tarjeta: créalo con board.sprint.crea, o elige el destino `backlog`.',
+    'codice_fiscale_non_valido' => 'Este código fiscal no es válido para el país del perfil: revisa los dígitos y la letra de control.',
+    'partita_iva_non_valida' => 'Este número de IVA no es válido para el país del perfil: revisa los dígitos y, en un país de la UE, el prefijo del país.',
+    'predefinito_archiviato' => 'Un elemento archivado no es el predeterminado: restáuralo (`archiviato: false`) antes de hacerlo predeterminado.',
+    'predefinito_non_si_toglie' => 'El predeterminado no se quita: haz predeterminado otro elemento y este deja de serlo.',
 ];
