@@ -353,6 +353,10 @@ return [
         'title' => 'Función vinculada',
         'detail' => 'Esta función del CRM no se puede activar o desactivar ahora: o está siempre activa, o necesita una función que está desactivada, o la necesita otra función activa. Nada cambia en cascada. Mira `richiede` y `attivo` en crm.funzioni.elenca, activa o desactiva antes la otra función con crm.funzioni.modifica y repite la petición. El método no ha escrito nada.',
     ],
+    'funzione_spenta' => [
+        'title' => 'Función apagada',
+        'detail' => 'La función del sector de este tablero (construcción o digital) está apagada en el workspace, por lo que la función del tablero no se enciende. Los tableros ya encendidos siguen encendidos. Enciende antes la función con board.funzioni.modifica (se necesita el rol de propietario o administrador) y repite la solicitud. El método no ha escrito nada.',
+    ],
     'personalizzazione_con_dati' => [
         'title' => 'Personalización con datos',
         'detail' => 'El CRM de este workspace ya tiene datos (contactos, oportunidades, actividades, catálogo, presupuestos, compras, cobros o vencimientos): un paquete de personalización se instala solo en un CRM vacío, porque cambiaría los datos que hay. El método no ha escrito nada. Para empezar desde un paquete crea un workspace nuevo.',

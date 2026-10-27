@@ -353,6 +353,10 @@ return [
         'title' => 'Funzione vincolata',
         'detail' => "Questa funzione del CRM non si può accendere o spegnere adesso: o è sempre attiva, o richiede una funzione che è spenta, o è richiesta da un'altra funzione accesa. Nessuna funzione cambia a cascata. Guarda `richiede` e `attivo` in crm.funzioni.elenca, accendi o spegni prima l'altra funzione con crm.funzioni.modifica e ripeti la richiesta. Il metodo non ha scritto niente.",
     ],
+    'funzione_spenta' => [
+        'title' => 'Funzione spenta',
+        'detail' => 'La funzione del settore di questa board (edilizia o digitale) è spenta nel workspace, quindi la funzione della board non si accende. Le board già accese restano accese. Accendi prima la funzione con board.funzioni.modifica (serve il ruolo di proprietario o amministratore) e ripeti la richiesta. Il metodo non ha scritto niente.',
+    ],
     'personalizzazione_con_dati' => [
         'title' => 'Personalizzazione con dati',
         'detail' => 'Il CRM di questo workspace ha già dei dati (contatti, trattative, attività, catalogo, preventivi, acquisti, incassi o scadenze): un pacchetto di personalizzazione si installa solo su un CRM vuoto, perché cambierebbe i dati che ci sono. Il metodo non ha scritto niente. Per partire da un pacchetto crea un nuovo workspace.',

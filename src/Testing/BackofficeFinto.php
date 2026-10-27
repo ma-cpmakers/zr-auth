@@ -27,6 +27,7 @@ use Zeiras\Auth\Testing\Finto\CrmCampi;
 use Zeiras\Auth\Testing\Finto\CrmCatalogo;
 use Zeiras\Auth\Testing\Finto\CrmRate;
 use Zeiras\Auth\Testing\Finto\CrmEsiti;
+use Zeiras\Auth\Testing\Finto\BoardFunzioni;
 use Zeiras\Auth\Testing\Finto\CrmPersonalizzazione;
 use Zeiras\Auth\Testing\Finto\CrmPreventivi;
 use Zeiras\Auth\Testing\Finto\CrmPreventiviPubblici;
@@ -65,6 +66,7 @@ use Zeiras\Auth\Testing\Finto\Todo;
  */
 final class BackofficeFinto
 {
+    use BoardFunzioni;
     use Crm;
     use CrmAcquisti;
     use CrmAvanzate;
@@ -155,6 +157,8 @@ final class BackofficeFinto
         ['GET', '#^/v1/ricerca$#', 'ricerca.elenca'],
         ['POST', '#^/v1/ricerca$#', 'ricerca.crea'],
         ['GET', '#^/v1/board/cartelle$#', 'board.cartelle.elenca'],
+        ['GET', '#^/v1/board/funzioni$#', 'board.funzioni.elenca'],
+        ['PATCH', '#^/v1/board/funzioni/([^/]+)$#', 'board.funzioni.modifica'],
         ['GET', '#^/v1/board/board$#', 'board.board.elenca'],
         ['GET', '#^/v1/board/schede$#', 'board.schede.elenca'],
         ['GET', '#^/v1/board/schede/([^/]+)$#', 'board.schede.mostra'],
@@ -1335,6 +1339,8 @@ final class BackofficeFinto
                 'ricerca.elenca' => $this->elencaRicerca($richiesta),
                 'ricerca.crea' => $this->creaRicerca($richiesta, $corpo),
                 'board.cartelle.elenca' => $this->elencaCartelle($richiesta),
+                'board.funzioni.elenca' => $this->elencaFunzioniBoard($richiesta),
+                'board.funzioni.modifica' => $this->modificaFunzioneBoard($richiesta, $corpo, $parametri[0]),
                 'board.board.elenca' => $this->elencaBoard($richiesta),
                 'board.schede.elenca' => $this->elencaSchede($richiesta),
                 'board.schede.mostra' => $this->mostraScheda($richiesta, $parametri[0]),
@@ -1772,7 +1778,7 @@ final class BackofficeFinto
         foreach ($this->boards as $board) {
             if ($board['workspace'] === $chi['workspace'] && $board['stato'] === $stato) {
                 $voci[] = [
-                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'metodo' => $board['metodo'] ?? null, 'creata_il' => self::iso($board['creata_il']),
+                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'metodo' => $board['metodo'] ?? null, 'funzione_attiva' => true, 'creata_il' => self::iso($board['creata_il']),
                     'aggiornata_il' => self::iso($board['aggiornata_il']), 'numero_schede' => $this->schedeDellaBoard($board['id']), 'descrizione' => null,
                     'sfondo' => 'neutral', 'stato' => $board['stato'], 'applica_regole' => true,
                     'chiusa_il' => $board['chiusa_il'] === null ? null : self::iso($board['chiusa_il']),

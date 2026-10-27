@@ -353,6 +353,10 @@ return [
         'title' => 'Linked function',
         'detail' => 'This CRM function cannot be turned on or off right now: it is either always on, or it needs a function that is off, or another function that is on needs it. Nothing changes in cascade. Check `richiede` and `attivo` in crm.funzioni.elenca, turn the other function on or off first with crm.funzioni.modifica, then try again. The method wrote nothing.',
     ],
+    'funzione_spenta' => [
+        'title' => 'Function is off',
+        'detail' => "The function for this board's sector (construction or digital) is off in the workspace, so the board's function cannot be turned on. Boards that are already on stay on. Turn the function on first with board.funzioni.modifica (owner or administrator role required) and repeat the request. The method has written nothing.",
+    ],
     'personalizzazione_con_dati' => [
         'title' => 'Customization with data',
         'detail' => 'This workspace\'s CRM already has data (contacts, deals, activities, catalog, quotes, purchases, payments or deadlines): a customization package is installed only on an empty CRM, because it would change the data that is there. The method wrote nothing. To start from a package, create a new workspace.',
