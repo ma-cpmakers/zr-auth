@@ -217,7 +217,7 @@
   "funzione.attivita.descrizione": {
     "it": "Chiamate, email e cose da fare, con le loro scadenze.",
     "en": "Calls, emails and to-dos, with their due dates.",
-    "es": "Llamadas, correos y tareas, con sus fechas."
+    "es": "Llamadas, correos y actividades, con sus fechas."
   },
   "funzione.lead.nome": {
     "it": "Lead",
@@ -387,6 +387,6 @@
   "passo.prima_attivita.testo": {
     "it": "Una chiamata, un'email o una cosa da fare, con la sua scadenza.",
     "en": "A call, an email or a to-do, with its due date.",
-    "es": "Una llamada, un correo o una tarea, con su fecha."
+    "es": "Una llamada, un correo o una actividad, con su fecha."
   }
 }
