@@ -103,7 +103,7 @@ it('i valori di una modifica sono un merge: si aggiunge in fondo, si cambia per 
         [['valori' => [['id' => $beta['id'], 'chiave' => crmValore('altra')]]], '#/valori/0/chiave'],
         [['valori' => [['id' => '01k6w6a2c4e6g8j0m2p4r6t8v1', 'nome' => ['it' => 'X']]]], '#/valori/0/id'],
         [['valori' => [['chiave' => crmValore('epsilon')]]], '#/valori/0/nome/it'],
-        [['valori' => ['chiave' => crmValore('epsilon')]], '#/valori'],
+        [['valori' => ['a' => ['chiave' => crmValore('epsilon'), 'nome' => ['it' => 'Epsilon']]]], '#/valori'],
         [['nome' => ['it' => null]], '#/nome/it'],
         [['altro' => 1], '#/altro'],
     ];
@@ -186,12 +186,13 @@ it('mostra dà l\'ETag e 304 con If-None-Match; modifica con If-Match vecchio è
     [, $gettoni] = studioColCrm();
     $elenco = elencoDelFinto($gettoni['anna']);
     $etag = alFinto('GET', "/v1/crm/elenchi/{$elenco['id']}", null, $gettoni['anna'])->header('ETag');
+    $condizionale = alFinto('GET', "/v1/crm/elenchi/{$elenco['id']}", null, $gettoni['anna'], null, ['If-None-Match' => $etag]);
 
     $nessunCambio = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['nome' => ['it' => 'Livelli'], 'valori' => [['chiave' => crmValore('alfa'), 'nome' => ['it' => 'Alfa']]]], $gettoni['anna']);
     $nuovo = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['nome' => ['it' => 'Uno']], $gettoni['anna'], null, ['If-Match' => $etag]);
     $vecchio = alFinto('PATCH', "/v1/crm/elenchi/{$elenco['id']}", ['nome' => ['it' => 'Due']], $gettoni['anna'], null, ['If-Match' => $etag]);
 
-    expect(alFinto('GET', "/v1/crm/elenchi/{$elenco['id']}", null, $gettoni['anna'], null, ['If-None-Match' => $etag])->status())->toBe(304)
+    expect($condizionale->status())->toBe(304)
         ->and($nessunCambio->header('ETag'))->toBe($etag)
         ->and($nuovo->status())->toBe(200)->and($nuovo->header('ETag'))->not->toBe($etag)
         ->and($vecchio->status())->toBe(412)->and($vecchio->json('codice'))->toBe('precondizione_fallita')

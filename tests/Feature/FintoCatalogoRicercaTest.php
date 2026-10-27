@@ -16,7 +16,7 @@ function nomiCercatiNelFinto(array $corpo, string $gettone): array
 it('q cerca nel nome senza maiuscole né accenti, ogni parola deve starci, e {} dà le voci dell\'elenco (CR.1, CR.2)', function () {
     [, $gettoni] = studioColCrm();
     foreach (['Corso PM base', 'Corso di cucina', 'Èsame di PM'] as $nome) {
-        expect(alFinto('POST', '/v1/crm/catalogo', ['tipo' => 'servizio', 'nome' => $nome], $gettoni['carla'])->status())->toBe(201);
+        expect(alFinto('POST', '/v1/crm/catalogo', ['tipo' => 'servizio', 'nome' => $nome], $gettoni['anna'])->status())->toBe(201);
     }
 
     $elenco = array_column(alFinto('GET', '/v1/crm/catalogo', null, $gettoni['carla'])->json('data'), 'nome');
@@ -31,7 +31,7 @@ it('q cerca nel nome senza maiuscole né accenti, ogni parola deve starci, e {} 
 it('i filtri, il totale e il cursore valgono come in elenca; un cursore con altri filtri è 422 su #/cursore (CR.2)', function () {
     [, $gettoni] = studioColCrm();
     foreach ([['Corso uno', 'servizio'], ['Corso due', 'prodotto'], ['Corso tre', 'servizio']] as [$nome, $tipo]) {
-        alFinto('POST', '/v1/crm/catalogo', ['tipo' => $tipo, 'nome' => $nome], $gettoni['carla']);
+        alFinto('POST', '/v1/crm/catalogo', ['tipo' => $tipo, 'nome' => $nome], $gettoni['anna']);
     }
 
     $prima = alFinto('POST', '/v1/crm/catalogo/ricerca', ['q' => 'corso', 'tipo' => ['servizio'], 'limite' => 1, 'totale' => true], $gettoni['carla']);
@@ -48,7 +48,7 @@ it('i filtri, il totale e il cursore valgono come in elenca; un cursore con altr
 
 it('q vuoto o non testo è 422 su #/q, e q nella query è 422 sul parametro senza ripetere il valore, in ricerca e in elenca (CR.4)', function () {
     [, $gettoni] = studioColCrm();
-    alFinto('POST', '/v1/crm/catalogo', ['tipo' => 'servizio', 'nome' => 'Segretissimo'], $gettoni['carla']);
+    alFinto('POST', '/v1/crm/catalogo', ['tipo' => 'servizio', 'nome' => 'Segretissimo'], $gettoni['anna']);
 
     foreach ([str_repeat('a', 101), '', '   ', null, 12] as $q) {
         $risposta = alFinto('POST', '/v1/crm/catalogo/ricerca', ['q' => $q], $gettoni['carla']);

@@ -559,8 +559,7 @@ trait Crm
         }
 
         if ($cambiata) {
-            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti', 'rate', 'pagamenti', 'preventivi', 'scadenzeTipi', 'profili', 'indirizzi'], true) ? 'aggiornato_il' : 'aggiornata_il';
-            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'elenchi', 'acquisti', 'rate', 'pagamenti', 'preventivi', 'scadenzeTipi'], true) ? 'aggiornato_il' : 'aggiornata_il';
+            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'elenchi', 'acquisti', 'rate', 'pagamenti', 'preventivi', 'scadenzeTipi', 'profili', 'indirizzi'], true) ? 'aggiornato_il' : 'aggiornata_il';
             $riga[$colonna] = self::dopoCrm($riga[$colonna]);
             $this->crm[$tipo][$id] = $riga;
         }
