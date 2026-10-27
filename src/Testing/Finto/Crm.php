@@ -1691,11 +1691,13 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('organizzazioni', $chi['workspace'], $id);
+        // `If-Match` (#2566): letto prima del corpo, come nel backoffice.
+        $this->pretendiLaVersioneCrm($richiesta, $this->voceOrganizzazione($riga, true));
         $campi = $this->modificaCrm($corpo, [...$this->regoleOrganizzazione($chi['workspace'], false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'organizzazione', false, $riga['id'], $corpo['campi'] ?? null), 'archiviata' => ['filled', 'boolean:strict']]);
 
+        // L'indirizzo è un Merge Patch (#2566): le chiavi mandate cambiano, le assenti restano, `null` toglie la chiave o l'indirizzo intero.
         if (array_key_exists('indirizzo', $campi)) {
-            $this->controllaLIndirizzoCrm($campi['indirizzo']);
-            $campi['indirizzo'] = self::indirizzoCrm($campi['indirizzo']);
+            $campi['indirizzo'] = $this->indirizzoDopoCrm($riga['indirizzo'] ?? null, $campi['indirizzo']);
         }
 
         if (array_key_exists('dominio', $campi) && $campi['dominio'] !== null) {
@@ -1703,8 +1705,29 @@ trait Crm
         }
 
         $this->applicaOrganizzazione($riga['id'], $campi, $chi['persona']);
+        $voce = $this->voceOrganizzazione($this->crm['organizzazioni'][$riga['id']], true);
 
-        return [200, ['data' => $this->voceOrganizzazione($this->crm['organizzazioni'][$riga['id']], true)]];
+        return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
+    }
+
+    /**
+     * L'indirizzo di un'azienda dopo una modifica (Organizzazioni::indirizzoDopo): le chiavi mandate cambiano, le assenti restano, `null` toglie
+     * la chiave e `indirizzo: null` l'indirizzo intero. Le regole fra i campi valgono sull'indirizzo che ne esce.
+     *
+     * @param  array<string, mixed>|null  $attuale
+     * @param  array<string, mixed>|null  $mandato
+     * @return array<string, string|float|null>|null
+     */
+    private function indirizzoDopoCrm(?array $attuale, ?array $mandato): ?array
+    {
+        if ($mandato === null) {
+            return null;
+        }
+
+        $dopo = array_replace(self::indirizzoCrm($attuale) ?? array_fill_keys(self::CRM_INDIRIZZO, null), array_intersect_key($mandato, array_flip(self::CRM_INDIRIZZO)));
+        $this->controllaLIndirizzoCrm($dopo);
+
+        return self::indirizzoCrm($dopo);
     }
 
     /** OrganizzazioniModifica::applica: i campi che cambiano davvero, l'archivio, la cronologia. */

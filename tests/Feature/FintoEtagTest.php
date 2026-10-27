@@ -130,3 +130,29 @@ it('un\'attività che non c\'è è 404 con qualunque If-Match o If-None-Match, p
         expect($risposta->status())->toBe(404)->and($risposta->json('codice'))->toBe('non_trovato');
     }
 });
+
+it('crm.organizzazioni.modifica con If-Match: la versione giusta passa e torna l\'ETag nuovo, una vecchia è 412 senza scrivere (#2566 A5)', function () {
+    [, $gettoni] = studioColCrm();
+    $anna = $gettoni['anna'];
+    $id = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $anna)->json('data.id');
+    $percorso = "/v1/crm/organizzazioni/{$id}";
+    $letta = etagDi(alFinto('GET', $percorso, null, $anna));
+
+    $giusta = alFinto('PATCH', $percorso, ['indirizzo' => ['cap' => '20121']], $anna, null, ['If-Match' => $letta]);
+    $nuova = etagDi($giusta);
+    $vecchia = alFinto('PATCH', $percorso, ['indirizzo' => ['citta' => 'Milano']], $anna, null, ['If-Match' => $letta]);
+    $primaDelCorpo = alFinto('PATCH', $percorso, ['stato' => 'inesistente'], $anna, null, ['If-Match' => $letta]);
+    $dopo = alFinto('GET', $percorso, null, $anna);
+    $stella = alFinto('PATCH', $percorso, ['telefono' => '+39 02 1'], $anna, null, ['If-Match' => '*']);
+    $senza = alFinto('PATCH', $percorso, ['telefono' => '+39 02 2'], $anna);
+
+    expect($giusta->status())->toBe(200)
+        ->and($nuova)->not->toBe($letta)
+        ->and($vecchia->status())->toBe(412)
+        ->and($vecchia->json('codice'))->toBe('precondizione_fallita')
+        ->and($primaDelCorpo->status())->toBe(412)
+        ->and($dopo->json('data.indirizzo.citta'))->toBeNull()
+        ->and($dopo->header('ETag'))->toBe($nuova)
+        ->and($stella->status())->toBe(200)
+        ->and($senza->status())->toBe(200);
+});

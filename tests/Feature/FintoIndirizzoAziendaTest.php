@@ -53,15 +53,34 @@ it('indirizzo vuole la via, citta rifiuta via e cap, testo_libero vuole il solo 
         ->and($testoLibero->json('data.indirizzo'))->toBe(indirizzoDelFinto(['testo' => 'Zona industriale', 'precisione' => 'testo_libero']));
 });
 
-it('l\'indirizzo sostituisce l\'oggetto intero in modifica: senza lat e lng le toglie (AD.6)', function () {
+it('l\'indirizzo è un Merge Patch in modifica: le chiavi assenti restano, un null toglie la chiave, indirizzo null lo toglie intero (#2566 A1, A2)', function () {
     [, $gettoni] = studioColCrm();
-    $id = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl', 'indirizzo' => ['precisione' => 'citta', 'citta' => 'Milano', 'lat' => 45.4642, 'lng' => 9.19]], $gettoni['carla'])->json('data.id');
+    $id = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl', 'indirizzo' => ['via' => 'Via Roma 12', 'cap' => '20121', 'citta' => 'Milano', 'lat' => 45.4642, 'lng' => 9.19]], $gettoni['carla'])->json('data.id');
 
-    $senza = alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => ['precisione' => 'citta', 'citta' => 'Milano']], $gettoni['carla']);
+    $cap = alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => ['cap' => '20122']], $gettoni['carla']);
+    $senzaCoordinate = alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => ['lat' => null, 'lng' => null]], $gettoni['carla']);
+    $senzaVia = alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => ['via' => null]], $gettoni['carla']);
+    $tutteNull = alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => ['cap' => null, 'citta' => null]], $gettoni['carla']);
+    alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => ['citta' => 'Roma']], $gettoni['carla']);
     $tolto = alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => null], $gettoni['carla']);
 
-    expect($senza->json('data.indirizzo'))->toBe(indirizzoDelFinto(['citta' => 'Milano', 'precisione' => 'citta']))
+    expect($cap->json('data.indirizzo'))->toBe(indirizzoDelFinto(['via' => 'Via Roma 12', 'cap' => '20122', 'citta' => 'Milano', 'lat' => 45.4642, 'lng' => 9.19]))
+        ->and($senzaCoordinate->json('data.indirizzo'))->toBe(indirizzoDelFinto(['via' => 'Via Roma 12', 'cap' => '20122', 'citta' => 'Milano']))
+        ->and($senzaVia->json('data.indirizzo'))->toBe(indirizzoDelFinto(['cap' => '20122', 'citta' => 'Milano']))
+        ->and($tutteNull->json('data.indirizzo'))->toBeNull()
         ->and($tolto->json('data.indirizzo'))->toBeNull();
+});
+
+it('le regole fra i campi valgono sull\'indirizzo com\'è dopo la modifica (#2566 A1)', function () {
+    [, $gettoni] = studioColCrm();
+    $id = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl', 'indirizzo' => ['precisione' => 'indirizzo', 'via' => 'Via Roma 12', 'cap' => '20121']], $gettoni['carla'])->json('data.id');
+
+    $senzaVia = alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => ['via' => null]], $gettoni['carla']);
+    $citta = alFinto('PATCH', "/v1/crm/organizzazioni/{$id}", ['indirizzo' => ['precisione' => 'citta', 'citta' => 'Milano', 'via' => null, 'cap' => null]], $gettoni['carla']);
+
+    expect($senzaVia->status())->toBe(422)
+        ->and($senzaVia->json('errors.0'))->toMatchArray(['pointer' => '#/indirizzo/via', 'regola' => 'obbligatorio'])
+        ->and($citta->json('data.indirizzo'))->toBe(indirizzoDelFinto(['precisione' => 'citta', 'citta' => 'Milano']));
 });
 
 it('l\'importazione ricava la precisione dalla riga e rifiuta lat, lng, place_id e precisione (AD.8)', function () {
