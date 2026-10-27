@@ -33,7 +33,7 @@ it('il seminatore crea le notifiche della persona, e notifiche_non_lette di io.m
     $uno = $finto->notifica($studio, $anna, 'com.zeiras.board.scheda.creata', 'pm', CarbonImmutable::parse('2026-10-10 09:00:00.123'));
     $finto->notifica($studio, $anna, 'com.zeiras.altro.fatto', null, CarbonImmutable::parse('2026-10-10 10:00:00'), CarbonImmutable::parse('2026-10-10 10:05:00'));
 
-    expect(array_keys($uno))->toBe(['id', 'tipo', 'app', 'soggetto', 'dati', 'letta_il', 'creata_il', 'ultima_azione_il', 'azioni', 'autore', 'risorsa_nome', 'board', 'per_me'])
+    expect(array_keys($uno))->toBe(['id', 'tipo', 'app', 'soggetto', 'dati', 'letta_il', 'creata_il', 'quando', 'ultima_azione_il', 'azioni', 'autore', 'risorsa_nome', 'board', 'per_me'])
         ->and($uno['ultima_azione_il'])->toBe('2026-10-10T09:00:00.123Z')
         ->and($uno['azioni'])->toBe(1)
         ->and($uno['board'])->toBeNull()
