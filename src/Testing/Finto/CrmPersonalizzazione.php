@@ -34,8 +34,8 @@ trait CrmPersonalizzazione
     /** @var array<string, array{pack: string, variante: ?string, versione: int, creata_il: \Carbon\CarbonImmutable}> l'installazione di ogni workspace */
     private array $crmInstallazioni = [];
 
-    /** @var array{pack: array<string, mixed>, vocabolario: array<string, array<string, string>>}|null */
-    private ?array $crmPackLetto = null;
+    /** @var array<string, array{pack: array<string, mixed>, vocabolario: array<string, array<string, string>>}> i pack letti da resources/crm, per chiave */
+    private array $crmPackLetti = [];
 
     /**
      * crm.personalizzazione.mostra (PersonalizzazioneController::mostra): il pack attivo, il cliente predefinito, la barra già filtrata sulle
@@ -46,7 +46,7 @@ trait CrmPersonalizzazione
     private function mostraPersonalizzazioneCrm(Request $richiesta): array
     {
         $chi = $this->conCrm($richiesta);
-        $pack = $this->packCrm();
+        $pack = $this->packCrm($chi['workspace']);
         $installazione = $this->crmInstallazioni[$chi['workspace']] ?? null;
 
         return [200, ['data' => [
@@ -70,9 +70,11 @@ trait CrmPersonalizzazione
         $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
 
         return $this->conIdempotenza($richiesta, 'crm.personalizzazione.installazione.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $scelto = $corpo['pack'] ?? null;
+            $varianti = is_string($scelto) && in_array($scelto, $this->chiaviDeiPackCrm(), true) ? array_column($this->packDiCrm($scelto)['varianti'], 'chiave') : [];
             $campi = $this->testi->validaCorpo($corpo, [
-                'pack' => ['bail', 'required', 'string', 'max:40', Rule::in([$this->packCrm()['chiave']])],
-                'variante' => ['bail', 'sometimes', 'nullable', 'string', 'max:40', Rule::in(array_column($this->packCrm()['varianti'], 'chiave'))],
+                'pack' => ['bail', 'required', 'string', 'max:40', Rule::in($this->chiaviDeiPackCrm())],
+                'variante' => ['bail', 'sometimes', 'nullable', 'string', 'max:40', Rule::in($varianti)],
             ]);
 
             if (isset($this->crmInstallazioni[$chi['workspace']])) {
@@ -83,13 +85,28 @@ trait CrmPersonalizzazione
                 throw new Problema('personalizzazione_con_dati');
             }
 
-            $pack = $this->packCrm();
+            $pack = $this->packDiCrm($campi['pack']);
             $this->crmInstallazioni[$chi['workspace']] = ['pack' => $pack['chiave'], 'variante' => $campi['variante'] ?? null, 'versione' => $pack['versione'], 'creata_il' => self::adessoCrm()];
             $fatta = $this->crmInstallazioni[$chi['workspace']];
+
+            // Come il backoffice: la pipeline di partenza intatta si archivia solo se il pack porta le sue (#2707); poi le pipeline, i motivi, i
+            // tipi di scadenza e il catalogo del pack (InstallaIlPack), o tutto o niente.
+            $prima = $this->crm;
+
+            try {
+                $archiviate = ($pack['pipeline'] ?? []) === [] ? [] : $this->archiviaLePipelineDiPartenzaCrm($chi['workspace']);
+                $this->installaDatiDelPackCrm($chi, $pack);
+            } catch (Problema $errore) {
+                $this->crm = $prima;
+                unset($this->crmInstallazioni[$chi['workspace']]);
+
+                throw $errore;
+            }
 
             return [201, ['data' => [
                 'pack' => ['chiave' => $fatta['pack'], 'versione' => $fatta['versione'], 'variante' => $fatta['variante']],
                 'installata_il' => self::iso($fatta['creata_il']),
+                'pipeline_archiviate' => $archiviate,
             ]], ['Location' => '/v1/crm/personalizzazione']];
         });
     }
@@ -103,7 +120,7 @@ trait CrmPersonalizzazione
     {
         $chi = $this->conCrm($richiesta);
 
-        return [200, ['data' => [$this->descrittoCrm($chi['persona'])]]];
+        return [200, ['data' => array_map(fn (string $chiave) => $this->descrittoCrm($chi['persona'], $this->packDiCrm($chiave)), $this->chiaviDeiPackCrm())]];
     }
 
     /**
@@ -115,14 +132,21 @@ trait CrmPersonalizzazione
     {
         $chi = $this->conCrm($richiesta);
 
-        if ($chiave !== $this->packCrm()['chiave']) {
+        if (! in_array($chiave, $this->chiaviDeiPackCrm(), true)) {
             throw new Problema('non_trovato');
         }
 
-        $pack = $this->packCrm();
+        $pack = $this->packDiCrm($chiave);
         $accese = array_keys(array_filter($pack['funzioni'], fn (array $funzione) => $funzione['sempre'] || $funzione['predefinita']));
+        $lingua = $this->linguaCrm($chi['persona']);
+        $generico = $this->packLetturaCrm('generico')['vocabolario'];
 
-        return [200, ['data' => $this->descrittoCrm($chi['persona']) + ['anteprima' => $pack['cambia'] + [
+        return [200, ['data' => $this->descrittoCrm($chi['persona'], $pack) + ['anteprima' => [
+            'vocabolario_chiavi' => array_keys(array_filter($this->packLetturaCrm($chiave)['vocabolario'], fn (array $testi, string $voce) => ($generico[$voce] ?? null) !== $testi, ARRAY_FILTER_USE_BOTH)),
+            'pipeline' => array_map(fn (array $pipeline) => $pipeline['nome'][$lingua], $pack['pipeline'] ?? []),
+            'campi' => [],
+            'catalogo_bozza' => array_map(fn (array $voce) => $voce['nome'][$lingua], $pack['catalogo'] ?? []),
+            'tipi_scadenza' => array_map(fn (array $tipo) => $tipo['nome'][$lingua], $pack['tipi_scadenza'] ?? []),
             'funzioni_attive' => $accese,
             'barra' => array_keys(array_filter($pack['barra'], fn (?string $funzione) => $funzione === null || in_array($funzione, $accese, true))),
             'primi_passi' => array_keys(array_filter($pack['passi'], fn (array $passo) => in_array($passo['funzione'], $accese, true))),
@@ -152,7 +176,7 @@ trait CrmPersonalizzazione
     {
         $chi = $this->conCrm($richiesta, ['proprietario', 'amministratore']);
 
-        if (! array_key_exists($funzione, $this->packCrm()['funzioni'])) {
+        if (! array_key_exists($funzione, $this->packCrm($chi['workspace'])['funzioni'])) {
             throw new Problema('non_trovato');
         }
 
@@ -209,7 +233,7 @@ trait CrmPersonalizzazione
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.json', ['attribute' => 'corpo']), 'regola' => Regola::TIPO, 'pointer' => '#']]);
         }
 
-        $valide = array_keys($this->packLetturaCrm()['vocabolario']);
+        $valide = array_keys($this->packLetturaCrm($this->chiavePackCrm($chi['workspace']))['vocabolario']);
         $errori = [];
 
         foreach ($corpo as $chiave => $valore) {
@@ -280,20 +304,152 @@ trait CrmPersonalizzazione
     }
 
     /** Il pack e il suo vocabolario, letti una volta. @return array{pack: array<string, mixed>, vocabolario: array<string, array<string, string>>} */
-    private function packLetturaCrm(): array
+    private function packLetturaCrm(string $chiave): array
     {
         $risorse = dirname(__DIR__, 3).'/resources/crm';
 
-        return $this->crmPackLetto ??= [
-            'pack' => require $risorse.'/generico.php',
-            'vocabolario' => json_decode((string) file_get_contents($risorse.'/generico-vocabolario.json'), true, 512, JSON_THROW_ON_ERROR),
+        return $this->crmPackLetti[$chiave] ??= [
+            'pack' => require $risorse."/{$chiave}.php",
+            'vocabolario' => json_decode((string) file_get_contents($risorse."/{$chiave}-vocabolario.json"), true, 512, JSON_THROW_ON_ERROR),
         ];
     }
 
-    /** @return array<string, mixed> il pack attivo: oggi «generico» per ogni workspace */
-    private function packCrm(): array
+    /**
+     * Ciò che il pack scrive nel workspace (InstallaIlPack): le pipeline con le fasi aperte nell'ordine del pack (la prima nata è quella di
+     * partenza), i motivi di perdita, i tipi di scadenza e le voci del catalogo in bozza, nella lingua di chi installa. Un motivo o un tipo
+     * già presente (stesso nome per somiglianza) non si rifà. Il chiamante ripristina lo stato se qualcosa lancia.
+     *
+     * @param  array{workspace: string, persona: string}  $chi
+     * @param  array<string, mixed>  $pack
+     */
+    private function installaDatiDelPackCrm(array $chi, array $pack): void
     {
-        return $this->packLetturaCrm()['pack'];
+        $lingua = $this->linguaCrm($chi['persona']);
+        $workspace = $chi['workspace'];
+
+        foreach ($pack['pipeline'] ?? [] as $pipeline) {
+            $this->nascePipelineCrm($chi, [
+                'nome' => $pipeline['nome'][$lingua],
+                'fasi' => array_map(fn (array $fase) => ['nome' => $fase['nome'][$lingua], 'probabilita' => $fase['probabilita'], 'giorni_massimi' => null], $pipeline['fasi']),
+            ]);
+        }
+
+        foreach ($pack['motivi_perdita'] ?? [] as $motivo) {
+            $nome = $motivo[$lingua];
+            $presente = array_filter($this->motiviViviCrm($workspace), fn (array $altro) => self::nomeSimileCrm($altro['nome'], null) === self::nomeSimileCrm($nome, null));
+
+            if ($presente !== []) {
+                continue;
+            }
+
+            if (count($this->righeCrm('motivi', $workspace)) >= self::CRM_TETTI['motivi']) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['motivi']]);
+            }
+
+            $vivi = $this->motiviViviCrm($workspace);
+            $id = self::id();
+            $ora = self::adessoCrm();
+            $this->crm['motivi'][$id] = [
+                'id' => $id, 'workspace' => $workspace, 'nome' => $nome,
+                'posizione' => $vivi === [] ? self::CRM_PASSO : end($vivi)['posizione'] + self::CRM_PASSO,
+                'archiviata_il' => null, 'creato_il' => $ora, 'aggiornato_il' => $ora,
+            ];
+        }
+
+        foreach ($pack['tipi_scadenza'] ?? [] as $tipo) {
+            $nome = $tipo['nome'][$lingua];
+            $presente = array_filter($this->righeCrm('scadenzeTipi', $workspace), fn (array $altro) => $altro['stato'] === 'attivo' && self::nomeSimileCrm($altro['nome'], null) === self::nomeSimileCrm($nome, null));
+
+            if ($presente !== []) {
+                continue;
+            }
+
+            if (count($this->righeCrm('scadenzeTipi', $workspace)) >= self::CRM_SCADENZE_TIPI_TETTO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_TIPI_TETTO]);
+            }
+
+            $id = self::id();
+            $ora = self::adessoCrm();
+            $this->crm['scadenzeTipi'][$id] = [
+                'id' => $id, 'workspace' => $workspace, 'nome' => $nome, 'preavvisi' => self::preavvisiOrdinatiCrm($tipo['preavvisi']),
+                'ricorrenza_mesi' => $tipo['ricorrenza_mesi'], 'sensibile' => $tipo['sensibile'], 'stato' => 'attivo',
+                'creato_il' => $ora, 'aggiornato_il' => $ora,
+            ];
+        }
+
+        foreach ($pack['catalogo'] ?? [] as $voce) {
+            $this->nasceVoceDelPackCrm($chi, $voce, $lingua);
+        }
+    }
+
+    /**
+     * Una voce di catalogo del pack, in bozza, come `CatalogoController::daUnPack`: il nome, la categoria e l'etichetta delle unità nella lingua
+     * di chi installa, il prezzo solo se il pack lo dà.
+     *
+     * @param  array{workspace: string, persona: string}  $chi
+     * @param  array<string, mixed>  $voce
+     */
+    private function nasceVoceDelPackCrm(array $chi, array $voce, string $lingua): void
+    {
+        $campi = ['tipo' => $voce['tipo'], 'nome' => $voce['nome'][$lingua], 'iva_inclusa' => $voce['iva_inclusa']];
+
+        foreach (['durata_minuti', 'unita_incluse', 'validita_mesi', 'rinnovo'] as $campo) {
+            if (array_key_exists($campo, $voce)) {
+                $campi[$campo] = $voce[$campo];
+            }
+        }
+
+        foreach (['categoria', 'etichetta_unita'] as $campo) {
+            if (isset($voce[$campo])) {
+                $campi[$campo] = $voce[$campo][$lingua];
+            }
+        }
+
+        if (is_array($voce['prezzo'] ?? null)) {
+            $campi['prezzo'] = ['importo' => $voce['prezzo']['importo']];
+        }
+
+        $this->coerenzaDellaVoceCrm($this->completaLaVoceCrm($campi, null));
+
+        if (count($this->righeCrm('catalogo', $chi['workspace'])) >= self::CRM_CATALOGO_TETTO) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_CATALOGO_TETTO]);
+        }
+
+        $id = self::id();
+        $ora = self::adessoCrm();
+        $this->crm['catalogo'][$id] = $this->colonneDellaVoceCrm($campi) + [
+            'id' => $id, 'workspace' => $chi['workspace'], 'stato' => 'bozza', 'iva_inclusa' => true, 'archiviata_il' => null,
+            'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona'],
+        ] + $this->colonneDellaVoceCrm(array_fill_keys(self::CRM_CATALOGO_CAMPI, null));
+        $this->cambioCrm('catalogo', $id, $chi['persona'], 'creata', []);
+    }
+
+    /** @return list<string> le chiavi dei pack pubblicati: «generico» per primo, poi le altre in ordine alfabetico (come `Personalizzazione::pubblicati`) */
+    private function chiaviDeiPackCrm(): array
+    {
+        $chiavi = array_map(fn (string $file) => basename($file, '.php'), glob(dirname(__DIR__, 3).'/resources/crm/*.php') ?: []);
+        sort($chiavi);
+        usort($chiavi, fn (string $a, string $b) => ($b === 'generico') <=> ($a === 'generico'));
+
+        return $chiavi;
+    }
+
+    /** La chiave del pack del workspace: quello che ha installato, o «generico». */
+    private function chiavePackCrm(string $workspace): string
+    {
+        return $this->crmInstallazioni[$workspace]['pack'] ?? 'generico';
+    }
+
+    /** @return array<string, mixed> il pack di una chiave pubblicata */
+    private function packDiCrm(string $chiave): array
+    {
+        return $this->packLetturaCrm($chiave)['pack'];
+    }
+
+    /** @return array<string, mixed> il pack attivo del workspace: quello che ha installato, o «generico» */
+    private function packCrm(string $workspace): array
+    {
+        return $this->packDiCrm($this->chiavePackCrm($workspace));
     }
 
     /** La lingua del vocabolario e dei nomi: quella della persona del gettone (it, en o es). */
@@ -305,9 +461,8 @@ trait CrmPersonalizzazione
     }
 
     /** @return array{chiave: string, nome: string, descrizione: string, versione: int, varianti: list<array{chiave: string, nome: string}>} */
-    private function descrittoCrm(string $persona): array
+    private function descrittoCrm(string $persona, array $pack): array
     {
-        $pack = $this->packCrm();
         $lingua = $this->linguaCrm($persona);
 
         return [
@@ -324,7 +479,7 @@ trait CrmPersonalizzazione
     {
         $elenco = [];
 
-        foreach ($this->packCrm()['funzioni'] as $chiave => $funzione) {
+        foreach ($this->packCrm($workspace)['funzioni'] as $chiave => $funzione) {
             $elenco[] = [
                 'chiave' => $chiave,
                 'attivo' => $funzione['sempre'] || ($this->crmFunzioniScelte[$workspace][$chiave] ?? $funzione['predefinita']),
@@ -348,7 +503,7 @@ trait CrmPersonalizzazione
     {
         $accese = $this->acceseCrm($workspace);
 
-        return array_keys(array_filter($this->packCrm()['barra'], fn (?string $funzione) => $funzione === null || in_array($funzione, $accese, true)));
+        return array_keys(array_filter($this->packCrm($workspace)['barra'], fn (?string $funzione) => $funzione === null || in_array($funzione, $accese, true)));
     }
 
     /** Se «Benvenuto» si può ancora mostrare e il pack installare: nessuna installazione e nessun dato del CRM. */
@@ -357,10 +512,57 @@ trait CrmPersonalizzazione
         return ! isset($this->crmInstallazioni[$workspace]) && ! $this->conDatiCrm($workspace);
     }
 
-    /** Se il CRM ha dati di una qualsiasi delle sue funzioni. */
+    /**
+     * Se una pipeline è ancora come è nata da partenza.crea (Pipelines::intattaDiPartenza): segnata, non archiviata, mai toccata (`aggiornata_il`
+     * uguale a `creata_il`: ogni scrittura di una fase la fa crescere), con le fasi non eliminate e senza nessuna trattativa.
+     *
+     * @param  array<string, mixed>  $pipeline
+     */
+    private function pipelineIntattaDiPartenzaCrm(array $pipeline): bool
+    {
+        if (! ($pipeline['di_partenza'] ?? false) || $pipeline['archiviata_il'] !== null || self::iso($pipeline['aggiornata_il']) !== self::iso($pipeline['creata_il'])) {
+            return false;
+        }
+
+        $fasiToccate = array_filter($this->crm['fasi'], fn (array $fase) => $fase['pipeline_id'] === $pipeline['id'] && ($fase['eliminata'] ?? false));
+        $trattative = array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['pipeline_id'] === $pipeline['id']);
+
+        return $fasiToccate === [] && $trattative === [];
+    }
+
+    /**
+     * Archivia le pipeline intatte di partenza del workspace (Pipelines::archiviaLeDiPartenza) e dice quali, con id e nome.
+     *
+     * @return list<array{id: string, nome: string}>
+     */
+    private function archiviaLePipelineDiPartenzaCrm(string $workspace): array
+    {
+        $archiviate = [];
+        $vive = array_filter($this->righeCrm('pipeline', $workspace), fn (array $pipeline) => $pipeline['di_partenza'] ?? false);
+        usort($vive, fn (array $una, array $altra) => [$una['creata_il'], $una['id']] <=> [$altra['creata_il'], $altra['id']]);
+
+        foreach ($vive as $pipeline) {
+            if (! $this->pipelineIntattaDiPartenzaCrm($pipeline)) {
+                continue;
+            }
+
+            $this->crm['pipeline'][$pipeline['id']]['archiviata_il'] = self::adessoCrm();
+            $archiviate[] = ['id' => $pipeline['id'], 'nome' => $pipeline['nome']];
+        }
+
+        return $archiviate;
+    }
+
+    /** Se il CRM ha dati di una qualsiasi delle sue funzioni, o una pipeline creata o toccata dalla persona (#2707). */
     private function conDatiCrm(string $workspace): bool
     {
-        foreach (array_keys($this->packCrm()['funzioni']) as $funzione) {
+        foreach ($this->righeCrm('pipeline', $workspace) as $pipeline) {
+            if (! $this->pipelineIntattaDiPartenzaCrm($pipeline)) {
+                return true;
+            }
+        }
+
+        foreach (array_keys($this->packCrm($workspace)['funzioni']) as $funzione) {
             if ($this->datiDellaFunzioneCrm($workspace, $funzione) !== []) {
                 return true;
             }
@@ -406,7 +608,7 @@ trait CrmPersonalizzazione
         $lingua = $this->linguaCrm($persona);
         $elenco = [];
 
-        foreach ($this->packLetturaCrm()['vocabolario'] as $chiave => $pack) {
+        foreach ($this->packLetturaCrm($this->chiavePackCrm($workspace))['vocabolario'] as $chiave => $pack) {
             $rinomina = $this->crmRinomine[$workspace][$chiave] ?? null;
             $testi = $rinomina ?? $pack;
             $elenco[] = ['chiave' => $chiave, 'testo' => $testi[$lingua], 'testi' => $testi, 'personalizzato' => $rinomina !== null];
@@ -426,7 +628,7 @@ trait CrmPersonalizzazione
         $accese = $this->acceseCrm($workspace);
         $elenco = [];
 
-        foreach ($this->packCrm()['passi'] as $chiave => $passo) {
+        foreach ($this->packCrm($workspace)['passi'] as $chiave => $passo) {
             if (! in_array($passo['funzione'], $accese, true)) {
                 continue;
             }

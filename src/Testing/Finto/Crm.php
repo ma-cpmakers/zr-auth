@@ -2927,14 +2927,14 @@ trait Crm
                 return [200, ['data' => $this->vocePipeline($esistenti[0])], []];
             }
 
-            $id = $this->nascePipelineCrm($chi, $campi);
+            $id = $this->nascePipelineCrm($chi, $campi, diPartenza: true);
 
             return [201, ['data' => $this->vocePipeline($this->crm['pipeline'][$id])], ['Location' => "/v1/crm/pipeline/{$id}"]];
         });
     }
 
-    /** Pipelines::scrivi: il tetto, la pipeline, le fasi a passo pieno, nell'istante della pipeline. */
-    private function nascePipelineCrm(array $chi, array $campi): string
+    /** Pipelines::scrivi: il tetto, la pipeline, le fasi a passo pieno, nell'istante della pipeline. `$diPartenza` la segna nata da partenza.crea (#2707). */
+    private function nascePipelineCrm(array $chi, array $campi, bool $diPartenza = false): string
     {
         if (count($this->righeCrm('pipeline', $chi['workspace'])) >= self::CRM_TETTI['pipeline']) {
             throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['pipeline']]);
@@ -2942,7 +2942,7 @@ trait Crm
 
         $id = self::id();
         $ora = self::adessoCrm();
-        $this->crm['pipeline'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'nome' => $campi['nome'], 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona']];
+        $this->crm['pipeline'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'nome' => $campi['nome'], 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona'], 'di_partenza' => $diPartenza];
 
         foreach (array_values($campi['fasi']) as $i => $fase) {
             $this->nasceFaseCrm($chi['workspace'], $id, $fase, self::CRM_PASSO * ($i + 1));
