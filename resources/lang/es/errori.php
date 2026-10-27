@@ -89,6 +89,30 @@ return [
         'title' => 'Carpeta no vacía',
         'detail' => 'Esta carpeta todavía tiene tableros, y solo se puede eliminar vacía: mueve o quita antes sus tableros.',
     ],
+    'settore_con_board' => [
+        'title' => 'Sector con tableros',
+        'detail' => 'Esta carpeta todavía tiene tableros activos o cerrados, y su sector no se puede cambiar de construcción a digital ni quitar: no repitas la misma solicitud.',
+    ],
+    'board_senza_metodo' => [
+        'title' => 'Tablero sin método',
+        'detail' => 'Este tablero no tiene un método de trabajo (nació sin él, o su área no tiene sector), así que no hay un método que cambiar: no repitas la misma solicitud.',
+    ],
+    'sprint_attivo' => [
+        'title' => 'Sprint activo',
+        'detail' => 'Este tablero tiene un sprint activo, y mientras exista no se inicia otro sprint ni se cambian su inicio y su duración: cierra antes el sprint activo con board.sprint.chiusura.crea. No repitas la misma solicitud.',
+    ],
+    'sprint_chiuso' => [
+        'title' => 'Sprint cerrado',
+        'detail' => 'Este sprint está cerrado y ya no cambia: no repitas la solicitud. board.sprint.elenca da los sprints del tablero.',
+    ],
+    'sprint_non_pianificato' => [
+        'title' => 'Sprint no planificado',
+        'detail' => 'Solo se inicia un sprint planificado, y este ya está activo o cerrado: no repitas la misma solicitud.',
+    ],
+    'sprint_non_attivo' => [
+        'title' => 'Sprint no activo',
+        'detail' => 'Solo se cierra un sprint activo, y este todavía está planificado o ya está cerrado: no repitas la misma solicitud.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'El propietario no se toca',
         'detail' => 'Un workspace tiene un solo propietario y ningún método lo quita ni le cambia el rol: no repitas la solicitud.',

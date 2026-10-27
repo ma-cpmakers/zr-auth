@@ -137,6 +137,52 @@ test('le viste e il riepilogo contano in una lista progetto i soli to-do assegna
         ->and(alFinto('GET', "/v1/board/todo/elementi?scheda_id={$scheda['id']}&vista=oggi", null, $gettoni['anna'])->status())->toBe(422);
 });
 
+test('assegnato_a=me legge i to-do di progetto assegnati a chi chiama, aperti o fatti; totale li conta; assegnati è nel riepilogo (F7, #2465 #2467)', function () {
+    [, $gettoni, $scheda, $anna, $bruno] = studioConLaScheda();
+    $lista = listaDelProgetto($gettoni['anna'], $scheda['id']);
+    $oggi = now('Europe/Rome')->format('Y-m-d');
+    $tardi = now('Europe/Rome')->addDays(2)->format('Y-m-d');
+    $tardiAnna = nuovoTodoDelProgetto($gettoni['anna'], ['titolo' => 'Tardi', 'lista_id' => $lista, 'assegnato_a' => $anna, 'giorno' => $tardi]);
+    $oggiAnna = nuovoTodoDelProgetto($gettoni['anna'], ['titolo' => 'Oggi', 'lista_id' => $lista, 'assegnato_a' => $anna, 'giorno' => $oggi]);
+    $fattoAnna = nuovoTodoDelProgetto($gettoni['anna'], ['titolo' => 'Fatto', 'lista_id' => $lista, 'assegnato_a' => $anna]);
+    $perBruno = nuovoTodoDelProgetto($gettoni['anna'], ['titolo' => 'Per Bruno', 'lista_id' => $lista, 'assegnato_a' => $bruno]);
+    nuovoTodoDelProgetto($gettoni['anna'], ['titolo' => 'Di nessuno', 'lista_id' => $lista]);
+    alFinto('POST', "/v1/board/todo/elementi/{$fattoAnna}/completamento", null, $gettoni['anna']);
+    $ids = fn (string $query, string $chi) => collect(alFinto('GET', "/v1/board/todo/elementi?{$query}", null, $gettoni[$chi])->json('data'))->pluck('id')->all();
+
+    $paginato = alFinto('GET', '/v1/board/todo/elementi?assegnato_a=me&limite=1&totale=true', null, $gettoni['anna']);
+    $riepilogoAnna = alFinto('GET', '/v1/board/todo/riepilogo', null, $gettoni['anna'])->json('data');
+
+    expect($ids('assegnato_a=me', 'anna'))->toBe([$oggiAnna, $tardiAnna])
+        ->and($ids("assegnato_a={$anna}", 'anna'))->toBe([$oggiAnna, $tardiAnna])
+        ->and($ids('assegnato_a=me&fatti=true', 'anna'))->toBe([$fattoAnna])
+        ->and($ids('assegnato_a=me', 'bruno'))->toBe([$perBruno])
+        ->and($paginato->json('data'))->toHaveCount(1)
+        ->and($paginato->json('totale'))->toBe(2)
+        ->and($paginato->json('successivo'))->not->toBeNull()
+        ->and($paginato->json())->not->toHaveKey('totale_almeno')
+        ->and(alFinto('GET', '/v1/board/todo/elementi?assegnato_a=me', null, $gettoni['anna'])->json())->not->toHaveKey('totale')
+        ->and(alFinto('GET', '/v1/board/todo/elementi?vista=tutti&totale=true', null, $gettoni['anna'])->json('totale'))->toBe(2)
+        ->and(array_keys($riepilogoAnna))->toBe(['oggi', 'in_ritardo', 'di_oggi', 'settimana', 'aperti', 'fatti', 'assegnati', 'liste'])
+        ->and($riepilogoAnna['assegnati'])->toBe(2)
+        ->and(alFinto('GET', '/v1/board/todo/riepilogo', null, $gettoni['bruno'])->json('data.assegnati'))->toBe(1);
+});
+
+test('assegnato_a vuole me o il proprio id, sta da solo fra i filtri e totale è true o false (F7)', function () {
+    [, $gettoni, $scheda, , $bruno] = studioConLaScheda();
+    $lista = listaDelProgetto($gettoni['anna'], $scheda['id']);
+    $errore = fn (string $query) => alFinto('GET', "/v1/board/todo/elementi?{$query}", null, $gettoni['anna']);
+
+    $altro = $errore("assegnato_a={$bruno}");
+
+    expect([$altro->status(), $altro->json('errors.0.parameter'), $altro->json('errors.0.regola')])->toBe([422, 'assegnato_a', 'valore_non_ammesso'])
+        ->and($errore('assegnato_a=me&vista=oggi')->status())->toBe(422)
+        ->and($errore("assegnato_a=me&lista_id={$lista}")->status())->toBe(422)
+        ->and($errore("assegnato_a=me&scheda_id={$scheda['id']}")->status())->toBe(422)
+        ->and($errore('assegnato_a=me&totale=1')->json('errors.0.parameter'))->toBe('totale')
+        ->and($errore('totale=true')->status())->toBe(422);
+});
+
 test('un to-do cambia lista solo fra liste dello stesso tipo; fra due progetto prende la scheda di arrivo (TP.10)', function () {
     [$finto, $gettoni, $scheda] = studioConLaScheda();
     $lista = listaDelProgetto($gettoni['anna'], $scheda['id']);
