@@ -130,7 +130,7 @@ it('un contatto con una scheda collegata non si unisce: 409 contatto_non_unibile
 
     alFinto('DELETE', "/v1/board/schede/{$scheda['id']}/crm/{$collegamento}", null, $gettoni['anna']);
 
-    expect(alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito), $gettoni['anna'])->status())->toBe(201);
+    expect(alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'resta']]), $gettoni['anna'])->status())->toBe(201);
 });
 
 it('l\'oblio di chi resta anonimizza anche chi si era unito in lui, e l\'unione non si annulla più (409)', function () {
