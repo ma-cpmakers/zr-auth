@@ -222,3 +222,30 @@ function nuovoTodoDelProgetto(string $gettone, array $corpo): string
 
     return $risposta->json('data.id');
 }
+
+test('spostato in una lista progetto di un\'altra board, il to-do perde l\'assegnatario che ha lasciato il workspace e la risposta dice assegnatario_tolto (#2812)', function () {
+    [$finto, $gettoni, $scheda, , $bruno] = studioConLaScheda();
+    $altra = $finto->scheda(['id' => $scheda['workspace']], 'Fuori', 'altra-board');
+    $stessa = $finto->scheda(['id' => $scheda['workspace']], 'Seconda');
+    $lista = listaDelProgetto($gettoni['anna'], $scheda['id']);
+    $listaAltra = listaDelProgetto($gettoni['anna'], $altra['id'], 'Fuori');
+    $listaStessa = listaDelProgetto($gettoni['anna'], $stessa['id'], 'Seconda');
+    $resta = nuovoTodoDelProgetto($gettoni['anna'], ['titolo' => 'Resta', 'lista_id' => $lista, 'assegnato_a' => $bruno]);
+    $parte = nuovoTodoDelProgetto($gettoni['anna'], ['titolo' => 'Parte', 'lista_id' => $lista, 'assegnato_a' => $bruno]);
+
+    $ancora = alFinto('PATCH', "/v1/board/todo/elementi/{$resta}", ['lista_id' => $listaAltra], $gettoni['anna']);
+    expect($ancora->status())->toBe(200, $ancora->body())
+        ->and($ancora->json('data.assegnato_a'))->toBe($bruno)
+        ->and($ancora->json('assegnatario_tolto'))->toBeFalse();
+
+    expect(alFinto('DELETE', "/v1/workspace/membri/{$bruno}", null, $gettoni['anna'])->status())->toBe(204);
+
+    $stessaBoard = alFinto('PATCH', "/v1/board/todo/elementi/{$parte}", ['lista_id' => $listaStessa], $gettoni['anna']);
+    expect($stessaBoard->json('assegnatario_tolto'))->toBeFalse()->and($stessaBoard->json('data.assegnato_a'))->toBe($bruno);
+
+    $tolto = alFinto('PATCH', "/v1/board/todo/elementi/{$parte}", ['lista_id' => $listaAltra], $gettoni['anna']);
+    expect($tolto->status())->toBe(200, $tolto->body())
+        ->and($tolto->json('data.lista_id'))->toBe($listaAltra)
+        ->and($tolto->json('data.assegnato_a'))->toBeNull()
+        ->and($tolto->json('assegnatario_tolto'))->toBeTrue();
+});
