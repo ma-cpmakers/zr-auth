@@ -3,12 +3,13 @@
 namespace Zeiras\Auth\Testing\Finto;
 
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Http\Client\Request;
 use Illuminate\Validation\Rule;
 
 /**
  * Le scadenze del CRM nel backoffice finto (CRM-09, #2426 e #2427): i tipi (`crm.scadenze.tipi.elenca`, `crea`, `modifica`) e le scadenze
- * (`crm.scadenze.elenca`, `crea`, `mostra`, `modifica`, `elimina`, `rinnovo.crea`, `chiusura.crea`), con le regole, i pointer e
+ * (`crm.scadenze.elenca`, `riepilogo.mostra`, `crea`, `mostra`, `modifica`, `elimina`, `rinnovo.crea`, `chiusura.crea`), con le regole, i pointer e
  * l'ordine di `ScadenzeTipiController`, `ScadenzeController` e `App\Crm\Scadenze` del backoffice. Un tipo nasce `attivo` e si archivia con
  * `stato`, mai si elimina; il nome è unico fra gli attivi (409 `nome_gia_usato`) e al più 200 per workspace, archiviati compresi. Una
  * scadenza ha un tipo, un oggetto solo fra contatto e azienda, la data, i preavvisi (una copia di quelli del tipo alla nascita) e un
@@ -181,6 +182,42 @@ trait CrmScadenze
         }
 
         return $risposta;
+    }
+
+    /**
+     * crm.scadenze.riepilogo.mostra (ScadenzeController::riepilogoMostra, Scadenze::riepilogo): i conti delle scadenze aperte, `scadute` (con
+     * `scade_il` prima di oggi) e i cumulativi `entro_30`, `entro_60` ed `entro_90` (da oggi compreso, fino a oggi più i giorni, compreso). Si
+     * restringono con `responsabile_id` e `tipo_id` (un id che non c'è è 422 `non_trovato`); ogni altro parametro è 422 `campo_estraneo`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function riepilogoScadenzeCrm(Request $richiesta): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $workspace = $chi['workspace'];
+        $regole = [
+            'responsabile_id' => ['sometimes', ...$this->regolaDiUnIdCrm(fn (string $id) => isset($this->membri[$workspace][$id]), 'regole.responsabile_del_workspace')],
+            'tipo_id' => ['sometimes', ...$this->regolaDiUnIdCrm(fn (string $id) => $this->esisteCrm('scadenzeTipi', $workspace, $id), 'regole.tipo_scadenza_non_esiste')],
+        ];
+        $estranei = array_diff(array_map('strval', array_keys(self::query($richiesta))), array_keys($regole));
+        $query = $this->testi->validaQuery(self::query($richiesta), $regole + array_fill_keys($estranei, [function (string $attributo, mixed $valore, Closure $fail) {
+            $this->rifiutaCrm($fail, $attributo, Regola::CAMPO_ESTRANEO, 'validation.prohibited', ['attribute' => $attributo]);
+        }]));
+        $id = fn (string $campo): ?string => isset($query[$campo]) && $query[$campo] !== '' ? strtolower((string) $query[$campo]) : null;
+        $oggi = self::oggiAcquistoCrm();
+        $fino = fn (int $giorni): string => CarbonImmutable::createFromFormat('Y-m-d', $oggi, 'UTC')->addDays($giorni)->format('Y-m-d');
+        $aperte = array_filter(
+            $this->righeCrm('scadenze', $workspace),
+            fn (array $riga) => $riga['stato'] === 'attiva' && ($id('responsabile_id') === null || $riga['responsabile_id'] === $id('responsabile_id')) && ($id('tipo_id') === null || $riga['tipo_id'] === $id('tipo_id')),
+        );
+        $entro = fn (int $giorni): int => count(array_filter($aperte, fn (array $riga) => $riga['scade_il'] >= $oggi && $riga['scade_il'] <= $fino($giorni)));
+
+        return [200, ['data' => [
+            'scadute' => count(array_filter($aperte, fn (array $riga) => $riga['scade_il'] < $oggi)),
+            'entro_30' => $entro(30),
+            'entro_60' => $entro(60),
+            'entro_90' => $entro(90),
+        ]]];
     }
 
     /**
