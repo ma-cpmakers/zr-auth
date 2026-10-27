@@ -438,7 +438,8 @@ trait Sprint
     private function sprintOrdinati(string $board): array
     {
         $suoi = array_values(array_filter($this->sprint, fn (array $sprint) => $sprint['board'] === $board));
-        $gradino = fn (array $sprint): int => array_search($sprint['stato'], self::SPRINT_STATI, true);
+        // L'ordine di SprintController::ORDINE: l'attivo, il pianificato, i chiusi (non quello di SPRINT_STATI).
+        $gradino = fn (array $sprint): int => ['attivo' => 0, 'pianificato' => 1][$sprint['stato']] ?? 2;
         $quando = fn (array $sprint): int => $sprint['chiuso_il'] === null ? 0 : (int) $sprint['chiuso_il']->format('Uv');
         usort($suoi, fn (array $uno, array $altro) => [$gradino($uno), $quando($altro), $altro['id']] <=> [$gradino($altro), $quando($uno), $uno['id']]);
 
