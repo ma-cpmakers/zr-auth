@@ -58,6 +58,7 @@ trait Crm
         ['PATCH', '#^/v1/crm/elenchi/([^/]+)$#', 'crm.elenchi.modifica'],
         ['GET', '#^/v1/crm/catalogo$#', 'crm.catalogo.elenca'],
         ['POST', '#^/v1/crm/catalogo$#', 'crm.catalogo.crea'],
+        ['POST', '#^/v1/crm/catalogo/ricerca$#', 'crm.catalogo.ricerca.crea'],
         ['GET', '#^/v1/crm/catalogo/categorie$#', 'crm.catalogo.categorie.elenca'],
         ['GET', '#^/v1/crm/catalogo/([^/]+)$#', 'crm.catalogo.mostra'],
         ['PATCH', '#^/v1/crm/catalogo/([^/]+)$#', 'crm.catalogo.modifica'],
@@ -334,6 +335,7 @@ trait Crm
             'crm.elenchi.mostra' => $this->mostraCrm($richiesta, 'elenchi', $parametri[0]),
             'crm.elenchi.modifica' => $this->modificaElencoCrm($richiesta, $corpo, $parametri[0]),
             'crm.catalogo.elenca' => $this->elencaCatalogoCrm($richiesta),
+            'crm.catalogo.ricerca.crea' => $this->ricercaCatalogoCrm($richiesta, $corpo),
             'crm.catalogo.crea' => $this->creaVoceCatalogoCrm($richiesta, $corpo),
             'crm.catalogo.categorie.elenca' => $this->elencaCategorieCatalogoCrm($richiesta),
             'crm.catalogo.mostra' => $this->mostraCrm($richiesta, 'catalogo', $parametri[0]),
@@ -630,11 +632,23 @@ trait Crm
             }],
         ]);
 
-        usort($righe, $ordine);
-        $limite = (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO);
+        return $this->tagliaPaginaCrm($lista, $righe, $ordine, $voce, (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO), $query['cursore'] ?? null);
+    }
 
-        if (isset($query['cursore'])) {
-            $dopo = (string) $this->leggiCursore($lista, 'id', $query['cursore']);
+    /**
+     * La pagina di `paginaCrm` dopo la validazione: `limite` e `cursore` già letti, da dove stiano (la query di un elenco, il corpo di una ricerca).
+     *
+     * @param  list<array<string, mixed>>  $righe
+     * @param  Closure(array<string, mixed>, array<string, mixed>): int  $ordine
+     * @param  Closure(array<string, mixed>): array<string, mixed>  $voce
+     * @return array{int, array<string, mixed>}
+     */
+    private function tagliaPaginaCrm(string $lista, array $righe, Closure $ordine, Closure $voce, int $limite, ?string $cursore): array
+    {
+        usort($righe, $ordine);
+
+        if ($cursore !== null) {
+            $dopo = (string) $this->leggiCursore($lista, 'id', $cursore);
             $posto = array_search($dopo, array_column($righe, 'id'), true);
             $righe = $posto === false ? [] : array_slice($righe, $posto + 1);
         }
