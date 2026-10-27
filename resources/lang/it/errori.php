@@ -297,6 +297,10 @@ return [
         'title' => 'Ultima opzione',
         'detail' => 'Questa è l\'ultima opzione viva del campo, e un campo a elenco o a scelta multipla ne ha sempre almeno una. Aggiungine un\'altra con crm.campi.opzioni.crea e poi togli questa. Il metodo non ha scritto niente.',
     ],
+    'elenco_in_uso' => [
+        'title' => 'Elenco in uso',
+        'detail' => 'Almeno un campo vivo del CRM usa questo elenco di valori, e un elenco in uso non si archivia. Il problema porta `campi`, gli id dei campi che lo usano: eliminali con crm.campi.elimina, o archivia solo i valori che non servono più con crm.elenchi.modifica. Il metodo non ha scritto niente.',
+    ],
     'sezione_di_sistema' => [
         'title' => 'Sezione di sistema',
         'detail' => '«Principali» è la sezione fissa dei campi di un oggetto: non si rinomina, non si sposta e non si elimina. Il metodo non ha scritto niente.',

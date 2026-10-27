@@ -297,6 +297,10 @@ return [
         'title' => 'Última opción',
         'detail' => 'Esta es la última opción viva del campo, y un campo de lista o de selección múltiple siempre tiene al menos una. Añade otra con crm.campi.opzioni.crea y luego quita esta. No se escribió nada.',
     ],
+    'elenco_in_uso' => [
+        'title' => 'Lista en uso',
+        'detail' => 'Al menos un campo vivo del CRM usa esta lista de valores compartida, y una lista en uso no se archiva. El problema lleva `campi`, los ids de los campos que la usan: elimínalos con crm.campi.elimina, o archiva solo los valores que ya no hacen falta con crm.elenchi.modifica. No se escribió nada.',
+    ],
     'sezione_di_sistema' => [
         'title' => 'Sección del sistema',
         'detail' => '«Principali» (Principales) es la sección fija de los campos de un objeto: no se renombra, no se mueve y no se elimina. No se escribió nada.',
