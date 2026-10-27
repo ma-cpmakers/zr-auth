@@ -177,6 +177,18 @@ return [
         'title' => 'Undo expired',
         'detail' => 'This import is more than 24 hours old and can no longer be undone: nothing has changed. The companies or contacts it created can be archived one by one with their update method.',
     ],
+    'unione_non_valida' => [
+        'title' => 'Invalid merge',
+        'detail' => 'The contact that stays and the contact being merged are the same one: two different contacts are needed. Nothing has changed.',
+    ],
+    'contatto_non_unibile' => [
+        'title' => 'Contact cannot be merged',
+        'detail' => 'One of the two contacts cannot be merged: it is archived, anonymised, is already the merged contact of a merge that can still be undone, or has parts the merge cannot move yet (listed in `blocchi`: bookings, quotes, deadlines, purchases, instalments). Nothing has changed.',
+    ],
+    'gia_annullata' => [
+        'title' => 'Already undone',
+        'detail' => 'This merge has already been undone: the merged contact is active again and there is nothing else to do. Nothing has changed.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline not empty',
         'detail' => 'This pipeline still has open deals and can only be archived without them: close or move its deals first, then try again.',

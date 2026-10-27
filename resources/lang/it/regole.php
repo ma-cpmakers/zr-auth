@@ -215,4 +215,10 @@ return [
     'partita_iva_non_valida' => "Questa partita IVA non è valida per il paese del profilo: controlla le cifre e, per un paese dell'UE, il prefisso del paese.",
     'predefinito_archiviato' => 'Un elemento archiviato non è il predefinito: ripristinalo (`archiviato: false`) prima di renderlo predefinito.',
     'predefinito_non_si_toglie' => 'Il predefinito non si toglie: rendi predefinito un altro elemento e questo smette di esserlo.',
+    'persona_non_esiste' => 'Questo contatto non c\'è nel workspace: cercalo con `crm.persone.ricerca.crea`.',
+    'unione_scelta_mancante' => 'I due contatti hanno un valore diverso in questo campo: scrivi in `scelte` quale tenere, `resta` o `unito`.',
+    'unione_scelta_inutile' => 'Questo campo non ha da scegliere: i due contatti hanno lo stesso valore, o non è un campo che si sceglie.',
+    'unione_elemento_estraneo' => 'Questo valore non è di nessuno dei due contatti: la lista finale ha solo valori di chi resta o di chi si unisce.',
+    'unione_elemento_doppio' => 'Questo valore è già nella lista: ogni valore compare una volta.',
+    'unione_troppi_elementi' => 'La lista ha troppi valori: al più :massimo.',
 ];

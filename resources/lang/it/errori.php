@@ -177,6 +177,18 @@ return [
         'title' => 'Annullamento scaduto',
         'detail' => 'Questa importazione è di più di 24 ore fa e non si annulla più: niente è cambiato. Le aziende o i contatti che ha creato si archiviano uno per uno con la loro modifica.',
     ],
+    'unione_non_valida' => [
+        'title' => 'Unione non valida',
+        'detail' => 'Il contatto che resta e quello che si unisce sono lo stesso: servono due contatti diversi. Niente è cambiato.',
+    ],
+    'contatto_non_unibile' => [
+        'title' => 'Contatto non unibile',
+        'detail' => "Uno dei due contatti non si può unire: è archiviato, anonimizzato, è già l'unito di un'unione che si può ancora annullare, oppure ha parti che l'unione non sa ancora spostare (le dice `blocchi`: prenotazioni, preventivi, scadenze, acquisti, rate). Niente è cambiato.",
+    ],
+    'gia_annullata' => [
+        'title' => 'Già annullata',
+        'detail' => "Questa unione è già stata annullata: l'unito è tornato attivo e non c'è altro da fare. Niente è cambiato.",
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline non vuota',
         'detail' => 'Questa pipeline ha ancora trattative aperte e si archivia solo senza: chiudi o sposta prima le sue trattative, poi ripeti.',

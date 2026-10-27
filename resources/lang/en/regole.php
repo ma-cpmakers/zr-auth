@@ -214,4 +214,10 @@ return [
     'partita_iva_non_valida' => "This VAT number is not valid for the profile's country: check the digits and, for an EU country, the country prefix.",
     'predefinito_archiviato' => 'An archived item is not the default: restore it (`archiviato: false`) before making it the default.',
     'predefinito_non_si_toglie' => 'The default cannot be removed: make another item the default and this one stops being it.',
+    'persona_non_esiste' => 'This contact is not in the workspace: find it with `crm.persone.ricerca.crea`.',
+    'unione_scelta_mancante' => 'The two contacts have a different value in this field: say in `scelte` which one to keep, `resta` or `unito`.',
+    'unione_scelta_inutile' => 'There is nothing to choose in this field: the two contacts have the same value, or it is not a field that can be chosen.',
+    'unione_elemento_estraneo' => 'This value belongs to neither contact: the final list only has values of the contact that stays or the one being merged.',
+    'unione_elemento_doppio' => 'This value is already in the list: each value appears once.',
+    'unione_troppi_elementi' => 'The list has too many values: at most :massimo.',
 ];

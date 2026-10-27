@@ -214,4 +214,10 @@ return [
     'partita_iva_non_valida' => 'Este número de IVA no es válido para el país del perfil: revisa los dígitos y, en un país de la UE, el prefijo del país.',
     'predefinito_archiviato' => 'Un elemento archivado no es el predeterminado: restáuralo (`archiviato: false`) antes de hacerlo predeterminado.',
     'predefinito_non_si_toglie' => 'El predeterminado no se quita: haz predeterminado otro elemento y este deja de serlo.',
+    'persona_non_esiste' => 'Este contacto no está en el workspace: búscalo con `crm.persone.ricerca.crea`.',
+    'unione_scelta_mancante' => 'Los dos contactos tienen un valor distinto en este campo: indica en `scelte` cuál conservar, `resta` o `unito`.',
+    'unione_scelta_inutile' => 'No hay nada que elegir en este campo: los dos contactos tienen el mismo valor, o no es un campo que se elija.',
+    'unione_elemento_estraneo' => 'Este valor no es de ninguno de los dos contactos: la lista final solo tiene valores del contacto que se queda o del que se une.',
+    'unione_elemento_doppio' => 'Este valor ya está en la lista: cada valor aparece una vez.',
+    'unione_troppi_elementi' => 'La lista tiene demasiados valores: como máximo :massimo.',
 ];
