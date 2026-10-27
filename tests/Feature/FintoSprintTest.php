@@ -23,6 +23,20 @@ function conLaBoardScrum(string $metodo = 'scrum', string $stato = 'attiva'): ar
     return [$finto, $studio, $board, $gettone];
 }
 
+/**
+ * Una board Scrum con un suo sprint attivo in un altro workspace: [board, sprint].
+ *
+ * @return array{array<string, mixed>, array<string, mixed>}
+ */
+function unaBoardScrumAltrui(BackofficeFinto $finto): array
+{
+    $bruno = $finto->persona('bruno@example.com', PASSWORD, 'Bruno');
+    $altro = $finto->workspace('Altro', $bruno);
+    $board = $finto->board($altro, 'Loro', null, 'attiva', 'scrum');
+
+    return [$board, $finto->sprint($altro, $board, 'Loro sprint', 'attivo')];
+}
+
 /** Il corpo di board.sprint.crea di una board. */
 function corpoDelloSprint(array $board, array $altri = []): array
 {
@@ -63,7 +77,7 @@ it('crea: il corpo sbagliato è 422 sul suo campo, una board che non è del work
         ->and($pointer(corpoDelloSprint(['id' => '01k6w9a1c3e5g7j9m1p3r5t7v9'])))->toBe('#/board_id');
 });
 
-it('una board senza metodo o con un altro metodo è 409 board_senza_metodo a ogni metodo; una chiusa o nel cestino, a chi scrive, 409 board_chiusa', function () {
+it('una board con un altro metodo è 409 board_senza_metodo su elenca e crea; una chiusa o nel cestino, a chi crea, 409 board_chiusa', function () {
     [$finto, $studio, $senza, $gettone] = conLaBoardScrum('waterfall');
     $chiusa = $finto->board($studio, 'Chiusa', null, 'chiusa', 'scrum');
     $cestino = $finto->board($studio, 'Cestino', null, 'cestino', 'scrum');
@@ -110,11 +124,12 @@ it('l\'elenco dà l\'attivo, il pianificato, poi i chiusi dal più recente, a cu
 });
 
 it('l\'elenco senza chiusi ha la velocità media null; senza board_id, con una board di un altro workspace o con uno stato fuori elenco è 422 sul parametro', function () {
-    [, , $board, $gettone] = conLaBoardScrum();
+    [$finto, , $board, $gettone] = conLaBoardScrum();
+    [$altrui] = unaBoardScrumAltrui($finto);
 
     expect(alFinto('GET', "/v1/board/sprint?board_id={$board['id']}", null, $gettone)->json('meta'))->toBe(['velocita_media' => null, 'velocita_media_unita' => null]);
 
-    foreach (['', '?board_id=01k6w9a1c3e5g7j9m1p3r5t7v9', "?board_id={$board['id']}&stato=archiviato"] as $query) {
+    foreach (['', '?board_id=01k6w9a1c3e5g7j9m1p3r5t7v9', "?board_id={$altrui['id']}", '?board_id[]=x', "?board_id={$board['id']}&stato=archiviato"] as $query) {
         $risposta = alFinto('GET', '/v1/board/sprint'.$query, null, $gettone);
         expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.parameter'))->toBe(str_contains($query, 'stato') ? 'stato' : 'board_id');
     }
@@ -213,6 +228,11 @@ it('la chiusura senza punti conta le schede completate, in unità schede; senza 
     $chiuso = alFinto('POST', "/v1/board/sprint/{$attivo['id']}/chiusura", ['schede' => []], $gettone);
 
     expect($chiuso->json('data'))->toMatchArray(['velocita' => 2, 'velocita_unita' => 'schede', 'obiettivo_raggiunto' => null]);
+
+    $vuoto = $finto->sprint($studio, $board, 'Senza schede', 'attivo');
+    $senzaSchede = alFinto('POST', "/v1/board/sprint/{$vuoto['id']}/chiusura", ['schede' => []], $gettone);
+
+    expect($senzaSchede->json('data'))->toMatchArray(['velocita' => 0, 'velocita_unita' => 'schede']);
 });
 
 it('la chiusura rifiuta una scheda aperta non nominata (#/schede), una che non è dello sprint o nominata due volte (#/schede/N/id) e sprint_dopo senza uno sprint pianificato', function () {
@@ -268,7 +288,7 @@ it('sprint() vuole una board Scrum e al più uno sprint attivo e uno pianificato
         ->and(fn () => $finto->sprint($studio, $board, 'Un altro chiuso', 'chiuso'))->not->toThrow(InvalidArgumentException::class);
 });
 
-it('con l\'app pm spenta ogni metodo è 403 app_non_attiva; la Idempotency-Key ripete lo stesso 201 senza un secondo sprint', function () {
+it('con l\'app pm spenta elenca e crea sono 403 app_non_attiva; la Idempotency-Key ripete lo stesso 201 senza un secondo sprint', function () {
     [, , $board, $gettone] = conLaBoardScrum();
     $corpo = corpoDelloSprint($board);
     $uguale = fn (string $chiave, array $corpo) => alFinto('POST', '/v1/board/sprint', $corpo, $gettone, null, ['Idempotency-Key' => $chiave]);
@@ -287,7 +307,7 @@ it('con l\'app pm spenta ogni metodo è 403 app_non_attiva; la Idempotency-Key r
         ->and(alFinto('POST', '/v1/board/sprint', $corpo, $gettone)->json('codice'))->toBe('app_non_attiva');
 });
 
-it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine, giorni), vuota senza semina; 404 per uno sprint che non c\'è o di un altro workspace; 409 se la board non è Scrum', function () {
+it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine, giorni), vuota senza semina; 404 per uno sprint che non c\'è o di un altro workspace', function () {
     [$finto, $studio, $board, $gettone] = conLaBoardScrum();
     $sprint = $finto->sprint($studio, $board, 'In corso', 'attivo', '2026-10-12');
     $vuoto = $finto->sprint($studio, $board, 'Dopo', 'pianificato', '2026-10-26');
@@ -296,6 +316,7 @@ it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine,
         ['data' => '2026-10-13', 'pianificato' => 8, 'aggiunto' => 2, 'rimosso' => 0, 'completato' => 3, 'rimasto' => 7],
     ];
     $finto->andamento($sprint, $giorni);
+    [, $altrui] = unaBoardScrumAltrui($finto);
 
     $serie = alFinto('GET', "/v1/board/sprint/{$sprint['id']}/andamento", null, $gettone);
 
@@ -303,7 +324,8 @@ it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine,
         ->and(array_keys($serie->json('data')))->toBe(['sprint_id', 'unita', 'inizio', 'fine', 'giorni'])
         ->and($serie->json('data'))->toMatchArray(['sprint_id' => $sprint['id'], 'unita' => 'punti', 'inizio' => '2026-10-12', 'fine' => '2026-10-25', 'giorni' => $giorni])
         ->and(alFinto('GET', "/v1/board/sprint/{$vuoto['id']}/andamento", null, $gettone)->json('data'))->toMatchArray(['unita' => 'schede', 'giorni' => []])
-        ->and(alFinto('GET', '/v1/board/sprint/01k6w9a1c3e5g7j9m1p3r5t7v9/andamento', null, $gettone)->status())->toBe(404);
+        ->and(alFinto('GET', '/v1/board/sprint/01k6w9a1c3e5g7j9m1p3r5t7v9/andamento', null, $gettone)->status())->toBe(404)
+        ->and(alFinto('GET', "/v1/board/sprint/{$altrui['id']}/andamento", null, $gettone)->status())->toBe(404);
 
     expect(fn () => $finto->andamento($sprint, [['data' => '2026-10-12']]))->toThrow(InvalidArgumentException::class)
         ->and(fn () => $finto->andamento($sprint, [], 'ore'))->toThrow(InvalidArgumentException::class);

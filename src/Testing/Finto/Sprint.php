@@ -162,7 +162,7 @@ trait Sprint
                 return $posto === false ? null : [sprintf('%06d', $posto)];
             },
             regole: [
-                'board_id' => ['required', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($chi) {
+                'board_id' => ['bail', 'required', 'string', function (string $attributo, mixed $valore, Closure $fail) use ($chi) {
                     if (($this->boards[$valore]['workspace'] ?? null) !== $chi['workspace']) {
                         $this->testi->dichiara($attributo, 'non_trovato');
                         $fail('regole.board_del_workspace')->translate();
