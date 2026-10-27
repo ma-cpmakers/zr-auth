@@ -378,6 +378,8 @@ it('l\'oblio del contatto riporta a non_verificata il VIES dei suoi profili (VI.
     alFinto('POST', "/v1/crm/persone/{$persona}/anonimizzazione", null, $gettoni['anna']);
 
     expect(alFinto('GET', "/v1/crm/profili-fatturazione/{$profilo}", null, $gettoni['anna'])->json('data.vies'))->toBe(['esito' => 'non_verificata', 'verificato_il' => null]);
+});
+
 it('i campi «tuoi» valgono per i profili e gli indirizzi: oggetti fatturazione e spedizione, valori in crea, modifica e mostra, in elenco solo gli in_elenco, mai nella ricerca; l\'oblio li toglie (#2755)', function () {
     [, $gettoni] = studioColCrm();
     $carla = $gettoni['carla'];
