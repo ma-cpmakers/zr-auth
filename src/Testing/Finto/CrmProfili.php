@@ -5,6 +5,7 @@ namespace Zeiras\Auth\Testing\Finto;
 use Closure;
 use Illuminate\Http\Client\Request;
 use Illuminate\Validation\Rule;
+use stdClass;
 
 /**
  * I profili di fatturazione e gli indirizzi di spedizione dei clienti del CRM nel backoffice finto (#2751, CRM-01 F5-F7):
@@ -110,7 +111,7 @@ trait CrmProfili
             $this->listaDelClienteCrm($operazione, [$persona, $organizzazione, $archiviati]),
             $esiste ? $this->righeDelClienteCrm($tipo, $chi['workspace'], $persona, $organizzazione, $archiviati) : [],
             self::ordineDelClienteCrm(...),
-            $this->formaDelClienteCrm($tipo, $chi['workspace']),
+            $this->formaDelClienteCrm($tipo, $chi['workspace'], true),
         );
 
         return $esiste ? $pagina : throw new Problema('non_trovato');
@@ -194,15 +195,15 @@ trait CrmProfili
     }
 
     /** La forma di un elemento in una pagina. */
-    private function formaDelClienteCrm(string $tipo, string $workspace): Closure
+    private function formaDelClienteCrm(string $tipo, string $workspace, bool $conCampi = false): Closure
     {
         if ($tipo === 'indirizzi') {
-            return fn (array $riga) => $this->voceIndirizzoSpedizioneCrm($riga);
+            return fn (array $riga) => $this->voceIndirizzoSpedizioneCrm($riga, $conCampi ? $this->valoriInElencoCrm($workspace, 'spedizione', $riga['id']) : null);
         }
 
         $paese = $this->paeseDelWorkspaceCrm($workspace);
 
-        return fn (array $riga) => $this->voceProfiloFatturazioneCrm($riga, $paese);
+        return fn (array $riga) => $this->voceProfiloFatturazioneCrm($riga, $paese, $conCampi ? $this->valoriInElencoCrm($workspace, 'fatturazione', $riga['id']) : null);
     }
 
     // ———————————————————————————————————————— Profili di fatturazione
@@ -223,6 +224,7 @@ trait CrmProfili
             $campi = $this->testi->validaCorpo($corpo, [
                 ...$this->regoleDelClienteCrm($chi['workspace']),
                 ...$this->regoleDelProfiloCrm(true),
+                ...$this->regoleDeiValoriCrm($chi['workspace'], 'fatturazione', true),
                 ...array_fill_keys(['id', 'area_fiscale', 'stato', 'mancano', 'vies', 'archiviato_il', 'creato_il', 'aggiornato_il', 'creato_da', 'archiviato'], ['prohibited']),
             ]);
             $fiscali = $this->fiscaliDelProfiloCrm($campi['paese'], $campi['codice_fiscale'] ?? null, $campi['partita_iva'] ?? null);
@@ -235,6 +237,7 @@ trait CrmProfili
             $this->liberaIlPredefinitoCrm('profili', $predefinito ? $vivi : [], null);
             $id = self::id();
             $ora = self::adessoCrm();
+            $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'fatturazione', $id, $campi['campi'] ?? []);
             $this->crm['profili'][$id] = [
                 'id' => $id, 'workspace' => $chi['workspace'], 'persona_id' => null, 'organizzazione_id' => null, $cliente['colonna'] => $cliente['id'],
                 'nome_profilo' => $campi['nome_profilo'] ?? null,
@@ -257,7 +260,8 @@ trait CrmProfili
                 'vies_esito' => 'non_verificata', 'vies_verificato_il' => null,
                 'predefinito' => $predefinito, 'archiviata_il' => null, 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
             ];
-            $voce = $this->voceProfiloFatturazioneCrm($this->crm['profili'][$id], $this->paeseDelWorkspaceCrm($chi['workspace']));
+            $this->scriviIValoriCrm('fatturazione', $id, $piano);
+            $voce = $this->voceProfiloFatturazioneCrm($this->crm['profili'][$id], $this->paeseDelWorkspaceCrm($chi['workspace']), $this->valoriDiCrm($chi['workspace'], 'fatturazione', $id));
 
             return [201, ['data' => $voce], ['Location' => "/v1/crm/profili-fatturazione/{$id}", 'ETag' => self::etagCrm($voce)]];
         });
@@ -272,7 +276,7 @@ trait CrmProfili
     {
         $chi = $this->conCrm($richiesta);
 
-        return $this->mostraDelClienteCrm($richiesta, $this->voceProfiloFatturazioneCrm($this->rigaCrm('profili', $chi['workspace'], $id), $this->paeseDelWorkspaceCrm($chi['workspace'])));
+        return $this->mostraDelClienteCrm($richiesta, $this->voceProfiloFatturazioneCrm($this->rigaCrm('profili', $chi['workspace'], $id), $this->paeseDelWorkspaceCrm($chi['workspace']), $this->valoriDiCrm($chi['workspace'], 'fatturazione', $id)));
     }
 
     /**
@@ -289,14 +293,16 @@ trait CrmProfili
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('profili', $chi['workspace'], $id);
         $paese = $this->paeseDelWorkspaceCrm($chi['workspace']);
-        $this->pretendiLaVersioneCrm($richiesta, $this->voceProfiloFatturazioneCrm($riga, $paese));
-        $campi = $this->modificaCrm($corpo, [...$this->regoleDelProfiloCrm(false), 'archiviato' => ['filled', 'boolean:strict']]);
+        $this->pretendiLaVersioneCrm($richiesta, $this->voceProfiloFatturazioneCrm($riga, $paese, $this->valoriDiCrm($chi['workspace'], 'fatturazione', $id)));
+        $campi = $this->modificaCrm($corpo, [...$this->regoleDelProfiloCrm(false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'fatturazione', false, $riga['id'], $corpo['campi'] ?? null), 'archiviato' => ['filled', 'boolean:strict']]);
 
         $this->contattoCollegabileCrm($riga['persona_id']);
         $dopo = $this->dopoDelProfiloCrm($riga, $campi);
+        $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'fatturazione', $riga['id'], $campi['campi'] ?? []);
         $this->scriviDelClienteCrm('profili', $chi['workspace'], $riga, $campi, $dopo);
+        $this->scriviIValoriDelClienteCrm('profili', 'fatturazione', $riga, $piano);
 
-        $voce = $this->voceProfiloFatturazioneCrm($this->crm['profili'][$riga['id']], $paese);
+        $voce = $this->voceProfiloFatturazioneCrm($this->crm['profili'][$riga['id']], $paese, $this->valoriDiCrm($chi['workspace'], 'fatturazione', $riga['id']));
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
     }
@@ -541,7 +547,7 @@ trait CrmProfili
      * @param  array<string, mixed>  $riga
      * @return array<string, mixed>
      */
-    private function voceProfiloFatturazioneCrm(array $riga, string $paeseDelWorkspace): array
+    private function voceProfiloFatturazioneCrm(array $riga, string $paeseDelWorkspace, ?stdClass $campi = null): array
     {
         $area = self::areaFiscaleCrm($riga['paese'], $paeseDelWorkspace);
         $mancano = self::mancanoDelProfiloCrm($riga, $area);
@@ -578,7 +584,7 @@ trait CrmProfili
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
             'creato_da' => $riga['creato_da'],
-        ];
+        ] + ($campi === null ? [] : ['campi' => $campi]);
     }
 
     // ———————————————————————————————————————— Indirizzi di spedizione
@@ -598,6 +604,7 @@ trait CrmProfili
             $campi = $this->testi->validaCorpo($corpo, [
                 ...$this->regoleDelClienteCrm($chi['workspace']),
                 ...$this->regoleDelIndirizzoCrm(true),
+                ...$this->regoleDeiValoriCrm($chi['workspace'], 'spedizione', true),
                 ...array_fill_keys(['id', 'archiviato_il', 'creato_il', 'aggiornato_il', 'creato_da', 'archiviato'], ['prohibited']),
             ]);
             $cliente = $this->clienteDelCorpoCrm($campi);
@@ -609,12 +616,14 @@ trait CrmProfili
             $this->liberaIlPredefinitoCrm('indirizzi', $predefinito ? $vivi : [], null);
             $id = self::id();
             $ora = self::adessoCrm();
+            $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'spedizione', $id, $campi['campi'] ?? []);
             $this->crm['indirizzi'][$id] = [
                 'id' => $id, 'workspace' => $chi['workspace'], 'persona_id' => null, 'organizzazione_id' => null, $cliente['colonna'] => $cliente['id'],
                 ...$this->colonneDelIndirizzoCrm($campi, true),
                 'predefinito' => $predefinito, 'archiviata_il' => null, 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
             ];
-            $voce = $this->voceIndirizzoSpedizioneCrm($this->crm['indirizzi'][$id]);
+            $this->scriviIValoriCrm('spedizione', $id, $piano);
+            $voce = $this->voceIndirizzoSpedizioneCrm($this->crm['indirizzi'][$id], $this->valoriDiCrm($chi['workspace'], 'spedizione', $id));
 
             return [201, ['data' => $voce], ['Location' => "/v1/crm/indirizzi-spedizione/{$id}", 'ETag' => self::etagCrm($voce)]];
         });
@@ -629,7 +638,7 @@ trait CrmProfili
     {
         $chi = $this->conCrm($richiesta);
 
-        return $this->mostraDelClienteCrm($richiesta, $this->voceIndirizzoSpedizioneCrm($this->rigaCrm('indirizzi', $chi['workspace'], $id)));
+        return $this->mostraDelClienteCrm($richiesta, $this->voceIndirizzoSpedizioneCrm($this->rigaCrm('indirizzi', $chi['workspace'], $id), $this->valoriDiCrm($chi['workspace'], 'spedizione', $id)));
     }
 
     /**
@@ -643,13 +652,15 @@ trait CrmProfili
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('indirizzi', $chi['workspace'], $id);
-        $this->pretendiLaVersioneCrm($richiesta, $this->voceIndirizzoSpedizioneCrm($riga));
-        $campi = $this->modificaCrm($corpo, [...$this->regoleDelIndirizzoCrm(false), 'archiviato' => ['filled', 'boolean:strict']]);
+        $this->pretendiLaVersioneCrm($richiesta, $this->voceIndirizzoSpedizioneCrm($riga, $this->valoriDiCrm($chi['workspace'], 'spedizione', $id)));
+        $campi = $this->modificaCrm($corpo, [...$this->regoleDelIndirizzoCrm(false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'spedizione', false, $riga['id'], $corpo['campi'] ?? null), 'archiviato' => ['filled', 'boolean:strict']]);
 
         $this->contattoCollegabileCrm($riga['persona_id']);
+        $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'spedizione', $riga['id'], $campi['campi'] ?? []);
         $this->scriviDelClienteCrm('indirizzi', $chi['workspace'], $riga, $campi, $this->colonneDelIndirizzoCrm($campi, false));
+        $this->scriviIValoriDelClienteCrm('indirizzi', 'spedizione', $riga, $piano);
 
-        $voce = $this->voceIndirizzoSpedizioneCrm($this->crm['indirizzi'][$riga['id']]);
+        $voce = $this->voceIndirizzoSpedizioneCrm($this->crm['indirizzi'][$riga['id']], $this->valoriDiCrm($chi['workspace'], 'spedizione', $riga['id']));
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
     }
@@ -703,7 +714,7 @@ trait CrmProfili
      * @param  array<string, mixed>  $riga
      * @return array<string, mixed>
      */
-    private function voceIndirizzoSpedizioneCrm(array $riga): array
+    private function voceIndirizzoSpedizioneCrm(array $riga, ?stdClass $campi = null): array
     {
         return [
             'id' => $riga['id'],
@@ -726,7 +737,7 @@ trait CrmProfili
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
             'creato_da' => $riga['creato_da'],
-        ];
+        ] + ($campi === null ? [] : ['campi' => $campi]);
     }
 
     // ———————————————————————————————————————— Il cliente, il predefinito e l'archivio (App\Crm\DelCliente)
@@ -880,6 +891,26 @@ trait CrmProfili
     }
 
     /**
+     * I valori dei campi «tuoi» di un profilo o di un indirizzo (#2755), scritti insieme al resto: se cambiano soli loro, il record si
+     * tocca comunque (Registro::segnala) e prende l'`aggiornato_il` nuovo, senza il millisecondo in più che un salvataggio con cambi dà.
+     *
+     * @param  array<string, mixed>  $riga  la riga com'era prima della scrittura
+     * @param  array<string, array{tipo: string, prima: mixed, dopo: mixed, riga: mixed}>  $piano
+     */
+    private function scriviIValoriDelClienteCrm(string $tipo, string $oggetto, array $riga, array $piano): void
+    {
+        if ($piano === []) {
+            return;
+        }
+
+        $this->scriviIValoriCrm($oggetto, $riga['id'], $piano);
+
+        if ($this->crm[$tipo][$riga['id']]['aggiornato_il'] === $riga['aggiornato_il']) {
+            $this->crm[$tipo][$riga['id']]['aggiornato_il'] = self::adessoCrm();
+        }
+    }
+
+    /**
      * Una risorsa letta con l'ETag: forte, e un `If-None-Match` che lo contiene (confronto debole) dà 304 senza corpo.
      *
      * @param  array<string, mixed>  $voce
@@ -912,6 +943,7 @@ trait CrmProfili
         foreach ($azzerati as $tipo => $colonne) {
             foreach ($this->crm[$tipo] as $id => $riga) {
                 if ($riga['persona_id'] === $persona) {
+                    unset($this->crm['valori'][$tipo === 'profili' ? 'fatturazione' : 'spedizione'][$id]);
                     $this->crm[$tipo][$id] = [
                         ...$riga, ...array_fill_keys($colonne, null), ...($tipo === 'profili' ? ['email_fatture' => [], 'vies_esito' => 'non_verificata', 'vies_verificato_il' => null] : []),
                         'predefinito' => false, 'archiviata_il' => $riga['archiviata_il'] ?? $ora, 'aggiornato_il' => $ora,

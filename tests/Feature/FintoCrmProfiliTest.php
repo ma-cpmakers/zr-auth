@@ -378,4 +378,45 @@ it('l\'oblio del contatto riporta a non_verificata il VIES dei suoi profili (VI.
     alFinto('POST', "/v1/crm/persone/{$persona}/anonimizzazione", null, $gettoni['anna']);
 
     expect(alFinto('GET', "/v1/crm/profili-fatturazione/{$profilo}", null, $gettoni['anna'])->json('data.vies'))->toBe(['esito' => 'non_verificata', 'verificato_il' => null]);
+it('i campi «tuoi» valgono per i profili e gli indirizzi: oggetti fatturazione e spedizione, valori in crea, modifica e mostra, in elenco solo gli in_elenco, mai nella ricerca; l\'oblio li toglie (#2755)', function () {
+    [, $gettoni] = studioColCrm();
+    $carla = $gettoni['carla'];
+    $azienda = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $carla)->json('data.id');
+    $sezioni = alFinto('GET', '/v1/crm/sezioni?oggetto=fatturazione', null, $carla);
+    $sigla = alFinto('POST', '/v1/crm/campi', ['oggetto' => 'fatturazione', 'nome' => ['it' => 'Sigla'], 'tipo' => 'testo', 'in_elenco' => true], $carla);
+    alFinto('POST', '/v1/crm/campi', ['oggetto' => 'fatturazione', 'nome' => ['it' => 'Nota'], 'tipo' => 'testo'], $carla);
+    alFinto('POST', '/v1/crm/campi', ['oggetto' => 'spedizione', 'nome' => ['it' => 'Orario'], 'tipo' => 'testo'], $carla);
+
+    expect(collect($sezioni->json('data'))->pluck('id')->all())->toBe(['fatturazione.principali'])
+        ->and($sigla->status())->toBe(201)
+        ->and($sigla->json('data.id'))->toBe('fatturazione.sigla');
+
+    $senza = alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda), $carla);
+    $creato = alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda, ['campi' => ['sigla' => 'RS', 'nota' => 'x']]), $carla);
+    $id = $creato->json('data.id');
+
+    expect($senza->json('data.campi'))->toBe([])
+        ->and($creato->json('data.campi'))->toBe(['sigla' => 'RS', 'nota' => 'x'])
+        ->and(alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda, ['campi' => ['sigla' => 5]]), $carla)->status())->toBe(422)
+        ->and(alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda, ['campi' => ['estraneo' => 'x']]), $carla)->json('errors.0.pointer'))->toBe('#/campi/estraneo');
+
+    $prima = alFinto('GET', "/v1/crm/profili-fatturazione/{$id}", null, $carla);
+    $modificato = alFinto('PATCH', "/v1/crm/profili-fatturazione/{$id}", ['campi' => ['sigla' => 'RSS', 'nota' => null]], $carla);
+    $uguale = alFinto('PATCH', "/v1/crm/profili-fatturazione/{$id}", ['campi' => ['sigla' => 'RSS']], $carla);
+
+    expect($modificato->json('data.campi'))->toBe(['sigla' => 'RSS'])
+        ->and($modificato->json('data.aggiornato_il'))->toBeGreaterThan($prima->json('data.aggiornato_il'))
+        ->and($modificato->header('ETag'))->not->toBe($prima->header('ETag'))
+        ->and($uguale->json('data.aggiornato_il'))->toBe($modificato->json('data.aggiornato_il'));
+
+    $elenco = alFinto('GET', "/v1/crm/profili-fatturazione?organizzazione_id={$azienda}", null, $carla)->json('data');
+    $ricerca = alFinto('POST', '/v1/crm/profili-fatturazione/ricerca', ['partita_iva' => PARTITA_IVA_DEL_FINTO], $carla)->json('data.0');
+
+    expect(collect($elenco)->firstWhere('id', $id)['campi'])->toBe(['sigla' => 'RSS'])
+        ->and(array_key_exists('campi', $ricerca))->toBeFalse();
+
+    $indirizzo = alFinto('POST', '/v1/crm/indirizzi-spedizione', indirizzoDiSpedizioneDelFinto($azienda, ['campi' => ['orario' => 'mattina']]), $carla);
+
+    expect($indirizzo->json('data.campi'))->toBe(['orario' => 'mattina'])
+        ->and(alFinto('PATCH', '/v1/crm/indirizzi-spedizione/'.$indirizzo->json('data.id'), ['campi' => ['orario' => null]], $carla)->json('data.campi'))->toBe([]);
 });
