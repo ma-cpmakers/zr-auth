@@ -2022,6 +2022,11 @@ trait Crm
             throw new Problema('persona_anonimizzata');
         }
 
+        // PersoneController::modifica: un contatto unito in un altro non si riattiva da qui, si annulla l'unione.
+        if (($campi['archiviato'] ?? null) === false && $riga['archiviata_il'] !== null && $this->unitoInCrm($riga['id']) !== null) {
+            throw $this->erroreCrm('archiviato', 'validation.in', Regola::VALORE_NON_AMMESSO, ['attribute' => 'archiviato']);
+        }
+
         $this->applicaPersona($riga['id'], $campi, $chi['persona']);
 
         return [200, ['data' => $this->vocePersona($this->crm['persone'][$riga['id']], true)]];

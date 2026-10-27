@@ -375,7 +375,7 @@ trait CrmProfili
             'indirizzo.cap' => $testo(20),
             'indirizzo.citta' => $testo(100),
             'indirizzo.provincia' => $testo(100),
-            'indirizzo.paese' => ['nullable', 'string', 'regex:/^[A-Z]{2}$/'],
+            'indirizzo.paese' => ['nullable', 'string', 'regex:/^[A-Z]{2}$/', Rule::in(self::PAESI)],
             'email_fatture' => ['nullable', 'array', 'list', 'max:'.self::CRM_PROFILI_EMAIL],
             'email_fatture.*' => ['bail', 'string', 'email', 'max:254', 'distinct:ignore_case'],
             'lingua' => ['nullable', 'string', Rule::in(Testi::LINGUE)],
@@ -682,7 +682,7 @@ trait CrmProfili
 
         return [
             ...$regole,
-            'paese' => ['bail', $nuovo ? 'required' : 'filled', 'string', 'regex:/^[A-Z]{2}$/'],
+            'paese' => ['bail', $nuovo ? 'required' : 'filled', 'string', 'regex:/^[A-Z]{2}$/', Rule::in(self::PAESI)],
             'telefono_corriere' => ['nullable', 'string', 'max:30', 'regex:/^[0-9 +().-]*$/'],
             'predefinito' => $nuovo ? ['nullable', 'boolean:strict'] : ['filled', 'boolean:strict'],
         ];

@@ -257,6 +257,23 @@ it('un indirizzo di spedizione vuole via, cap, citta e paese; una modifica non l
         ->and($mostra->json('data.archiviato_il'))->not->toBeNull();
 });
 
+it('il paese di un indirizzo (del profilo e di spedizione) è un codice ISO assegnato: «ZZ» è 422 sul suo pointer', function () {
+    [, $gettoni] = studioColCrm();
+    $azienda = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $gettoni['carla'])->json('data.id');
+    $profilo = alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda), $gettoni['carla'])->json('data.id');
+    $spedizione = alFinto('POST', '/v1/crm/indirizzi-spedizione', indirizzoDiSpedizioneDelFinto($azienda), $gettoni['carla'])->json('data.id');
+
+    $nelProfilo = alFinto('PATCH', "/v1/crm/profili-fatturazione/{$profilo}", ['indirizzo' => ['paese' => 'ZZ']], $gettoni['carla']);
+    $inCreazione = alFinto('POST', '/v1/crm/indirizzi-spedizione', indirizzoDiSpedizioneDelFinto($azienda, ['paese' => 'ZZ']), $gettoni['carla']);
+    $inModifica = alFinto('PATCH', "/v1/crm/indirizzi-spedizione/{$spedizione}", ['paese' => 'ZZ'], $gettoni['carla']);
+
+    expect($nelProfilo->status())->toBe(422)
+        ->and($nelProfilo->json('errors.0.pointer'))->toBe('#/indirizzo/paese')
+        ->and($inCreazione->json('errors.0.pointer'))->toBe('#/paese')
+        ->and($inModifica->json('errors.0'))->toMatchArray(['pointer' => '#/paese', 'regola' => 'valore_non_ammesso'])
+        ->and(alFinto('PATCH', "/v1/crm/indirizzi-spedizione/{$spedizione}", ['paese' => 'DE'], $gettoni['carla'])->status())->toBe(200);
+});
+
 it('un contatto anonimizzato perde i dati dei suoi profili e indirizzi, che si archiviano, e non ne riceve di nuovi (PF.11)', function () {
     [, $gettoni] = studioColCrm();
     $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Mario'], $gettoni['carla'])->json('data.id');

@@ -100,6 +100,22 @@ it('l\'annullamento rimette note, attività e campi a chi si era unito, una volt
         ->and(alFinto('GET', '/v1/crm/persone/unioni/01k6zzzzzzzzzzzzzzzzzzzzzz', null, $gettoni['anna'])->json('codice'))->toBe('non_trovato');
 });
 
+it('un contatto unito non si riattiva con una PATCH: 422 su #/archiviato, e l\'annullamento lo rimette', function () {
+    [$gettoni, $resta, $unito] = duePersoneDoppie();
+    $id = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'unito']]), $gettoni['anna'])->json('data.id');
+
+    $riattiva = alFinto('PATCH', "/v1/crm/persone/{$unito}", ['archiviato' => false], $gettoni['carla']);
+
+    expect($riattiva->status())->toBe(422)
+        ->and($riattiva->json('errors.0'))->toMatchArray(['pointer' => '#/archiviato', 'regola' => 'valore_non_ammesso'])
+        ->and(alFinto('GET', "/v1/crm/persone/{$unito}", null, $gettoni['anna'])->json('data.archiviato_il'))->not->toBeNull();
+
+    alFinto('POST', "/v1/crm/persone/unioni/{$id}/annullamento", null, $gettoni['anna']);
+
+    expect(alFinto('PATCH', "/v1/crm/persone/{$resta}", ['archiviato' => true], $gettoni['carla'])->status())->toBe(200)
+        ->and(alFinto('PATCH', "/v1/crm/persone/{$resta}", ['archiviato' => false], $gettoni['carla'])->status())->toBe(200);
+});
+
 it('un contatto con una scheda collegata non si unisce: 409 contatto_non_unibile con schede_collegate in blocchi, finché la scheda non lo scollega', function () {
     [$gettoni, $resta, $unito, $finto, $studio] = duePersoneDoppie();
     $finto->attivaApp($studio, 'pm', 'crm');
