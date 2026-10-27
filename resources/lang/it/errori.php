@@ -357,6 +357,10 @@ return [
         'title' => 'Funzione spenta',
         'detail' => 'La funzione del settore di questa board (edilizia o digitale) è spenta nel workspace, quindi la funzione della board non si accende. Le board già accese restano accese. Accendi prima la funzione con board.funzioni.modifica (serve il ruolo di proprietario o amministratore) e ripeti la richiesta. Il metodo non ha scritto niente.',
     ],
+    'epica_con_figlie' => [
+        'title' => 'Epica con figlie',
+        'detail' => "L'epica ha ancora delle schede figlie vive, quindi il suo tipo non cambia. Togli prima l'epica dalle figlie con board.schede.modifica (`epica_id` a `null`) o spostale in un'altra epica, e ripeti la richiesta. Le figlie si vedono con board.schede.figlie.elenca. Il metodo non ha scritto niente.",
+    ],
     'personalizzazione_con_dati' => [
         'title' => 'Personalizzazione con dati',
         'detail' => 'Il CRM di questo workspace ha già dei dati (contatti, trattative, attività, catalogo, preventivi, acquisti, incassi o scadenze): un pacchetto di personalizzazione si installa solo su un CRM vuoto, perché cambierebbe i dati che ci sono. Il metodo non ha scritto niente. Per partire da un pacchetto crea un nuovo workspace.',

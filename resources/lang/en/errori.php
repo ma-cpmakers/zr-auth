@@ -357,6 +357,10 @@ return [
         'title' => 'Function is off',
         'detail' => "The function for this board's sector (construction or digital) is off in the workspace, so the board's function cannot be turned on. Boards that are already on stay on. Turn the function on first with board.funzioni.modifica (owner or administrator role required) and repeat the request. The method has written nothing.",
     ],
+    'epica_con_figlie' => [
+        'title' => 'Epic with children',
+        'detail' => 'The epic still has live child cards, so its type cannot change. First take the epic off its children with board.schede.modifica (`epica_id` set to `null`) or move them to another epic, and repeat the request. The children are listed by board.schede.figlie.elenca. The method has written nothing.',
+    ],
     'personalizzazione_con_dati' => [
         'title' => 'Customization with data',
         'detail' => 'This workspace\'s CRM already has data (contacts, deals, activities, catalog, quotes, purchases, payments or deadlines): a customization package is installed only on an empty CRM, because it would change the data that is there. The method wrote nothing. To start from a package, create a new workspace.',

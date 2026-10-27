@@ -17,6 +17,7 @@ return [
     'cartella_del_workspace' => "Nel workspace non c'è una cartella con questo id: gli id delle cartelle li dà board.cartelle.elenca.",
     'board_del_workspace' => "Nel workspace non c'è una board con questo id: gli id delle board li dà board.board.elenca.",
     'lista_del_workspace' => "Nel workspace non c'è una lista con questo id: gli id delle liste li dà board.board.mostra.",
+    'epica_della_board' => "L'epica deve essere una scheda viva di questa board con tipo `epica`, diversa da questa scheda, e una scheda che è un'epica non può averne una: le epiche della board si trovano con board.schede.elenca.",
     'tipo_della_board' => 'Il tipo non è fra quelli del metodo di questa board (:tipi): i tipi ammessi li dà board.board.mostra nel campo `tipi`.',
     'punti_di_storie_e_bug' => 'I punti si danno solo a una scheda di tipo `storia` o `bug`: imposta prima il tipo con board.schede.modifica.',
     'pronta_di_storie_e_bug' => 'Solo una scheda di tipo `storia` o `bug` si segna pronta per lo sprint: imposta prima il tipo con board.schede.modifica.',

@@ -16,6 +16,7 @@ return [
     'cartella_del_workspace' => 'There is no folder with this id in the workspace: the ids of the folders are given by board.cartelle.elenca.',
     'board_del_workspace' => 'There is no board with this id in the workspace: the ids of the boards are given by board.board.elenca.',
     'lista_del_workspace' => 'There is no list with this id in the workspace: the ids of the lists are given by board.board.mostra.',
+    'epica_della_board' => "The epic must be a live card of this board with type `epica`, different from this card, and a card that is an epic cannot have one: the board's epics are found with board.schede.elenca.",
     'tipo_della_board' => "The type is not one of the types of this board's method (:tipi): board.board.mostra gives the allowed types in its `tipi` field.",
     'punti_di_storie_e_bug' => 'Points are only given to a card of type `storia` or `bug`: set the type first with board.schede.modifica.',
     'pronta_di_storie_e_bug' => 'Only a card of type `storia` or `bug` can be marked ready for the sprint: set the type first with board.schede.modifica.',

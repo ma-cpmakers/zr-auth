@@ -357,6 +357,10 @@ return [
         'title' => 'Función apagada',
         'detail' => 'La función del sector de este tablero (construcción o digital) está apagada en el workspace, por lo que la función del tablero no se enciende. Los tableros ya encendidos siguen encendidos. Enciende antes la función con board.funzioni.modifica (se necesita el rol de propietario o administrador) y repite la solicitud. El método no ha escrito nada.',
     ],
+    'epica_con_figlie' => [
+        'title' => 'Épica con hijas',
+        'detail' => 'La épica todavía tiene tarjetas hijas vivas, por lo que su tipo no cambia. Quita antes la épica de las hijas con board.schede.modifica (`epica_id` a `null`) o muévelas a otra épica y repite la solicitud. Las hijas se ven con board.schede.figlie.elenca. El método no ha escrito nada.',
+    ],
     'personalizzazione_con_dati' => [
         'title' => 'Personalización con datos',
         'detail' => 'El CRM de este workspace ya tiene datos (contactos, oportunidades, actividades, catálogo, presupuestos, compras, cobros o vencimientos): un paquete de personalización se instala solo en un CRM vacío, porque cambiaría los datos que hay. El método no ha escrito nada. Para empezar desde un paquete crea un workspace nuevo.',

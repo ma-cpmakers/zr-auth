@@ -16,6 +16,7 @@ return [
     'cartella_del_workspace' => 'En el workspace no hay una carpeta con este id: los ids de las carpetas los da board.cartelle.elenca.',
     'board_del_workspace' => 'En el workspace no hay un tablero con este id: los ids de los tableros los da board.board.elenca.',
     'lista_del_workspace' => 'En el workspace no hay una lista con este id: los ids de las listas los da board.board.mostra.',
+    'epica_della_board' => 'La épica debe ser una tarjeta viva de este tablero con tipo `epica`, distinta de esta tarjeta, y una tarjeta que es una épica no puede tener una: las épicas del tablero se encuentran con board.schede.elenca.',
     'tipo_della_board' => 'El tipo no es uno de los del método de este tablero (:tipi): board.board.mostra da los tipos admitidos en su campo `tipi`.',
     'punti_di_storie_e_bug' => 'Los puntos solo se dan a una tarjeta de tipo `storia` o `bug`: establece primero el tipo con board.schede.modifica.',
     'pronta_di_storie_e_bug' => 'Solo una tarjeta de tipo `storia` o `bug` se marca lista para el sprint: establece primero el tipo con board.schede.modifica.',
