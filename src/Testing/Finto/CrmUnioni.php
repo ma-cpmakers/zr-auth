@@ -447,18 +447,21 @@ trait CrmUnioni
 
     /**
      * Le parti, diverse da note, attività e opportunità, che un contatto ha e che l'unione non sa spostare: i nomi di `blocchi`, nell'ordine in
-     * cui si apriranno. Il finto non ha le parti di Bookings (`link_prenotazione`, `prenotazioni`) né i profili di fatturazione e gli indirizzi di spedizione.
+     * cui si apriranno. Il finto non ha le parti di Bookings (`link_prenotazione`, `prenotazioni`). Un profilo o un indirizzo archiviato (`archiviata_il`) non blocca.
      *
      * @return list<string>
      */
     private function blocchiDelContattoCrm(string $contatto): array
     {
         $vive = fn (string $tipo) => array_filter($this->crm[$tipo], fn (array $riga) => ($riga['persona_id'] ?? null) === $contatto && ! ($riga['eliminata'] ?? false));
+        $viva = fn (string $tipo) => array_filter($this->crm[$tipo], fn (array $riga) => $riga['persona_id'] === $contatto && $riga['archiviata_il'] === null) !== [];
         $acquisti = array_keys(array_filter($this->crm['acquisti'], fn (array $riga) => $riga['persona_id'] === $contatto));
         $nomi = [];
 
         foreach (['preventivi' => $vive('preventivi') !== [], 'scadenze' => $vive('scadenze') !== [], 'acquisti' => $acquisti !== [],
             'rate' => array_filter($this->crm['rate'], fn (array $rata) => in_array($rata['acquisto_id'], $acquisti, true) && ! ($rata['eliminata'] ?? false)) !== [],
+            'profili_fatturazione' => $viva('profili'),
+            'indirizzi_spedizione' => $viva('indirizzi'),
             'schede_collegate' => array_filter($this->schedeCrm, fn (array $collegamento) => $collegamento['tipo'] === 'crm.persona' && $collegamento['record'] === $contatto) !== []] as $nome => $presente) {
             if ($presente) {
                 $nomi[] = $nome;

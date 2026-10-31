@@ -26,13 +26,13 @@ it('un profilo nasce con 201, Location ed ETag; il primo del cliente è il prede
     [, $gettoni] = studioColCrm();
     $azienda = alFinto('POST', '/v1/crm/organizzazioni', ['nome' => 'Rossi Srl'], $gettoni['carla'])->json('data.id');
 
-    $creato = alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda, ['partita_iva' => 'it 123 45678-903', 'pec' => 'Fatture@Rossi.IT']), $gettoni['carla']);
+    $creato = alFinto('POST', '/v1/crm/profili-fatturazione', profiloDelFinto($azienda, ['partita_iva' => 'it 123 45678-903', 'pec' => 'Fatture@Example.COM']), $gettoni['carla']);
 
     expect($creato->status())->toBe(201)
         ->and($creato->header('Location'))->toBe('/v1/crm/profili-fatturazione/'.$creato->json('data.id'))
         ->and($creato->header('ETag'))->toStartWith('"')
         ->and($creato->json('data'))->toMatchArray([
-            'organizzazione_id' => $azienda, 'persona_id' => null, 'partita_iva' => 'IT'.PARTITA_IVA_DEL_FINTO, 'codice_destinatario' => 'ABCDEFG', 'pec' => 'fatture@rossi.it',
+            'organizzazione_id' => $azienda, 'persona_id' => null, 'partita_iva' => 'IT'.PARTITA_IVA_DEL_FINTO, 'codice_destinatario' => 'ABCDEFG', 'pec' => 'fatture@example.com',
             'predefinito' => true, 'area_fiscale' => 'nazionale', 'stato' => 'completo', 'mancano' => [], 'archiviato_il' => null, 'scissione_pagamenti' => false,
             'vies' => ['esito' => 'non_verificata', 'verificato_il' => null],
         ])

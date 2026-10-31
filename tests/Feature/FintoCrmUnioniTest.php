@@ -146,3 +146,22 @@ it('l\'oblio di chi resta anonimizza anche chi si era unito in lui, e l\'unione 
     expect($letto->json('data.anonimizzata_il'))->not->toBeNull()->and($letto->json('data.nome'))->toBeNull()
         ->and(alFinto('POST', "/v1/crm/persone/unioni/{$unione}/annullamento", null, $gettoni['anna'])->json('codice'))->toBe('contatto_non_unibile');
 });
+
+it('un contatto con un profilo di fatturazione o un indirizzo di spedizione attivo non si unisce: 409 con i due blocchi, finché non sono archiviati', function () {
+    [$gettoni, $resta, $unito] = duePersoneDoppie();
+    $profilo = alFinto('POST', '/v1/crm/profili-fatturazione', ['persona_id' => $unito, 'tipo_intestatario' => 'privato', 'paese' => 'IT'], $gettoni['anna']);
+    $indirizzo = alFinto('POST', '/v1/crm/indirizzi-spedizione', ['persona_id' => $unito, 'via' => 'Via Dante 2', 'cap' => '10121', 'citta' => 'Torino', 'paese' => 'IT'], $gettoni['anna']);
+    expect($profilo->status())->toBe(201)->and($indirizzo->status())->toBe(201);
+
+    $risposta = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito), $gettoni['anna']);
+
+    expect($risposta->status())->toBe(409)->and($risposta->json('codice'))->toBe('contatto_non_unibile')->and($risposta->json('blocchi'))->toBe(['profili_fatturazione', 'indirizzi_spedizione']);
+
+    $archiviati = [
+        alFinto('PATCH', '/v1/crm/profili-fatturazione/'.$profilo->json('data.id'), ['archiviato' => true], $gettoni['anna'])->status(),
+        alFinto('PATCH', '/v1/crm/indirizzi-spedizione/'.$indirizzo->json('data.id'), ['archiviato' => true], $gettoni['anna'])->status(),
+    ];
+
+    expect($archiviati)->toBe([200, 200])
+        ->and(alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'resta']]), $gettoni['anna'])->status())->toBe(201);
+});
