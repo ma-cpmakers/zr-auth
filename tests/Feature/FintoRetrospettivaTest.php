@@ -10,10 +10,10 @@ use Zeiras\Auth\Testing\BackofficeFinto;
  *
  * @return array{BackofficeFinto, array<string, mixed>, array<string, mixed>, array<string, mixed>, string, string}
  */
-function conLoSprintChiuso(string $stato = 'chiuso'): array
+function conLoSprintChiuso(string $stato = 'chiuso', string $lingua = 'it'): array
 {
     $finto = BackofficeFinto::attiva();
-    $anna = $finto->persona('anna@example.com', PASSWORD);
+    $anna = $finto->persona('anna@example.com', PASSWORD, lingua: $lingua);
     $bruno = $finto->persona('bruno@example.com', PASSWORD, 'Bruno');
     $studio = $finto->workspace('Studio', $anna);
     $finto->membro($studio, $bruno, 'membro');
@@ -48,9 +48,10 @@ it('la retrospettiva risponde 201 con la board intera, tre liste nella lingua di
 });
 
 it('la lingua della richiesta dà i nomi della board e delle liste', function () {
-    [, , , $sprint, $gettone] = conLoSprintChiuso();
+    // Con un gettone valido si risponde nella lingua della persona, non in quella di Accept-Language.
+    [, , , $sprint, $gettone] = conLoSprintChiuso('chiuso', 'en');
 
-    $dati = alFinto('POST', "/v1/board/sprint/{$sprint['id']}/retrospettiva", [], $gettone, 'en')->json('data');
+    $dati = alFinto('POST', "/v1/board/sprint/{$sprint['id']}/retrospettiva", [], $gettone)->json('data');
 
     expect($dati['nome'])->toBe('Retrospective: Sprint 12')
         ->and(array_column($dati['liste'], 'nome'))->toBe(['What went well', 'To improve', 'Actions']);
