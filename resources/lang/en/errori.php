@@ -214,8 +214,8 @@ return [
         'detail' => 'This merge has already been undone: the merged contact is active again and there is nothing else to do. Nothing has changed.',
     ],
     'contatto_unito' => [
-        'title' => "Merged contact",
-        'detail' => "This contact was merged into another one (`unito_in`): it is the same person, so the erasure is requested on the contact that stays, or the merge is undone first. Nothing has changed.",
+        'title' => 'Merged contact',
+        'detail' => 'This contact was merged into another one (`unito_in`): it is the same person, so the erasure is requested on the contact that stays, or the merge is undone first. Nothing has changed.',
     ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline not empty',

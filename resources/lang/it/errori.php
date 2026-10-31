@@ -214,7 +214,7 @@ return [
         'detail' => "Questa unione è già stata annullata: l'unito è tornato attivo e non c'è altro da fare. Niente è cambiato.",
     ],
     'contatto_unito' => [
-        'title' => "Contatto unito",
+        'title' => 'Contatto unito',
         'detail' => "Questo contatto si è unito in un altro (`unito_in`): è la stessa persona, e l'oblio si chiede su chi resta, oppure si annulla prima l'unione. Niente è cambiato.",
     ],
     'pipeline_non_vuota' => [

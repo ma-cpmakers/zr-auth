@@ -214,8 +214,8 @@ return [
         'detail' => 'Esta unión ya se deshizo: el contacto unido vuelve a estar activo y no hay nada más que hacer. No ha cambiado nada.',
     ],
     'contatto_unito' => [
-        'title' => "Contacto unido",
-        'detail' => "Este contacto se unió a otro (`unito_in`): es la misma persona, y el olvido se pide sobre el contacto que queda, o se anula antes la unión. No ha cambiado nada.",
+        'title' => 'Contacto unido',
+        'detail' => 'Este contacto se unió a otro (`unito_in`): es la misma persona, y el olvido se pide sobre el contacto que queda, o se anula antes la unión. No ha cambiado nada.',
     ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline no vacío',
