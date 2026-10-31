@@ -78,6 +78,7 @@ final class Problema extends RuntimeException
         'annullamento_scaduto' => 409,
         'unione_non_valida' => 409,
         'contatto_non_unibile' => 409,
+        'contatto_unito' => 409,
         'gia_annullata' => 409,
         'campo_di_sistema' => 409,
         'ultima_opzione' => 409,
