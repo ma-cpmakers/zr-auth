@@ -2616,7 +2616,7 @@ trait Crm
             return [200, ['data' => ['attivita_eliminate' => 0, 'opportunita_rinominate' => 0]]];
         }
 
-        // Un contatto unito in un altro (unione non annullata, anche oltre le 24 ore) è la stessa persona di chi resta: l'oblio si chiede lì (PersoneController).
+        // Un contatto unito in un altro (unione non annullata, anche oltre la finestra di 7 giorni) è la stessa persona di chi resta: l'oblio si chiede lì (PersoneController).
         if ($this->unitoInCrm($persona['id']) !== null) {
             throw new Problema('contatto_unito');
         }
