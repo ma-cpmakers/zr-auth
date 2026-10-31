@@ -209,6 +209,10 @@ return [
         'title' => 'Purchase expired',
         'detail' => 'This purchase has expired, and a use cannot be recorded on an expired purchase. Nothing was written.',
     ],
+    'acquisto_necessario' => [
+        'title' => 'Purchase needed',
+        'detail' => 'This calendar is reserved for people who have bought: the contact has no valid purchase of any of the items that open it. The method wrote nothing. Record the purchase in the CRM (crm.acquisti.crea) and try again.',
+    ],
     'rata_pagata' => [
         'title' => 'Installment already paid',
         'detail' => 'This installment is already paid in full and has nothing left to collect. Nothing was written: read it again with crm.rate.mostra.',
@@ -260,6 +264,18 @@ return [
     'pagina_presente' => [
         'title' => 'Page already exists',
         'detail' => 'You already have a booking page in this workspace: each member has only one. Read it with `bookings.pagine.elenca` (`mie=true`) and change it with `bookings.pagine.modifica`. Nothing was written.',
+    ],
+    'struttura_presente' => [
+        'title' => 'Venue already exists',
+        'detail' => 'This workspace already has a venue: it has only one. Read it with `bookings.pagine.elenca` and add people with `bookings.pagine.persone.crea`. Nothing was written.',
+    ],
+    'piu_persone' => [
+        'title' => 'More people in the venue',
+        'detail' => 'The venue has other active people besides the page owner, so it cannot go back to a `persona` page. Remove them with `bookings.pagine.persone.elimina` and try again. Nothing was written.',
+    ],
+    'persona_presente' => [
+        'title' => 'Person already added',
+        'detail' => 'This member is already a person of the venue (even if they left: remove their row first with `bookings.pagine.persone.elimina`). Read the list with `bookings.pagine.persone.elenca`. Nothing was written.',
     ],
     'orario_non_disponibile' => [
         'title' => 'Time not available',

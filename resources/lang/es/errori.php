@@ -209,6 +209,10 @@ return [
         'title' => 'Compra caducada',
         'detail' => 'Esta compra ha caducado, y no se registra un consumo sobre una compra caducada. No se escribió nada.',
     ],
+    'acquisto_necessario' => [
+        'title' => 'Hace falta una compra',
+        'detail' => 'Este calendario está reservado a quien ha comprado: el contacto no tiene una compra válida de ninguno de los artículos que lo abren. El método no ha escrito nada. Registra la compra en el CRM (crm.acquisti.crea) y vuelve a intentarlo.',
+    ],
     'rata_pagata' => [
         'title' => 'Cuota ya pagada',
         'detail' => 'Esta cuota ya está pagada por completo y no tiene nada que cobrar. No se escribió nada: léela de nuevo con crm.rate.mostra.',
@@ -260,6 +264,18 @@ return [
     'pagina_presente' => [
         'title' => 'Página ya existente',
         'detail' => 'Ya tienes una página de reservas en este espacio de trabajo: cada miembro tiene solo una. Léela con `bookings.pagine.elenca` (`mie=true`) y cámbiala con `bookings.pagine.modifica`. No se escribió nada.',
+    ],
+    'struttura_presente' => [
+        'title' => 'Local ya existente',
+        'detail' => 'Este espacio de trabajo ya tiene un local: solo puede tener uno. Léelo con `bookings.pagine.elenca` y añade personas con `bookings.pagine.persone.crea`. No se escribió nada.',
+    ],
+    'piu_persone' => [
+        'title' => 'Más personas en el local',
+        'detail' => 'El local tiene otras personas activas además del propietario de la página, así que no puede volver a una página `persona`. Quítalas con `bookings.pagine.persone.elimina` y repite. No se escribió nada.',
+    ],
+    'persona_presente' => [
+        'title' => 'Persona ya añadida',
+        'detail' => 'Este miembro ya es una persona del local (aunque se haya ido: su fila se quita antes con `bookings.pagine.persone.elimina`). Lee la lista con `bookings.pagine.persone.elenca`. No se escribió nada.',
     ],
     'orario_non_disponibile' => [
         'title' => 'Horario no disponible',
