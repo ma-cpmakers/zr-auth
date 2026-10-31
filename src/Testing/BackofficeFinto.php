@@ -25,6 +25,7 @@ use Zeiras\Auth\Testing\Finto\CrmAcquisti;
 use Zeiras\Auth\Testing\Finto\CrmAvanzate;
 use Zeiras\Auth\Testing\Finto\CrmCampi;
 use Zeiras\Auth\Testing\Finto\CrmCatalogo;
+use Zeiras\Auth\Testing\Finto\CrmElenchi;
 use Zeiras\Auth\Testing\Finto\CrmRate;
 use Zeiras\Auth\Testing\Finto\CrmEsiti;
 use Zeiras\Auth\Testing\Finto\BoardFunzioni;
@@ -32,7 +33,9 @@ use Zeiras\Auth\Testing\Finto\BoardRuoliEpiche;
 use Zeiras\Auth\Testing\Finto\CrmPersonalizzazione;
 use Zeiras\Auth\Testing\Finto\CrmPreventivi;
 use Zeiras\Auth\Testing\Finto\CrmPreventiviPubblici;
+use Zeiras\Auth\Testing\Finto\CrmProfili;
 use Zeiras\Auth\Testing\Finto\CrmScadenze;
+use Zeiras\Auth\Testing\Finto\CrmUnioni;
 use Zeiras\Auth\Testing\Finto\CrmValori;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
@@ -74,6 +77,7 @@ final class BackofficeFinto
     use CrmAvanzate;
     use CrmCampi;
     use CrmCatalogo;
+    use CrmElenchi;
     use CrmRate;
     use CrmEsiti;
     use CrmPersonalizzazione;
@@ -83,7 +87,9 @@ final class BackofficeFinto
     use Retrospettiva;
     use Scrumban;
     use Sprint;
+    use CrmProfili;
     use CrmScadenze;
+    use CrmUnioni;
     use CrmValori;
     use Todo;
 
@@ -882,7 +888,7 @@ final class BackofficeFinto
      * @param  array<string, mixed>|null  $autore  la persona che ha fatto, di persona(): `autore` dice il suo nome di oggi finché è membra del workspace, poi `null`; senza, `null` (lo ha fatto il sistema)
      * @param  string|null  $risorsaNome  il nome della cosa a cui si riferisce il soggetto; senza, `risorsa_nome` è `null`
      * @param  array{id: string, nome: string}|null  $board  la board di ciò che sta dentro una board (scheda, lista, etichetta, vista); senza, `null`
-     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, ultima_azione_il: string, azioni: int, autore: ?array{nome: string}, risorsa_nome: ?string, board: ?array{id: string, nome: string}, per_me: null}
+     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, quando: null, ultima_azione_il: string, azioni: int, autore: ?array{nome: string}, risorsa_nome: ?string, board: ?array{id: string, nome: string}, per_me: null}
      */
     public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null, ?array $autore = null, ?string $risorsaNome = null, ?array $board = null, int $azioni = 1, ?CarbonInterface $ultimaAzioneIl = null): array
     {
@@ -3610,6 +3616,8 @@ final class BackofficeFinto
             'dati' => (object) $notifica['dati'],
             'letta_il' => $notifica['letta_il'] === null ? null : self::iso($notifica['letta_il']),
             'creata_il' => self::iso($notifica['creata_il']),
+            // Il preavviso di una scadenza porta l'istante locale (`{il, fuso}`); il finto non ne semina: sempre `null` (#2428, come il backoffice per ogni altro tipo).
+            'quando' => null,
             'ultima_azione_il' => self::iso($notifica['ultima_azione_il']),
             'azioni' => $notifica['azioni'],
             'autore' => $notifica['autore'] !== null && isset($this->membri[$notifica['workspace']][$notifica['autore']]) ? ['nome' => $this->persone[$notifica['autore']]['nome']] : null,

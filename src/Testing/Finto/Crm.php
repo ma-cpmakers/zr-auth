@@ -25,6 +25,10 @@ trait Crm
         ['GET', '#^/v1/crm/persone$#', 'crm.persone.elenca'],
         ['POST', '#^/v1/crm/persone/ricerca$#', 'crm.persone.ricerca.crea'],
         ['POST', '#^/v1/crm/persone/importazioni$#', 'crm.persone.importazioni.crea'],
+        ['GET', '#^/v1/crm/persone/doppioni$#', 'crm.persone.doppioni.elenca'],
+        ['POST', '#^/v1/crm/persone/unioni$#', 'crm.persone.unioni.crea'],
+        ['GET', '#^/v1/crm/persone/unioni/([^/]+)$#', 'crm.persone.unioni.mostra'],
+        ['POST', '#^/v1/crm/persone/unioni/([^/]+)/annullamento$#', 'crm.persone.unioni.annullamento.crea'],
         ['GET', '#^/v1/crm/persone/esportazione$#', 'crm.persone.esportazione.mostra'],
         ['POST', '#^/v1/crm/persone$#', 'crm.persone.crea'],
         ['GET', '#^/v1/crm/persone/([^/]+)$#', 'crm.persone.mostra'],
@@ -48,8 +52,13 @@ trait Crm
         ['GET', '#^/v1/crm/esiti$#', 'crm.esiti.elenca'],
         ['POST', '#^/v1/crm/esiti$#', 'crm.esiti.crea'],
         ['PATCH', '#^/v1/crm/esiti/([^/]+)$#', 'crm.esiti.modifica'],
+        ['GET', '#^/v1/crm/elenchi$#', 'crm.elenchi.elenca'],
+        ['POST', '#^/v1/crm/elenchi$#', 'crm.elenchi.crea'],
+        ['GET', '#^/v1/crm/elenchi/([^/]+)$#', 'crm.elenchi.mostra'],
+        ['PATCH', '#^/v1/crm/elenchi/([^/]+)$#', 'crm.elenchi.modifica'],
         ['GET', '#^/v1/crm/catalogo$#', 'crm.catalogo.elenca'],
         ['POST', '#^/v1/crm/catalogo$#', 'crm.catalogo.crea'],
+        ['POST', '#^/v1/crm/catalogo/ricerca$#', 'crm.catalogo.ricerca.crea'],
         ['GET', '#^/v1/crm/catalogo/categorie$#', 'crm.catalogo.categorie.elenca'],
         ['GET', '#^/v1/crm/catalogo/([^/]+)$#', 'crm.catalogo.mostra'],
         ['PATCH', '#^/v1/crm/catalogo/([^/]+)$#', 'crm.catalogo.modifica'],
@@ -71,6 +80,7 @@ trait Crm
         ['POST', '#^/v1/crm/scadenze/tipi$#', 'crm.scadenze.tipi.crea'],
         ['PATCH', '#^/v1/crm/scadenze/tipi/([^/]+)$#', 'crm.scadenze.tipi.modifica'],
         ['GET', '#^/v1/crm/scadenze$#', 'crm.scadenze.elenca'],
+        ['GET', '#^/v1/crm/scadenze/riepilogo$#', 'crm.scadenze.riepilogo.mostra'],
         ['POST', '#^/v1/crm/scadenze$#', 'crm.scadenze.crea'],
         ['GET', '#^/v1/crm/scadenze/([^/]+)$#', 'crm.scadenze.mostra'],
         ['PATCH', '#^/v1/crm/scadenze/([^/]+)$#', 'crm.scadenze.modifica'],
@@ -139,6 +149,16 @@ trait Crm
         ['GET', '#^/v1/crm/impostazioni$#', 'crm.impostazioni.mostra'],
         ['PATCH', '#^/v1/crm/impostazioni$#', 'crm.impostazioni.modifica'],
         ['GET', '#^/v1/crm/utilizzo$#', 'crm.utilizzo.mostra'],
+        ['GET', '#^/v1/crm/profili-fatturazione$#', 'crm.profili-fatturazione.elenca'],
+        ['POST', '#^/v1/crm/profili-fatturazione$#', 'crm.profili-fatturazione.crea'],
+        ['POST', '#^/v1/crm/profili-fatturazione/ricerca$#', 'crm.profili-fatturazione.ricerca.crea'],
+        ['GET', '#^/v1/crm/profili-fatturazione/([^/]+)$#', 'crm.profili-fatturazione.mostra'],
+        ['PATCH', '#^/v1/crm/profili-fatturazione/([^/]+)$#', 'crm.profili-fatturazione.modifica'],
+        ['POST', '#^/v1/crm/profili-fatturazione/([^/]+)/verifica-vies$#', 'crm.profili-fatturazione.verifica-vies.crea'],
+        ['GET', '#^/v1/crm/indirizzi-spedizione$#', 'crm.indirizzi-spedizione.elenca'],
+        ['POST', '#^/v1/crm/indirizzi-spedizione$#', 'crm.indirizzi-spedizione.crea'],
+        ['GET', '#^/v1/crm/indirizzi-spedizione/([^/]+)$#', 'crm.indirizzi-spedizione.mostra'],
+        ['PATCH', '#^/v1/crm/indirizzi-spedizione/([^/]+)$#', 'crm.indirizzi-spedizione.modifica'],
     ];
 
     /** Gli stati di un contatto e di un'azienda (Persona::STATI, Organizzazione::STATI). */
@@ -254,9 +274,9 @@ trait Crm
      * Lo stato del CRM, per tipo e per id: ogni riga porta il suo `workspace`. Le righe eliminate (fasi, attività, note) restano con
      * `eliminata`, come nell'archivio di sistema; le `cambi` sono le righe delle cronologie di contatti, aziende e trattative.
      *
-     * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
+     * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, elenchi: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'elenchi' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'unioni' => [], 'indirizzi' => [], 'profili' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -287,6 +307,10 @@ trait Crm
             'crm.persone.importazioni.crea' => $this->importaCrm($richiesta, $corpo, 'persone', $operazione),
             'crm.persone.cronologia.elenca' => $this->cronologiaCrm($richiesta, 'persone', $parametri[0], $operazione),
             'crm.persone.anonimizzazione.crea' => $this->anonimizzaCrm($richiesta, $parametri[0]),
+            'crm.persone.doppioni.elenca' => $this->elencaDoppioniCrm($richiesta),
+            'crm.persone.unioni.crea' => $this->creaUnioneCrm($richiesta, $corpo),
+            'crm.persone.unioni.mostra' => $this->mostraUnioneCrm($richiesta, $parametri[0]),
+            'crm.persone.unioni.annullamento.crea' => $this->annullaUnioneCrm($richiesta, $corpo, $parametri[0]),
             'crm.importazioni.elenca' => $this->elencaImportazioniCrm($richiesta),
             'crm.importazioni.mostra' => [200, ['data' => $this->voceImportazioneCrm($this->importazioneCrm($this->conCrm($richiesta, ['proprietario', 'amministratore'])['workspace'], $parametri[0]))]],
             'crm.importazioni.annullamento.crea' => $this->annullaImportazioneCrm($richiesta, $corpo, $parametri[0]),
@@ -306,7 +330,12 @@ trait Crm
             'crm.esiti.elenca' => $this->elencaEsitiCrm($richiesta),
             'crm.esiti.crea' => $this->creaEsitoCrm($richiesta, $corpo),
             'crm.esiti.modifica' => $this->modificaEsitoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.elenchi.elenca' => $this->elencaElenchiCrm($richiesta),
+            'crm.elenchi.crea' => $this->creaElencoCrm($richiesta, $corpo),
+            'crm.elenchi.mostra' => $this->mostraCrm($richiesta, 'elenchi', $parametri[0]),
+            'crm.elenchi.modifica' => $this->modificaElencoCrm($richiesta, $corpo, $parametri[0]),
             'crm.catalogo.elenca' => $this->elencaCatalogoCrm($richiesta),
+            'crm.catalogo.ricerca.crea' => $this->ricercaCatalogoCrm($richiesta, $corpo),
             'crm.catalogo.crea' => $this->creaVoceCatalogoCrm($richiesta, $corpo),
             'crm.catalogo.categorie.elenca' => $this->elencaCategorieCatalogoCrm($richiesta),
             'crm.catalogo.mostra' => $this->mostraCrm($richiesta, 'catalogo', $parametri[0]),
@@ -327,6 +356,7 @@ trait Crm
             'crm.scadenze.tipi.crea' => $this->creaScadenzaTipoCrm($richiesta, $corpo),
             'crm.scadenze.tipi.modifica' => $this->modificaScadenzaTipoCrm($richiesta, $corpo, $parametri[0]),
             'crm.scadenze.elenca' => $this->elencaScadenzeCrm($richiesta),
+            'crm.scadenze.riepilogo.mostra' => $this->riepilogoScadenzeCrm($richiesta),
             'crm.scadenze.crea' => $this->creaScadenzaCrm($richiesta, $corpo),
             'crm.scadenze.mostra' => $this->mostraCrm($richiesta, 'scadenze', $parametri[0]),
             'crm.scadenze.modifica' => $this->modificaScadenzaCrm($richiesta, $corpo, $parametri[0]),
@@ -387,6 +417,16 @@ trait Crm
             'crm.impostazioni.mostra' => [200, ['data' => ['valuta' => $this->valutaCrm($this->conCrm($richiesta)['workspace'])]]],
             'crm.impostazioni.modifica' => $this->modificaImpostazioniCrm($richiesta, $corpo, $amministra),
             'crm.utilizzo.mostra' => $this->utilizzoCrm($richiesta),
+            'crm.profili-fatturazione.elenca' => $this->elencaDelClienteCrm($richiesta, 'profili', $operazione),
+            'crm.profili-fatturazione.crea' => $this->creaProfiloFatturazioneCrm($richiesta, $corpo),
+            'crm.profili-fatturazione.ricerca.crea' => $this->ricercaProfiliCrm($richiesta, $corpo, $operazione),
+            'crm.profili-fatturazione.mostra' => $this->mostraProfiloFatturazioneCrm($richiesta, $parametri[0]),
+            'crm.profili-fatturazione.modifica' => $this->modificaProfiloFatturazioneCrm($richiesta, $corpo, $parametri[0]),
+            'crm.profili-fatturazione.verifica-vies.crea' => $this->verificaViesProfiloCrm($richiesta, $parametri[0]),
+            'crm.indirizzi-spedizione.elenca' => $this->elencaDelClienteCrm($richiesta, 'indirizzi', $operazione),
+            'crm.indirizzi-spedizione.crea' => $this->creaIndirizzoSpedizioneCrm($richiesta, $corpo),
+            'crm.indirizzi-spedizione.mostra' => $this->mostraIndirizzoSpedizioneCrm($richiesta, $parametri[0]),
+            'crm.indirizzi-spedizione.modifica' => $this->modificaIndirizzoSpedizioneCrm($richiesta, $corpo, $parametri[0]),
             default => throw new LogicException("Il finto non fa {$operazione}."),
         };
     }
@@ -519,7 +559,7 @@ trait Crm
         }
 
         if ($cambiata) {
-            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'acquisti', 'rate', 'pagamenti', 'preventivi', 'scadenzeTipi'], true) ? 'aggiornato_il' : 'aggiornata_il';
+            $colonna = in_array($tipo, ['persone', 'motivi', 'esiti', 'elenchi', 'acquisti', 'rate', 'pagamenti', 'preventivi', 'scadenzeTipi', 'profili', 'indirizzi'], true) ? 'aggiornato_il' : 'aggiornata_il';
             $riga[$colonna] = self::dopoCrm($riga[$colonna]);
             $this->crm[$tipo][$id] = $riga;
         }
@@ -537,11 +577,11 @@ trait Crm
     }
 
     /** Una riga della cronologia di un contatto, un'azienda o una trattativa, con l'autore della scrittura. */
-    private function cambioCrm(string $tipo, string $id, ?string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null, ?string $scadenza = null): void
+    private function cambioCrm(string $tipo, string $id, ?string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null, ?string $scadenza = null, ?string $altra = null, ?string $unione = null): void
     {
         $this->crm['cambi'][] = [
             'id' => self::id(), 'tipo_risorsa' => $tipo, 'risorsa' => $id, 'tipo' => $cambio, 'autore_id' => $autore, 'istante' => self::adessoCrm(),
-            'campi' => $campi, 'importazione_id' => $importazione, 'attivita_id' => $attivita, 'scadenza_id' => $scadenza,
+            'campi' => $campi, 'importazione_id' => $importazione, 'attivita_id' => $attivita, 'scadenza_id' => $scadenza, 'altra_persona_id' => $altra, 'unione_id' => $unione,
         ];
     }
 
@@ -591,11 +631,23 @@ trait Crm
             }],
         ]);
 
-        usort($righe, $ordine);
-        $limite = (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO);
+        return $this->tagliaPaginaCrm($lista, $righe, $ordine, $voce, (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO), $query['cursore'] ?? null);
+    }
 
-        if (isset($query['cursore'])) {
-            $dopo = (string) $this->leggiCursore($lista, 'id', $query['cursore']);
+    /**
+     * La pagina di `paginaCrm` dopo la validazione: `limite` e `cursore` già letti, da dove stiano (la query di un elenco, il corpo di una ricerca).
+     *
+     * @param  list<array<string, mixed>>  $righe
+     * @param  Closure(array<string, mixed>, array<string, mixed>): int  $ordine
+     * @param  Closure(array<string, mixed>): array<string, mixed>  $voce
+     * @return array{int, array<string, mixed>}
+     */
+    private function tagliaPaginaCrm(string $lista, array $righe, Closure $ordine, Closure $voce, int $limite, ?string $cursore): array
+    {
+        usort($righe, $ordine);
+
+        if ($cursore !== null) {
+            $dopo = (string) $this->leggiCursore($lista, 'id', $cursore);
             $posto = array_search($dopo, array_column($righe, 'id'), true);
             $righe = $posto === false ? [] : array_slice($righe, $posto + 1);
         }
@@ -1260,7 +1312,7 @@ trait Crm
                 return [
                     'id' => $cambio['id'], 'tipo' => $cambio['tipo'] === 'creata' ? 'trattativa.creata' : 'trattativa.'.self::esitoCrm($cambio),
                     'autore_id' => $cambio['autore_id'], 'istante' => self::iso($cambio['istante']), 'campi' => [], 'importazione_id' => null,
-                    'attivita_id' => null, 'scadenza_id' => null, 'trattativa_id' => $cambio['risorsa'],
+                    'attivita_id' => null, 'scadenza_id' => null, 'altra_persona_id' => null, 'unione_id' => null, 'trattativa_id' => $cambio['risorsa'],
                 ];
             }
 
@@ -1274,7 +1326,8 @@ trait Crm
                 ] : $campo, $voce['campi']);
             }
 
-            return $voce + ($tipo === 'trattative' ? [] : ['importazione_id' => $cambio['importazione_id']]) + ['attivita_id' => $cambio['attivita_id']] + ($tipo === 'trattative' ? [] : ['scadenza_id' => $cambio['scadenza_id']]);
+            return $voce + ($tipo === 'trattative' ? [] : ['importazione_id' => $cambio['importazione_id']]) + ['attivita_id' => $cambio['attivita_id']] + ($tipo === 'trattative' ? [] : ['scadenza_id' => $cambio['scadenza_id']])
+                + ($tipo === 'persone' ? ['altra_persona_id' => $cambio['altra_persona_id'], 'unione_id' => $cambio['unione_id']] : []);
         };
         $esito = $this->paginaCrm($richiesta, "{$lista}:{$riga['id']}", $righe, fn (array $una, array $altra) => [$altra['istante'], $altra['id']] <=> [$una['istante'], $una['id']], $voce);
         // Come il backoffice (ValoriDeiCampi::senzaEliminati): le voci `campi.<chiave>` di un campo «tuo» eliminato non escono, e una riga che
@@ -1341,6 +1394,7 @@ trait Crm
             'trattative' => $this->voceTrattativa($riga, true),
             'pipeline' => $this->vocePipeline($riga),
             'catalogo' => $this->voceCatalogoCrm($riga),
+            'elenchi' => $this->voceElencoCrm($riga),
             'acquisti' => $this->voceAcquistoCrm($riga),
             'rate' => $this->voceRataCrm($riga),
             'preventivi' => $this->vocePreventivoCrm($riga),
@@ -1636,11 +1690,13 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('organizzazioni', $chi['workspace'], $id);
+        // `If-Match` (#2566): letto prima del corpo, come nel backoffice.
+        $this->pretendiLaVersioneCrm($richiesta, $this->voceOrganizzazione($riga, true));
         $campi = $this->modificaCrm($corpo, [...$this->regoleOrganizzazione($chi['workspace'], false), ...$this->regoleDeiValoriCrm($chi['workspace'], 'organizzazione', false, $riga['id'], $corpo['campi'] ?? null), 'archiviata' => ['filled', 'boolean:strict']]);
 
+        // L'indirizzo è un Merge Patch (#2566): le chiavi mandate cambiano, le assenti restano, `null` toglie la chiave o l'indirizzo intero.
         if (array_key_exists('indirizzo', $campi)) {
-            $this->controllaLIndirizzoCrm($campi['indirizzo']);
-            $campi['indirizzo'] = self::indirizzoCrm($campi['indirizzo']);
+            $campi['indirizzo'] = $this->indirizzoDopoCrm($riga['indirizzo'] ?? null, $campi['indirizzo']);
         }
 
         if (array_key_exists('dominio', $campi) && $campi['dominio'] !== null) {
@@ -1648,8 +1704,29 @@ trait Crm
         }
 
         $this->applicaOrganizzazione($riga['id'], $campi, $chi['persona']);
+        $voce = $this->voceOrganizzazione($this->crm['organizzazioni'][$riga['id']], true);
 
-        return [200, ['data' => $this->voceOrganizzazione($this->crm['organizzazioni'][$riga['id']], true)]];
+        return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
+    }
+
+    /**
+     * L'indirizzo di un'azienda dopo una modifica (Organizzazioni::indirizzoDopo): le chiavi mandate cambiano, le assenti restano, `null` toglie
+     * la chiave e `indirizzo: null` l'indirizzo intero. Le regole fra i campi valgono sull'indirizzo che ne esce.
+     *
+     * @param  array<string, mixed>|null  $attuale
+     * @param  array<string, mixed>|null  $mandato
+     * @return array<string, string|float|null>|null
+     */
+    private function indirizzoDopoCrm(?array $attuale, ?array $mandato): ?array
+    {
+        if ($mandato === null) {
+            return null;
+        }
+
+        $dopo = array_replace(self::indirizzoCrm($attuale) ?? array_fill_keys(self::CRM_INDIRIZZO, null), array_intersect_key($mandato, array_flip(self::CRM_INDIRIZZO)));
+        $this->controllaLIndirizzoCrm($dopo);
+
+        return self::indirizzoCrm($dopo);
     }
 
     /** OrganizzazioniModifica::applica: i campi che cambiano davvero, l'archivio, la cronologia. */
@@ -1751,6 +1828,7 @@ trait Crm
             'professione' => $riga['professione'] ?? null,
             'organizzazione_id' => $riga['organizzazione_id'],
             'organizzazione' => $azienda === null ? null : ['id' => $azienda['id'], 'nome' => $azienda['nome'], 'archiviata_il' => self::isoCrm($azienda['archiviata_il'])],
+            'unito_in' => $this->unitoInCrm($riga['id']),
             'email' => $riga['email'],
             'telefoni' => $riga['telefoni'],
             'stato' => $riga['stato'],
@@ -1941,6 +2019,11 @@ trait Crm
 
         if ($riga['anonimizzata_il'] !== null) {
             throw new Problema('persona_anonimizzata');
+        }
+
+        // PersoneController::modifica: un contatto unito in un altro non si riattiva da qui, si annulla l'unione.
+        if (($campi['archiviato'] ?? null) === false && $riga['archiviata_il'] !== null && $this->unitoInCrm($riga['id']) !== null) {
+            throw $this->erroreCrm('archiviato', 'validation.in', Regola::VALORE_NON_AMMESSO, ['attribute' => 'archiviato']);
         }
 
         $this->applicaPersona($riga['id'], $campi, $chi['persona']);
@@ -2533,6 +2616,21 @@ trait Crm
             return [200, ['data' => ['attivita_eliminate' => 0, 'opportunita_rinominate' => 0]]];
         }
 
+        [$eliminate, $rinominate] = $this->anonimizzaIlContattoCrm($chi, $persona);
+
+        return [200, ['data' => ['attivita_eliminate' => $eliminate, 'opportunita_rinominate' => $rinominate]]];
+    }
+
+    /**
+     * Il lavoro di Anonimizzazione::della su un contatto, e poi su chi si era unito in lui con un'unione non annullata (Anonimizzazione::uniti,
+     * #2752): sono la stessa persona.
+     *
+     * @param  array<string, mixed>  $chi
+     * @param  array<string, mixed>  $persona
+     * @return array{int, int} le attività eliminate e le opportunità rinominate di questo contatto
+     */
+    private function anonimizzaIlContattoCrm(array $chi, array $persona): array
+    {
         $ora = self::adessoCrm();
         $this->crm['persone'][$persona['id']] = [
             ...$persona, 'nome' => null, 'cognome' => null, 'ruolo' => null, 'professione' => null, 'fonte' => null, 'email' => [], 'telefoni' => [],
@@ -2560,6 +2658,7 @@ trait Crm
         $this->dimenticaIPagamentiCrm($persona['id']);
         $this->dimenticaIPreventiviCrm($persona['id']);
         $this->dimenticaLeScadenzeCrm($persona['id']);
+        $this->dimenticaIProfiliCrm($persona['id']);
 
         foreach ($this->crm['note'] as $nota => $riga) {
             if ($riga['persona_id'] === $persona['id']) {
@@ -2599,7 +2698,13 @@ trait Crm
 
         $this->cambioCrm('persone', $persona['id'], $chi['persona'], 'anonimizzata', []);
 
-        return [200, ['data' => ['attivita_eliminate' => $eliminate, 'opportunita_rinominate' => $rinominate]]];
+        foreach ($this->crm['unioni'] as $unione) {
+            if ($unione['resta_id'] === $persona['id'] && $unione['annullata_il'] === null && $this->crm['persone'][$unione['unito_id']]['anonimizzata_il'] === null) {
+                $this->anonimizzaIlContattoCrm($chi, $this->crm['persone'][$unione['unito_id']]);
+            }
+        }
+
+        return [$eliminate, $rinominate];
     }
 
     // ———————————————————————————————————————— Motivi di perdita
@@ -2927,14 +3032,14 @@ trait Crm
                 return [200, ['data' => $this->vocePipeline($esistenti[0])], []];
             }
 
-            $id = $this->nascePipelineCrm($chi, $campi);
+            $id = $this->nascePipelineCrm($chi, $campi, diPartenza: true);
 
             return [201, ['data' => $this->vocePipeline($this->crm['pipeline'][$id])], ['Location' => "/v1/crm/pipeline/{$id}"]];
         });
     }
 
-    /** Pipelines::scrivi: il tetto, la pipeline, le fasi a passo pieno, nell'istante della pipeline. */
-    private function nascePipelineCrm(array $chi, array $campi): string
+    /** Pipelines::scrivi: il tetto, la pipeline, le fasi a passo pieno, nell'istante della pipeline. `$diPartenza` la segna nata da partenza.crea (#2707). */
+    private function nascePipelineCrm(array $chi, array $campi, bool $diPartenza = false): string
     {
         if (count($this->righeCrm('pipeline', $chi['workspace'])) >= self::CRM_TETTI['pipeline']) {
             throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['pipeline']]);
@@ -2942,7 +3047,7 @@ trait Crm
 
         $id = self::id();
         $ora = self::adessoCrm();
-        $this->crm['pipeline'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'nome' => $campi['nome'], 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona']];
+        $this->crm['pipeline'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'nome' => $campi['nome'], 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora, 'creata_da' => $chi['persona'], 'di_partenza' => $diPartenza];
 
         foreach (array_values($campi['fasi']) as $i => $fase) {
             $this->nasceFaseCrm($chi['workspace'], $id, $fase, self::CRM_PASSO * ($i + 1));

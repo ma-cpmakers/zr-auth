@@ -201,6 +201,18 @@ return [
         'title' => 'Anulación caducada',
         'detail' => 'Esta importación es de hace más de 24 horas y ya no se puede anular: nada ha cambiado. Las empresas o los contactos que creó se archivan uno a uno con su modificación.',
     ],
+    'unione_non_valida' => [
+        'title' => 'Unión no válida',
+        'detail' => 'El contacto que se queda y el que se une son el mismo: hacen falta dos contactos distintos. No ha cambiado nada.',
+    ],
+    'contatto_non_unibile' => [
+        'title' => 'Contacto no unible',
+        'detail' => 'Uno de los dos contactos no se puede unir: está archivado, anonimizado, ya es el unido de una unión que todavía se puede deshacer, o tiene partes que la unión aún no sabe mover (las indica `blocchi`: reservas, presupuestos, vencimientos, compras, cuotas). No ha cambiado nada.',
+    ],
+    'gia_annullata' => [
+        'title' => 'Ya deshecha',
+        'detail' => 'Esta unión ya se deshizo: el contacto unido vuelve a estar activo y no hay nada más que hacer. No ha cambiado nada.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline no vacío',
         'detail' => 'Este pipeline aún tiene negociaciones abiertas y solo se archiva sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',
@@ -324,6 +336,10 @@ return [
     'ultima_opzione' => [
         'title' => 'Última opción',
         'detail' => 'Esta es la última opción viva del campo, y un campo de lista o de selección múltiple siempre tiene al menos una. Añade otra con crm.campi.opzioni.crea y luego quita esta. No se escribió nada.',
+    ],
+    'elenco_in_uso' => [
+        'title' => 'Lista en uso',
+        'detail' => 'Al menos un campo vivo del CRM usa esta lista de valores compartida, y una lista en uso no se archiva. El problema lleva `campi`, los ids de los campos que la usan: elimínalos con crm.campi.elimina, o archiva solo los valores que ya no hacen falta con crm.elenchi.modifica. No se escribió nada.',
     ],
     'sezione_di_sistema' => [
         'title' => 'Sección del sistema',

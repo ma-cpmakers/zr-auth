@@ -45,7 +45,7 @@ trait CrmValori
         $campi = array_filter($this->campiCrm[$workspace][$oggetto]['campi'], fn (array $campo) => $campo['origine'] === 'tuo' && ($campo['eliminato_il'] ?? null) === null);
         uasort($campi, fn (array $a, array $b) => $a['ord'] <=> $b['ord']);
 
-        return $campi;
+        return array_map(fn (array $campo) => $this->conOpzioniDelloElencoCrm($campo), $campi);
     }
 
     /**

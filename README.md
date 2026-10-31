@@ -731,6 +731,11 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   resto dell'indirizzo, lo `stato` di 10 minuti usa-e-getta e la sfida PKCE sono quelli del backoffice. Una persona nuova
   vuole `termini_accettati`; con Google e LinkedIn nasce anche a registrazione chiusa (dal backoffice del 10/10, #1554), con
   Facebook solo se la registrazione la ammette (`consenti()`).
+- **Il VIES.** `crm.profili-fatturazione.verifica-vies.crea` verifica la partita IVA UE di un profilo. Il VIES finto non chiama nessuno: di norma
+  ogni numero è `non_valida`, `viesValide(['IT01234567897' => ['nome' => 'Rossi Srl', 'indirizzo' => "Via Roma 1\n20121 Milano"]])` dice quali
+  riconosce (e la `proposta` che dà, mai scritta sul profilo; `[]` per un paese che non dà nome e indirizzo), e `guastaVies()` lo fa non
+  rispondere: `da_verificare`, con il profilo salvato comunque. I nuovi tentativi in background e il freno della verifica non ci sono. Cambiare
+  `paese` o `partita_iva` di un profilo, o l'oblio del contatto, riporta l'esito a `non_verificata`.
 - **Le schede.** Il finto non modella board né liste: `scheda($workspace, $titolo, $board)` fa nascere una scheda con il minimo che
   le attese guardano, e `segnaScheda($scheda, 'completata'|'archiviata')` la completa o la archivia. Ogni board ha una lista sola
   (`lista_id` `lista-di-prova`): la scheda nasce in fondo con la sua `posizione` (1024, 2048, …), e `board.schede.spostamento.crea`
@@ -873,7 +878,9 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
 - **Il CRM.** I 52 metodi `crm.*` del contratto rispondono come il backoffice, in memoria e per workspace: aziende, contatti,
   trattative (e il loro riepilogo per fase), pipeline e fasi, attività, note, impostazioni, utilizzo, le cronologie, le ricerche (il termine nel corpo), gli
   spostamenti, le eliminazioni (da lì `404`), le importazioni (con `prova`, `simili` dei contatti e `Location` sul `201`), la loro lettura e il loro
-  annullamento entro 24 ore (`409` `annullamento_scaduto` oltre), e l'anonimizzazione. Le **sezioni** e i **campi** (`crm.sezioni.elenca`,
+  annullamento entro 24 ore (`409` `annullamento_scaduto` oltre), e l'anonimizzazione. I **doppioni** (`crm.persone.doppioni.elenca`, per telefono o per nome) e l'**unione** di due contatti (`crm.persone.unioni.crea`, `.mostra` e
+  `.annullamento.crea`, #2752): `scelte` per i campi in conflitto, `versioni` con l'`ETag` di ognuno (`412` se cambiato), `unito_in` nel contatto che si è
+  unito, le righe `unita` e `unione_annullata` nella cronologia, annullabile 7 giorni; il finto dice solo i `blocchi` delle scadenze, dei preventivi, degli acquisti, delle rate e delle `schede_collegate`: non ha quelli di Bookings (`link_prenotazione`, `prenotazioni`) né i profili di fatturazione e gli indirizzi di spedizione. Le **sezioni** e i **campi** (`crm.sezioni.elenca`,
   `crea`, `modifica` ed `elimina`, `crm.campi.elenca` e `modifica`, dalla v0.12.30) partono dal catalogo degli standard del backoffice
   (persona 24 campi in 6 sezioni, organizzazione 16 in 4, trattativa 11 in 2; «Principali» è fissa), con un nome `{it, en, es}`, la
   visibilità, la sezione e il posto: un campo `indispensabile` non si nasconde e non lascia «Principali» (`422` `campo_indispensabile`),

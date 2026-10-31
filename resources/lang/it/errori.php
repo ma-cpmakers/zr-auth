@@ -201,6 +201,18 @@ return [
         'title' => 'Annullamento scaduto',
         'detail' => 'Questa importazione è di più di 24 ore fa e non si annulla più: niente è cambiato. Le aziende o i contatti che ha creato si archiviano uno per uno con la loro modifica.',
     ],
+    'unione_non_valida' => [
+        'title' => 'Unione non valida',
+        'detail' => 'Il contatto che resta e quello che si unisce sono lo stesso: servono due contatti diversi. Niente è cambiato.',
+    ],
+    'contatto_non_unibile' => [
+        'title' => 'Contatto non unibile',
+        'detail' => "Uno dei due contatti non si può unire: è archiviato, anonimizzato, è già l'unito di un'unione che si può ancora annullare, oppure ha parti che l'unione non sa ancora spostare (le dice `blocchi`: prenotazioni, preventivi, scadenze, acquisti, rate). Niente è cambiato.",
+    ],
+    'gia_annullata' => [
+        'title' => 'Già annullata',
+        'detail' => "Questa unione è già stata annullata: l'unito è tornato attivo e non c'è altro da fare. Niente è cambiato.",
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline non vuota',
         'detail' => 'Questa pipeline ha ancora trattative aperte e si archivia solo senza: chiudi o sposta prima le sue trattative, poi ripeti.',
@@ -324,6 +336,10 @@ return [
     'ultima_opzione' => [
         'title' => 'Ultima opzione',
         'detail' => 'Questa è l\'ultima opzione viva del campo, e un campo a elenco o a scelta multipla ne ha sempre almeno una. Aggiungine un\'altra con crm.campi.opzioni.crea e poi togli questa. Il metodo non ha scritto niente.',
+    ],
+    'elenco_in_uso' => [
+        'title' => 'Elenco in uso',
+        'detail' => 'Almeno un campo vivo del CRM usa questo elenco di valori, e un elenco in uso non si archivia. Il problema porta `campi`, gli id dei campi che lo usano: eliminali con crm.campi.elimina, o archivia solo i valori che non servono più con crm.elenchi.modifica. Il metodo non ha scritto niente.',
     ],
     'sezione_di_sistema' => [
         'title' => 'Sezione di sistema',

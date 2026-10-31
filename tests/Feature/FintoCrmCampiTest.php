@@ -53,7 +53,7 @@ it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: pers
 
     expect($persona['nome']['chiave'])->toBe('nome')
         ->and($nome)->toBe([
-            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null, 'opzioni_archiviate' => null,
+            'id' => 'persona.nome', 'oggetto' => 'persona', 'origine' => 'standard', 'tipo' => 'testo', 'opzioni' => null, 'opzioni_archiviate' => null, 'elenco_id' => null,
             'nome' => ['it' => 'Nome', 'en' => 'First name', 'es' => 'Nombre'], 'visibilita' => 'visibile', 'sezione_id' => 'persona.principali',
             'posizione' => 1, 'obbligatorio' => false, 'aiuto' => null, 'predefinito' => null, 'limiti' => null, 'in_elenco' => false, 'nel_crea' => false,
             'indispensabile' => true, 'in_campi' => false,
