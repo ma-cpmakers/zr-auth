@@ -197,6 +197,10 @@ return [
         'title' => 'Acquisto scaduto',
         'detail' => 'Questo acquisto è scaduto, e un consumo non si registra su un acquisto scaduto. Il metodo non ha scritto niente.',
     ],
+    'acquisto_necessario' => [
+        'title' => 'Serve un acquisto',
+        'detail' => "Questo calendario è riservato a chi ha comprato: il contatto non ha un acquisto valido di una delle voci che lo aprono. Il metodo non ha scritto niente. Registra l'acquisto nel CRM (crm.acquisti.crea) e riprova.",
+    ],
     'rata_pagata' => [
         'title' => 'Rata già pagata',
         'detail' => 'Questa rata è già pagata per intero e non ha niente da incassare. Il metodo non ha scritto niente: rileggila con crm.rate.mostra.',
@@ -248,6 +252,18 @@ return [
     'pagina_presente' => [
         'title' => 'Pagina già presente',
         'detail' => 'Hai già una pagina delle prenotazioni in questo workspace: ogni membro ne ha una sola. Rileggila con `bookings.pagine.elenca` (`mie=true`) e cambiala con `bookings.pagine.modifica`. Il metodo non ha scritto niente.',
+    ],
+    'struttura_presente' => [
+        'title' => 'Struttura già presente',
+        'detail' => 'Questo workspace ha già una struttura: ne ha una sola. Rileggila con `bookings.pagine.elenca` e aggiungi le persone con `bookings.pagine.persone.crea`. Il metodo non ha scritto niente.',
+    ],
+    'piu_persone' => [
+        'title' => 'Più persone nella struttura',
+        'detail' => 'La struttura ha altre persone attive oltre al proprietario della pagina, quindi non può tornare a una pagina `persona`. Togli le persone con `bookings.pagine.persone.elimina` e ripeti. Il metodo non ha scritto niente.',
+    ],
+    'persona_presente' => [
+        'title' => 'Persona già presente',
+        'detail' => 'Questo membro è già una persona della struttura (anche se è uscito: la sua riga si toglie prima con `bookings.pagine.persone.elimina`). Rileggi l\'elenco con `bookings.pagine.persone.elenca`. Il metodo non ha scritto niente.',
     ],
     'orario_non_disponibile' => [
         'title' => 'Orario non disponibile',
