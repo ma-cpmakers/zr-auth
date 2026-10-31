@@ -9,7 +9,7 @@ use Zeiras\Auth\Testing\BackofficeFinto;
 /**
  * Un workspace con `pm`, Anna e Bruno e una scheda: [finto, gettoni per nome, scheda, id di Anna, id di Bruno].
  *
- * @return array{BackofficeFinto, array<string, string>, array<string, mixed>, string, string}
+ * @return array{BackofficeFinto, array<string, string>, array<string, mixed>, string, string, array<string, mixed>}
  */
 function studioConLaScheda(): array
 {
@@ -25,7 +25,7 @@ function studioConLaScheda(): array
         $gettoni[$nome] = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto("{$nome}@example.com")['gettone']['gettone'])->json('data.gettone');
     }
 
-    return [$finto, $gettoni, $finto->scheda($studio, 'Scrivere il piano'), $anna['id'], $bruno['id']];
+    return [$finto, $gettoni, $finto->scheda($studio, 'Scrivere il piano'), $anna['id'], $bruno['id'], $studio];
 }
 
 /** La lista `progetto` di una scheda: l'`id`. */
@@ -224,9 +224,9 @@ function nuovoTodoDelProgetto(string $gettone, array $corpo): string
 }
 
 test('spostato in una lista progetto di un\'altra board, il to-do perde l\'assegnatario che ha lasciato il workspace e la risposta dice assegnatario_tolto (#2812)', function () {
-    [$finto, $gettoni, $scheda, , $bruno] = studioConLaScheda();
-    $altra = $finto->scheda(['id' => $scheda['workspace']], 'Fuori', 'altra-board');
-    $stessa = $finto->scheda(['id' => $scheda['workspace']], 'Seconda');
+    [$finto, $gettoni, $scheda, , $bruno, $studio] = studioConLaScheda();
+    $altra = $finto->scheda($studio, 'Fuori', 'altra-board');
+    $stessa = $finto->scheda($studio, 'Seconda');
     $lista = listaDelProgetto($gettoni['anna'], $scheda['id']);
     $listaAltra = listaDelProgetto($gettoni['anna'], $altra['id'], 'Fuori');
     $listaStessa = listaDelProgetto($gettoni['anna'], $stessa['id'], 'Seconda');

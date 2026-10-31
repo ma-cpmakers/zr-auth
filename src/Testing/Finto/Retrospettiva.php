@@ -120,6 +120,7 @@ trait Retrospettiva
             'nome' => $nome,
             'cartella_id' => $origine['cartella'],
             'metodo' => null,
+            'funzione_attiva' => true,
             'creata_il' => self::iso($ora),
             'aggiornata_il' => self::iso($ora),
             'numero_schede' => 0,

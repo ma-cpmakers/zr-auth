@@ -106,7 +106,7 @@ trait Scrumban
      *
      * @return array<string, mixed>
      */
-    private function boardDelPercorso(string $workspace, string $id): array
+    private function boardInteraDelPercorso(string $workspace, string $id): array
     {
         $board = $this->boards[$id] ?? null;
 
@@ -124,7 +124,7 @@ trait Scrumban
     private function pianificaBoard(Request $richiesta, array $corpo, string $id): array
     {
         $chi = $this->conPm($richiesta);
-        $board = $this->boardDelPercorso($chi['workspace'], $id);
+        $board = $this->boardInteraDelPercorso($chi['workspace'], $id);
 
         if ($corpo !== []) {
             throw new Problema('dati_non_validi', array_map(
@@ -159,7 +159,7 @@ trait Scrumban
     private function mostraFlusso(Request $richiesta, string $id): array
     {
         $chi = $this->conPm($richiesta);
-        $board = $this->boardDelPercorso($chi['workspace'], $id);
+        $board = $this->boardInteraDelPercorso($chi['workspace'], $id);
         [$da, $a] = $this->periodoDelFlusso(self::query($richiesta));
 
         if ($board['metodo'] !== 'scrumban') {

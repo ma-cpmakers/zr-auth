@@ -33,7 +33,7 @@ it('la retrospettiva risponde 201 con la board intera, tre liste nella lingua di
 
     expect($risposta->status())->toBe(201)
         ->and($risposta->header('Location'))->toBe("/v1/board/board/{$dati['id']}")
-        ->and(array_keys($dati))->toBe(['id', 'nome', 'cartella_id', 'metodo', 'creata_il', 'aggiornata_il', 'numero_schede', 'descrizione', 'sfondo', 'stato', 'applica_regole', 'chiusa_il', 'nel_cestino_il', 'cancellata_il', 'tipi', 'retrospettiva_di', 'liste', 'etichette', 'io'])
+        ->and(array_keys($dati))->toBe(['id', 'nome', 'cartella_id', 'metodo', 'funzione_attiva', 'creata_il', 'aggiornata_il', 'numero_schede', 'descrizione', 'sfondo', 'stato', 'applica_regole', 'chiusa_il', 'nel_cestino_il', 'cancellata_il', 'tipi', 'retrospettiva_di', 'liste', 'etichette', 'io'])
         ->and($dati['nome'])->toBe('Retrospettiva: Sprint 12')
         ->and($dati['metodo'])->toBeNull()
         ->and($dati['retrospettiva_di'])->toBe($sprint['id'])

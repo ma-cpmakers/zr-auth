@@ -49,7 +49,7 @@ it('crea uno sprint pianificato: 201 senza Location, la forma del backoffice con
     $nato = alFinto('POST', '/v1/board/sprint', corpoDelloSprint($board, ['obiettivo' => 'Il carrello']), $gettone);
 
     expect($nato->status())->toBe(201)->and($nato->header('Location'))->toBe('')
-        ->and(array_keys($nato->json('data')))->toBe(['id', 'board_id', 'nome', 'obiettivo', 'stato', 'inizio', 'fine', 'durata_settimane', 'avviato_il', 'chiuso_il', 'obiettivo_raggiunto', 'velocita', 'velocita_unita', 'creata_il', 'aggiornata_il'])
+        ->and(array_keys($nato->json('data')))->toBe(['id', 'board_id', 'nome', 'obiettivo', 'stato', 'inizio', 'fine', 'durata_settimane', 'avviato_il', 'chiuso_il', 'obiettivo_raggiunto', 'retrospettiva_board_id', 'velocita', 'velocita_unita', 'creata_il', 'aggiornata_il'])
         ->and($nato->json('data'))->toMatchArray([
             'board_id' => $board['id'], 'nome' => 'Sprint 1', 'obiettivo' => 'Il carrello', 'stato' => 'pianificato', 'inizio' => '2026-11-02', 'fine' => '2026-11-15',
             'durata_settimane' => 2, 'avviato_il' => null, 'chiuso_il' => null, 'obiettivo_raggiunto' => null, 'velocita' => null, 'velocita_unita' => null,
