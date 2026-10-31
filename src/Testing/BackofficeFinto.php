@@ -27,6 +27,8 @@ use Zeiras\Auth\Testing\Finto\CrmCampi;
 use Zeiras\Auth\Testing\Finto\CrmCatalogo;
 use Zeiras\Auth\Testing\Finto\CrmRate;
 use Zeiras\Auth\Testing\Finto\CrmEsiti;
+use Zeiras\Auth\Testing\Finto\BoardFunzioni;
+use Zeiras\Auth\Testing\Finto\BoardRuoliEpiche;
 use Zeiras\Auth\Testing\Finto\CrmPersonalizzazione;
 use Zeiras\Auth\Testing\Finto\CrmPreventivi;
 use Zeiras\Auth\Testing\Finto\CrmPreventiviPubblici;
@@ -36,7 +38,9 @@ use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
+use Zeiras\Auth\Testing\Finto\Retrospettiva;
 use Zeiras\Auth\Testing\Finto\SchedeCrm;
+use Zeiras\Auth\Testing\Finto\Scrumban;
 use Zeiras\Auth\Testing\Finto\Sprint;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
@@ -63,6 +67,8 @@ use Zeiras\Auth\Testing\Finto\Todo;
  */
 final class BackofficeFinto
 {
+    use BoardFunzioni;
+    use BoardRuoliEpiche;
     use Crm;
     use CrmAcquisti;
     use CrmAvanzate;
@@ -74,6 +80,8 @@ final class BackofficeFinto
     use CrmPreventivi;
     use CrmPreventiviPubblici;
     use SchedeCrm;
+    use Retrospettiva;
+    use Scrumban;
     use Sprint;
     use CrmScadenze;
     use CrmValori;
@@ -151,6 +159,8 @@ final class BackofficeFinto
         ['GET', '#^/v1/ricerca$#', 'ricerca.elenca'],
         ['POST', '#^/v1/ricerca$#', 'ricerca.crea'],
         ['GET', '#^/v1/board/cartelle$#', 'board.cartelle.elenca'],
+        ['GET', '#^/v1/board/funzioni$#', 'board.funzioni.elenca'],
+        ['PATCH', '#^/v1/board/funzioni/([^/]+)$#', 'board.funzioni.modifica'],
         ['GET', '#^/v1/board/board$#', 'board.board.elenca'],
         ['GET', '#^/v1/board/schede$#', 'board.schede.elenca'],
         ['GET', '#^/v1/board/schede/([^/]+)$#', 'board.schede.mostra'],
@@ -160,6 +170,7 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/collegamenti/([^/]+)$#', 'board.schede.collegamenti.elimina'],
+        ['GET', '#^/v1/board/schede/([^/]+)/figlie$#', 'board.schede.figlie.elenca'],
         ['GET', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/crm/([^/]+)$#', 'board.schede.crm.elimina'],
@@ -169,6 +180,12 @@ final class BackofficeFinto
         ['POST', '#^/v1/board/sprint/([^/]+)/avvio$#', 'board.sprint.avvio.crea'],
         ['POST', '#^/v1/board/sprint/([^/]+)/chiusura$#', 'board.sprint.chiusura.crea'],
         ['GET', '#^/v1/board/sprint/([^/]+)/andamento$#', 'board.sprint.andamento.mostra'],
+        ['POST', '#^/v1/board/sprint/([^/]+)/retrospettiva$#', 'board.sprint.retrospettiva.crea'],
+        ['GET', '#^/v1/board/schede/([^/]+)/voti$#', 'board.schede.voti.elenca'],
+        ['POST', '#^/v1/board/schede/([^/]+)/voti$#', 'board.schede.voti.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/voti$#', 'board.schede.voti.elimina'],
+        ['POST', '#^/v1/board/board/([^/]+)/pianificazione$#', 'board.board.pianificazione.crea'],
+        ['GET', '#^/v1/board/board/([^/]+)/flusso$#', 'board.board.flusso.mostra'],
         ['GET', '#^/v1/board/todo/liste$#', 'board.todo.liste.elenca'],
         ['POST', '#^/v1/board/todo/liste$#', 'board.todo.liste.crea'],
         ['PATCH', '#^/v1/board/todo/liste/([^/]+)$#', 'board.todo.liste.modifica'],
@@ -181,6 +198,8 @@ final class BackofficeFinto
         ['DELETE', '#^/v1/board/todo/elementi/([^/]+)/completamento$#', 'board.todo.elementi.completamento.elimina'],
         ['GET', '#^/v1/board/todo/riepilogo$#', 'board.todo.riepilogo.mostra'],
         ['GET', '#^/v1/board/todo/tag$#', 'board.todo.tag.elenca'],
+        ['GET', '#^/v1/board/board/([^/]+)/ruoli$#', 'board.board.ruoli.elenca'],
+        ['PATCH', '#^/v1/board/board/([^/]+)/ruoli$#', 'board.board.ruoli.modifica'],
         ['GET', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.elenca'],
         ['POST', '#^/v1/board/board/([^/]+)/viste$#', 'board.board.viste.crea'],
         ['PATCH', '#^/v1/board/board/([^/]+)/viste/([^/]+)$#', 'board.board.viste.modifica'],
@@ -689,12 +708,14 @@ final class BackofficeFinto
      * possono collegare fra loro; una scheda di un'altra board è «di un'altra board». `$board` è l'id di una board() o un nome
      * qualunque. `$scadenza` è un giorno `AAAA-MM-GG`; `$assegnatari` le persone (di workspace() o persona()) o i loro id; `$tipo` (#2661) il tipo che
      * le letture danno alla scheda, come lo darebbe il backoffice: il finto non lo controlla contro i `tipi` della board, perché non modella i metodi. `$punti` e `$pronta` (#2706) la stima e il «pronta per lo sprint» che le letture danno alla scheda, senza controllare che il tipo sia una storia o un bug. `$sprint` (#2664) l'id di uno sprint non chiuso di questa board, di sprint(): la scheda ci sta dal momento in cui nasce.
+     * `$orizzonte` (#2666) è l'orizzonte della scheda del backlog di una board Scrumban che le letture danno: `3_mesi`, `6_mesi`, `1_anno` o nessuno.
+     * `$dallaScheda` (#2667) è l'id di una scheda non archiviata di una retrospettiva da cui nasce questa: le letture la danno in `dalla_scheda_id`, e quella d'origine la nomina in `trasformata_in`.
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  list<array<string, mixed>|string>  $assegnatari
      * @return array{id: string, board_id: string, numero: int, titolo: string}
      */
-    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null, ?int $punti = null, bool $pronta = false, ?string $sprint = null): array
+    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null, ?int $punti = null, bool $pronta = false, ?string $sprint = null, ?string $orizzonte = null, ?string $dallaScheda = null, ?string $epica = null): array
     {
         $idWorkspace = $workspace['id'] ?? null;
 
@@ -706,12 +727,24 @@ final class BackofficeFinto
             throw new InvalidArgumentException('Lo sprint non è uno sprint non chiuso di questa board: nasce con sprint(), e la board è il suo id.');
         }
 
+        if ($orizzonte !== null && ! in_array($orizzonte, ['3_mesi', '6_mesi', '1_anno'], true)) {
+            throw new InvalidArgumentException("L'orizzonte «{$orizzonte}» non c'è: sono 3_mesi, 6_mesi e 1_anno.");
+        }
+
+        if ($dallaScheda !== null && (($this->schede[$dallaScheda]['workspace'] ?? null) !== $idWorkspace || $this->schede[$dallaScheda]['archiviata_il'] !== null || $this->sprintDellaRetrospettiva($this->schede[$dallaScheda]['board']) === null)) {
+            throw new InvalidArgumentException('La scheda d\'origine non è una scheda non archiviata di una retrospettiva di questo workspace: nasce con scheda() sulla board di retrospettiva.crea.');
+        }
+
+        if ($epica !== null && (($this->schede[$epica]['workspace'] ?? null) !== $idWorkspace || $this->schede[$epica]['board'] !== $board || ($this->schede[$epica]['tipo'] ?? null) !== 'epica' || $tipo === 'epica')) {
+            throw new InvalidArgumentException('L\'epica non è una scheda di tipo epica di questa board (nata con scheda()), e un\'epica non ha un\'epica.');
+        }
+
         $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
         $cambiate = [];
         $posizione = $this->inCoda($idWorkspace, $board, $cambiate);
-        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'punti' => $punti, 'pronta' => $pronta, 'sprint_id' => $sprint, 'nello_sprint_dal' => $sprint === null ? null : $ora, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'punti' => $punti, 'pronta' => $pronta, 'orizzonte' => $orizzonte, 'dalla_scheda' => $dallaScheda, 'epica_id' => $epica, 'sprint_id' => $sprint, 'nello_sprint_dal' => $sprint === null ? null : $ora, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
         $this->versione([$id, ...$cambiate]);
 
@@ -1315,6 +1348,8 @@ final class BackofficeFinto
                 'ricerca.elenca' => $this->elencaRicerca($richiesta),
                 'ricerca.crea' => $this->creaRicerca($richiesta, $corpo),
                 'board.cartelle.elenca' => $this->elencaCartelle($richiesta),
+                'board.funzioni.elenca' => $this->elencaFunzioniBoard($richiesta),
+                'board.funzioni.modifica' => $this->modificaFunzioneBoard($richiesta, $corpo, $parametri[0]),
                 'board.board.elenca' => $this->elencaBoard($richiesta),
                 'board.schede.elenca' => $this->elencaSchede($richiesta),
                 'board.schede.mostra' => $this->mostraScheda($richiesta, $parametri[0]),
@@ -1324,6 +1359,9 @@ final class BackofficeFinto
                 'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
                 'board.schede.collegamenti.crea' => $this->creaCollegamento($richiesta, $corpo, $parametri[0]),
                 'board.schede.collegamenti.elimina' => $this->eliminaCollegamento($richiesta, $parametri[0], $parametri[1]),
+                'board.schede.figlie.elenca' => $this->elencaFigliePerScheda($richiesta, $parametri[0]),
+                'board.board.ruoli.elenca' => $this->elencaRuoliBoard($richiesta, $parametri[0]),
+                'board.board.ruoli.modifica' => $this->modificaRuoliBoard($richiesta, $corpo, $parametri[0]),
                 'board.schede.crm.elenca' => $this->elencaSchedeCrm($richiesta, $parametri[0]),
                 'board.schede.crm.crea' => $this->creaSchedaCrm($richiesta, $corpo, $parametri[0]),
                 'board.schede.crm.elimina' => $this->eliminaSchedaCrm($richiesta, $parametri[0], $parametri[1]),
@@ -1333,6 +1371,12 @@ final class BackofficeFinto
                 'board.sprint.avvio.crea' => $this->avviaSprint($richiesta, $parametri[0]),
                 'board.sprint.chiusura.crea' => $this->chiudiSprint($richiesta, $corpo, $parametri[0]),
                 'board.sprint.andamento.mostra' => $this->mostraAndamentoSprint($richiesta, $parametri[0]),
+                'board.sprint.retrospettiva.crea' => $this->creaRetrospettiva($richiesta, $corpo, $parametri[0]),
+                'board.schede.voti.elenca' => $this->elencaVoti($richiesta, $parametri[0]),
+                'board.schede.voti.crea' => $this->votaScheda($richiesta, $corpo, $parametri[0]),
+                'board.schede.voti.elimina' => $this->togliVoto($richiesta, $parametri[0]),
+                'board.board.pianificazione.crea' => $this->pianificaBoard($richiesta, $corpo, $parametri[0]),
+                'board.board.flusso.mostra' => $this->mostraFlusso($richiesta, $parametri[0]),
                 'board.todo.liste.elenca' => $this->elencaListeTodo($richiesta),
                 'board.todo.liste.crea' => $this->creaListaTodo($richiesta, $corpo),
                 'board.todo.liste.modifica' => $this->modificaListaTodo($richiesta, $corpo, $parametri[0]),
@@ -1541,19 +1585,25 @@ final class BackofficeFinto
             'tipo' => $scheda['tipo'] ?? null,
             'punti' => $scheda['punti'] ?? null,
             'pronta' => $scheda['pronta'] ?? false,
+            'orizzonte' => $scheda['orizzonte'] ?? null,
+            'epica_id' => $scheda['epica_id'] ?? null,
             'sprint_id' => $scheda['sprint_id'] ?? null,
             'nello_sprint_dal' => ($scheda['nello_sprint_dal'] ?? null) === null ? null : self::iso($scheda['nello_sprint_dal']),
+            'dalla_scheda_id' => $scheda['dalla_scheda'] ?? null,
+            'trasformata_in' => $this->trasformataIn($scheda['id']),
+            'voti' => count($this->voti[$scheda['id']] ?? []),
             'etichette' => [],
             'assegnatari' => $scheda['assegnatari'],
             'numero_voci' => 0,
             'numero_voci_spuntate' => 0,
             'numero_commenti' => 0,
             'attese_aperte' => $this->atteseAperte($scheda['id']),
+            'figlie' => $this->contoDelleFiglie($scheda),
             'completata_il' => $scheda['completata_il'] === null ? null : self::iso($scheda['completata_il']),
             'archiviata_il' => $scheda['archiviata_il'] === null ? null : self::iso($scheda['archiviata_il']),
             'creata_il' => self::iso($scheda['creata_il']),
             'aggiornata_il' => self::iso($scheda['aggiornata_il']),
-            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 2])).'"',
+            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 5])).'"',
         ];
     }
 
@@ -1742,7 +1792,7 @@ final class BackofficeFinto
         foreach ($this->boards as $board) {
             if ($board['workspace'] === $chi['workspace'] && $board['stato'] === $stato) {
                 $voci[] = [
-                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'metodo' => $board['metodo'] ?? null, 'creata_il' => self::iso($board['creata_il']),
+                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'metodo' => $board['metodo'] ?? null, 'funzione_attiva' => true, 'creata_il' => self::iso($board['creata_il']),
                     'aggiornata_il' => self::iso($board['aggiornata_il']), 'numero_schede' => $this->schedeDellaBoard($board['id']), 'descrizione' => null,
                     'sfondo' => 'neutral', 'stato' => $board['stato'], 'applica_regole' => true,
                     'chiusa_il' => $board['chiusa_il'] === null ? null : self::iso($board['chiusa_il']),

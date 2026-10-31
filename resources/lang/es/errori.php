@@ -113,6 +113,30 @@ return [
         'title' => 'Sprint no activo',
         'detail' => 'Solo se cierra un sprint activo, y este todavía está planificado o ya está cerrado: no repitas la misma solicitud.',
     ],
+    'ruolo_gia_assegnato' => [
+        'title' => 'Rol ya asignado',
+        'detail' => 'Otra lista de este tablero, no archivada, ya tiene este rol: quita antes el rol a esa lista, o archívala. No repitas la misma solicitud.',
+    ],
+    'nessuna_pianificazione' => [
+        'title' => 'Nada que planificar',
+        'detail' => 'No hay nada que llevar a la lista `pronte`: el tablero no tiene una lista `backlog` y una `pronte` (con el rol, no archivadas), o el umbral de `pronte` es 0, o `pronte` ya tiene las tarjetas del umbral, o el backlog no tiene tarjetas abiertas. No repitas la misma solicitud.',
+    ],
+    'sprint_non_chiuso' => [
+        'title' => 'Sprint no cerrado',
+        'detail' => 'La retrospectiva se abre sobre el sprint cerrado: este sigue planificado o activo. Ciérralo con `board.sprint.chiusura.crea` y repite la petición.',
+    ],
+    'retrospettiva_esistente' => [
+        'title' => 'Retrospectiva ya abierta',
+        'detail' => 'Este sprint ya tiene su retrospectiva, una sola: el tablero está en `retrospettiva_board_id` del sprint. No repitas la petición.',
+    ],
+    'voto_gia_dato' => [
+        'title' => 'Voto ya dado',
+        'detail' => 'Ya votaste esta tarjeta: un voto por persona y tarjeta. Para cambiar de idea quítalo con `board.schede.voti.elimina`. No repitas la misma petición.',
+    ],
+    'scheda_non_di_retrospettiva' => [
+        'title' => 'Tarjeta que no es de una retrospectiva',
+        'detail' => 'Solo se vota una tarjeta de un tablero nacido de `board.sprint.retrospettiva.crea`: esta es de otro tablero. No repitas la petición.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'El propietario no se toca',
         'detail' => 'Un workspace tiene un solo propietario y ningún método lo quita ni le cambia el rol: no repitas la solicitud.',
@@ -328,6 +352,14 @@ return [
     'funzione_vincolata' => [
         'title' => 'Función vinculada',
         'detail' => 'Esta función del CRM no se puede activar o desactivar ahora: o está siempre activa, o necesita una función que está desactivada, o la necesita otra función activa. Nada cambia en cascada. Mira `richiede` y `attivo` en crm.funzioni.elenca, activa o desactiva antes la otra función con crm.funzioni.modifica y repite la petición. El método no ha escrito nada.',
+    ],
+    'funzione_spenta' => [
+        'title' => 'Función apagada',
+        'detail' => 'La función del sector de este tablero (construcción o digital) está apagada en el workspace, por lo que la función del tablero no se enciende. Los tableros ya encendidos siguen encendidos. Enciende antes la función con board.funzioni.modifica (se necesita el rol de propietario o administrador) y repite la solicitud. El método no ha escrito nada.',
+    ],
+    'epica_con_figlie' => [
+        'title' => 'Épica con hijas',
+        'detail' => 'La épica todavía tiene tarjetas hijas vivas, por lo que su tipo no cambia. Quita antes la épica de las hijas con board.schede.modifica (`epica_id` a `null`) o muévelas a otra épica y repite la solicitud. Las hijas se ven con board.schede.figlie.elenca. El método no ha escrito nada.',
     ],
     'personalizzazione_con_dati' => [
         'title' => 'Personalización con datos',
