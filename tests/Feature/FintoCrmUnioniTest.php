@@ -165,3 +165,20 @@ it('un contatto con un profilo di fatturazione o un indirizzo di spedizione atti
     expect($archiviati)->toBe([200, 200])
         ->and(alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'resta']]), $gettoni['anna'])->status())->toBe(201);
 });
+
+it('l\'oblio chiesto su un contatto unito è 409 contatto_unito e non scrive niente; annullata l\'unione, passa', function () {
+    [$gettoni, $resta, $unito] = duePersoneDoppie();
+    $unita = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'resta']]), $gettoni['anna']);
+    expect($unita->status())->toBe(201);
+    $unione = $unita->json('data.id');
+
+    $rifiutato = alFinto('POST', "/v1/crm/persone/{$unito}/anonimizzazione", null, $gettoni['anna']);
+
+    expect($rifiutato->status())->toBe(409)->and($rifiutato->json('codice'))->toBe('contatto_unito')
+        ->and(alFinto('GET', "/v1/crm/persone/{$unito}", null, $gettoni['anna'])->json('data.anonimizzata_il'))->toBeNull()
+        ->and(alFinto('GET', "/v1/crm/persone/{$resta}", null, $gettoni['anna'])->json('data.anonimizzata_il'))->toBeNull();
+
+    expect(alFinto('POST', "/v1/crm/persone/unioni/{$unione}/annullamento", null, $gettoni['anna'])->status())->toBe(200)
+        ->and(alFinto('POST', "/v1/crm/persone/{$unito}/anonimizzazione", null, $gettoni['anna'])->status())->toBe(200)
+        ->and(alFinto('GET', "/v1/crm/persone/{$resta}", null, $gettoni['anna'])->json('data.anonimizzata_il'))->toBeNull();
+});
