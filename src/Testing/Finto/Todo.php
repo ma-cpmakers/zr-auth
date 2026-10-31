@@ -410,6 +410,7 @@ trait Todo
         $cambi['ora'] = $ora;
         $cambi += $this->collocaTodo($chi, $corrente, $campi);
         $cambi += $this->legamiCambiatiTodo($chi, $corrente, $campi, $cambi['lista'] ?? null);
+        $assegnatarioTolto = $this->togliAssegnatarioDiUnaltraBoardTodo($chi, $corrente, $campi, $cambi);
 
         $cambiati = array_filter($cambi, fn (mixed $valore, string $campo) => $valore !== $corrente[$campo], ARRAY_FILTER_USE_BOTH);
 
@@ -419,7 +420,34 @@ trait Todo
 
         $voce = $this->voceElementoTodo($this->todoElementi[$id]);
 
-        return [200, ['data' => $voce], ['ETag' => $voce['etag']]];
+        return [200, ['data' => $voce, 'assegnatario_tolto' => $assegnatarioTolto], ['ETag' => $voce['etag']]];
+    }
+
+    /**
+     * Il to-do passa a una lista `progetto` di un'altra board (Todo::togliAssegnatarioDiUnaltraBoard, #2812): l'assegnatario che non è più
+     * membro del workspace si toglie, e si dice se è successo. Un assegnatario scritto dalla richiesta, nessuna `lista_id` nuova o la stessa
+     * board non toccano niente.
+     *
+     * @param  array<string, mixed>  $chi
+     * @param  array<string, mixed>  $corrente
+     * @param  array<string, mixed>  $campi
+     * @param  array<string, mixed>  $cambi
+     */
+    private function togliAssegnatarioDiUnaltraBoardTodo(array $chi, array $corrente, array $campi, array &$cambi): bool
+    {
+        if (! isset($cambi['lista']) || array_key_exists('assegnato_a', $campi) || ($corrente['assegnato'] ?? null) === null) {
+            return false;
+        }
+
+        $arrivo = $this->todoListe[$cambi['lista']];
+
+        if ($arrivo['tipo'] !== 'progetto' || $arrivo['board'] === $this->todoListe[$corrente['lista']]['board'] || isset($this->membri[$chi['workspace']][$corrente['assegnato']])) {
+            return false;
+        }
+
+        $cambi['assegnato'] = null;
+
+        return true;
     }
 
     /**

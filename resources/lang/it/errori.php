@@ -113,6 +113,30 @@ return [
         'title' => 'Sprint non attivo',
         'detail' => 'Si chiude solo uno sprint attivo, e questo è ancora pianificato o già chiuso: non ripetere la richiesta uguale.',
     ],
+    'ruolo_gia_assegnato' => [
+        'title' => 'Ruolo già assegnato',
+        'detail' => 'In questa board un\'altra lista, non archiviata, ha già questo ruolo: togli prima il ruolo a quella, o archiviala. Non ripetere la richiesta uguale.',
+    ],
+    'nessuna_pianificazione' => [
+        'title' => 'Niente da pianificare',
+        'detail' => 'Non c\'è niente da portare nelle pronte: la board non ha una lista `backlog` e una `pronte` (col ruolo, non archiviate), oppure la soglia delle pronte è 0, oppure le pronte hanno già le schede della soglia, oppure il backlog non ha schede aperte. Non ripetere la richiesta uguale.',
+    ],
+    'sprint_non_chiuso' => [
+        'title' => 'Sprint non chiuso',
+        'detail' => 'La retrospettiva si apre sullo sprint chiuso: questo è ancora pianificato o attivo. Chiudilo con `board.sprint.chiusura.crea` e poi ripeti la richiesta.',
+    ],
+    'retrospettiva_esistente' => [
+        'title' => 'Retrospettiva già aperta',
+        'detail' => 'Questo sprint ha già la sua retrospettiva, una sola: la board è in `retrospettiva_board_id` dello sprint. Non ripetere la richiesta.',
+    ],
+    'voto_gia_dato' => [
+        'title' => 'Voto già dato',
+        'detail' => 'Hai già votato questa scheda: un voto per persona e scheda. Per cambiare idea toglilo con `board.schede.voti.elimina`. Non ripetere la richiesta uguale.',
+    ],
+    'scheda_non_di_retrospettiva' => [
+        'title' => 'Scheda non di una retrospettiva',
+        'detail' => 'Si vota solo una scheda di una board nata da `board.sprint.retrospettiva.crea`: questa è di un\'altra board. Non ripetere la richiesta.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'Il proprietario non si tocca',
         'detail' => 'Il proprietario del workspace è uno solo e nessun metodo lo toglie né ne cambia il ruolo: non ripetere la richiesta.',
@@ -344,6 +368,14 @@ return [
     'funzione_vincolata' => [
         'title' => 'Funzione vincolata',
         'detail' => "Questa funzione del CRM non si può accendere o spegnere adesso: o è sempre attiva, o richiede una funzione che è spenta, o è richiesta da un'altra funzione accesa. Nessuna funzione cambia a cascata. Guarda `richiede` e `attivo` in crm.funzioni.elenca, accendi o spegni prima l'altra funzione con crm.funzioni.modifica e ripeti la richiesta. Il metodo non ha scritto niente.",
+    ],
+    'funzione_spenta' => [
+        'title' => 'Funzione spenta',
+        'detail' => 'La funzione del settore di questa board (edilizia o digitale) è spenta nel workspace, quindi la funzione della board non si accende. Le board già accese restano accese. Accendi prima la funzione con board.funzioni.modifica (serve il ruolo di proprietario o amministratore) e ripeti la richiesta. Il metodo non ha scritto niente.',
+    ],
+    'epica_con_figlie' => [
+        'title' => 'Epica con figlie',
+        'detail' => "L'epica ha ancora delle schede figlie vive, quindi il suo tipo non cambia. Togli prima l'epica dalle figlie con board.schede.modifica (`epica_id` a `null`) o spostale in un'altra epica, e ripeti la richiesta. Le figlie si vedono con board.schede.figlie.elenca. Il metodo non ha scritto niente.",
     ],
     'personalizzazione_con_dati' => [
         'title' => 'Personalizzazione con dati',

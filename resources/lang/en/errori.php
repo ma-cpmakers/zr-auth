@@ -113,6 +113,30 @@ return [
         'title' => 'Sprint is not active',
         'detail' => 'Only an active sprint can be closed, and this one is still planned or already closed: do not repeat the same request.',
     ],
+    'ruolo_gia_assegnato' => [
+        'title' => 'Role already assigned',
+        'detail' => 'Another list in this board, not archived, already has this role: take the role off that list first, or archive it. Do not repeat the same request.',
+    ],
+    'nessuna_pianificazione' => [
+        'title' => 'Nothing to plan',
+        'detail' => 'There is nothing to move into the ready list: the board has no `backlog` list and `pronte` list (with the role, not archived), or the threshold of the ready list is 0, or the ready list already has the cards of its threshold, or the backlog has no open cards. Do not repeat the same request.',
+    ],
+    'sprint_non_chiuso' => [
+        'title' => 'Sprint not closed',
+        'detail' => 'The retrospective opens on a closed sprint: this one is still planned or active. Close it with `board.sprint.chiusura.crea`, then repeat the request.',
+    ],
+    'retrospettiva_esistente' => [
+        'title' => 'Retrospective already open',
+        'detail' => 'This sprint already has its retrospective, only one: the board is in the sprint\'s `retrospettiva_board_id`. Do not repeat the request.',
+    ],
+    'voto_gia_dato' => [
+        'title' => 'Vote already cast',
+        'detail' => 'You already voted this card: one vote per person and card. To change your mind take it off with `board.schede.voti.elimina`. Do not repeat the same request.',
+    ],
+    'scheda_non_di_retrospettiva' => [
+        'title' => 'Card not in a retrospective',
+        'detail' => 'Only a card of a board made by `board.sprint.retrospettiva.crea` can be voted: this one belongs to another board. Do not repeat the request.',
+    ],
     'proprietario_intoccabile' => [
         'title' => 'The owner cannot be touched',
         'detail' => 'A workspace has one owner and no method removes them or changes their role: do not repeat the request.',
@@ -344,6 +368,14 @@ return [
     'funzione_vincolata' => [
         'title' => 'Linked function',
         'detail' => 'This CRM function cannot be turned on or off right now: it is either always on, or it needs a function that is off, or another function that is on needs it. Nothing changes in cascade. Check `richiede` and `attivo` in crm.funzioni.elenca, turn the other function on or off first with crm.funzioni.modifica, then try again. The method wrote nothing.',
+    ],
+    'funzione_spenta' => [
+        'title' => 'Function is off',
+        'detail' => "The function for this board's sector (construction or digital) is off in the workspace, so the board's function cannot be turned on. Boards that are already on stay on. Turn the function on first with board.funzioni.modifica (owner or administrator role required) and repeat the request. The method has written nothing.",
+    ],
+    'epica_con_figlie' => [
+        'title' => 'Epic with children',
+        'detail' => 'The epic still has live child cards, so its type cannot change. First take the epic off its children with board.schede.modifica (`epica_id` set to `null`) or move them to another epic, and repeat the request. The children are listed by board.schede.figlie.elenca. The method has written nothing.',
     ],
     'personalizzazione_con_dati' => [
         'title' => 'Customization with data',

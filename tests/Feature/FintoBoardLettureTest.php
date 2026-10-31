@@ -73,7 +73,7 @@ it('board.board.elenca dà le board attive con la cartella e il conto delle sche
     $attive = alFinto('GET', '/v1/board/board', null, $gettone);
 
     expect(array_column($attive->json('data'), 'nome'))->toBe(['Lancio'])
-        ->and(array_keys($attive->json('data.0')))->toBe(['id', 'nome', 'cartella_id', 'metodo', 'creata_il', 'aggiornata_il', 'numero_schede', 'descrizione', 'sfondo', 'stato', 'applica_regole', 'chiusa_il', 'nel_cestino_il', 'cancellata_il'])
+        ->and(array_keys($attive->json('data.0')))->toBe(['id', 'nome', 'cartella_id', 'metodo', 'funzione_attiva', 'creata_il', 'aggiornata_il', 'numero_schede', 'descrizione', 'sfondo', 'stato', 'applica_regole', 'chiusa_il', 'nel_cestino_il', 'cancellata_il'])
         ->and($attive->json('data.0.cartella_id'))->toBe($marketing['id'])
         ->and($attive->json('data.0.numero_schede'))->toBe(1);
 
