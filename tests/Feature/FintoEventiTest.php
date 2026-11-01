@@ -131,37 +131,49 @@ test('dopo che non è un sequence, o insieme al cursore, è 422 sul parametro do
 
 test('si leggono gli eventi dei 30 giorni dal loro istante; oltre l\'ultimo, o con l\'evento dopo scaduto, è 410 (FE.4)', function () {
     $this->freezeTime();
-    [$finto, $studio, , $gettone] = conUnWorkspaceDiEventi();
-    $vecchio = CarbonImmutable::now()->subDays(31);
+    [$finto, $studio] = conUnWorkspaceDiEventi();
+    $inizio = CarbonImmutable::now();
 
-    // Il 1 è nato adesso; i due seguenti sono più vecchi: per il test il numero non segue il tempo, e conta l'istante di ciascuno.
-    $finto->registraEvento($studio, 'com.zeiras.workspace.modificato', '/v1/workspace', istante: $vecchio);
-    $finto->registraEvento($studio, 'com.zeiras.workspace.modificato', '/v1/workspace', istante: CarbonImmutable::now()->subDays(29));
+    // I numeri seguono il tempo come nel backoffice: il 1 è nato adesso, il 2 un giorno dopo, il 3 a 30 giorni.
+    $finto->registraEvento($studio, 'com.zeiras.workspace.modificato', '/v1/workspace', istante: $inizio->addDay());
+    $finto->registraEvento($studio, 'com.zeiras.workspace.modificato', '/v1/workspace', istante: $inizio->addDays(30));
 
-    // Senza dopo la lista dice gli eventi dei 30 giorni; l'ultimo si dà anche vecchio.
-    expect(array_column(alFinto('GET', '/v1/eventi', null, $gettone)->json('data'), 'sequence'))->toBe(['000000000001', '000000000003']);
+    // Dopo 31 giorni e mezzo il 1 e il 2 hanno più di 30 giorni, il 3 no.
+    $this->travel(31)->days();
+    $this->travel(12)->hours();
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
+    $sequenze = fn ($risposta) => array_column($risposta->json('data'), 'sequence');
 
-    // dopo=1: l'evento subito dopo (il 2) ha 31 giorni → 410; dopo=2: il 3 ha 29 giorni → vale.
+    // Senza dopo la lista parte dal più vecchio evento dei 30 giorni; l'ultimo è il 3.
+    expect($sequenze(alFinto('GET', '/v1/eventi', null, $gettone)))->toBe(['000000000003'])
+        ->and(alFinto('GET', '/v1/eventi/ultimo', null, $gettone)->json('data.sequence'))->toBe('000000000003');
+
+    // dopo=1: l'evento subito dopo (il 2) ha più di 30 giorni → 410; dopo=2: il 3 vale.
     $scaduto = alFinto('GET', '/v1/eventi?dopo=1', null, $gettone);
 
     expect($scaduto->status())->toBe(410)->and($scaduto->json('codice'))->toBe('cursore_scaduto')
-        ->and(array_column(alFinto('GET', '/v1/eventi?dopo=2', null, $gettone)->json('data'), 'sequence'))->toBe(['000000000003'])
+        ->and($sequenze(alFinto('GET', '/v1/eventi?dopo=2', null, $gettone)))->toBe(['000000000003'])
         // dopo = l'ultimo: lista vuota; oltre l'ultimo: 410.
-        ->and(alFinto('GET', '/v1/eventi?dopo=3', null, $gettone)->json('data'))->toBe([])
         ->and(alFinto('GET', '/v1/eventi?dopo=3', null, $gettone)->status())->toBe(200)
-        ->and(alFinto('GET', '/v1/eventi?dopo=4', null, $gettone)->status())->toBe(410);
+        ->and($sequenze(alFinto('GET', '/v1/eventi?dopo=3', null, $gettone)))->toBe([])
+        ->and(alFinto('GET', '/v1/eventi?dopo=4', null, $gettone)->status())->toBe(410)
+        // Un parametro vuoto è assente: la lista di sempre, non un 410.
+        ->and($sequenze(alFinto('GET', '/v1/eventi?dopo=', null, $gettone)))->toBe(['000000000003']);
 });
 
 test('ultimo dà l\'ultimo evento anche se ha più di 30 giorni, e quell\'evento non è nella lista (FE.4)', function () {
     $this->freezeTime();
-    [$finto, $studio, , $gettone] = conUnWorkspaceDiEventi();
-    $finto->registraEvento($studio, 'com.zeiras.workspace.modificato', '/v1/workspace', istante: CarbonImmutable::now()->subDays(31));
+    [, $studio] = conUnWorkspaceDiEventi();
+    $this->travel(31)->days();
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
 
     $ultimo = alFinto('GET', '/v1/eventi/ultimo', null, $gettone);
 
-    expect($ultimo->status())->toBe(200)->and($ultimo->json('data.sequence'))->toBe('000000000002')
-        ->and(array_column(alFinto('GET', '/v1/eventi', null, $gettone)->json('data'), 'sequence'))->toBe(['000000000001'])
-        ->and(alFinto('GET', '/v1/eventi?dopo=1', null, $gettone)->status())->toBe(410);
+    expect($ultimo->status())->toBe(200)->and($ultimo->json('data.sequence'))->toBe('000000000001')
+        ->and(alFinto('GET', '/v1/eventi', null, $gettone)->json('data'))->toBe([])
+        ->and(alFinto('GET', '/v1/eventi?dopo=0', null, $gettone)->status())->toBe(410);
 });
 
 test('senza gettone 401, col gettone dell\'accesso 403 gettone_senza_workspace, e tutti i ruoli leggono (FE.5, deve fallire se l\'accesso legge)', function () {

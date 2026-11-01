@@ -119,10 +119,20 @@ trait Eventi
     {
         $eventi = $this->eventiDelWorkspace[$workspace] ?? [];
         $soglia = self::iso(now()->toImmutable()->subDays(self::EVENTI_GIORNI));
-        $punto = isset($query['dopo']) ? (int) $query['dopo'] : (isset($query['cursore']) ? (int) $this->leggiCursore('eventi.elenca', 'sequence', $query['cursore']) : null);
+        // Un parametro vuoto è un parametro assente, come per il backoffice (ConvertEmptyStringsToNull).
+        $dopoDato = trim((string) ($query['dopo'] ?? '')) !== '' ? (int) $query['dopo'] : null;
+        $cursore = trim((string) ($query['cursore'] ?? '')) !== '' ? (int) $this->leggiCursore('eventi.elenca', 'sequence', $query['cursore']) : null;
+        $punto = $dopoDato ?? $cursore;
 
         if ($punto === null) {
-            return array_values(array_filter($eventi, fn (array $evento) => $evento['time'] >= $soglia));
+            // Dal più vecchio evento dei 30 giorni in poi, anche se uno dopo di lui avesse un istante più vecchio (il numero comanda).
+            foreach ($eventi as $indice => $evento) {
+                if ($evento['time'] >= $soglia) {
+                    return array_slice($eventi, $indice);
+                }
+            }
+
+            return [];
         }
 
         $dopo = array_values(array_filter($eventi, fn (array $evento) => (int) $evento['sequence'] > $punto));
@@ -132,7 +142,7 @@ trait Eventi
             throw new Problema('cursore_scaduto');
         }
 
-        return isset($query['dopo']) ? $dopo : $eventi;
+        return $dopoDato !== null ? $dopo : $eventi;
     }
 
     /**
