@@ -943,7 +943,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   accanto: `proprieta_da_trasferire` (`workspace_da_trasferire`), `ultimo_workspace` (`workspace_da_lasciare`),
   `unico_amministratore` (`workspace_senza_amministratore`). Un workspace con l'eliminazione programmata non è vivo.
   `io.aziende.elenca` porta per ogni azienda `uscita_negata` (il codice del `409`, o `null`) e `uscita_negata_workspace` (la
-  stessa lista, `[]` se può uscire); `aziende.mostra` e `aziende.modifica` li portano `null` e `[]`.
+  stessa lista, `[]` se può uscire); `aziende.mostra` e `aziende.modifica` non li portano.
 - La registrazione è chiusa come nel backoffice: ogni `utenti.crea` è `403` `registrazione_non_aperta`, finché il test
   non dà la lista dei consentiti con `consenti('bruno@altro.it', '@example.com')` (un'email intera o un dominio, per
   uguaglianza) o la apre a tutti con `apri()`, che vale solo con Turnstile acceso, come il backoffice che si apre solo
