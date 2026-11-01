@@ -277,4 +277,10 @@ return [
     'foto_peso' => 'The photo is too heavy: 2 MB at most.',
     'foto_formato' => 'The photo must be a readable JPEG, PNG or WebP file (an animated WebP or a broken file is not valid).',
     'foto_lato' => 'The photo has a side over :lato pixels.',
+    'board_del_workspace' => 'This id is not that of a board of the workspace: board.board.elenca gives the boards.',
+    'board_diversa' => 'The destination board is the source board: to change place inside the same board use the move (board.schede.spostamento.crea, board.liste.spostamento.crea).',
+    'tipo_nella_board_d_arrivo' => "The type of a card to move is not one of the types of the destination board's method (:tipi): board.board.mostra gives the allowed types in its `tipi` field.",
+    'lista_d_arrivo' => 'This list is not of the destination board: the ids of the lists are given by board.board.mostra.',
+    'scheda_d_arrivo' => 'This card is not of the destination board: the ids of the cards are given by board.schede.elenca.',
+    'lista_d_arrivo_della_lista' => 'This list is not of the destination board: the ids of the lists are given by board.board.mostra.',
 ];
