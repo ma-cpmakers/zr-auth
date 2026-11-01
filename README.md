@@ -887,7 +887,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `.annullamento.crea`, #2752): `scelte` per i campi in conflitto, `versioni` con l'`ETag` di ognuno (`412` se cambiato), `unito_in` nel contatto che si è
   unito, le righe `unita` e `unione_annullata` nella cronologia, annullabile 7 giorni; il finto dice solo i `blocchi` delle scadenze, dei preventivi, degli acquisti, delle rate e delle `schede_collegate`: non ha quelli di Bookings (`link_prenotazione`, `prenotazioni`) né i profili di fatturazione e gli indirizzi di spedizione. Le **sezioni** e i **campi** (`crm.sezioni.elenca`,
   `crea`, `modifica` ed `elimina`, `crm.campi.elenca` e `modifica`, dalla v0.12.30) partono dal catalogo degli standard del backoffice
-  (persona 24 campi in 6 sezioni, organizzazione 16 in 4, trattativa 11 in 2; «Principali» è fissa), con un nome `{it, en, es}`, la
+  (persona 24 campi in 6 sezioni, organizzazione 17 in 4, trattativa 11 in 2; «Principali» è fissa), con un nome `{it, en, es}`, la
   visibilità, la sezione e il posto: un campo `indispensabile` non si nasconde e non lascia «Principali» (`422` `campo_indispensabile`),
   «Principali» non si cambia (`409` `sezione_di_sistema`) e una sezione con campi non si elimina (`409` `sezione_non_vuota`).
   Un campo «tuo» si elimina con `crm.campi.elimina` (`204`; uno standard o di `sistema` è `409` `campo_di_sistema`): esce dall'elenco e

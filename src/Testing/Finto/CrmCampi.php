@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
  * Le sezioni e i campi del CRM del backoffice finto (#2024, G67): `crm.sezioni.elenca`, `crea`, `modifica` ed `elimina`, e
  * `crm.campi.elenca`, `crea` (#2111: i campi «tuoi») e `modifica`, in memoria e per workspace, con le forme, i codici e le regole del backoffice
  * (`SezioniController` e `CampiController`). Il catalogo degli standard è la copia di `App\Crm\Catalogo` (persona 24 campi e 6
- * sezioni, organizzazione 16 e 4, trattativa 11 e 2): il workspace lo prende al primo metodo, e una modifica scrive sulla copia del
+ * sezioni, organizzazione 17 e 4, trattativa 11 e 2): il workspace lo prende al primo metodo, e una modifica scrive sulla copia del
  * workspace, mai sul catalogo. Come nel backoffice, un metodo vuole l'app `crm` (prima il ruolo, poi l'app), il corpo si valida
  * prima di cercare la risorsa, e una scrittura che non cambia niente non porta avanti `aggiornato_il`. Il finto non emette gli
  * eventi (`com.zeiras.crm.campo.modificato` e `creato`) né tiene lo storico: lo dice il README.
@@ -118,6 +118,7 @@ trait CrmCampi
         ],
         'organizzazione' => [
             ['codice' => 'nome', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Ragione sociale', 'en' => 'Company name', 'es' => 'Razón social'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => true, 'in_campi' => false],
+            ['codice' => 'partita_iva', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'P. IVA', 'en' => 'VAT number', 'es' => 'Número de IVA'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
             ['codice' => 'sito', 'tipo' => 'url', 'sistema' => null, 'nome' => ['it' => 'Sito', 'en' => 'Website', 'es' => 'Sitio web'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
             ['codice' => 'telefono', 'tipo' => 'telefono', 'sistema' => null, 'nome' => ['it' => 'Telefono', 'en' => 'Phone', 'es' => 'Teléfono'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],
             ['codice' => 'indirizzo', 'tipo' => 'testo', 'sistema' => null, 'nome' => ['it' => 'Indirizzo', 'en' => 'Address', 'es' => 'Dirección'], 'sezione' => 'principali', 'visibilita' => 'visibile', 'indispensabile' => false, 'in_campi' => false],

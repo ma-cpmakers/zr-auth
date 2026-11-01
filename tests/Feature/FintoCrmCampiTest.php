@@ -29,10 +29,10 @@ function campiDellaSezione(string $gettone, string $oggetto, string $sezione): a
     return array_values(array_column(array_filter($campi, fn (array $campo) => $campo['sezione_id'] === $sezione), 'chiave'));
 }
 
-it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: persona 24 campi in 6 sezioni, organizzazione 16 in 4, trattativa 11 in 2 (FC.2)', function () {
+it('crm.campi.elenca e crm.sezioni.elenca danno il catalogo degli standard: persona 24 campi in 6 sezioni, organizzazione 17 in 4, trattativa 11 in 2 (FC.2)', function () {
     [, $gettoni] = studioColCrm();
 
-    foreach ([['persona', 24, 6], ['organizzazione', 16, 4], ['trattativa', 11, 2]] as [$oggetto, $campi, $sezioni]) {
+    foreach ([['persona', 24, 6], ['organizzazione', 17, 4], ['trattativa', 11, 2]] as [$oggetto, $campi, $sezioni]) {
         $elencoCampi = alFinto('GET', "/v1/crm/campi?oggetto={$oggetto}", null, $gettoni['carla']);
         $elencoSezioni = alFinto('GET', "/v1/crm/sezioni?oggetto={$oggetto}", null, $gettoni['carla']);
 
