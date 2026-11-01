@@ -50,6 +50,7 @@ use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
 use Zeiras\Auth\Testing\Finto\Todo;
 use Zeiras\Auth\Testing\Finto\TodoCrm;
+use Zeiras\Auth\Testing\Finto\TodoPromemoria;
 use Zeiras\Auth\Testing\Finto\UscitaAzienda;
 
 /**
@@ -98,6 +99,7 @@ final class BackofficeFinto
     use UscitaAzienda;
     use Todo;
     use TodoCrm;
+    use TodoPromemoria;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
     public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';
@@ -211,6 +213,9 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/todo/elementi/([^/]+)/crm$#', 'board.todo.elementi.crm.elenca'],
         ['POST', '#^/v1/board/todo/elementi/([^/]+)/crm$#', 'board.todo.elementi.crm.crea'],
         ['DELETE', '#^/v1/board/todo/elementi/([^/]+)/crm/([^/]+)$#', 'board.todo.elementi.crm.elimina'],
+        ['GET', '#^/v1/board/todo/elementi/([^/]+)/promemoria$#', 'board.todo.elementi.promemoria.elenca'],
+        ['POST', '#^/v1/board/todo/elementi/([^/]+)/promemoria$#', 'board.todo.elementi.promemoria.crea'],
+        ['DELETE', '#^/v1/board/todo/elementi/([^/]+)/promemoria/([^/]+)$#', 'board.todo.elementi.promemoria.elimina'],
         ['GET', '#^/v1/board/todo/riepilogo$#', 'board.todo.riepilogo.mostra'],
         ['GET', '#^/v1/board/todo/tag$#', 'board.todo.tag.elenca'],
         ['GET', '#^/v1/board/board/([^/]+)/ruoli$#', 'board.board.ruoli.elenca'],
@@ -372,7 +377,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -1409,6 +1414,9 @@ final class BackofficeFinto
                 'board.todo.elementi.crm.elenca' => $this->elencaTodoCrm($richiesta, $parametri[0]),
                 'board.todo.elementi.crm.crea' => $this->creaTodoCrm($richiesta, $corpo, $parametri[0]),
                 'board.todo.elementi.crm.elimina' => $this->eliminaTodoCrm($richiesta, $parametri[0], $parametri[1]),
+                'board.todo.elementi.promemoria.elenca' => $this->elencaPromemoriaTodo($richiesta, $parametri[0]),
+                'board.todo.elementi.promemoria.crea' => $this->creaPromemoriaTodo($richiesta, $corpo, $parametri[0]),
+                'board.todo.elementi.promemoria.elimina' => $this->eliminaPromemoriaTodo($richiesta, $parametri[0], $parametri[1]),
                 'board.todo.riepilogo.mostra' => $this->riepilogoTodo($richiesta),
                 'board.todo.tag.elenca' => $this->tagTodo($richiesta),
                 'board.board.viste.elenca' => $this->elencaViste($richiesta, $parametri[0]),

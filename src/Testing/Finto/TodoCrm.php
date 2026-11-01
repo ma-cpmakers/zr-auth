@@ -90,6 +90,8 @@ trait TodoCrm
             $id = self::id();
             $this->todoCrm[$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'elemento' => $mio['id'], 'ruolo' => $ruolo, 'tipo' => $tipo, 'record' => $record, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'creato_da' => $chi['persona']];
 
+            $this->toccaIlTodoPromemoria($mio['id']);
+
             return [201, ['data' => $this->voceTodoCrm($this->todoCrm[$id], $chi['workspace'], true)], ['Location' => "/v1/board/todo/elementi/{$mio['id']}/crm/{$id}"]];
         });
     }
@@ -113,6 +115,7 @@ trait TodoCrm
         }
 
         unset($this->todoCrm[$collegamento]);
+        $this->toccaIlTodoPromemoria($mio['id']);
 
         return [204, null];
     }

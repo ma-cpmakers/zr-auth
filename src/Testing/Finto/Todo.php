@@ -694,6 +694,7 @@ trait Todo
             'creato_il' => self::iso($e['creato_il']), 'aggiornato_il' => self::iso($e['aggiornato_il']),
             'etag' => self::etagCrm($this->versioneTodo($e, 'aggiornato_il')),
             'crm' => $this->crmDelTodo($e['id'], $e['workspace'], $intero),
+            'promemoria_n' => $this->quantiPromemoriaTodo($e['id']),
         ];
     }
 

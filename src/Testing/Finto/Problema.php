@@ -30,6 +30,7 @@ final class Problema extends RuntimeException
         'invito_esistente' => 409,
         'collegamento_esistente' => 409,
         'record_gia_collegato' => 409,
+        'promemoria_gia_presente' => 409,
         'scheda_archiviata' => 409,
         'lista_gia_esistente' => 409,
         'board_chiusa' => 409,

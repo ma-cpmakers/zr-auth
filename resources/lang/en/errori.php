@@ -421,6 +421,10 @@ return [
         'title' => 'Record already linked',
         'detail' => 'This card is already linked to that CRM record: do not repeat the request. You will find the link in board.schede.crm.elenca.',
     ],
+    'promemoria_gia_presente' => [
+        'title' => 'Reminder already set',
+        'detail' => 'This to-do already has a reminder with that lead time: a second one is not created. You will find it in board.todo.elementi.promemoria.elenca; to change it, remove it with board.todo.elementi.promemoria.elimina. Do not repeat the request.',
+    ],
     'lista_gia_esistente' => [
         'title' => 'List already exists',
         'detail' => 'This card already has its to-do list: a second one is not created. The list id is in `lista_id`; you also find it with board.todo.liste.elenca and `scheda_id`.',

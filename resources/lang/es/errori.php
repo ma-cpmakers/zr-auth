@@ -421,6 +421,10 @@ return [
         'title' => 'Registro ya vinculado',
         'detail' => 'Esta tarjeta ya está vinculada a ese registro del CRM: no repitas la solicitud. El vínculo está en board.schede.crm.elenca.',
     ],
+    'promemoria_gia_presente' => [
+        'title' => 'Recordatorio ya existente',
+        'detail' => 'Esta tarea ya tiene un recordatorio con esa antelación: no se crea un segundo. Lo encuentras en board.todo.elementi.promemoria.elenca; para cambiarlo, quítalo con board.todo.elementi.promemoria.elimina. No repitas la solicitud.',
+    ],
     'lista_gia_esistente' => [
         'title' => 'Lista ya existente',
         'detail' => 'Esta tarjeta ya tiene su lista de tareas: no se crea una segunda. El id de la lista está en `lista_id`; también la encuentras con board.todo.liste.elenca y `scheda_id`.',

@@ -421,6 +421,10 @@ return [
         'title' => 'Record già collegato',
         'detail' => 'Questa scheda è già collegata a quel record del CRM: non ripetere la richiesta. Il collegamento lo trovi in board.schede.crm.elenca.',
     ],
+    'promemoria_gia_presente' => [
+        'title' => 'Promemoria già presente',
+        'detail' => "Questo to-do ha già un promemoria con quell'anticipo: non ne nasce un secondo. Lo trovi in board.todo.elementi.promemoria.elenca; per cambiarlo toglilo con board.todo.elementi.promemoria.elimina. Non ripetere la richiesta.",
+    ],
     'lista_gia_esistente' => [
         'title' => 'Lista già presente',
         'detail' => "Questa scheda ha già la sua lista di to-do: non ne nasce una seconda. L'id della lista è in `lista_id`; la trovi anche con board.todo.liste.elenca e `scheda_id`.",
