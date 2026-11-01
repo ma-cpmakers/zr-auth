@@ -178,3 +178,82 @@ it('il seminatore rifiuta un\'app che il tipo non ha e una persona che non è de
     expect(fn () => $finto->notifica($studio, $anna, 'com.zeiras.altro.fatto', 'pm'))->toThrow(InvalidArgumentException::class, 'dà il tipo')
         ->and(fn () => $finto->notifica($studio, $estranea, 'com.zeiras.board.scheda.creata'))->toThrow(InvalidArgumentException::class, 'non è del workspace');
 });
+
+// #2732 e #2733: le preferenze di notifica e «Non voglio più questa email». Che le risposte e gli errori siano quelli del backoffice lo prova il
+// FintoTest del backoffice (G12); qui ciò che un frontend vede dal suo lato.
+it('io.notifiche.preferenze.mostra: ogni tipo del catalogo con `app` se non si è scelto, e l\'email solo dove il tipo la ha (#2732)', function () {
+    [, , , , $gettone, $dellAccesso] = conLeNotifiche();
+
+    $risposta = alFinto('GET', '/v1/io/notifiche/preferenze', null, $gettone);
+    $tipi = array_column($risposta->json('data.tipi'), null, 'tipo');
+
+    expect($risposta->status())->toBe(200)
+        ->and(array_keys($risposta->json('data')))->toBe(['tipi'])
+        ->and(array_keys($risposta->json('data.tipi.0')))->toBe(['tipo', 'modulo', 'canale', 'canali'])
+        ->and($risposta->json('data.tipi.0'))->toBe(['tipo' => 'com.zeiras.app.modificata', 'modulo' => 'workspace', 'canale' => 'app', 'canali' => ['app', 'spenta']])
+        ->and($tipi['board.commento.menzione']['canali'])->toBe(['app', 'email', 'spenta'])
+        ->and(array_unique(array_column($tipi, 'canale')))->toBe(['app'])
+        // Della persona, non del workspace: vale anche il gettone dell'accesso.
+        ->and(alFinto('GET', '/v1/io/notifiche/preferenze', null, $dellAccesso)->json('data'))->toBe($risposta->json('data'))
+        ->and(alFinto('GET', '/v1/io/notifiche/preferenze')->status())->toBe(401);
+});
+
+it('io.notifiche.preferenze.modifica: cambia i canali dei tipi mandati, tutti o nessuno, e solo della persona del gettone (#2732)', function () {
+    [, , , , $gettone] = conLeNotifiche();
+    $bruno = entraNelFinto('bruno@example.com')['gettone']['gettone'];
+
+    $risposta = alFinto('PATCH', '/v1/io/notifiche/preferenze', ['tipi' => [
+        ['tipo' => 'board.scheda.assegnata', 'canale' => 'email'],
+        ['tipo' => 'com.zeiras.board.scheda.creata', 'canale' => 'spenta'],
+    ]], $gettone);
+    $tipi = array_column($risposta->json('data.tipi'), 'canale', 'tipo');
+
+    expect($risposta->status())->toBe(200)
+        ->and($tipi['board.scheda.assegnata'])->toBe('email')
+        ->and($tipi['com.zeiras.board.scheda.creata'])->toBe('spenta')
+        ->and(array_count_values($tipi)['app'])->toBe(count($tipi) - 2)
+        ->and(array_column(alFinto('GET', '/v1/io/notifiche/preferenze', null, $bruno)->json('data.tipi'), 'canale', 'tipo')['board.scheda.assegnata'])->toBe('app');
+
+    // Un errore non salva niente: il tipo fuori dal catalogo, il doppione e il canale che il tipo non ha sono 422 sul pointer dell'elemento.
+    $rifiutata = alFinto('PATCH', '/v1/io/notifiche/preferenze', ['tipi' => [
+        ['tipo' => 'board.commento.menzione', 'canale' => 'spenta'],
+        ['tipo' => 'non.esiste', 'canale' => 'app'],
+        ['tipo' => 'board.commento.menzione', 'canale' => 'app'],
+        ['tipo' => 'com.zeiras.board.scheda.modificata', 'canale' => 'email'],
+    ]], $gettone);
+
+    expect($rifiutata->status())->toBe(422)
+        ->and(array_column($rifiutata->json('errors'), 'pointer'))->toContain('#/tipi/1/tipo', '#/tipi/3/canale')
+        ->and(array_column(alFinto('GET', '/v1/io/notifiche/preferenze', null, $gettone)->json('data.tipi'), 'canale', 'tipo')['board.commento.menzione'])->toBe('app');
+});
+
+it('notifiche.disiscrizione: il token del finto spegne solo l\'email del suo tipo, senza gettone, e non si consuma (#2733)', function () {
+    [$finto, , $anna, , $gettone] = conLeNotifiche();
+    $tipo = 'board.commento.menzione';
+    $token = $finto->tokenDiDisiscrizione($anna['id'], $tipo);
+    $canale = fn () => array_column(alFinto('GET', '/v1/io/notifiche/preferenze', null, $gettone)->json('data.tipi'), 'canale', 'tipo')[$tipo];
+    alFinto('PATCH', '/v1/io/notifiche/preferenze', ['tipi' => [['tipo' => $tipo, 'canale' => 'email']]], $gettone);
+
+    $verifica = alFinto('POST', '/v1/notifiche/disiscrizione/verifica', ['token' => $token]);
+
+    expect($verifica->status())->toBe(200)
+        ->and($verifica->json('data'))->toBe(['tipo' => $tipo, 'canale' => 'email'])
+        ->and($canale())->toBe('email');
+
+    expect(alFinto('POST', '/v1/notifiche/disiscrizione', ['token' => $token])->status())->toBe(204)
+        ->and($canale())->toBe('app')
+        ->and(alFinto('POST', '/v1/notifiche/disiscrizione', ['token' => $token])->status())->toBe(204);
+
+    // «spenta» non si tocca: la disiscrizione spegne l'email, non riaccende niente.
+    alFinto('PATCH', '/v1/io/notifiche/preferenze', ['tipi' => [['tipo' => $tipo, 'canale' => 'spenta']]], $gettone);
+    alFinto('POST', '/v1/notifiche/disiscrizione', ['token' => $token]);
+
+    expect($canale())->toBe('spenta');
+
+    foreach (['', 'abc', $token.'x', substr($token, 0, -3).'AAA'] as $sbagliato) {
+        $rifiutato = alFinto('POST', '/v1/notifiche/disiscrizione', ['token' => $sbagliato]);
+
+        expect($rifiutato->status())->toBe(422)
+            ->and($rifiutato->json('errors.0.pointer'))->toBe('#/token');
+    }
+});

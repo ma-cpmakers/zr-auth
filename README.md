@@ -793,6 +793,11 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `autore` (`{nome}` di chi ha fatto, a oggi, finché è membra del workspace, altrimenti `null`), `risorsa_nome` e `per_me` (sempre `null`, come
   nel backoffice di oggi: il destinatario diretto non si conosce ancora). L'app la dà il tipo
   (`pm` per `com.zeiras.board.*`, altrimenti `null`): un'altra è un errore del test. La lettura in blocco segna al più 5000 per chiamata.
+- **Le preferenze di notifica** (#2732, #2733). `io.notifiche.preferenze.mostra` e `.modifica` rispondono come il backoffice, con qualunque gettone della persona
+  (con o senza workspace): ogni tipo del catalogo con il suo `modulo`, il `canale` scelto (`app` se non ha scelto) e i `canali` che il tipo ha davvero (`email` solo
+  per le assegnazioni e le menzioni). `modifica` è tutto o niente. «Non voglio più questa email», `notifiche.disiscrizione.crea` e `.verifica.crea`, è senza gettone e
+  porta il token nel corpo: il finto non manda email, quindi il test lo chiede con `$finto->tokenDiDisiscrizione($persona['id'], $tipo)`. Spegne solo l'email (il canale
+  `email` torna `app`), è `204` anche ripetuta, e un token che non è del finto è `422` su `#/token`.
 - **Le aziende.** `io.aziende.elenca` dà le aziende dei workspace di cui la persona è membro (con ogni suo gettone, anche
   quello dell'accesso), una volta sola ciascuna, in ordine di nome e poi di id, a pagine col solo id. Un'azienda nasce con
   il workspace e prende il suo nome di allora (`workspace()` e `io.workspace.crea` senza `azienda_id`): una rinomina del
