@@ -333,6 +333,14 @@ return [
         'title' => 'Troppe prenotazioni attive',
         'detail' => "Hai già il massimo di prenotazioni attive con questo professionista (il problema porta `limite`): annullane una con `io.prenotazioni.modifica` (`stato: annullata`) per prenotarne un'altra. Il metodo non ha scritto niente.",
     ],
+    'trasferimento_impossibile' => [
+        'title' => 'Trasferimento impossibile',
+        'detail' => "Almeno una prenotazione non si può spostare sull'altro professionista: manca il calendario con la stessa voce del Catalogo (`calendario_mancante`) o l'orario è occupato (`orario_occupato`). Il problema porta `non_spostate`, un elenco di `prenotazione_id` e `motivo`. Il metodo non ha scritto niente: sposta le altre mandando `solo_possibili: true`, oppure sistema i calendari e ripeti.",
+    ],
+    'termine_scaduto' => [
+        'title' => 'Termine per il trasferimento scaduto',
+        'detail' => 'Sono passati più di 7 giorni da quando il professionista ha lasciato il workspace: le sue prenotazioni non si spostano più. Il metodo non ha scritto niente.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',

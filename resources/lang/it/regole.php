@@ -213,6 +213,8 @@ return [
     'prenotazione_calendario_non_trovato' => "Questo calendario non c'è: scegline uno che `bookings.calendari.elenca` mostra.",
     'prenotazione_calendario_senza_durata' => 'La voce di questo calendario non ha una durata: senza non si prenota.',
     'prenotazione_persona_non_trovata' => "Questo contatto non c'è: cercalo con `crm.persone.ricerca.crea` o crealo con `crm.persone.crea`.",
+    'trasferimento_da_non_trovato' => "Questo professionista non ha lasciato il workspace, oppure non c'è.",
+    'trasferimento_a_non_trovato' => "Questo professionista non c'è nel workspace, non ha una pagina pubblicata, oppure è lo stesso che lascia: scegli un altro membro.",
     'link_canale_senza_email' => "Questo contatto non ha un'email: scegli il canale `copia`, oppure aggiungi un'email al contatto con `crm.persone.modifica`.",
     'prenotazione_posti_oltre' => 'Una prenotazione prende al più :massimo posti di questo calendario.',
     'prenotazione_inizio_non_slot' => 'Questo non è un inizio prenotabile: scegline uno che `bookings.calendari.slot.elenca` mostra.',

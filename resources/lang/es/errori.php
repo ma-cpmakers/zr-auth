@@ -333,6 +333,14 @@ return [
         'title' => 'Demasiadas reservas activas',
         'detail' => 'Ya tienes el máximo de reservas activas con este profesional (el problema lleva `limite`): cancela una con `io.prenotazioni.modifica` (`stato: annullata`) para reservar otra. El método no escribió nada.',
     ],
+    'trasferimento_impossibile' => [
+        'title' => 'Traslado imposible',
+        'detail' => 'Al menos una reserva no se puede pasar al otro profesional: falta el calendario con el mismo elemento del Catálogo (`calendario_mancante`) o la hora está ocupada (`orario_occupato`). El problema lleva `non_spostate`, una lista de `prenotazione_id` y `motivo`. El método no escribió nada: pasa las demás enviando `solo_possibili: true`, o arregla los calendarios y repite.',
+    ],
+    'termine_scaduto' => [
+        'title' => 'Plazo de traslado vencido',
+        'detail' => 'Han pasado más de 7 días desde que el profesional dejó el workspace: sus reservas ya no se pueden pasar. El método no escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',

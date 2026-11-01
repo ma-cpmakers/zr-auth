@@ -46,6 +46,8 @@ final class Problema extends RuntimeException
         'scheda_non_di_retrospettiva' => 409,
         'limite_raggiunto' => 409,
         'prenotazioni_al_limite' => 409,
+        'trasferimento_impossibile' => 409,
+        'termine_scaduto' => 409,
         'crediti_esauriti' => 409,
         'acquisto_scaduto' => 409,
         'acquisto_necessario' => 409,

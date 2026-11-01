@@ -606,7 +606,7 @@ final class BackofficeFinto
     /** @var array<string, array{id: string, email: string, verificata: bool, nome: ?string}> il profilo che il provider dà per un codice (identitaDelProvider()), per slug e codice */
     private array $profili = [];
 
-    /** @var array<string, array{provider: string, scade: CarbonImmutable, verificatore: string}> le partenze che valgono, per stato */
+    /** @var array<string, array{provider: string, scade: CarbonImmutable, verificatore: string, ritorno: string}> le partenze che valgono, per stato */
     private array $partenze = [];
 
     /** @var array<string, string> la persona di ogni identità del provider, per slug e id del provider */
@@ -2649,8 +2649,9 @@ final class BackofficeFinto
     }
 
     /**
-     * accessi.provider.autorizzazioni.crea (AccessiProviderController::autorizzazioniCrea), senza gettone e senza corpo: la
-     * partenza. I freni (in tutto, poi del provider) contano prima di tutto, anche per uno slug sconosciuto, che non apre un
+     * accessi.provider.autorizzazioni.crea (AccessiProviderController::autorizzazioniCrea), senza gettone e con il solo campo
+     * facoltativo `ritorno` (`home`, di partenza, o `bookings`, #2623; il finto non sa quale client chiama, e li accetta tutti e due:
+     * il backoffice vuole `bookings` dal client `bookings`): la partenza. I freni (in tutto, poi del provider) contano prima di tutto, anche per uno slug sconosciuto, che non apre un
      * conto per slug; un provider spento o sconosciuto è 404. Dà l'indirizzo del provider con lo stato e la sfida PKCE
      * (S256); il verificatore resta nel finto. Il `client_id` è `finto-<slug>`: nel backoffice lo mette l'.env.
      *
@@ -2666,18 +2667,18 @@ final class BackofficeFinto
         }
 
         $this->frena('provider.autorizzazioni:'.$provider, self::FRENI['provider_partenza'], self::MINUTO);
-        $this->testi->validaStretta($corpo, []);
+        $ritorno = (string) ($this->testi->validaStretta($corpo, ['ritorno' => ['sometimes', 'bail', 'string', 'in:home,bookings']])['ritorno'] ?? 'home');
 
         $stato = self::base64url(random_bytes(32));
         $verificatore = self::base64url(random_bytes(32));
         // Al millesimo, come il backoffice: la scadenza scritta nella risposta è quella vera.
         $scade = now()->toImmutable()->addSeconds(self::SECONDI_DELLO_STATO);
-        $this->partenze[$stato] = ['provider' => $provider, 'scade' => $scade, 'verificatore' => $verificatore];
+        $this->partenze[$stato] = ['provider' => $provider, 'scade' => $scade, 'verificatore' => $verificatore, 'ritorno' => $ritorno];
 
         $url = self::PROVIDER[$provider]['indirizzo'].'?'.http_build_query([
             'response_type' => 'code',
             'client_id' => 'finto-'.$provider,
-            'redirect_uri' => 'https://app.zeiras.com/auth/'.$provider.'/callback',
+            'redirect_uri' => $ritorno === 'bookings' ? 'https://bookings.zeiras.com/accedi/'.$provider.'/ritorno' : 'https://app.zeiras.com/auth/'.$provider.'/callback',
             'scope' => self::PROVIDER[$provider]['scope'],
             'state' => $stato,
             'code_challenge' => self::base64url(hash('sha256', $verificatore, true)),

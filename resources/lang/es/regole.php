@@ -212,6 +212,8 @@ return [
     'prenotazione_calendario_non_trovato' => 'Este calendario no existe: elige uno de los que muestra `bookings.calendari.elenca`.',
     'prenotazione_calendario_senza_durata' => 'El elemento de este calendario no tiene duración: sin ella no se puede reservar.',
     'prenotazione_persona_non_trovata' => 'Este contacto no existe: búscalo con `crm.persone.ricerca.crea` o créalo con `crm.persone.crea`.',
+    'trasferimento_da_non_trovato' => 'Este profesional no ha dejado el workspace, o no existe.',
+    'trasferimento_a_non_trovato' => 'Este profesional no está en el workspace, no tiene una página publicada, o es el mismo que se fue: elige otro miembro.',
     'link_canale_senza_email' => 'Este contacto no tiene email: elige el canal `copia`, o añade un email al contacto con `crm.persone.modifica`.',
     'prenotazione_posti_oltre' => 'Una reserva ocupa como máximo :massimo plazas de este calendario.',
     'prenotazione_inizio_non_slot' => 'Este no es un inicio reservable: elige uno de los que muestra `bookings.calendari.slot.elenca`.',

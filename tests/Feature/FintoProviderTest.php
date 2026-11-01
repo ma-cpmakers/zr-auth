@@ -105,6 +105,27 @@ it('accessi.provider.autorizzazioni.crea: un provider spento o sconosciuto è 40
         ->and($campo->json('errors.0.pointer'))->toBe('#/redirect_uri');
 });
 
+it("accessi.provider.autorizzazioni.crea: il ritorno bookings (#2623) dà l'indirizzo di Bookings, home e nessun campo quello di sempre; un altro valore è 422 su #/ritorno", function () {
+    BackofficeFinto::attiva()->provider('google');
+    $ritorno = fn (array $corpo) => alFinto('POST', '/v1/accessi/provider/google/autorizzazioni', $corpo);
+    $redirect = function ($risposta) {
+        parse_str((string) parse_url($risposta->json('data.url'), PHP_URL_QUERY), $parametri);
+
+        return $parametri['redirect_uri'];
+    };
+
+    expect($redirect($ritorno(['ritorno' => 'bookings'])))->toBe('https://bookings.zeiras.com/accedi/google/ritorno')
+        ->and($redirect($ritorno(['ritorno' => 'home'])))->toBe('https://app.zeiras.com/auth/google/callback')
+        ->and($redirect($ritorno([])))->toBe('https://app.zeiras.com/auth/google/callback');
+
+    foreach (['https://altro.example/ritorno', 'crm', 'Bookings', 1, null] as $valore) {
+        $rifiutato = $ritorno(['ritorno' => $valore]);
+
+        expect($rifiutato->status())->toBe(422)
+            ->and($rifiutato->json('errors.0.pointer'))->toBe('#/ritorno');
+    }
+});
+
 it('accessi.provider.autorizzazioni.crea: 60 chiamate al minuto per provider, 120 in tutto (#1429)', function () {
     BackofficeFinto::attiva()->provider('google', 'facebook');
 
