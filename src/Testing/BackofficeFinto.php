@@ -4427,7 +4427,7 @@ final class BackofficeFinto
         }
 
         $this->datiAziende[$azienda] = [...$this->voceAzienda($azienda), ...$campi];
-        unset($this->datiAziende[$azienda]['id'], $this->datiAziende[$azienda]['nome'], $this->datiAziende[$azienda]['uscita_negata'], $this->datiAziende[$azienda]['uscita_negata_workspace']);
+        unset($this->datiAziende[$azienda]['id'], $this->datiAziende[$azienda]['nome']);
 
         return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto, 'accordo_trattamento_dati_da_accettare' => $this->accordoDaAccettare($azienda)]]];
     }
@@ -4475,7 +4475,8 @@ final class BackofficeFinto
         foreach ($this->membri as $workspace => $ruoli) {
             if (isset($ruoli[$persona])) {
                 $id = $this->workspace[$workspace]['azienda_id'];
-                $voci[$id] = $this->voceAzienda($id, $uscite[$id]['ostacolo'] ?? null, $uscite[$id]['workspace'] ?? []);
+                // Solo questo elenco porta ciò che dice se la persona può lasciare l'azienda (Forme::aziendaConUscita, #2740).
+                $voci[$id] = [...$this->voceAzienda($id), 'uscita_negata' => $uscite[$id]['ostacolo'] ?? null, 'uscita_negata_workspace' => ($uscite[$id]['ostacolo'] ?? null) === null ? [] : $uscite[$id]['workspace']];
             }
         }
 
@@ -4499,19 +4500,13 @@ final class BackofficeFinto
     }
 
     /**
-     * Lo schema Azienda (Forme::azienda): id, nome, i dati dell'azienda e ciò che dice se la persona può lasciarla (#2740): `uscita_negata` (il codice
-     * del 409 di io.aziende.uscita.crea) e `uscita_negata_workspace`, che solo io.aziende.elenca riempie; altrove `null` e `[]`.
+     * Lo schema Azienda (Forme::azienda): id, nome e i quattro dati dell'azienda.
      *
-     * @param  list<array{id: string, nome: string}>  $coinvolti
-     * @return array<string, mixed>
+     * @return array<string, ?string>
      */
-    private function voceAzienda(string $id, ?string $uscitaNegata = null, array $coinvolti = []): array
+    private function voceAzienda(string $id): array
     {
-        return [
-            'id' => $id, 'nome' => $this->aziende[$id],
-            ...($this->datiAziende[$id] ?? ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null]),
-            'uscita_negata' => $uscitaNegata, 'uscita_negata_workspace' => $uscitaNegata === null ? [] : $coinvolti,
-        ];
+        return ['id' => $id, 'nome' => $this->aziende[$id], ...($this->datiAziende[$id] ?? ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null])];
     }
 
     /**

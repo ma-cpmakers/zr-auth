@@ -39,10 +39,10 @@ it('io.aziende.elenca dice se la persona può lasciare ogni azienda: il codice d
         // Carla può lasciare lo Studio: ha un'altra casa; il campo c'è, null e [].
         ->and($azienda('carla@example.com', $studio['azienda_id']))->toMatchArray(['uscita_negata' => null, 'uscita_negata_workspace' => []]);
 
-    // Gli stessi due campi, vuoti, dove l'azienda non si elenca: aziende.mostra e aziende.modifica.
+    // Gli altri metodi dell'azienda (aziende.mostra, AziendaConRuolo) non li portano: lo schema non li ha.
     $anna = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso('anna@example.com'))->json('data.gettone');
 
-    expect(alFinto('GET', "/v1/aziende/{$studio['azienda_id']}", gettone: $anna)->json('data'))->toMatchArray(['uscita_negata' => null, 'uscita_negata_workspace' => []]);
+    expect(alFinto('GET', "/v1/aziende/{$studio['azienda_id']}", gettone: $anna)->json('data'))->not->toHaveKeys(['uscita_negata', 'uscita_negata_workspace']);
 });
 
 it('io.aziende.uscita.crea: 204 e la persona non è più in nessun workspace dell\'azienda, i suoi gettoni di là sono 401, l\'accesso e le altre aziende restano (#2740)', function () {
