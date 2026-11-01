@@ -332,10 +332,12 @@ it("io.aziende.elenca dà le aziende dei workspace della persona, una volta sola
     // Rinominare il workspace non rinomina l'azienda (il backoffice la nomina una volta, alla nascita).
     expect(alFinto('PATCH', '/v1/workspace', ['nome' => 'Tutt’altro nome'], gettoneDelFinto('anna@example.com', $beta))->status())->toBe(200);
 
+    // Anna è amministratrice sola dell'Àlbero (il proprietario non conta), proprietaria di Alfa e di beta (#2740).
+    $nulla = ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null];
     $attese = [
-        ['id' => $albero['azienda_id'], 'nome' => 'Àlbero', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null],
-        ['id' => $alfa['azienda_id'], 'nome' => 'Alfa', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null],
-        ['id' => $beta['azienda_id'], 'nome' => 'beta', 'partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null],
+        ['id' => $albero['azienda_id'], 'nome' => 'Àlbero', ...$nulla, 'uscita_negata' => 'unico_amministratore', 'uscita_negata_workspace' => [['id' => $albero['id'], 'nome' => 'Àlbero']]],
+        ['id' => $alfa['azienda_id'], 'nome' => 'Alfa', ...$nulla, 'uscita_negata' => 'proprieta_da_trasferire', 'uscita_negata_workspace' => [['id' => $alfa['id'], 'nome' => 'Alfa']]],
+        ['id' => $beta['azienda_id'], 'nome' => 'beta', ...$nulla, 'uscita_negata' => 'proprieta_da_trasferire', 'uscita_negata_workspace' => [['id' => $beta['id'], 'nome' => 'Tutt’altro nome'], ['id' => $secondo->json('data.id'), 'nome' => 'Beta due']]],
     ];
 
     foreach ([gettoneDelFinto('anna@example.com'), gettoneDelFinto('anna@example.com', $beta)] as $gettone) {

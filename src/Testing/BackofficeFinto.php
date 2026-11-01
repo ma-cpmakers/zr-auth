@@ -37,6 +37,7 @@ use Zeiras\Auth\Testing\Finto\CrmProfili;
 use Zeiras\Auth\Testing\Finto\CrmScadenze;
 use Zeiras\Auth\Testing\Finto\CrmUnioni;
 use Zeiras\Auth\Testing\Finto\CrmValori;
+use Zeiras\Auth\Testing\Finto\Eventi;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
@@ -48,6 +49,7 @@ use Zeiras\Auth\Testing\Finto\Sprint;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
 use Zeiras\Auth\Testing\Finto\Todo;
+use Zeiras\Auth\Testing\Finto\UscitaAzienda;
 
 /**
  * Il backoffice finto, per i test dei frontend (nota 5721): risponde alle chiamate di /v1 come zr-backoffice, senza rete
@@ -91,6 +93,8 @@ final class BackofficeFinto
     use CrmScadenze;
     use CrmUnioni;
     use CrmValori;
+    use Eventi;
+    use UscitaAzienda;
     use Todo;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
@@ -233,6 +237,9 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/aziende/([^/]+)$#', 'aziende.modifica'],
         ['GET', '#^/v1/aziende/([^/]+)/workspace$#', 'aziende.workspace.elenca'],
         ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
+        ['POST', '#^/v1/io/aziende/([^/]+)/uscita$#', 'io.aziende.uscita.crea'],
+        ['GET', '#^/v1/eventi$#', 'eventi.elenca'],
+        ['GET', '#^/v1/eventi/ultimo$#', 'eventi.ultimo.mostra'],
         ['POST', '#^/v1/io/inviti/verifica$#', 'io.inviti.verifica.crea'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
         ['DELETE', '#^/v1/io$#', 'io.elimina'],
@@ -1008,6 +1015,7 @@ final class BackofficeFinto
         // data: più workspace nella stessa azienda, per il ruolo più alto e l'elenco di aziende.mostra (#1590).
         $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => $azienda ?? $this->nuovaAzienda($nome), 'settore' => null, 'lingua_contenuti' => null];
         $this->membro($this->workspace[$id], $proprietaria, 'proprietario');
+        $this->nascitaDelWorkspace($id, $proprietaria['id']);
 
         return $this->workspace[$id];
     }
@@ -1426,6 +1434,9 @@ final class BackofficeFinto
                 'aziende.modifica' => $this->modificaAzienda($richiesta, $corpo, $parametri[0]),
                 'aziende.workspace.elenca' => $this->elencaWorkspaceDellAzienda($richiesta, $parametri[0]),
                 'io.aziende.elenca' => $this->elencaAziende($richiesta),
+                'io.aziende.uscita.crea' => $this->lasciaLAzienda($richiesta, $corpo, $parametri[0]),
+                'eventi.elenca' => $this->elencaEventi($richiesta),
+                'eventi.ultimo.mostra' => $this->mostraUltimoEvento($richiesta),
                 'io.inviti.verifica.crea' => $this->verificaInvitoIo($richiesta, $corpo),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
                 'io.workspace.crea' => $this->creaWorkspaceDellaPersona($richiesta, $corpo),
@@ -4416,7 +4427,7 @@ final class BackofficeFinto
         }
 
         $this->datiAziende[$azienda] = [...$this->voceAzienda($azienda), ...$campi];
-        unset($this->datiAziende[$azienda]['id'], $this->datiAziende[$azienda]['nome']);
+        unset($this->datiAziende[$azienda]['id'], $this->datiAziende[$azienda]['nome'], $this->datiAziende[$azienda]['uscita_negata'], $this->datiAziende[$azienda]['uscita_negata_workspace']);
 
         return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto, 'accordo_trattamento_dati_da_accettare' => $this->accordoDaAccettare($azienda)]]];
     }
@@ -4458,12 +4469,13 @@ final class BackofficeFinto
     private function elencaAziende(Request $richiesta): array
     {
         $persona = $this->autentica($richiesta)['persona'];
+        $uscite = $this->ostacoliDelleAziende($persona);
         $voci = [];
 
         foreach ($this->membri as $workspace => $ruoli) {
             if (isset($ruoli[$persona])) {
                 $id = $this->workspace[$workspace]['azienda_id'];
-                $voci[$id] = $this->voceAzienda($id);
+                $voci[$id] = $this->voceAzienda($id, $uscite[$id]['ostacolo'] ?? null, $uscite[$id]['workspace'] ?? []);
             }
         }
 
@@ -4487,13 +4499,19 @@ final class BackofficeFinto
     }
 
     /**
-     * Lo schema Azienda (Forme::azienda): id, nome e i quattro dati dell'azienda.
+     * Lo schema Azienda (Forme::azienda): id, nome, i dati dell'azienda e ciò che dice se la persona può lasciarla (#2740): `uscita_negata` (il codice
+     * del 409 di io.aziende.uscita.crea) e `uscita_negata_workspace`, che solo io.aziende.elenca riempie; altrove `null` e `[]`.
      *
-     * @return array<string, ?string>
+     * @param  list<array{id: string, nome: string}>  $coinvolti
+     * @return array<string, mixed>
      */
-    private function voceAzienda(string $id): array
+    private function voceAzienda(string $id, ?string $uscitaNegata = null, array $coinvolti = []): array
     {
-        return ['id' => $id, 'nome' => $this->aziende[$id], ...($this->datiAziende[$id] ?? ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null])];
+        return [
+            'id' => $id, 'nome' => $this->aziende[$id],
+            ...($this->datiAziende[$id] ?? ['partita_iva' => null, 'settore' => null, 'persone' => null, 'sito' => null, 'paese' => null, 'valuta' => null, 'fuso_orario' => null, 'lingua' => null]),
+            'uscita_negata' => $uscitaNegata, 'uscita_negata_workspace' => $uscitaNegata === null ? [] : $coinvolti,
+        ];
     }
 
     /**
@@ -4594,6 +4612,7 @@ final class BackofficeFinto
             }
 
             $this->entra($id, $persona, 'proprietario');
+            $this->nascitaDelWorkspace($id, $persona);
             // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
             $this->attive[$id]['pm'] = true;
 

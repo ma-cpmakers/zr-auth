@@ -100,6 +100,7 @@ final class Problema extends RuntimeException
         'verifica_non_riuscita' => 422,
         'email_del_provider_non_verificata' => 422,
         'turnstile_non_valido' => 422,
+        'cursore_scaduto' => 410,
         'troppe_richieste' => 429,
         'servizio_non_disponibile' => 503,
         'turnstile_non_disponibile' => 503,
