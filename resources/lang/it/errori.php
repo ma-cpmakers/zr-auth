@@ -285,6 +285,10 @@ return [
         'title' => 'Unico amministratore',
         'detail' => 'Sei l\'unico amministratore di questo workspace e non puoi lasciarlo: nomina prima un altro amministratore con `workspace.membri.modifica`, poi ripeti la richiesta. Il metodo non ha scritto niente.',
     ],
+    'eliminazione_programmata' => [
+        'title' => 'Eliminazione programmata',
+        'detail' => "Tutti i tuoi workspace di questa azienda hanno l'eliminazione programmata: non c'è niente da lasciare. Il problema porta accanto al codice `workspace_da_eliminare`, quei workspace (id e nome). Per tenerli ripristinali entro la scadenza (`io.workspace.eliminazione.elimina`); altrimenti spariranno da soli. Il metodo non ha scritto niente.",
+    ],
     'indirizzo_occupato' => [
         'title' => 'Indirizzo già in uso',
         'detail' => 'L\'indirizzo è già in uso: quello di una pagina di Bookings è unico in tutta Zeiras, quello di un calendario è unico nella sua pagina. Il problema porta accanto al codice `proposta`, un indirizzo libero; scegline un altro e ripeti la richiesta. Il metodo non ha scritto niente.',
@@ -383,7 +387,7 @@ return [
     ],
     'funzione_spenta' => [
         'title' => 'Funzione spenta',
-        'detail' => 'La funzione del settore di questa board (edilizia o digitale) è spenta nel workspace, quindi la funzione della board non si accende. Le board già accese restano accese. Accendi prima la funzione con board.funzioni.modifica (serve il ruolo di proprietario o amministratore) e ripeti la richiesta. Il metodo non ha scritto niente.',
+        'detail' => 'La funzione del settore di questa board (edilizia o digitale) è spenta nel workspace, quindi la funzione della board non si accende. Il valore già scritto nelle altre board non cambia, ma finché la funzione è spenta la loro `funzione_attiva` dice false. Accendi prima la funzione con board.funzioni.modifica (serve il ruolo di proprietario o amministratore) e ripeti la richiesta. Il metodo non ha scritto niente.',
     ],
     'epica_con_figlie' => [
         'title' => 'Epica con figlie',

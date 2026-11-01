@@ -112,3 +112,18 @@ it('un workspace con l\'eliminazione programmata non è vivo: non conta come alt
     expect(esito($risposta))->toBe([409, 'ultimo_workspace'])
         ->and($risposta->json('workspace_da_lasciare'))->toBe([['id' => $studio['id'], 'nome' => 'Studio']]);
 });
+
+it('un\'azienda i cui workspace della persona sono tutti in eliminazione programmata è 409 eliminazione_programmata, con quei workspace, nell\'elenco e nella chiamata (TX.1, #2866)', function () {
+    [$finto, $studio, $case, $persone, $accesso] = squadraDiAziende();
+    $casa = alFinto('POST', '/v1/gettoni', ['workspace_id' => $case['carla']['id']], $accesso('carla@example.com'))->json('data.gettone');
+
+    expect(alFinto('DELETE', '/v1/workspace', gettone: $casa)->status())->toBe(202);
+
+    $azienda = collect(alFinto('GET', '/v1/io/aziende', gettone: $accesso('carla@example.com'))->json('data'))->firstWhere('id', $case['carla']['azienda_id']);
+    $risposta = alFinto('POST', "/v1/io/aziende/{$case['carla']['azienda_id']}/uscita", gettone: $accesso('carla@example.com'));
+
+    // deve fallire se: un'azienda con tutti i workspace in eliminazione ha uscita_negata null, o la chiamata è un 404 muto
+    expect($azienda)->toMatchArray(['uscita_negata' => 'eliminazione_programmata', 'uscita_negata_workspace' => [['id' => $case['carla']['id'], 'nome' => 'Casa di Carla']]])
+        ->and(esito($risposta))->toBe([409, 'eliminazione_programmata'])
+        ->and($risposta->json('workspace_da_eliminare'))->toBe($azienda['uscita_negata_workspace']);
+});

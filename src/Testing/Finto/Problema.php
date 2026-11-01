@@ -91,6 +91,7 @@ final class Problema extends RuntimeException
         'workspace_in_eliminazione' => 409,
         'proprieta_da_trasferire' => 409,
         'unico_amministratore' => 409,
+        'eliminazione_programmata' => 409,
         'versione_scaduta' => 410,
         'dati_non_validi' => 422,
         'collegamento_circolare' => 422,
