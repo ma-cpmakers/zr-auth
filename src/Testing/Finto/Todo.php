@@ -211,9 +211,26 @@ trait Todo
     {
         return [
             'id' => $lista['id'], 'nome' => $lista['nome'], 'colore' => $lista['colore'], 'tipo' => $lista['tipo'],
-            'scheda_id' => $lista['scheda'] ?? null, 'board_id' => $lista['board'] ?? null, 'predefinita' => $lista['predefinita'], 'ordine' => $lista['ordine'], 'posizione' => $lista['posizione'],
+            'scheda_id' => $lista['scheda'] ?? null, 'board_id' => $lista['board'] ?? null, 'scheda' => $this->schedaInBreveTodo($lista), 'predefinita' => $lista['predefinita'], 'ordine' => $lista['ordine'], 'posizione' => $lista['posizione'],
             'creata_il' => self::iso($lista['creata_il']), 'aggiornata_il' => self::iso($lista['aggiornata_il']),
             'etag' => self::etagCrm($this->versioneTodo($lista, 'aggiornata_il')),
+        ];
+    }
+
+    /**
+     * La scheda di una lista `progetto` in breve (Todo::schedeDelleListe): `{id, numero, titolo, board_id, board_nome}`, null in una personale.
+     * Una scheda di una board che non nasce con board() (la «board-di-prova» di scheda()) porta come nome l'id della board.
+     *
+     * @param  array<string, mixed>  $lista
+     * @return array{id: string, numero: int, titolo: string, board_id: string, board_nome: string}|null
+     */
+    private function schedaInBreveTodo(array $lista): ?array
+    {
+        $scheda = $this->schede[$lista['scheda'] ?? ''] ?? null;
+
+        return $scheda === null ? null : [
+            'id' => $scheda['id'], 'numero' => $scheda['numero'], 'titolo' => $scheda['titolo'],
+            'board_id' => $scheda['board'], 'board_nome' => $this->boards[$scheda['board']]['nome'] ?? $scheda['board'],
         ];
     }
 
