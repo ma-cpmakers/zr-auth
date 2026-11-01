@@ -158,8 +158,8 @@ test('si leggono gli eventi dei 30 giorni dal loro istante; oltre l\'ultimo, o c
         ->and(alFinto('GET', '/v1/eventi?dopo=3', null, $gettone)->status())->toBe(200)
         ->and($sequenze(alFinto('GET', '/v1/eventi?dopo=3', null, $gettone)))->toBe([])
         ->and(alFinto('GET', '/v1/eventi?dopo=4', null, $gettone)->status())->toBe(410)
-        // Un parametro vuoto è assente: la lista di sempre, non un 410.
-        ->and($sequenze(alFinto('GET', '/v1/eventi?dopo=', null, $gettone)))->toBe(['000000000003']);
+        // Un `dopo` vuoto è 422 sul parametro, mai un 410.
+        ->and(alFinto('GET', '/v1/eventi?dopo=', null, $gettone)->status())->toBe(422);
 });
 
 test('ultimo dà l\'ultimo evento anche se ha più di 30 giorni, e quell\'evento non è nella lista (FE.4)', function () {

@@ -119,9 +119,9 @@ trait Eventi
     {
         $eventi = $this->eventiDelWorkspace[$workspace] ?? [];
         $soglia = self::iso(now()->toImmutable()->subDays(self::EVENTI_GIORNI));
-        // Un parametro vuoto è un parametro assente, come per il backoffice (ConvertEmptyStringsToNull).
-        $dopoDato = trim((string) ($query['dopo'] ?? '')) !== '' ? (int) $query['dopo'] : null;
-        $cursore = trim((string) ($query['cursore'] ?? '')) !== '' ? (int) $this->leggiCursore('eventi.elenca', 'sequence', $query['cursore']) : null;
+        // Un parametro vuoto non arriva qui: per la validazione è null, e `dopo=` è 422 come nel backoffice.
+        $dopoDato = isset($query['dopo']) ? (int) $query['dopo'] : null;
+        $cursore = isset($query['cursore']) ? (int) $this->leggiCursore('eventi.elenca', 'sequence', $query['cursore']) : null;
         $punto = $dopoDato ?? $cursore;
 
         if ($punto === null) {
