@@ -119,6 +119,9 @@ final class BackofficeFinto
     /** I tetti delle attese di una scheda e della catena (Tetti del backoffice, #1457). */
     private const ATTESE_IN_USCITA = 10;
 
+    /** Le richieste di «Avvisami al lancio» vive di una persona (ModuloInteresse::TETTO del backoffice, #2869). */
+    private const MODULI_INTERESSE_TETTO = 50;
+
     private const ATTESE_IN_ENTRATA = 50;
 
     private const CATENA = 20;
@@ -277,6 +280,9 @@ final class BackofficeFinto
         ['GET', '#^/v1/legale/documenti$#', 'legale.documenti.elenca'],
         ['GET', '#^/v1/legale/accettazioni$#', 'legale.accettazioni.elenca'],
         ['POST', '#^/v1/legale/accettazioni$#', 'legale.accettazioni.crea'],
+        ['GET', '#^/v1/moduli/interesse$#', 'moduli.interesse.elenca'],
+        ['POST', '#^/v1/moduli/([^/]+)/interesse$#', 'moduli.interesse.crea'],
+        ['DELETE', '#^/v1/moduli/([^/]+)/interesse$#', 'moduli.interesse.elimina'],
         ['GET', '#^/v1/workspace/link$#', 'workspace.link.mostra'],
         ['POST', '#^/v1/workspace/link$#', 'workspace.link.crea'],
         ['DELETE', '#^/v1/workspace/link$#', 'workspace.link.elimina'],
@@ -384,7 +390,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -578,6 +584,12 @@ final class BackofficeFinto
 
     /** @var array<string, array<string, string>> le accettazioni di ogni persona: per persona, «documento@versione» → l'istante */
     private array $accettazioni = [];
+
+    /** @var array<string, array<string, array{id: string, richiesto_il: string}>> le richieste «Avvisami al lancio» vive di ogni persona: per persona, il codice del modulo */
+    private array $moduliInteresse = [];
+
+    /** L'ordine in cui nascono le richieste di avviso (nel backoffice l'id): una richiesta tolta e rifatta ne ha uno nuovo. */
+    private int $ordineInteresse = 0;
 
     /** @var array<string, array{codice: string, scade: CarbonImmutable, massimi: int, usati: int}> il link d'invito vivo di ogni workspace (LinkInvito), per workspace: uno solo */
     private array $links = [];
@@ -1445,6 +1457,9 @@ final class BackofficeFinto
                 'legale.documenti.elenca' => $this->elencaDocumentiLegali($richiesta),
                 'legale.accettazioni.elenca' => $this->elencaAccettazioniLegali($richiesta),
                 'legale.accettazioni.crea' => $this->accettaDocumentoLegale($richiesta, $corpo),
+                'moduli.interesse.elenca' => $this->elencaModuliInteresse($richiesta),
+                'moduli.interesse.crea' => $this->chiediAvvisoModulo($richiesta, $parametri[0]),
+                'moduli.interesse.elimina' => $this->togliAvvisoModulo($richiesta, $parametri[0]),
                 'io.mostra' => $this->mostraIo($richiesta),
                 'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
                 'io.notifiche.preferenze.mostra' => $this->mostraPreferenzeDiNotifica($richiesta),
@@ -3069,6 +3084,73 @@ final class BackofficeFinto
         $this->accettazioni[$chi['persona']][$chiave] ??= self::iso(now());
 
         return [$nuova ? 201 : 200, ['data' => ['documento' => $campi['documento'], 'versione' => $campi['versione'], 'accettata_il' => $this->accettazioni[$chi['persona']][$chiave]]]];
+    }
+
+    /**
+     * moduli.interesse.elenca (ModuliInteresseController::elenca, #2869): le richieste di avviso al lancio della persona del gettone
+     * (qualunque gettone suo), dalla più recente, a pagine. L'ordine di nascita non esce: la riga porta modulo e richiesto_il.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaModuliInteresse(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+
+        [$stato, $corpo] = $this->pagina($richiesta, 'moduli.interesse.elenca', 'id', array_values($this->moduliInteresse[$chi['persona']] ?? []), fn (array $voce) => [$voce['id']], fn (string $id) => [$id], dalPiuRecente: true);
+        $corpo['data'] = array_map(fn (array $voce) => array_diff_key($voce, ['id' => true]), $corpo['data']);
+
+        return [$stato, $corpo];
+    }
+
+    /**
+     * moduli.interesse.crea (ModuliInteresseController::crea): la persona del gettone chiede l'avviso per un modulo: 201 la prima volta,
+     * 200 con la stessa riga se lo ripete. Un codice fuori forma è 404; la cinquantunesima richiesta viva è 409 limite_raggiunto (limite 50).
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function chiediAvvisoModulo(Request $richiesta, string $modulo): array
+    {
+        $chi = $this->autentica($richiesta);
+        $this->codiceDiModulo($modulo);
+        $this->frena('moduli-interesse:'.$chi['persona'], self::FRENI['moduli_interesse_per_persona'], self::ORA);
+
+        $nuova = ! isset($this->moduliInteresse[$chi['persona']][$modulo]);
+
+        if ($nuova && count($this->moduliInteresse[$chi['persona']] ?? []) >= self::MODULI_INTERESSE_TETTO) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::MODULI_INTERESSE_TETTO]);
+        }
+
+        $this->moduliInteresse[$chi['persona']][$modulo] ??= ['id' => sprintf('%010d', ++$this->ordineInteresse), 'richiesto_il' => self::iso(now())];
+
+        return [$nuova ? 201 : 200, ['data' => ['modulo' => $modulo, 'richiesto_il' => $this->moduliInteresse[$chi['persona']][$modulo]['richiesto_il']]]];
+    }
+
+    /**
+     * moduli.interesse.elimina (ModuliInteresseController::elimina): toglie la richiesta, 204; senza una richiesta viva, o per un codice
+     * fuori forma, è 404.
+     *
+     * @return array{int, null}
+     */
+    private function togliAvvisoModulo(Request $richiesta, string $modulo): array
+    {
+        $chi = $this->autentica($richiesta);
+        $this->codiceDiModulo($modulo);
+
+        if (! isset($this->moduliInteresse[$chi['persona']][$modulo])) {
+            throw new Problema('non_trovato');
+        }
+
+        unset($this->moduliInteresse[$chi['persona']][$modulo]);
+
+        return [204, null];
+    }
+
+    /** Il codice di un modulo (ModuliInteresseController::CODICE): minuscole, cifre e trattini, fino a 40 caratteri, comincia con una lettera o una cifra. */
+    private function codiceDiModulo(string $modulo): void
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9-]{0,39}$/', $modulo) !== 1) {
+            throw new Problema('non_trovato');
+        }
     }
 
     /**
