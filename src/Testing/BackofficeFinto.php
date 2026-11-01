@@ -3458,7 +3458,7 @@ final class BackofficeFinto
 
     /**
      * io.foto.file.mostra (IoFotoController::fileMostra): il file della foto, `200` `image/webp` con l'ETag forte (l'impronta del file) e
-     * `Cache-Control: private, max-age=300`; `If-None-Match` uguale (anche debole, o `*`) è 304 senza corpo. Senza foto 404 foto_assente.
+     * `Cache-Control: max-age=300, private`; `If-None-Match` uguale (anche debole, o `*`) è 304 senza corpo. Senza foto 404 foto_assente.
      * Il corpo è un WebP minimo, lo stesso per tutti.
      *
      * @return array{0: int, 1: ?string, 2: array<string, string>}
@@ -3468,7 +3468,7 @@ final class BackofficeFinto
         $chi = $this->autentica($richiesta);
         $foto = $this->foto[$chi['persona']] ?? throw new Problema('foto_assente');
         $etag = '"'.$foto['etag'].'"';
-        $header = ['ETag' => $etag, 'Cache-Control' => 'private, max-age=300', 'X-Content-Type-Options' => 'nosniff'];
+        $header = ['ETag' => $etag, 'Cache-Control' => 'max-age=300, private', 'X-Content-Type-Options' => 'nosniff'];
         $chiesti = array_map(fn (string $voce) => preg_replace('#^W/#', '', trim($voce)), explode(',', self::header($richiesta, 'If-None-Match') ?? ''));
 
         if (in_array($etag, $chiesti, true) || in_array('*', $chiesti, true)) {
