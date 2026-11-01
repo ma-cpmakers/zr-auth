@@ -217,6 +217,14 @@ return [
         'title' => 'Contatto unito',
         'detail' => "Questo contatto si è unito in un altro (`unito_in`): è la stessa persona, e l'oblio si chiede su chi resta, oppure si annulla prima l'unione. Niente è cambiato.",
     ],
+    'identita_gia_collegata' => [
+        'title' => 'Identità già collegata',
+        'detail' => 'Questo account del provider è già collegato a un altro account di Zeiras. Niente è cambiato.',
+    ],
+    'provider_gia_collegato' => [
+        'title' => 'Provider già collegato',
+        'detail' => 'Il tuo account ha già un account di questo provider collegato: scollegalo prima di collegarne un altro. Niente è cambiato.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline non vuota',
         'detail' => 'Questa pipeline ha ancora trattative aperte e si archivia solo senza: chiudi o sposta prima le sue trattative, poi ripeti.',

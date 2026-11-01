@@ -217,6 +217,14 @@ return [
         'title' => 'Contacto unido',
         'detail' => 'Este contacto se unió a otro (`unito_in`): es la misma persona, y el olvido se pide sobre el contacto que queda, o se anula antes la unión. No ha cambiado nada.',
     ],
+    'identita_gia_collegata' => [
+        'title' => 'Identidad ya vinculada',
+        'detail' => 'Esta cuenta del proveedor ya está vinculada a otra cuenta de Zeiras. No ha cambiado nada.',
+    ],
+    'provider_gia_collegato' => [
+        'title' => 'Proveedor ya vinculado',
+        'detail' => 'Tu cuenta ya tiene vinculada una cuenta de este proveedor: desvincúlala antes de vincular otra. No ha cambiado nada.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline no vacío',
         'detail' => 'Este pipeline aún tiene negociaciones abiertas y solo se archiva sin ellas: cierra o mueve antes sus negociaciones y vuelve a intentarlo.',

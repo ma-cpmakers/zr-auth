@@ -232,6 +232,10 @@ final class BackofficeFinto
         ['GET', '#^/v1/accessi/provider$#', 'accessi.provider.elenca'],
         ['POST', '#^/v1/accessi/provider/([^/]+)/autorizzazioni$#', 'accessi.provider.autorizzazioni.crea'],
         ['POST', '#^/v1/accessi/provider/([^/]+)$#', 'accessi.provider.crea'],
+        ['GET', '#^/v1/io/provider$#', 'io.provider.elenca'],
+        ['POST', '#^/v1/io/provider/([^/]+)/autorizzazioni$#', 'io.provider.autorizzazioni.crea'],
+        ['POST', '#^/v1/io/provider/([^/]+)$#', 'io.provider.crea'],
+        ['DELETE', '#^/v1/io/provider/([^/]+)$#', 'io.provider.elimina'],
         ['GET', '#^/v1/app$#', 'app.elenca'],
         ['PATCH', '#^/v1/app/([^/]+)$#', 'app.modifica'],
         ['POST', '#^/v1/gettoni$#', 'gettoni.crea'],
@@ -390,7 +394,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -642,11 +646,20 @@ final class BackofficeFinto
     /** @var array<string, array{id: string, email: string, verificata: bool, nome: ?string}> il profilo che il provider dà per un codice (identitaDelProvider()), per slug e codice */
     private array $profili = [];
 
-    /** @var array<string, array{provider: string, scade: CarbonImmutable, verificatore: string, ritorno: string}> le partenze che valgono, per stato */
+    /** @var array<string, array{provider: string, scade: CarbonImmutable, verificatore: string, ritorno: string, persona?: string}> le partenze che valgono, per stato (`persona`: quelle di io.provider.autorizzazioni.crea) */
     private array $partenze = [];
 
     /** @var array<string, string> la persona di ogni identità del provider, per slug e id del provider */
     private array $identita = [];
+
+    /** @var array<string, array<string, array{ordine: int, chiave: string, collegato_il: CarbonImmutable}>> i provider collegati di ogni persona: per persona e slug, la chiave in `identita` e l'istante */
+    private array $providerCollegati = [];
+
+    /** @var array<string, string> la persona di ogni identità scollegata con io.provider.elimina (archiviata nel backoffice), per slug e id del provider */
+    private array $identitaScollegate = [];
+
+    /** L'ordine in cui nascono i collegamenti (nel backoffice l'id): uno scollegato e rifatto ne ha uno nuovo. */
+    private int $ordineCollegamenti = 0;
 
     /** Il numero d'ordine dell'ultimo evento che consegna() ha fatto: cresce di uno a ogni consegna (`sequence`). */
     private int $sequenza = 0;
@@ -1388,6 +1401,10 @@ final class BackofficeFinto
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
                 'accessi.provider.crea' => $this->creaAccessoDalProvider($corpo, $parametri[0]),
+                'io.provider.elenca' => $this->elencaProviderCollegati($richiesta),
+                'io.provider.autorizzazioni.crea' => $this->creaAutorizzazioneCollegamento($richiesta, $corpo, $parametri[0]),
+                'io.provider.crea' => $this->collegaProvider($richiesta, $corpo, $parametri[0]),
+                'io.provider.elimina' => $this->scollegaProvider($richiesta, $parametri[0]),
                 'ricerca.elenca' => $this->elencaRicerca($richiesta),
                 'ricerca.crea' => $this->creaRicerca($richiesta, $corpo),
                 'board.cartelle.elenca' => $this->elencaCartelle($richiesta),
@@ -2723,11 +2740,22 @@ final class BackofficeFinto
         $this->frena('provider.autorizzazioni:'.$provider, self::FRENI['provider_partenza'], self::MINUTO);
         $ritorno = (string) ($this->testi->validaStretta($corpo, ['ritorno' => ['sometimes', 'bail', 'string', 'in:home,bookings']])['ritorno'] ?? 'home');
 
+        return $this->emettiPartenza($provider, $ritorno);
+    }
+
+    /**
+     * Lo stato, la sfida PKCE e l'indirizzo del provider: la partenza di chi entra e quella di chi collega un provider a un account
+     * aperto (`$persona`, io.provider.autorizzazioni.crea). Il verificatore resta nel finto.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function emettiPartenza(string $provider, string $ritorno, ?string $persona = null): array
+    {
         $stato = self::base64url(random_bytes(32));
         $verificatore = self::base64url(random_bytes(32));
         // Al millesimo, come il backoffice: la scadenza scritta nella risposta è quella vera.
         $scade = now()->toImmutable()->addSeconds(self::SECONDI_DELLO_STATO);
-        $this->partenze[$stato] = ['provider' => $provider, 'scade' => $scade, 'verificatore' => $verificatore, 'ritorno' => $ritorno];
+        $this->partenze[$stato] = ['provider' => $provider, 'scade' => $scade, 'verificatore' => $verificatore, 'ritorno' => $ritorno] + ($persona === null ? [] : ['persona' => $persona]);
 
         $url = self::PROVIDER[$provider]['indirizzo'].'?'.http_build_query([
             'response_type' => 'code',
@@ -2777,7 +2805,7 @@ final class BackofficeFinto
         $partenza = $this->partenze[$dati['stato']] ?? null;
         unset($this->partenze[$dati['stato']]);
 
-        if ($partenza === null || $partenza['scade']->lte(now()) || $partenza['provider'] !== $provider) {
+        if ($partenza === null || $partenza['scade']->lte(now()) || $partenza['provider'] !== $provider || isset($partenza['persona'])) {
             throw new Problema('verifica_non_riuscita', verifica: 'provider');
         }
 
@@ -2798,6 +2826,11 @@ final class BackofficeFinto
 
         $email = self::normalizza($profilo['email']);
         $persona = $this->identita[$provider.'|'.$profilo['id']] ?? null;
+
+        // Un'identità scollegata (io.provider.elimina) è archiviata: scollegata, non fa entrare e non si ricollega da qui.
+        if ($persona === null && isset($this->identitaScollegate[$provider.'|'.$profilo['id']])) {
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
 
         if ($persona === null) {
             $persona = $this->conEmail($email);
@@ -2840,7 +2873,12 @@ final class BackofficeFinto
                 }
             }
 
-            $this->identita[$provider.'|'.$profilo['id']] = $persona;
+            // Un'identità per provider e persona, anche scollegata: chi arriva con un altro id dello stesso provider non è chi si era collegato.
+            if (array_filter($this->identitaScollegate, fn (string $chi, string $chiave) => $chi === $persona && str_starts_with($chiave, $provider.'|'), ARRAY_FILTER_USE_BOTH) !== []) {
+                throw new Problema('verifica_non_riuscita', verifica: 'provider');
+            }
+
+            $this->registraIdentita($persona, $provider, $profilo['id']);
         } else {
             $this->controllaInvitoDelProvider($invito, $this->persone[$persona]['email'], $persona);
         }
@@ -2859,6 +2897,155 @@ final class BackofficeFinto
             ...($this->annullaLEliminazione($persona) ? ['eliminazione_annullata' => true] : []),
             'workspace_id' => $workspace,
         ]]];
+    }
+
+    /**
+     * Registra un'identità del provider come collegata alla persona (`identita`) con l'istante e l'ordine di nascita, che io.provider.elenca
+     * legge. Una scollegata e rifatta ha un ordine nuovo; la sua traccia di «scollegata» non conta più per quella chiave.
+     */
+    private function registraIdentita(string $persona, string $provider, string $id): void
+    {
+        $chiave = $provider.'|'.$id;
+        $this->identita[$chiave] = $persona;
+        $this->providerCollegati[$persona][$provider] = ['ordine' => ++$this->ordineCollegamenti, 'chiave' => $chiave, 'collegato_il' => now()->toImmutable()->startOfMillisecond()];
+        unset($this->identitaScollegate[$chiave]);
+    }
+
+    /**
+     * La riga di un provider collegato (ProviderCollegato): lo slug e l'istante. Mai l'email né l'id del provider.
+     *
+     * @param  array{ordine: int, chiave: string, collegato_il: CarbonImmutable}  $collegamento
+     * @return array{provider: string, collegato_il: string}
+     */
+    private static function voceProviderCollegato(string $provider, array $collegamento): array
+    {
+        return ['provider' => $provider, 'collegato_il' => self::iso($collegamento['collegato_il'])];
+    }
+
+    /**
+     * io.provider.elenca (IoProviderController::elenca, #2868): i provider collegati alla persona del gettone, dal collegamento più
+     * recente, a pagine. L'ordine di nascita non esce: la riga porta provider e collegato_il. Vale ogni gettone della persona.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaProviderCollegati(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $voci = [];
+
+        foreach ($this->providerCollegati[$chi['persona']] ?? [] as $provider => $collegamento) {
+            $voci[] = ['id' => sprintf('%010d', $collegamento['ordine'])] + self::voceProviderCollegato($provider, $collegamento);
+        }
+
+        [$stato, $corpo] = $this->pagina($richiesta, 'io.provider.elenca', 'id', $voci, fn (array $voce) => [$voce['id']], fn (string $id) => [$id], dalPiuRecente: true);
+        $corpo['data'] = array_map(fn (array $voce) => array_diff_key($voce, ['id' => true]), $corpo['data']);
+
+        return [$stato, $corpo];
+    }
+
+    /**
+     * io.provider.autorizzazioni.crea (IoProviderController::autorizzazioniCrea): la partenza di chi collega un provider, col gettone, senza
+     * corpo; lo stato è legato alla persona. Il freno è della persona e conta prima del provider, che spento o sconosciuto è 404.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaAutorizzazioneCollegamento(Request $richiesta, array $corpo, string $provider): array
+    {
+        $chi = $this->autentica($richiesta);
+        $this->frena('io-provider-partenza:'.$chi['persona'], self::FRENI['io_provider_partenza_per_persona'], self::ORA);
+
+        if (! isset($this->provider[$provider])) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->testi->validaStretta($corpo, []);
+
+        return $this->emettiPartenza($provider, 'home', $chi['persona']);
+    }
+
+    /**
+     * io.provider.crea (IoProviderController::crea, AccessoConProvider::collegaA): l'arrivo di chi collega un provider. Nell'ordine del
+     * backoffice: il freno della persona, il provider (404), il corpo, il freno dello stato, lo stato (si consuma una volta sola; sconosciuto,
+     * scaduto, già usato, di un altro provider, di un'altra persona o dell'accesso: 422 verifica_non_riuscita), il provider che non risponde (503)
+     * o rifiuta il codice (422). L'email del profilo non conta. Già collegata alla stessa persona 200 senza scrivere; di un'altra 409
+     * identita_gia_collegata; un altro account dello stesso provider già collegato 409 provider_gia_collegato; se no 201.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function collegaProvider(Request $richiesta, array $corpo, string $provider): array
+    {
+        $chi = $this->autentica($richiesta);
+        $this->frena('io-provider-arrivo:'.$chi['persona'], self::FRENI['io_provider_arrivo_per_persona'], self::ORA);
+
+        if (! isset($this->provider[$provider])) {
+            throw new Problema('non_trovato');
+        }
+
+        $dati = $this->testi->validaStretta($corpo, [
+            'codice' => ['required', 'string', 'max:2048'],
+            'stato' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
+        ]);
+        $this->frena('provider.crea:stato:'.hash('sha256', (string) $dati['stato']), self::FRENI['provider_stato'], self::MINUTO);
+
+        $partenza = $this->partenze[$dati['stato']] ?? null;
+        unset($this->partenze[$dati['stato']]);
+
+        if ($partenza === null || $partenza['scade']->lte(now()) || $partenza['provider'] !== $provider || ($partenza['persona'] ?? null) !== $chi['persona']) {
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
+
+        if (isset($this->provider_guasti[$provider])) {
+            throw new Problema('servizio_non_disponibile');
+        }
+
+        $profilo = $this->profili[$provider.'|'.$dati['codice']] ?? null;
+
+        if ($profilo === null) {
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
+
+        $chiave = $provider.'|'.$profilo['id'];
+        $di = $this->identita[$chiave] ?? null;
+
+        if ($di !== null) {
+            if ($di !== $chi['persona']) {
+                throw new Problema('identita_gia_collegata');
+            }
+
+            return [200, ['data' => self::voceProviderCollegato($provider, $this->providerCollegati[$chi['persona']][$provider])]];
+        }
+
+        if (isset($this->providerCollegati[$chi['persona']][$provider])) {
+            throw new Problema('provider_gia_collegato');
+        }
+
+        $this->registraIdentita($chi['persona'], $provider, $profilo['id']);
+
+        return [201, ['data' => self::voceProviderCollegato($provider, $this->providerCollegati[$chi['persona']][$provider])]];
+    }
+
+    /**
+     * io.provider.elimina (IoProviderController::elimina): scollega il provider, archiviando il collegamento: 204. Un provider che il finto
+     * non conosce, o non collegato, è 404; vale anche per un provider spento. L'identità scollegata non fa più entrare (accessi.provider.crea).
+     *
+     * @return array{int, null}
+     */
+    private function scollegaProvider(Request $richiesta, string $provider): array
+    {
+        $chi = $this->autentica($richiesta);
+        $this->frena('io-provider-elimina:'.$chi['persona'], self::FRENI['io_provider_elimina_per_persona'], self::ORA);
+
+        if (! isset(self::PROVIDER[$provider]) || ! isset($this->providerCollegati[$chi['persona']][$provider])) {
+            throw new Problema('non_trovato');
+        }
+
+        $chiave = $this->providerCollegati[$chi['persona']][$provider]['chiave'];
+        unset($this->identita[$chiave], $this->providerCollegati[$chi['persona']][$provider]);
+        $this->identitaScollegate[$chiave] = $chi['persona'];
+
+        return [204, null];
     }
 
     /**

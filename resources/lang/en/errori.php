@@ -217,6 +217,14 @@ return [
         'title' => 'Merged contact',
         'detail' => 'This contact was merged into another one (`unito_in`): it is the same person, so the erasure is requested on the contact that stays, or the merge is undone first. Nothing has changed.',
     ],
+    'identita_gia_collegata' => [
+        'title' => 'Identity already linked',
+        'detail' => 'This provider account is already linked to another Zeiras account. Nothing has changed.',
+    ],
+    'provider_gia_collegato' => [
+        'title' => 'Provider already linked',
+        'detail' => 'Your account already has an account from this provider linked: unlink it before linking another one. Nothing has changed.',
+    ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline not empty',
         'detail' => 'This pipeline still has open deals and can only be archived without them: close or move its deals first, then try again.',
