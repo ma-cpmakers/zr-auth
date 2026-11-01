@@ -4427,7 +4427,7 @@ final class BackofficeFinto
         }
 
         $this->datiAziende[$azienda] = [...$this->voceAzienda($azienda), ...$campi];
-        unset($this->datiAziende[$azienda]['id'], $this->datiAziende[$azienda]['nome']);
+        unset($this->datiAziende[$azienda]['id'], $this->datiAziende[$azienda]['nome'], $this->datiAziende[$azienda]['uscita_negata'], $this->datiAziende[$azienda]['uscita_negata_workspace']);
 
         return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto, 'accordo_trattamento_dati_da_accettare' => $this->accordoDaAccettare($azienda)]]];
     }
