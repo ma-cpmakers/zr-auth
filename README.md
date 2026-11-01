@@ -926,6 +926,16 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   la fa il backoffice: `['intestazioni' => [...], 'corpo' => '...']`, con i tre header di Standard Webhooks e il corpo nella
   forma di un evento del backoffice. L'`id` è un ULID nuovo a ogni chiamata, `sequence` cresce di uno a 12 cifre, e la firma
   è quella del ricevitore col segreto di `zr-auth.eventi.segreto`. Vedi «Gli eventi del backoffice: il ricevitore».
+- **Gli eventi di un workspace** (#2853). `eventi.elenca` (`GET /v1/eventi`) e `eventi.ultimo.mostra` (`GET /v1/eventi/ultimo`)
+  rispondono col gettone di un workspace (qualunque ruolo; senza gettone `401`, con quello dell'accesso `403`
+  `gettone_senza_workspace`) dal log del workspace. Il finto non modella gli eventi che le scritture lasciano nel
+  backoffice: ogni workspace nasce con `com.zeiras.workspace.creato` (`sequence` `000000000001`), gli altri li mette il test con
+  `registraEvento($workspace, $tipo, $subject, $data = [], $istante = null, $autore = null, $causa = null)`, che dà l'evento
+  com'è in lista. Il `sequence` è per workspace, cresce di uno e ha 12 cifre. La lista è in ordine di `sequence` e dà gli
+  eventi degli ultimi 30 giorni dal loro `time` (l'istante dato al test, adesso se manca); `dopo` (da 1 a 12 cifre, anche
+  senza gli zeri davanti) parte dall'evento dopo, `limite` e `cursore` impaginano, `dopo` insieme al `cursore` è `422` su
+  `dopo`. Se l'evento subito dopo `dopo` (o dopo il cursore) ha più di 30 giorni, o `dopo` sta oltre l'ultimo, è `410`
+  `cursore_scaduto`; `dopo` uguale all'ultimo dà la lista vuota. `eventi.ultimo.mostra` dà l'ultimo anche se vecchio.
 - La registrazione è chiusa come nel backoffice: ogni `utenti.crea` è `403` `registrazione_non_aperta`, finché il test
   non dà la lista dei consentiti con `consenti('bruno@altro.it', '@example.com')` (un'email intera o un dominio, per
   uguaglianza) o la apre a tutti con `apri()`, che vale solo con Turnstile acceso, come il backoffice che si apre solo

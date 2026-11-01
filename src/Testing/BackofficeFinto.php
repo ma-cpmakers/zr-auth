@@ -37,6 +37,7 @@ use Zeiras\Auth\Testing\Finto\CrmProfili;
 use Zeiras\Auth\Testing\Finto\CrmScadenze;
 use Zeiras\Auth\Testing\Finto\CrmUnioni;
 use Zeiras\Auth\Testing\Finto\CrmValori;
+use Zeiras\Auth\Testing\Finto\Eventi;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
@@ -91,6 +92,7 @@ final class BackofficeFinto
     use CrmScadenze;
     use CrmUnioni;
     use CrmValori;
+    use Eventi;
     use Todo;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
@@ -233,6 +235,8 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/aziende/([^/]+)$#', 'aziende.modifica'],
         ['GET', '#^/v1/aziende/([^/]+)/workspace$#', 'aziende.workspace.elenca'],
         ['GET', '#^/v1/io/aziende$#', 'io.aziende.elenca'],
+        ['GET', '#^/v1/eventi$#', 'eventi.elenca'],
+        ['GET', '#^/v1/eventi/ultimo$#', 'eventi.ultimo.mostra'],
         ['POST', '#^/v1/io/inviti/verifica$#', 'io.inviti.verifica.crea'],
         ['PATCH', '#^/v1/io$#', 'io.modifica'],
         ['DELETE', '#^/v1/io$#', 'io.elimina'],
@@ -1008,6 +1012,7 @@ final class BackofficeFinto
         // data: più workspace nella stessa azienda, per il ruolo più alto e l'elenco di aziende.mostra (#1590).
         $this->workspace[$id] = ['id' => $id, 'nome' => $nome, 'slug' => $this->nuovoSlug($nome), 'azienda_id' => $azienda ?? $this->nuovaAzienda($nome), 'settore' => null, 'lingua_contenuti' => null];
         $this->membro($this->workspace[$id], $proprietaria, 'proprietario');
+        $this->nascitaDelWorkspace($id, $proprietaria['id']);
 
         return $this->workspace[$id];
     }
@@ -1426,6 +1431,8 @@ final class BackofficeFinto
                 'aziende.modifica' => $this->modificaAzienda($richiesta, $corpo, $parametri[0]),
                 'aziende.workspace.elenca' => $this->elencaWorkspaceDellAzienda($richiesta, $parametri[0]),
                 'io.aziende.elenca' => $this->elencaAziende($richiesta),
+                'eventi.elenca' => $this->elencaEventi($richiesta),
+                'eventi.ultimo.mostra' => $this->mostraUltimoEvento($richiesta),
                 'io.inviti.verifica.crea' => $this->verificaInvitoIo($richiesta, $corpo),
                 'io.workspace.elenca' => $this->elencaWorkspace($richiesta),
                 'io.workspace.crea' => $this->creaWorkspaceDellaPersona($richiesta, $corpo),
@@ -4594,6 +4601,7 @@ final class BackofficeFinto
             }
 
             $this->entra($id, $persona, 'proprietario');
+            $this->nascitaDelWorkspace($id, $persona);
             // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
             $this->attive[$id]['pm'] = true;
 
