@@ -285,6 +285,10 @@ return [
         'title' => 'Only administrator',
         'detail' => 'You are the only administrator of this workspace and cannot leave it: first appoint another administrator with `workspace.membri.modifica`, then repeat the request. Nothing was written.',
     ],
+    'eliminazione_programmata' => [
+        'title' => 'Deletion scheduled',
+        'detail' => 'All your workspaces in this company are scheduled for deletion: there is nothing to leave. The problem carries `workspace_da_eliminare` next to the code, those workspaces (id and name). To keep them, restore them before the deadline (`io.workspace.eliminazione.elimina`); otherwise they will go on their own. Nothing was written.',
+    ],
     'indirizzo_occupato' => [
         'title' => 'Address already in use',
         'detail' => 'The address is already in use: a Bookings page address is unique across all of Zeiras, a calendar address is unique within its page. The problem carries `proposta` next to the code, a free address; pick another and repeat the request. Nothing was written.',
@@ -383,7 +387,7 @@ return [
     ],
     'funzione_spenta' => [
         'title' => 'Function is off',
-        'detail' => "The function for this board's sector (construction or digital) is off in the workspace, so the board's function cannot be turned on. Boards that are already on stay on. Turn the function on first with board.funzioni.modifica (owner or administrator role required) and repeat the request. The method has written nothing.",
+        'detail' => "The function for this board's sector (construction or digital) is off in the workspace, so the board's function cannot be turned on. The value already written in other boards does not change, but while the function is off their `funzione_attiva` reads false. Turn the function on first with board.funzioni.modifica (owner or administrator role required) and repeat the request. The method has written nothing.",
     ],
     'epica_con_figlie' => [
         'title' => 'Epic with children',

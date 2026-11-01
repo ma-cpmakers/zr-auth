@@ -285,6 +285,10 @@ return [
         'title' => 'Único administrador',
         'detail' => 'Eres el único administrador de este espacio de trabajo y no puedes abandonarlo: nombra primero a otro administrador con `workspace.membri.modifica` y repite la petición. No se escribió nada.',
     ],
+    'eliminazione_programmata' => [
+        'title' => 'Eliminación programada',
+        'detail' => 'Todos tus espacios de trabajo de esta empresa tienen la eliminación programada: no hay nada que abandonar. El problema lleva junto al código `workspace_da_eliminare`, esos espacios (id y nombre). Para conservarlos, restáuralos antes del plazo (`io.workspace.eliminazione.elimina`); si no, desaparecerán solos. No se escribió nada.',
+    ],
     'indirizzo_occupato' => [
         'title' => 'Dirección ya en uso',
         'detail' => 'La dirección ya está en uso: la de una página de Bookings es única en todo Zeiras, la de un calendario es única dentro de su página. El problema lleva `proposta` junto al código, una dirección libre; elige otra y repite la petición. No se escribió nada.',
@@ -383,7 +387,7 @@ return [
     ],
     'funzione_spenta' => [
         'title' => 'Función apagada',
-        'detail' => 'La función del sector de este tablero (construcción o digital) está apagada en el workspace, por lo que la función del tablero no se enciende. Los tableros ya encendidos siguen encendidos. Enciende antes la función con board.funzioni.modifica (se necesita el rol de propietario o administrador) y repite la solicitud. El método no ha escrito nada.',
+        'detail' => 'La función del sector de este tablero (construcción o digital) está apagada en el workspace, por lo que la función del tablero no se enciende. El valor ya escrito en los otros tableros no cambia, pero mientras la función esté apagada su `funzione_attiva` dice false. Enciende antes la función con board.funzioni.modifica (se necesita el rol de propietario o administrador) y repite la solicitud. El método no ha escrito nada.',
     ],
     'epica_con_figlie' => [
         'title' => 'Épica con hijas',

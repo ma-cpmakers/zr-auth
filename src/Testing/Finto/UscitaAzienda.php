@@ -12,8 +12,9 @@ use Illuminate\Http\Client\Request;
 trait UscitaAzienda
 {
     /**
-     * Per ogni azienda in cui la persona è membro di almeno un workspace vivo (senza un'eliminazione programmata): l'ostacolo (il codice del 409 o
-     * null), i workspace che lo causano `[{id, nome}]` e i workspace vivi che lascerebbe. Per gravità: `proprieta_da_trasferire` (proprietaria di
+     * Per ogni azienda in cui la persona è membro di almeno un workspace: l'ostacolo (il codice del 409 o null), i workspace che lo causano
+     * `[{id, nome}]` e i workspace vivi che lascerebbe (senza un'eliminazione programmata). Se tutti i suoi sono in eliminazione programmata:
+     * `eliminazione_programmata`, quelli, e nessun workspace vivo. Altrimenti, per gravità: `proprieta_da_trasferire` (proprietaria di
      * almeno uno: quelli), `ultimo_workspace` (dopo l'uscita non le resta nessun workspace vivo in nessuna azienda: quelli che lascerebbe),
      * `unico_amministratore` (l'unica amministratrice di almeno uno, il proprietario non conta: quelli). Nell'ordine degli id, come il backoffice.
      *
@@ -21,8 +22,9 @@ trait UscitaAzienda
      */
     private function ostacoliDelleAziende(string $persona): array
     {
-        $vivi = array_keys(array_filter($this->membri, fn (array $ruoli, string $workspace) => isset($ruoli[$persona]) && ! isset($this->eliminazioni[$workspace]), ARRAY_FILTER_USE_BOTH));
-        sort($vivi);
+        $suoi = array_keys(array_filter($this->membri, fn (array $ruoli) => isset($ruoli[$persona])));
+        sort($suoi);
+        $vivi = array_values(array_filter($suoi, fn (string $workspace) => ! isset($this->eliminazioni[$workspace])));
         $perAzienda = [];
 
         foreach ($vivi as $workspace) {
@@ -31,6 +33,19 @@ trait UscitaAzienda
 
         $voci = fn (array $elenco) => array_map(fn (string $workspace) => ['id' => $workspace, 'nome' => $this->workspace[$workspace]['nome']], $elenco);
         $esiti = [];
+
+        // Un'azienda in cui tutti i suoi workspace hanno l'eliminazione programmata non ha niente da lasciare, ma c'è: lo dice, non è un 404 muto.
+        foreach (array_diff($suoi, $vivi) as $workspace) {
+            $azienda = $this->workspace[$workspace]['azienda_id'];
+
+            if (! isset($perAzienda[$azienda])) {
+                $esiti[$azienda]['workspace'][] = $workspace;
+            }
+        }
+
+        foreach ($esiti as $azienda => $inUscita) {
+            $esiti[$azienda] = ['ostacolo' => 'eliminazione_programmata', 'workspace' => $voci($inUscita['workspace']), 'vivi' => []];
+        }
 
         foreach ($perAzienda as $azienda => $suoi) {
             $proprietari = array_values(array_filter($suoi, fn (string $workspace) => $this->membri[$workspace][$persona] === 'proprietario'));
@@ -52,9 +67,9 @@ trait UscitaAzienda
 
     /**
      * io.aziende.uscita.crea (IoAziendeController::uscita): la persona lascia tutti i workspace vivi dell'azienda di cui è membro, con qualunque
-     * suo gettone. Nell'ordine del backoffice: il gettone, il corpo (422, nessun campo), poi 404 se in quell'azienda non ha nessun workspace vivo
+     * suo gettone. Nell'ordine del backoffice: il gettone, il corpo (422, nessun campo), poi 404 se in quell'azienda non è membro di nessun workspace
      * (o non c'è: lo stesso per tutti), il 409 col suo codice e i workspace coinvolti accanto (`workspace_da_trasferire`, `workspace_da_lasciare`,
-     * `workspace_senza_amministratore`), altrimenti 204. I gettoni di quei workspace smettono di valere; quello dell'accesso resta.
+     * `workspace_senza_amministratore`, `workspace_da_eliminare`), altrimenti 204. I gettoni di quei workspace smettono di valere; quello dell'accesso resta.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, null}
@@ -70,6 +85,7 @@ trait UscitaAzienda
             $chiave = match ($esito['ostacolo']) {
                 'proprieta_da_trasferire' => 'workspace_da_trasferire',
                 'ultimo_workspace' => 'workspace_da_lasciare',
+                'eliminazione_programmata' => 'workspace_da_eliminare',
                 default => 'workspace_senza_amministratore',
             };
 
