@@ -268,4 +268,7 @@ return [
     'vies_paese_non_ue' => 'El VIES solo verifica números de IVA de países de la UE: el país de este perfil no lo es.',
     'predefinito_archiviato' => 'Un elemento archivado no es el predeterminado: restáuralo (`archiviato: false`) antes de hacerlo predeterminado.',
     'predefinito_non_si_toglie' => 'El predeterminado no se quita: haz predeterminado otro elemento y este deja de serlo.',
+    'foto_peso' => 'La foto pesa demasiado: 2 MB como máximo.',
+    'foto_formato' => 'La foto debe ser un archivo JPEG, PNG o WebP que se pueda leer (un WebP animado o un archivo roto no vale).',
+    'foto_lato' => 'La foto tiene un lado de más de :lato píxeles.',
 ];

@@ -52,6 +52,10 @@ return [
         'title' => 'Risorsa non trovata',
         'detail' => 'La risorsa indicata nel percorso non esiste o non si può vedere col gettone.',
     ],
+    'foto_assente' => [
+        'title' => 'Foto assente',
+        'detail' => 'La persona non ha una foto: caricala con `io.foto.modifica`. Niente è cambiato.',
+    ],
     'metodo_non_ammesso' => [
         'title' => 'Metodo non ammesso',
         'detail' => "Il percorso non accetta questo metodo HTTP: quelli ammessi sono nell'header Allow.",

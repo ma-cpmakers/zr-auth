@@ -52,6 +52,10 @@ return [
         'title' => 'Resource not found',
         'detail' => 'The resource in the path does not exist or cannot be seen with the token.',
     ],
+    'foto_assente' => [
+        'title' => 'Photo missing',
+        'detail' => 'The person has no photo: upload one with `io.foto.modifica`. Nothing has changed.',
+    ],
     'metodo_non_ammesso' => [
         'title' => 'Method not allowed',
         'detail' => 'The path does not accept this HTTP method: the allowed ones are in the Allow header.',

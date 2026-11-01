@@ -52,6 +52,10 @@ return [
         'title' => 'Recurso no encontrado',
         'detail' => 'El recurso indicado en la ruta no existe o no se puede ver con el token.',
     ],
+    'foto_assente' => [
+        'title' => 'Foto ausente',
+        'detail' => 'La persona no tiene foto: súbela con `io.foto.modifica`. No ha cambiado nada.',
+    ],
     'metodo_non_ammesso' => [
         'title' => 'Método no permitido',
         'detail' => 'La ruta no acepta este método HTTP: los permitidos están en la cabecera Allow.',

@@ -287,6 +287,9 @@ final class BackofficeFinto
         ['GET', '#^/v1/moduli/interesse$#', 'moduli.interesse.elenca'],
         ['POST', '#^/v1/moduli/([^/]+)/interesse$#', 'moduli.interesse.crea'],
         ['DELETE', '#^/v1/moduli/([^/]+)/interesse$#', 'moduli.interesse.elimina'],
+        ['PATCH', '#^/v1/io/foto$#', 'io.foto.modifica'],
+        ['DELETE', '#^/v1/io/foto$#', 'io.foto.elimina'],
+        ['GET', '#^/v1/io/foto/file$#', 'io.foto.file.mostra'],
         ['GET', '#^/v1/workspace/link$#', 'workspace.link.mostra'],
         ['POST', '#^/v1/workspace/link$#', 'workspace.link.crea'],
         ['DELETE', '#^/v1/workspace/link$#', 'workspace.link.elimina'],
@@ -394,7 +397,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'io_foto_modifica_per_persona' => 20, 'io_foto_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -592,6 +595,9 @@ final class BackofficeFinto
     /** @var array<string, array<string, array{id: string, richiesto_il: string}>> le richieste «Avvisami al lancio» vive di ogni persona: per persona, il codice del modulo */
     private array $moduliInteresse = [];
 
+    /** @var array<string, array{etag: string}> la foto viva di ogni persona (FotoPersona del backoffice, #2870): l'impronta del file caricato; il file servito è sempre uno stesso WebP minimo */
+    private array $foto = [];
+
     /** L'ordine in cui nascono le richieste di avviso (nel backoffice l'id): una richiesta tolta e rifatta ne ha uno nuovo. */
     private int $ordineInteresse = 0;
 
@@ -742,6 +748,7 @@ final class BackofficeFinto
             'telefono' => null,
             'formato_data' => null,
             'inizio_settimana' => null,
+            'foto_aggiornata_il' => null,
             'email' => $email,
             'email_verificata_il' => $verificata ? now()->toImmutable() : null,
             'lingua' => $lingua,
@@ -1477,6 +1484,9 @@ final class BackofficeFinto
                 'moduli.interesse.elenca' => $this->elencaModuliInteresse($richiesta),
                 'moduli.interesse.crea' => $this->chiediAvvisoModulo($richiesta, $parametri[0]),
                 'moduli.interesse.elimina' => $this->togliAvvisoModulo($richiesta, $parametri[0]),
+                'io.foto.modifica' => $this->caricaFoto($richiesta),
+                'io.foto.elimina' => $this->togliFoto($richiesta),
+                'io.foto.file.mostra' => $this->leggiFoto($richiesta),
                 'io.mostra' => $this->mostraIo($richiesta),
                 'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
                 'io.notifiche.preferenze.mostra' => $this->mostraPreferenzeDiNotifica($richiesta),
@@ -2856,6 +2866,7 @@ final class BackofficeFinto
                     'telefono' => null,
                     'formato_data' => null,
                     'inizio_settimana' => null,
+                    'foto_aggiornata_il' => null,
                     'email' => $email,
                     'email_verificata_il' => now()->toImmutable(),
                     'lingua' => 'it',
@@ -3341,6 +3352,133 @@ final class BackofficeFinto
     }
 
     /**
+     * io.foto.modifica (IoFotoController::modifica, #2870): la foto della persona del gettone, `multipart/form-data` col solo campo `file`. Il finto non
+     * ridisegna l'immagine: controlla il peso (2 MB), il formato (JPEG, PNG o WebP dai primi byte) e, per un PNG, il lato (4000 px), e tiene l'impronta
+     * del file; `200` con `aggiornata_il`, che cresce di almeno un millisecondo a ogni sostituzione. Un campo di testo in più è `campo_estraneo`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function caricaFoto(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $this->frena('io-foto-modifica:'.$chi['persona'], self::FRENI['io_foto_modifica_per_persona'], self::ORA);
+
+        $file = null;
+        $errori = [];
+
+        foreach ($richiesta->isMultipart() ? $richiesta->data() : [] as $parte) {
+            if (! is_array($parte) || ! isset($parte['name'])) {
+                continue;
+            }
+
+            if ($parte['name'] === 'file' && isset($parte['filename'])) {
+                $contenuto = $parte['contents'] ?? '';
+                $file = is_resource($contenuto) ? (string) stream_get_contents($contenuto) : (string) $contenuto;
+
+                continue;
+            }
+
+            $errori[] = ['detail' => $this->testi->testo('validation.prohibited', ['attribute' => $this->testi->nome((string) $parte['name'])]), 'regola' => 'campo_estraneo', 'pointer' => '#/'.$parte['name']];
+        }
+
+        if ($file === null) {
+            $errori[] = ['detail' => $this->testi->testo('validation.required', ['attribute' => $this->testi->nome('file')]), 'regola' => 'obbligatorio', 'pointer' => '#/file'];
+        }
+
+        if ($errori === [] && $file !== null) {
+            $errore = $this->erroreDellaFoto($file);
+
+            if ($errore !== null) {
+                $errori[] = $errore;
+            }
+        }
+
+        if ($errori !== [] || $file === null) {
+            throw new Problema('dati_non_validi', $errori);
+        }
+
+        $prima = $this->persone[$chi['persona']]['foto_aggiornata_il'];
+        $ora = now()->toImmutable()->startOfMillisecond();
+        $this->persone[$chi['persona']]['foto_aggiornata_il'] = $prima !== null && $ora->lte($prima) ? $prima->addMillisecond() : $ora;
+        $this->foto[$chi['persona']] = ['etag' => hash('sha256', $file)];
+
+        return [200, ['data' => ['aggiornata_il' => self::iso($this->persone[$chi['persona']]['foto_aggiornata_il'])]]];
+    }
+
+    /**
+     * Il primo rifiuto di un file di foto (FotoDellaPersona::riduci): più grande di 2 MB, di un formato che non è JPEG, PNG o WebP, o con un lato
+     * oltre 4000 px (letto solo da un PNG: il finto non apre un JPEG).
+     *
+     * @return array{detail: string, regola: string, pointer: string}|null
+     */
+    private function erroreDellaFoto(string $file): ?array
+    {
+        if (strlen($file) > 2 * 1024 * 1024) {
+            return ['detail' => $this->testi->testo('regole.foto_peso'), 'regola' => 'troppo_lungo', 'pointer' => '#/file'];
+        }
+
+        $png = str_starts_with($file, "\x89PNG\r\n\x1a\n");
+        $formato = str_starts_with($file, "\xFF\xD8\xFF") || $png || (str_starts_with($file, 'RIFF') && substr($file, 8, 4) === 'WEBP');
+
+        if (! $formato) {
+            return ['detail' => $this->testi->testo('regole.foto_formato'), 'regola' => 'formato', 'pointer' => '#/file'];
+        }
+
+        if ($png && strlen($file) >= 24) {
+            /** @var array{larghezza: int, altezza: int} $lati */
+            $lati = unpack('Nlarghezza/Naltezza', substr($file, 16, 8));
+
+            if ($lati['larghezza'] > 4000 || $lati['altezza'] > 4000) {
+                return ['detail' => $this->testi->testo('regole.foto_lato', ['lato' => 4000]), 'regola' => 'fuori_intervallo', 'pointer' => '#/file'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * io.foto.elimina (IoFotoController::elimina): toglie la foto, 204 (`foto_aggiornata_il` torna null); senza una foto viva è 404 foto_assente.
+     *
+     * @return array{int, null}
+     */
+    private function togliFoto(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $this->frena('io-foto-elimina:'.$chi['persona'], self::FRENI['io_foto_elimina_per_persona'], self::ORA);
+
+        if (! isset($this->foto[$chi['persona']])) {
+            throw new Problema('foto_assente');
+        }
+
+        unset($this->foto[$chi['persona']]);
+        $this->persone[$chi['persona']]['foto_aggiornata_il'] = null;
+
+        return [204, null];
+    }
+
+    /**
+     * io.foto.file.mostra (IoFotoController::fileMostra): il file della foto, `200` `image/webp` con l'ETag forte (l'impronta del file) e
+     * `Cache-Control: private, max-age=300`; `If-None-Match` uguale (anche debole, o `*`) è 304 senza corpo. Senza foto 404 foto_assente.
+     * Il corpo è un WebP minimo, lo stesso per tutti.
+     *
+     * @return array{0: int, 1: ?string, 2: array<string, string>}
+     */
+    private function leggiFoto(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $foto = $this->foto[$chi['persona']] ?? throw new Problema('foto_assente');
+        $etag = '"'.$foto['etag'].'"';
+        $header = ['ETag' => $etag, 'Cache-Control' => 'private, max-age=300', 'X-Content-Type-Options' => 'nosniff'];
+        $chiesti = array_map(fn (string $voce) => preg_replace('#^W/#', '', trim($voce)), explode(',', self::header($richiesta, 'If-None-Match') ?? ''));
+
+        if (in_array($etag, $chiesti, true) || in_array('*', $chiesti, true)) {
+            return [304, null, $header];
+        }
+
+        return [200, base64_decode('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', true) ?: '', $header + ['Content-Type' => 'image/webp']];
+    }
+
+    /**
      * Se un ospite può diventare utente dei workspace (Legale::puoDiventareUtente, #2574): la registrazione aperta o l'email nella lista
      * dei consentiti (consente()), o un invito vivo per quell'email, di un workspace qualsiasi.
      */
@@ -3717,6 +3855,7 @@ final class BackofficeFinto
                 'telefono' => null,
                 'formato_data' => null,
                 'inizio_settimana' => null,
+                'foto_aggiornata_il' => null,
                 'email' => $email,
                 // L'invito è arrivato a quell'indirizzo: la persona che lo accetta ha già verificato l'email.
                 'email_verificata_il' => $invito === null ? null : now()->toImmutable(),
@@ -6404,6 +6543,7 @@ final class BackofficeFinto
                 'telefono' => null,
                 'formato_data' => null,
                 'inizio_settimana' => null,
+                'foto_aggiornata_il' => null,
                 'email' => $email,
                 'email_verificata_il' => now()->toImmutable(),
                 'lingua' => Testi::dellaRichiesta(self::header($richiesta, 'Accept-Language')),
@@ -6585,6 +6725,7 @@ final class BackofficeFinto
             'cognome' => $persona['cognome'],
             'mansione' => $persona['mansione'],
             'telefono' => $persona['telefono'],
+            'foto_aggiornata_il' => $persona['foto_aggiornata_il'] === null ? null : self::iso($persona['foto_aggiornata_il']),
         ];
     }
 

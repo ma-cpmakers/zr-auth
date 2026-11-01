@@ -269,4 +269,7 @@ return [
     'vies_paese_non_ue' => "Il VIES verifica solo le partite IVA dei paesi dell'UE: il paese di questo profilo non lo è.",
     'predefinito_archiviato' => 'Un elemento archiviato non è il predefinito: ripristinalo (`archiviato: false`) prima di renderlo predefinito.',
     'predefinito_non_si_toglie' => 'Il predefinito non si toglie: rendi predefinito un altro elemento e questo smette di esserlo.',
+    'foto_peso' => 'La foto pesa troppo: al più 2 MB.',
+    'foto_formato' => 'La foto deve essere un file JPEG, PNG o WebP che si legge (un WebP animato o un file rotto non vale).',
+    'foto_lato' => 'La foto ha un lato oltre i :lato pixel.',
 ];

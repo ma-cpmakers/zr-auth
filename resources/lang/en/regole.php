@@ -268,4 +268,7 @@ return [
     'vies_paese_non_ue' => "VIES only checks VAT numbers of EU countries: this profile's country is not one.",
     'predefinito_archiviato' => 'An archived item is not the default: restore it (`archiviato: false`) before making it the default.',
     'predefinito_non_si_toglie' => 'The default cannot be removed: make another item the default and this one stops being it.',
+    'foto_peso' => 'The photo is too heavy: 2 MB at most.',
+    'foto_formato' => 'The photo must be a readable JPEG, PNG or WebP file (an animated WebP or a broken file is not valid).',
+    'foto_lato' => 'The photo has a side over :lato pixels.',
 ];

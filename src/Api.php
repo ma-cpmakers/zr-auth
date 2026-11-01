@@ -43,6 +43,12 @@ final class Api
 
     private function __construct(private readonly ?string $gettone) {}
 
+    /** I tipi di un'immagine di `immagine()` (#2870). */
+    public const IMMAGINI = ['image/webp', 'image/jpeg', 'image/png'];
+
+    /** Il peso massimo di un'immagine di `immagine()`, in byte: sta in memoria, quindi un tetto (la foto della persona è al più 512 KB). */
+    public const IMMAGINE_MASSIMA = 512 * 1024;
+
     /** Senza gettone: i metodi che lo fanno nascere (accessi.crea) o che non lo vogliono (utenti.crea). */
     public static function senzaGettone(): self
     {
@@ -112,6 +118,38 @@ final class Api
     }
 
     /**
+     * Un'immagine di /v1 (la foto della persona, `io.foto.file.mostra`, #2870): una GET che torna un file piccolo, in memoria, e non JSON. Come
+     * `condizionale()`: con la `versione` che chi chiama ha avuto (l'`etag` della risposta di prima, com'è) manda `If-None-Match`, e un 304 torna
+     * `['stato' => 304, 'etag' => …, 'tipo' => null, 'corpo' => null]`. Un 200 torna `['stato' => 200, 'etag' => ?string, 'tipo' => il tipo,
+     * 'corpo' => i byte]`; il tipo è uno di `IMMAGINI` e il file non supera `IMMAGINE_MASSIMA` byte, altrimenti `BackofficeNonRisponde`. Gli errori
+     * sono quelli di get(): il 404 `foto_assente` è un `ErroreApi`. Il percorso è dentro /v1 senza query.
+     *
+     * @return array{stato: 200|304, etag: ?string, tipo: ?string, corpo: ?string}
+     */
+    public function immagine(string $percorso, ?string $versione = null): array
+    {
+        if ($versione !== null && ! self::entityTag($versione)) {
+            throw new InvalidArgumentException('La versione dev\'essere un entity-tag («"abc"» o «W/"abc"»), com\'è arrivata nell\'etag.');
+        }
+
+        $esito = $this->controllata(
+            fn (PendingRequest $richiesta) => ($versione === null ? $richiesta : $richiesta->withHeaders(['If-None-Match' => $versione]))->get($percorso),
+            $percorso,
+            true,
+            $versione,
+            false,
+            true,
+        );
+
+        if (! is_array($esito)) {
+            throw new LogicException('Una chiamata a un\'immagine torna un array.');
+        }
+
+        /** @var array{stato: 200|304, etag: ?string, tipo: ?string, corpo: ?string} $esito */
+        return $esito;
+    }
+
+    /**
      * @param  array<string, mixed>  $corpo
      * @param  array<string, string>  $header
      * @return array<mixed>
@@ -119,6 +157,20 @@ final class Api
     public function post(string $percorso, array $corpo = [], array $header = []): array
     {
         return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->withHeaders($header)->post($percorso, $corpo), $percorso);
+    }
+
+    /**
+     * Una PATCH `multipart/form-data` con un solo file (la foto della persona, `io.foto.modifica`, #2870): `$campo` è il nome del campo (`file`), `$contenuto` i
+     * byte e `$nome` il nome che il browser aveva. Il backoffice rilegge il file e non si fida del nome né del tipo. Gli errori sono quelli di ogni chiamata:
+     * il 422 sul pointer `#/file` è un `ErroreApi`.
+     *
+     *     Api::persona()->caricaFile('/v1/io/foto', 'file', $contenuto, 'foto.jpg');
+     *
+     * @return array<mixed>
+     */
+    public function caricaFile(string $percorso, string $campo, string $contenuto, string $nome): array
+    {
+        return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->attach($campo, $contenuto, $nome)->patch($percorso), $percorso);
     }
 
     /**
@@ -304,12 +356,13 @@ final class Api
 
     /**
      * Il percorso, la spedizione e i controlli che ogni chiamata ha in comune: il freno letto, un 3xx, il gettone rifiutato (401),
-     * l'errore di /v1. Con `$flusso` una risposta riuscita torna com'è, col corpo ancora da leggere (`scarica`); altrimenti il suo JSON.
+     * l'errore di /v1. Con `$flusso` una risposta riuscita torna com'è, col corpo ancora da leggere (`scarica`); con `$immagine` torna il file
+     * piccolo (`immagine`); altrimenti il suo JSON.
      *
      * @param  \Closure(PendingRequest): Response  $invia
      * @return array<mixed>|Response
      */
-    private function controllata(\Closure $invia, string $percorso, bool $condizionale, ?string $versione, bool $flusso): array|Response
+    private function controllata(\Closure $invia, string $percorso, bool $condizionale, ?string $versione, bool $flusso, bool $immagine = false): array|Response
     {
         // Niente resta della chiamata prima: una chiamata che non parte, o un guasto del trasporto, lascia nessun freno noto.
         $this->freni = null;
@@ -317,7 +370,7 @@ final class Api
         // Il gettone va solo al backoffice: un percorso che porta altrove (un indirizzo intero, `//host`) non parte. La query
         // sta in `$query`: in un GET Guzzle sostituirebbe in silenzio quella scritta nel percorso.
         // Uno scaricamento vuole di più: `/v1` o `/v1/…` e nessun segmento `..` (`/v1/../up` resterebbe sullo stesso host, ma fuori da /v1).
-        $dentro = ! $flusso || ($percorso === '/v1' || str_starts_with($percorso, '/v1/')) && ! str_contains($percorso, '/..') && ! str_contains($percorso, '\\');
+        $dentro = ! ($flusso || $immagine) || ($percorso === '/v1' || str_starts_with($percorso, '/v1/')) && ! str_contains($percorso, '/..') && ! str_contains($percorso, '\\');
 
         if (! str_starts_with($percorso, '/v1') || ! $dentro || str_contains($percorso, '?') || str_contains($percorso, '#')) {
             throw new InvalidArgumentException("Il percorso dev'essere un percorso di /v1 («/v1/…»), senza query: non «{$percorso}».");
@@ -329,7 +382,7 @@ final class Api
             // Un redirect non si segue (R31): un 307 rimanderebbe il corpo, una password compresa, al Location, e il tetto
             // di tempo varrebbe per ogni salto.
             ->withoutRedirecting()
-            ->accept($flusso ? implode(', ', Scaricamento::TIPI) : 'application/json')
+            ->accept($flusso ? implode(', ', Scaricamento::TIPI) : ($immagine ? implode(', ', self::IMMAGINI) : 'application/json'))
             ->withHeaders(['Accept-Language' => app()->getLocale()]);
 
         if ($this->gettone !== null) {
@@ -356,7 +409,9 @@ final class Api
                 throw new BackofficeNonRisponde('Il backoffice ha risposto 304 a una GET senza condizione.');
             }
 
-            return ['stato' => 304, 'etag' => self::etag($risposta), 'corpo' => null];
+            return $immagine
+                ? ['stato' => 304, 'etag' => self::etag($risposta), 'tipo' => null, 'corpo' => null]
+                : ['stato' => 304, 'etag' => self::etag($risposta), 'corpo' => null];
         }
 
         // Un redirect non è mai un problema di /v1 (RFC 9457): è nginx o il trasporto, non il backoffice che risponde
@@ -387,6 +442,20 @@ final class Api
 
         if ($flusso) {
             return $risposta;
+        }
+
+        if ($immagine) {
+            $tipo = strtolower(trim(explode(';', (string) $risposta->header('Content-Type'))[0]));
+
+            if ($risposta->status() !== 200 || ! in_array($tipo, self::IMMAGINI, true)) {
+                throw new BackofficeNonRisponde("Il backoffice ha risposto {$risposta->status()} a un'immagine, non un 200 con un tipo che vale.");
+            }
+
+            if (strlen($risposta->body()) > self::IMMAGINE_MASSIMA) {
+                throw new BackofficeNonRisponde("Il backoffice ha mandato un'immagine oltre i ".self::IMMAGINE_MASSIMA.' byte.');
+            }
+
+            return ['stato' => 200, 'etag' => self::etag($risposta), 'tipo' => $tipo, 'corpo' => $risposta->body()];
         }
 
         if ($condizionale) {
