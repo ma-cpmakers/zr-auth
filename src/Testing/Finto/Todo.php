@@ -355,7 +355,8 @@ trait Todo
         $chi = $this->conPm($richiesta);
         $voce = $this->voceElementoTodo($this->elementoDelPercorsoTodo($chi, $id));
 
-        if (self::trovaEtagCrm($richiesta->toPsrRequest()->getHeaderLine('If-None-Match'), $voce['etag'], true)) {
+        // Titolo e contesto dei collegamenti al CRM non entrano nell'ETag: con un collegamento il 304 non c'è (#2609).
+        if ($voce['crm'] === [] && self::trovaEtagCrm($richiesta->toPsrRequest()->getHeaderLine('If-None-Match'), $voce['etag'], true)) {
             return [304, null, ['ETag' => $voce['etag']]];
         }
 
@@ -692,6 +693,7 @@ trait Todo
             'tag' => $e['tag'], 'colore' => $e['colore'], 'posizione' => $e['posizione'],
             'creato_il' => self::iso($e['creato_il']), 'aggiornato_il' => self::iso($e['aggiornato_il']),
             'etag' => self::etagCrm($this->versioneTodo($e, 'aggiornato_il')),
+            'crm' => $this->crmDelTodo($e['id'], $e['workspace'], $intero),
         ];
     }
 

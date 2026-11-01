@@ -49,6 +49,7 @@ use Zeiras\Auth\Testing\Finto\Sprint;
 use Zeiras\Auth\Testing\Finto\SenzaCarattereNullo;
 use Zeiras\Auth\Testing\Finto\Testi;
 use Zeiras\Auth\Testing\Finto\Todo;
+use Zeiras\Auth\Testing\Finto\TodoCrm;
 use Zeiras\Auth\Testing\Finto\UscitaAzienda;
 
 /**
@@ -96,6 +97,7 @@ final class BackofficeFinto
     use Eventi;
     use UscitaAzienda;
     use Todo;
+    use TodoCrm;
 
     /** La risposta del widget che il finto accetta con Turnstile acceso: quella che danno i tasti di prova di Cloudflare. */
     public const TURNSTILE_VALIDO = 'XXXX.DUMMY.TOKEN.XXXX';
@@ -206,6 +208,9 @@ final class BackofficeFinto
         ['DELETE', '#^/v1/board/todo/elementi/([^/]+)$#', 'board.todo.elementi.elimina'],
         ['POST', '#^/v1/board/todo/elementi/([^/]+)/completamento$#', 'board.todo.elementi.completamento.crea'],
         ['DELETE', '#^/v1/board/todo/elementi/([^/]+)/completamento$#', 'board.todo.elementi.completamento.elimina'],
+        ['GET', '#^/v1/board/todo/elementi/([^/]+)/crm$#', 'board.todo.elementi.crm.elenca'],
+        ['POST', '#^/v1/board/todo/elementi/([^/]+)/crm$#', 'board.todo.elementi.crm.crea'],
+        ['DELETE', '#^/v1/board/todo/elementi/([^/]+)/crm/([^/]+)$#', 'board.todo.elementi.crm.elimina'],
         ['GET', '#^/v1/board/todo/riepilogo$#', 'board.todo.riepilogo.mostra'],
         ['GET', '#^/v1/board/todo/tag$#', 'board.todo.tag.elenca'],
         ['GET', '#^/v1/board/board/([^/]+)/ruoli$#', 'board.board.ruoli.elenca'],
@@ -1401,6 +1406,9 @@ final class BackofficeFinto
                 'board.todo.elementi.elimina' => $this->eliminaElementoTodo($richiesta, $parametri[0]),
                 'board.todo.elementi.completamento.crea' => $this->completamentoCreaTodo($richiesta, $parametri[0]),
                 'board.todo.elementi.completamento.elimina' => $this->completamentoEliminaTodo($richiesta, $parametri[0]),
+                'board.todo.elementi.crm.elenca' => $this->elencaTodoCrm($richiesta, $parametri[0]),
+                'board.todo.elementi.crm.crea' => $this->creaTodoCrm($richiesta, $corpo, $parametri[0]),
+                'board.todo.elementi.crm.elimina' => $this->eliminaTodoCrm($richiesta, $parametri[0], $parametri[1]),
                 'board.todo.riepilogo.mostra' => $this->riepilogoTodo($richiesta),
                 'board.todo.tag.elenca' => $this->tagTodo($richiesta),
                 'board.board.viste.elenca' => $this->elencaViste($richiesta, $parametri[0]),
