@@ -275,6 +275,7 @@ final class BackofficeFinto
         ['DELETE', '#^/v1/workspace/eliminazione$#', 'workspace.eliminazione.elimina'],
         ['GET', '#^/v1/workspace/contenuti$#', 'workspace.contenuti.mostra'],
         ['GET', '#^/v1/legale/documenti$#', 'legale.documenti.elenca'],
+        ['GET', '#^/v1/legale/accettazioni$#', 'legale.accettazioni.elenca'],
         ['POST', '#^/v1/legale/accettazioni$#', 'legale.accettazioni.crea'],
         ['GET', '#^/v1/workspace/link$#', 'workspace.link.mostra'],
         ['POST', '#^/v1/workspace/link$#', 'workspace.link.crea'],
@@ -1442,6 +1443,7 @@ final class BackofficeFinto
                 'preventivi.pubblici.accettazione.crea' => $this->accettaPreventivoPubblico($corpo),
                 'preventivi.pubblici.richieste.crea' => $this->chiediModificaPreventivoPubblico($corpo),
                 'legale.documenti.elenca' => $this->elencaDocumentiLegali($richiesta),
+                'legale.accettazioni.elenca' => $this->elencaAccettazioniLegali($richiesta),
                 'legale.accettazioni.crea' => $this->accettaDocumentoLegale($richiesta, $corpo),
                 'io.mostra' => $this->mostraIo($richiesta),
                 'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
@@ -3010,6 +3012,29 @@ final class BackofficeFinto
         }
 
         return [200, ['data' => $elenco]];
+    }
+
+    /**
+     * legale.accettazioni.elenca (LegaleController::accettazioniElenca, #2867): le accettazioni della persona del gettone, dalla più
+     * recente, a pagine; anche di versioni non più in vigore e a interruttore spento. La posizione è l'ordine in cui sono nate (nel
+     * backoffice l'id), e non esce: la riga porta documento, versione e accettata_il. Vale ogni gettone della persona.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaAccettazioniLegali(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $voci = [];
+
+        foreach (array_keys($this->accettazioni[$chi['persona']] ?? []) as $ordine => $chiave) {
+            [$documento, $versione] = explode('@', $chiave, 2);
+            $voci[] = ['id' => sprintf('%010d', $ordine), 'documento' => $documento, 'versione' => $versione, 'accettata_il' => $this->accettazioni[$chi['persona']][$chiave]];
+        }
+
+        [$stato, $corpo] = $this->pagina($richiesta, 'legale.accettazioni.elenca', 'id', $voci, fn (array $voce) => [$voce['id']], fn (string $id) => [$id], dalPiuRecente: true);
+        $corpo['data'] = array_map(fn (array $voce) => array_diff_key($voce, ['id' => true]), $corpo['data']);
+
+        return [$stato, $corpo];
     }
 
     /**

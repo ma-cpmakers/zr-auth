@@ -101,3 +101,37 @@ it('accettazione obbligatoria: spenta, nessun metodo cambia (#1699, T6.2)', func
 
     expect(esito(alFinto('GET', '/v1/app', gettone: $anna)))->toBe([403, 'gettone_senza_workspace']);
 });
+
+it('legale.accettazioni.elenca: le accettazioni della sola persona, dalla più recente, a pagine; chi non ha accettato tutto è 403; 401 senza gettone (#2867, A.1, A.2)', function () {
+    $finto = BackofficeFinto::attiva()->documentiLegali(DOCUMENTI_DI_PROVA);
+    $finto->persona('anna@example.com', PASSWORD);
+    $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
+    $anna = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $bruno = entraNelFinto('bruno@example.com')['gettone']['gettone'];
+
+    expect(esito(alFinto('GET', '/v1/legale/accettazioni', gettone: $anna)))->toBe([403, 'accettazione_richiesta']);
+
+    foreach (['informativa-privacy', 'termini-d-uso'] as $documento) {
+        alFinto('POST', '/v1/legale/accettazioni', ['documento' => $documento, 'versione' => 'bozza-0.1'], $anna)->assertCreated();
+    }
+
+    alFinto('POST', '/v1/legale/accettazioni', ['documento' => 'termini-d-uso', 'versione' => 'bozza-0.1'], $bruno)->assertCreated();
+
+    $prima = alFinto('GET', '/v1/legale/accettazioni?limite=1', gettone: $anna);
+    $seconda = alFinto('GET', '/v1/legale/accettazioni?limite=1&cursore='.urlencode($prima->json('successivo')), gettone: $anna);
+
+    expect(array_keys($prima->json('data.0')))->toBe(['documento', 'versione', 'accettata_il'])
+        ->and($prima->json('data.0.documento'))->toBe('termini-d-uso')
+        ->and($prima->json('successivo'))->toBeString()
+        ->and($seconda->json('data.0.documento'))->toBe('informativa-privacy')
+        ->and($seconda->json('successivo'))->toBeNull()
+        ->and(esito(alFinto('GET', '/v1/legale/accettazioni', gettone: $bruno)))->toBe([403, 'accettazione_richiesta'])
+        ->and(esito(alFinto('GET', '/v1/legale/accettazioni')))->toBe([401, 'gettone_assente']);
+});
+
+it('legale.accettazioni.elenca: spento, la lista è vuota (#2867, A.1)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+
+    expect(alFinto('GET', '/v1/legale/accettazioni', gettone: entraNelFinto('anna@example.com')['gettone']['gettone'])->json())->toBe(['data' => [], 'successivo' => null]);
+});
