@@ -143,7 +143,7 @@ test('si leggono gli eventi dei 30 giorni dal loro istante; oltre l\'ultimo, o c
     $this->travel(12)->hours();
     $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
     $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
-    $sequenze = fn ($risposta) => array_column($risposta->json('data'), 'sequence');
+    $sequenze = fn ($risposta) => array_column($risposta->json('data') ?? throw new RuntimeException($risposta->status().' '.$risposta->body()), 'sequence');
 
     // Senza dopo la lista parte dal più vecchio evento dei 30 giorni; l'ultimo è il 3.
     expect($sequenze(alFinto('GET', '/v1/eventi', null, $gettone)))->toBe(['000000000003'])
