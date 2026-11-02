@@ -707,11 +707,12 @@ trait Todo
             'id' => $e['id'], 'lista_id' => $e['lista'], 'scheda_id' => $e['scheda'] ?? null, 'assegnato_a' => $e['assegnato'] ?? null, 'titolo' => $e['titolo'],
             ...($intero ? ['note' => $e['note'] ?? ''] : []),
             'fatto_il' => $e['fatto_il'] === null ? null : self::iso($e['fatto_il']), 'giorno' => $e['giorno'], 'ora' => $e['ora'],
-            'tag' => $e['tag'], 'colore' => $e['colore'], 'posizione' => $e['posizione'],
-            'creato_il' => self::iso($e['creato_il']), 'aggiornato_il' => self::iso($e['aggiornato_il']),
-            'etag' => self::etagCrm($this->versioneTodo($e, 'aggiornato_il')),
+            'tag' => $e['tag'], 'colore' => $e['colore'],
             'crm' => $this->crmDelTodo($e['id'], $e['workspace'], $intero),
             'promemoria_n' => $this->quantiPromemoriaTodo($e['id']),
+            'posizione' => $e['posizione'],
+            'creato_il' => self::iso($e['creato_il']), 'aggiornato_il' => self::iso($e['aggiornato_il']),
+            'etag' => self::etagCrm($this->versioneTodo($e, 'aggiornato_il')),
         ];
     }
 

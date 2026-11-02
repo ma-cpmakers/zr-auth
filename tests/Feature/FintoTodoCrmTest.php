@@ -105,7 +105,8 @@ it('i ruoli hanno tetti propri: «dove» uno solo, «con_chi» venti (409 limite
     $primo = null;
 
     foreach (range(1, 19) as $n) {
-        $primo ??= collegaIlTodo($gettoni['anna'], $todo, 'con_chi', 'crm.persona', contattoPerIlTodo($gettoni['anna'], "Contatto {$n}"), 201)->json('data.id');
+        $collegato = collegaIlTodo($gettoni['anna'], $todo, 'con_chi', 'crm.persona', contattoPerIlTodo($gettoni['anna'], "Contatto {$n}"), 201)->json('data.id');
+        $primo ??= $collegato;
     }
 
     $fermata = collegaIlTodo($gettoni['anna'], $todo, 'con_chi', 'crm.persona', contattoPerIlTodo($gettoni['anna'], 'Contatto 20'), 409);

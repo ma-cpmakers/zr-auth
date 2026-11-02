@@ -11,10 +11,17 @@ function todoDaRicordareNelFinto(?string $giorno = '2026-11-10', ?string $ora = 
     $studio = $finto->workspace('Studio', $anna);
     $finto->attivaApp($studio, 'pm');
     $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], entraNelFinto('anna@example.com')['gettone']['gettone'])->json('data.gettone');
+
+    return [$gettone, nuovoTodoNelFinto($gettone, $giorno, $ora)];
+}
+
+/** Un altro to-do di Anna nello stesso finto: un secondo `attiva()` lo azzererebbe e il gettone di prima non varrebbe più. */
+function nuovoTodoNelFinto(string $gettone, ?string $giorno, ?string $ora): string
+{
     $todo = alFinto('POST', '/v1/board/todo/elementi', ['titolo' => 'Chiamare', ...($giorno === null ? [] : ['giorno' => $giorno]), ...($ora === null ? [] : ['ora' => $ora])], $gettone);
     expect($todo->status())->toBe(201);
 
-    return [$gettone, $todo->json('data.id')];
+    return $todo->json('data.id');
 }
 
 it('aggiunge un promemoria: 201, la Location, {id, anticipo, invio_il} con l\'istante in UTC; un anticipo fuori da 0, 10, 60 e 1440 è 422', function () {
@@ -37,7 +44,7 @@ it('un to-do senza giorno è 422 su #/anticipo; con il giorno e senza l\'ora val
 
     expect(alFinto('POST', "/v1/board/todo/elementi/{$senza}/promemoria", ['anticipo' => 10], $gettone)->json('errors.0.pointer'))->toBe('#/anticipo');
 
-    [$gettone, $senzaOra] = todoDaRicordareNelFinto('2026-11-10', null);
+    $senzaOra = nuovoTodoNelFinto($gettone, '2026-11-10', null);
     expect(alFinto('POST', "/v1/board/todo/elementi/{$senzaOra}/promemoria", ['anticipo' => 0], $gettone)->json('data.invio_il'))->toBe('2026-11-10T08:00:00.000Z');
 
     $doppio = alFinto('POST', "/v1/board/todo/elementi/{$senzaOra}/promemoria", ['anticipo' => 0], $gettone);
