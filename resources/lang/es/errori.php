@@ -171,7 +171,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Límite alcanzado',
-        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos (300 entre activos y cerrados, 1000 con los de la papelera) y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación, 50 miembros por workspace (contando las invitaciones vigentes), 10 vínculos de salida y 50 de entrada por tarjeta (contando también las tarjetas completadas o archivadas; `limite` y `direzione` dicen cuál), 50 vínculos a registros del CRM por tarjeta, 50 módulos por persona para recibir el aviso de lanzamiento. Libera un lugar (cierra un tablero o, si tienes 1000 en total con la papelera, espera a que uno de la papelera pase al archivo; archiva una lista o una tarjeta, quita una etiqueta, un elemento, un vínculo, un vínculo al CRM o una solicitud de aviso de lanzamiento, revoca una invitación) y repite.',
+        'detail' => 'El recurso ya tiene el máximo permitido: 100 tableros activos (300 entre activos y cerrados, 1000 con los de la papelera) y 100 carpetas por workspace, 50 listas por tablero, 500 tarjetas por lista, 3 etiquetas por tarjeta, 100 elementos por lista de comprobación, 50 miembros por workspace (contando las invitaciones vigentes), 10 vínculos de salida y 50 de entrada por tarjeta (contando también las tarjetas completadas o archivadas; `limite` y `direzione` dicen cuál), 50 vínculos a registros del CRM por tarjeta. Libera un lugar (cierra un tablero o, si tienes 1000 en total con la papelera, espera a que uno de la papelera pase al archivo; archiva una lista o una tarjeta, quita una etiqueta, un elemento, un vínculo o un vínculo al CRM, revoca una invitación) y repite.',
     ],
     'esportazione_in_corso' => [
         'title' => 'Exportación en curso',
@@ -220,14 +220,6 @@ return [
     'contatto_unito' => [
         'title' => 'Contacto unido',
         'detail' => 'Este contacto se unió a otro (`unito_in`): es la misma persona, y el olvido se pide sobre el contacto que queda, o se anula antes la unión. No ha cambiado nada.',
-    ],
-    'identita_gia_collegata' => [
-        'title' => 'Identidad ya vinculada',
-        'detail' => 'Esta cuenta del proveedor ya está vinculada a otra cuenta de Zeiras. No ha cambiado nada.',
-    ],
-    'provider_gia_collegato' => [
-        'title' => 'Proveedor ya vinculado',
-        'detail' => 'Tu cuenta ya tiene vinculada una cuenta de este proveedor: desvincúlala antes de vincular otra. No ha cambiado nada.',
     ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline no vacío',
@@ -356,6 +348,14 @@ return [
     'termine_scaduto' => [
         'title' => 'Plazo de traslado vencido',
         'detail' => 'Han pasado más de 7 días desde que el profesional dejó el workspace: sus reservas ya no se pueden pasar. El método no escribió nada.',
+    ],
+    'identita_gia_collegata' => [
+        'title' => 'Identidad ya vinculada',
+        'detail' => 'Esta identidad del proveedor ya está vinculada a otra cuenta. El método no escribió nada.',
+    ],
+    'provider_gia_collegato' => [
+        'title' => 'Proveedor ya vinculado',
+        'detail' => 'Tu cuenta ya tiene vinculada otra cuenta de este proveedor. Desvincúlala y repite. El método no escribió nada.',
     ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',

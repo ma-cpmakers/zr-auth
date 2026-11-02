@@ -171,7 +171,7 @@ return [
     ],
     'limite_raggiunto' => [
         'title' => 'Limit reached',
-        'detail' => 'The resource already has the maximum allowed: 100 active boards (300 active and closed, 1000 counting those in the bin) and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 50 members per workspace (counting live invitations), 10 outgoing and 50 incoming links per card (counting completed or archived cards too; `limite` and `direzione` say which), 50 links to CRM records per card, 50 modules per person to be notified of at launch. Free a slot (close a board or, with 1000 in all counting the bin, wait for one in the bin to be archived; archive a list or a card, remove a label, an item, a link, a CRM link or a launch notice request, revoke an invitation) and try again.',
+        'detail' => 'The resource already has the maximum allowed: 100 active boards (300 active and closed, 1000 counting those in the bin) and 100 folders per workspace, 50 lists per board, 500 cards per list, 3 labels per card, 100 checklist items per card, 50 members per workspace (counting live invitations), 10 outgoing and 50 incoming links per card (counting completed or archived cards too; `limite` and `direzione` say which), 50 links to CRM records per card. Free a slot (close a board or, with 1000 in all counting the bin, wait for one in the bin to be archived; archive a list or a card, remove a label, an item, a link or a CRM link, revoke an invitation) and try again.',
     ],
     'esportazione_in_corso' => [
         'title' => 'Export in progress',
@@ -220,14 +220,6 @@ return [
     'contatto_unito' => [
         'title' => 'Merged contact',
         'detail' => 'This contact was merged into another one (`unito_in`): it is the same person, so the erasure is requested on the contact that stays, or the merge is undone first. Nothing has changed.',
-    ],
-    'identita_gia_collegata' => [
-        'title' => 'Identity already linked',
-        'detail' => 'This provider account is already linked to another Zeiras account. Nothing has changed.',
-    ],
-    'provider_gia_collegato' => [
-        'title' => 'Provider already linked',
-        'detail' => 'Your account already has an account from this provider linked: unlink it before linking another one. Nothing has changed.',
     ],
     'pipeline_non_vuota' => [
         'title' => 'Pipeline not empty',
@@ -356,6 +348,14 @@ return [
     'termine_scaduto' => [
         'title' => 'Transfer deadline passed',
         'detail' => 'More than 7 days have passed since the professional left the workspace: their bookings can no longer be moved. The method wrote nothing.',
+    ],
+    'identita_gia_collegata' => [
+        'title' => 'Identity already linked',
+        'detail' => 'This provider identity is already linked to another account. The method wrote nothing.',
+    ],
+    'provider_gia_collegato' => [
+        'title' => 'Provider already linked',
+        'detail' => 'Your account already has another account of this provider linked. Unlink it and try again. The method wrote nothing.',
     ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
