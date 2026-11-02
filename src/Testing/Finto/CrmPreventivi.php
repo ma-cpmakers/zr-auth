@@ -550,21 +550,25 @@ trait CrmPreventivi
 
         $chiusa = null;
 
-        if ($trattativa !== null && ! ($trattativa['eliminata'] ?? false)) {
-            if ($trattativa['stato'] === 'aperta') {
-                $this->applicaTrattativa($trattativa, ['stato' => 'vinta'], $autore);
-            } else {
-                $chiusa = $trattativa['stato'];
+        // Il cambio di stato del contatto sta nella riga `preventivo.accettato` del contatto, non in una riga anonima accanto (#2902).
+        $cambiate = $this->raccogliendoPersonaCrm($compratore['id'], function () use ($trattativa, $autore, $id, $primo, $compratore, &$chiusa) {
+            if ($trattativa !== null && ! ($trattativa['eliminata'] ?? false)) {
+                if ($trattativa['stato'] === 'aperta') {
+                    $this->applicaTrattativa($trattativa, ['stato' => 'vinta'], $autore);
+                } else {
+                    $chiusa = $trattativa['stato'];
+                }
+
+                $this->cambioCrm('trattative', $trattativa['id'], $autore, 'preventivo.accettato', [['campo' => 'preventivo_id', 'dopo' => $id]]);
             }
 
-            $this->cambioCrm('trattative', $trattativa['id'], $autore, 'preventivo.accettato', [['campo' => 'preventivo_id', 'dopo' => $id]]);
-        }
+            $persona = $this->crm['persone'][$compratore['id']];
 
-        $persona = $this->crm['persone'][$compratore['id']];
-
-        if ($primo && in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
-            $this->applicaPersona($persona['id'], ['stato' => 'cliente'], $autore);
-        }
+            if ($primo && in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
+                $this->applicaPersona($persona['id'], ['stato' => 'cliente'], $autore);
+            }
+        });
+        $this->cambioCrm('persone', $compratore['id'], $autore, 'preventivo.accettato', [['campo' => 'preventivo_id', 'dopo' => $id], ['campo' => 'modo', 'dopo' => $modo], ...$cambiate]);
 
         $adesso = self::dopoCrm($riga['aggiornato_il']);
         $this->crm['preventivi'][$id]['stato'] = 'accettato';

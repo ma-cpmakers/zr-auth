@@ -577,9 +577,39 @@ trait Crm
         return $uno === $altro;
     }
 
+    /** @var array{id: string, voci: list<array<string, mixed>>}|null il contatto di cui si raccolgono le voci di modifica, e quelle raccolte */
+    private ?array $raccoltaPersonaCrm = null;
+
+    /**
+     * Esegue `$lavoro` senza che le modifiche del contatto `$id` scrivano la loro riga `modificata`: le voci si danno a chi chiama, che le mette
+     * in una riga sola (PersoneModifica::raccogliendo del backoffice, #2902).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function raccogliendoPersonaCrm(string $id, \Closure $lavoro): array
+    {
+        $prima = $this->raccoltaPersonaCrm;
+        $this->raccoltaPersonaCrm = ['id' => $id, 'voci' => []];
+
+        try {
+            $lavoro();
+
+            return $this->raccoltaPersonaCrm['voci'];
+        } finally {
+            $this->raccoltaPersonaCrm = $prima;
+        }
+    }
+
     /** Una riga della cronologia di un contatto, un'azienda o una trattativa, con l'autore della scrittura. */
     private function cambioCrm(string $tipo, string $id, ?string $autore, string $cambio, array $campi, ?string $importazione = null, ?string $attivita = null, ?string $scadenza = null, ?string $altra = null, ?string $unione = null): void
     {
+        // Dentro `raccogliendoPersonaCrm` le voci della modifica del contatto non fanno una riga: le prende chi ha chiesto di raccoglierle.
+        if ($tipo === 'persone' && $cambio === 'modificata' && ($this->raccoltaPersonaCrm['id'] ?? null) === $id) {
+            $this->raccoltaPersonaCrm['voci'] = [...$this->raccoltaPersonaCrm['voci'], ...$campi];
+
+            return;
+        }
+
         $this->crm['cambi'][] = [
             'id' => self::id(), 'tipo_risorsa' => $tipo, 'risorsa' => $id, 'tipo' => $cambio, 'autore_id' => $autore, 'istante' => self::adessoCrm(),
             'campi' => $campi, 'importazione_id' => $importazione, 'attivita_id' => $attivita, 'scadenza_id' => $scadenza, 'altra_persona_id' => $altra, 'unione_id' => $unione,

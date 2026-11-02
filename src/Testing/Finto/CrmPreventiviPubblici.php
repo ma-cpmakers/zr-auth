@@ -125,6 +125,11 @@ trait CrmPreventiviPubblici
             $this->cambioCrm('trattative', $trattativa['id'], null, 'preventivo.richiesta', [['campo' => 'preventivo_id', 'dopo' => $riga['id']]]);
         }
 
+        // La cronologia del contatto, senza autore e col solo id del preventivo: il testo resta nella sua tabella (#2902).
+        if ($riga['persona_id'] !== null && isset($this->crm['persone'][$riga['persona_id']])) {
+            $this->cambioCrm('persone', $riga['persona_id'], null, 'preventivo.richiesta', [['campo' => 'preventivo_id', 'dopo' => $riga['id']]]);
+        }
+
         return [201, ['data' => ['creata_il' => self::iso($ora)]]];
     }
 
