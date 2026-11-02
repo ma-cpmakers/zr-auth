@@ -212,7 +212,7 @@ trait CrmElenchi
      */
     private function valoriDiUnElencoCrm(string $id): array
     {
-        return $this->crm['elenchi'][strtolower($id)]['valori'] ?? [];
+        return array_map(fn (array $valore) => array_diff_key($valore, ['seguiva' => true]), $this->crm['elenchi'][strtolower($id)]['valori'] ?? []);
     }
 
     /**
@@ -331,6 +331,8 @@ trait CrmElenchi
 
             if ($archivia) {
                 if (! $eraTolta) {
+                    // Chi lo seguiva si ricorda (#2907): è il posto a cui torna col ripristino. Resta nella riga, mai nell'API.
+                    $tutti[$id]['seguiva'] = array_slice($vive, (int) array_search($id, $vive, true) + 1);
                     $vive = array_values(array_diff($vive, [$id]));
                     $tolte[] = $id;
                     $tutti[$id]['archiviato_il'] = self::iso(self::adessoCrm());
@@ -338,6 +340,10 @@ trait CrmElenchi
             } elseif ($eraTolta) {
                 $tolte = array_values(array_diff($tolte, [$id]));
                 $tutti[$id]['archiviato_il'] = null;
+                // Senza un posto dato torna davanti al primo di quelli che lo seguivano e che sono ancora vivi, o in fondo se nessuno lo è più.
+                $dopo = array_values(array_filter($tutti[$id]['seguiva'] ?? [], fn (string $altro) => in_array($altro, $vive, true)));
+                $posizione ??= $dopo === [] ? null : (int) array_search($dopo[0], $vive, true) + 1;
+                unset($tutti[$id]['seguiva']);
                 $vive = $this->inserisciUnValoreCrm($vive, $id, $posizione);
             } elseif ($nuovo) {
                 $vive = $this->inserisciUnValoreCrm($vive, $id, $posizione);

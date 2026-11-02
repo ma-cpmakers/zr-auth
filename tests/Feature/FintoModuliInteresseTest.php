@@ -105,6 +105,6 @@ it('moduli.interesse.crea: 60 in un\'ora per persona, poi 429 con Retry-After; u
     $oltre = alFinto('POST', '/v1/moduli/uno/interesse', gettone: $anna);
 
     expect(esito($oltre))->toBe([429, 'troppe_richieste'])
-        ->and($oltre->headers->has('Retry-After'))->toBeTrue();
+        ->and($oltre->hasHeader('Retry-After'))->toBeTrue();
     alFinto('POST', '/v1/moduli/uno/interesse', gettone: $bruno)->assertCreated();
 });

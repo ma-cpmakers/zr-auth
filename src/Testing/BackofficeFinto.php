@@ -2955,8 +2955,8 @@ final class BackofficeFinto
     }
 
     /**
-     * io.provider.autorizzazioni.crea (IoProviderController::autorizzazioniCrea): la partenza di chi collega un provider, col gettone, senza
-     * corpo; lo stato è legato alla persona. Il freno è della persona e conta prima del provider, che spento o sconosciuto è 404.
+     * io.provider.autorizzazioni.crea (IoProviderController::autorizzazioniCrea): la partenza di chi collega un provider, col gettone e il solo campo
+     * facoltativo `ritorno` (`home`: il finto non sa da quale client chiama); lo stato è legato alla persona. Il freno è della persona e conta prima del provider, che spento o sconosciuto è 404.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -2970,9 +2970,9 @@ final class BackofficeFinto
             throw new Problema('non_trovato');
         }
 
-        $this->testi->validaStretta($corpo, []);
+        $ritorno = (string) ($this->testi->validaStretta($corpo, ['ritorno' => ['sometimes', 'bail', 'string', 'in:home']])['ritorno'] ?? 'home');
 
-        return $this->emettiPartenza($provider, 'home', $chi['persona']);
+        return $this->emettiPartenza($provider, $ritorno, $chi['persona']);
     }
 
     /**
@@ -3318,7 +3318,7 @@ final class BackofficeFinto
             throw new Problema('limite_raggiunto', estensioni: ['limite' => self::MODULI_INTERESSE_TETTO]);
         }
 
-        $this->moduliInteresse[$chi['persona']][$modulo] ??= ['id' => sprintf('%010d', ++$this->ordineInteresse), 'richiesto_il' => self::iso(now())];
+        $this->moduliInteresse[$chi['persona']][$modulo] ??= ['id' => sprintf('%010d', ++$this->ordineInteresse), 'modulo' => $modulo, 'richiesto_il' => self::iso(now())];
 
         return [$nuova ? 201 : 200, ['data' => ['modulo' => $modulo, 'richiesto_il' => $this->moduliInteresse[$chi['persona']][$modulo]['richiesto_il']]]];
     }

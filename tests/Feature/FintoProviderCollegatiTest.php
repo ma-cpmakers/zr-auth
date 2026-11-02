@@ -16,7 +16,7 @@ function fintoConDuePersone(): array
 }
 
 /** Collega un provider: parte, dice cosa risponde il provider e riporta codice e stato. */
-function collegaNelFinto(BackofficeFinto $finto, string $gettone, string $provider, string $email = 'anna@example.com', ?string $id = null)
+function collegaProviderNelFinto(BackofficeFinto $finto, string $gettone, string $provider, string $email = 'anna@example.com', ?string $id = null)
 {
     $stato = alFinto('POST', "/v1/io/provider/{$provider}/autorizzazioni", gettone: $gettone)->json('data.stato');
     $finto->identitaDelProvider($provider, 'codice-'.$provider, $email, id: $id);
@@ -29,10 +29,10 @@ it('io.provider: collega (201), lo ripete (200), elenca dal più recente a pagin
 
     expect(alFinto('GET', '/v1/io/provider', gettone: $anna)->json())->toBe(['data' => [], 'successivo' => null]);
 
-    $prima = collegaNelFinto($finto, $anna, 'google');
-    $ancora = collegaNelFinto($finto, $anna, 'google');
-    collegaNelFinto($finto, $anna, 'linkedin-openid');
-    collegaNelFinto($finto, $bruno, 'facebook', 'bruno@example.com');
+    $prima = collegaProviderNelFinto($finto, $anna, 'google');
+    $ancora = collegaProviderNelFinto($finto, $anna, 'google');
+    collegaProviderNelFinto($finto, $anna, 'linkedin-openid');
+    collegaProviderNelFinto($finto, $bruno, 'facebook', 'bruno@example.com');
 
     expect([$prima->status(), $ancora->status()])->toBe([201, 200])
         ->and(array_keys($prima->json('data')))->toBe(['provider', 'collegato_il'])
@@ -54,10 +54,10 @@ it('io.provider: collega (201), lo ripete (200), elenca dal più recente a pagin
 
 it('io.provider.crea: un\'identità di un\'altra persona è 409 identita_gia_collegata, un altro account dello stesso provider 409 provider_gia_collegato (#2868, B.3)', function () {
     [$finto, $anna, $bruno] = fintoConDuePersone();
-    collegaNelFinto($finto, $anna, 'google', 'anna@example.com', 'id-di-anna');
+    collegaProviderNelFinto($finto, $anna, 'google', 'anna@example.com', 'id-di-anna');
 
-    expect(esito(collegaNelFinto($finto, $bruno, 'google', 'bruno@example.com', 'id-di-anna')))->toBe([409, 'identita_gia_collegata'])
-        ->and(esito(collegaNelFinto($finto, $anna, 'google', 'anna@example.com', 'un-altro-account')))->toBe([409, 'provider_gia_collegato'])
+    expect(esito(collegaProviderNelFinto($finto, $bruno, 'google', 'bruno@example.com', 'id-di-anna')))->toBe([409, 'identita_gia_collegata'])
+        ->and(esito(collegaProviderNelFinto($finto, $anna, 'google', 'anna@example.com', 'un-altro-account')))->toBe([409, 'provider_gia_collegato'])
         ->and(alFinto('GET', '/v1/io/provider', gettone: $bruno)->json('data'))->toBe([]);
 });
 
@@ -93,7 +93,7 @@ it('io.provider.autorizzazioni.crea: senza corpo, un provider spento o sconosciu
 
 it('io.provider.elimina: 204, poi 404; non toglie quello di un\'altra persona; lo scollegato non fa più entrare e si può ricollegare (#2868, B.4)', function () {
     [$finto, $anna, $bruno] = fintoConDuePersone();
-    collegaNelFinto($finto, $anna, 'google');
+    collegaProviderNelFinto($finto, $anna, 'google');
 
     expect(esito(alFinto('DELETE', '/v1/io/provider/google', gettone: $bruno)))->toBe([404, 'non_trovato'])
         ->and(alFinto('DELETE', '/v1/io/provider/google', gettone: $anna)->status())->toBe(204)
@@ -106,7 +106,7 @@ it('io.provider.elimina: 204, poi 404; non toglie quello di un\'altra persona; l
     expect(esito(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-google', 'stato' => $stato])))->toBe([422, 'verifica_non_riuscita']);
 
     // Ricollegata, sì.
-    expect(collegaNelFinto($finto, $anna, 'google')->status())->toBe(201);
+    expect(collegaProviderNelFinto($finto, $anna, 'google')->status())->toBe(201);
     $stato = alFinto('POST', '/v1/accessi/provider/google/autorizzazioni')->json('data.stato');
     expect(alFinto('POST', '/v1/accessi/provider/google', ['codice' => 'codice-google', 'stato' => $stato])->status())->toBe(201);
 });

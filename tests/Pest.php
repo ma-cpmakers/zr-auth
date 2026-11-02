@@ -92,6 +92,15 @@ const PASSWORD_SBAGLIATA = 'una password sbagliata';
 const PASSWORD_CORTA = 'corta';
 const PASSWORD_COL_NULLO = "una password\0lunga";
 
+// Le asserzioni di stato sulla risposta del client HTTP (sono del TestResponse, non di questa): lo stato e la risposta stessa, per concatenare.
+foreach (['assertOk' => 200, 'assertCreated' => 201, 'assertNoContent' => 204] as $nome => $stato) {
+    Response::macro($nome, function () use ($stato) {
+        expect($this->status())->toBe($stato);
+
+        return $this;
+    });
+}
+
 /** Una chiamata al finto: metodo, percorso di /v1, corpo JSON, gettone, Accept-Language, altri header (Idempotency-Key). */
 function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string $gettone = null, ?string $lingua = null, array $intestazioni = []): Response
 {
