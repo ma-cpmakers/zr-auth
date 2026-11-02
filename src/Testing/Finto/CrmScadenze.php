@@ -175,10 +175,10 @@ trait CrmScadenze
 
     /**
      * La scadenza «Fine abbonamento / validità» di un acquisto appena nato, se ha un `valido_fino_al` (ScadenzeDegliAcquisti::nasce): origine
-     * `acquisto`, la data dell'acquisto, i preavvisi del tipo di sistema, come responsabile quello del contatto o chi registra. Il tetto delle
+     * `acquisto`, la data dell'acquisto, i preavvisi del tipo di sistema, come responsabile quello del contatto o chi registra (nessuno, se a registrare è l'accettazione pubblica di un preventivo). Il tetto delle
      * scadenze aperte non vale. La cronologia del contatto riceve `scadenza.creata`.
      */
-    private function nasceLaScadenzaDiUnAcquistoCrm(array $acquisto, array $persona, string $autore): void
+    private function nasceLaScadenzaDiUnAcquistoCrm(array $acquisto, array $persona, ?string $autore): void
     {
         if ($acquisto['valido_fino_al'] === null) {
             return;
