@@ -2308,25 +2308,34 @@ trait Crm
 
             $importazione = null;
 
-            if (! $prova) {
-                $importazione = self::id();
-                $saltate = count(array_filter($esiti, fn (array $esito) => $esito['esito'] === 'saltata'));
-                $this->crm['importazioni'][$importazione] = [
-                    'id' => $importazione, 'workspace' => $chi['workspace'], 'tipo' => $tipo, 'autore_id' => $chi['persona'], 'righe' => count($campi['righe']),
-                    'create' => count($nuove), 'saltate' => $saltate, 'rifiutate' => count($campi['righe']) - count($nuove) - $saltate, 'creata_il' => self::adessoCrm(),
-                    'annullata_il' => null, 'annullamento' => null,
-                ];
+            // Come il backoffice (Importazioni::esegui), tutto o niente: un tetto o un valore rifiutato a metà non lascia contatti né la riga dell'importazione.
+            $prima = $this->crm;
 
-                foreach ($nuove as $indice => $valida) {
-                    $esiti[$indice]['id'] = $tipo === 'persone' ? $this->nascePersonaCrm($chi, $valida, $importazione) : $this->nasceOrganizzazione($chi, $valida, $importazione);
+            try {
+                if (! $prova) {
+                    $importazione = self::id();
+                    $saltate = count(array_filter($esiti, fn (array $esito) => $esito['esito'] === 'saltata'));
+                    $this->crm['importazioni'][$importazione] = [
+                        'id' => $importazione, 'workspace' => $chi['workspace'], 'tipo' => $tipo, 'autore_id' => $chi['persona'], 'righe' => count($campi['righe']),
+                        'create' => count($nuove), 'saltate' => $saltate, 'rifiutate' => count($campi['righe']) - count($nuove) - $saltate, 'creata_il' => self::adessoCrm(),
+                        'annullata_il' => null, 'annullamento' => null,
+                    ];
 
-                    if ($tipo === 'persone') {
-                        $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $esiti[$indice]['id'], $valida['campi'] ?? []);
-                        $this->scriviIValoriCrm('persona', $esiti[$indice]['id'], $piano);
-                        $this->seguiLeScadenzeDeiCampiCrm($chi['workspace'], $esiti[$indice]['id'], $chi['persona'], $piano);
-                        $this->cambioDiNascitaPersonaCrm($chi, $esiti[$indice]['id'], $importazione);
+                    foreach ($nuove as $indice => $valida) {
+                        $esiti[$indice]['id'] = $tipo === 'persone' ? $this->nascePersonaCrm($chi, array_diff_key($valida, ['campi' => 1]), $importazione) : $this->nasceOrganizzazione($chi, $valida, $importazione);
+
+                        if ($tipo === 'persone') {
+                            $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $esiti[$indice]['id'], $valida['campi'] ?? []);
+                            $this->scriviIValoriCrm('persona', $esiti[$indice]['id'], $piano);
+                            $this->seguiLeScadenzeDeiCampiCrm($chi['workspace'], $esiti[$indice]['id'], $chi['persona'], $piano);
+                            $this->cambioDiNascitaPersonaCrm($chi, $esiti[$indice]['id'], $importazione);
+                        }
                     }
                 }
+            } catch (\Throwable $errore) {
+                $this->crm = $prima;
+
+                throw $errore;
             }
 
             foreach ($esiti as $indice => $esito) {

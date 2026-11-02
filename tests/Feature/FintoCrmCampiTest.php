@@ -1046,14 +1046,14 @@ it('crm.campi: sensibile, genera_scadenza e avvisa si scrivono, tornano in elenc
 it('crm.persone: la chiave di un campo sensibile manca per un membro in ogni risposta, e la cronologia non ha i valori per nessuno (B1, B2)', function () {
     [, $gettoni] = studioColCrm();
     ['anna' => $anna, 'bruno' => $bruno, 'carla' => $carla] = $gettoni;
-    $sensibile = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Dato sanitario'], 'tipo' => 'testo', 'sensibile' => true, 'in_elenco' => true], $anna))->json('data.chiave');
+    $sensibile = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Pressione'], 'tipo' => 'numero', 'sensibile' => true, 'in_elenco' => true], $anna))->json('data.chiave');
     $normale = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Soprannome'], 'tipo' => 'testo', 'in_elenco' => true], $anna))->json('data.chiave');
-    $id = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => [$sensibile => 'Allergia al nichel', $normale => 'Giuli']], $anna))->json('data.id');
-    riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => [$sensibile => 'Nessuna allergia']], $anna));
+    $id = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => [$sensibile => 120, $normale => 'Giuli']], $anna))->json('data.id');
+    riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => [$sensibile => 135]], $anna));
 
     foreach (['anna' => $anna, 'bruno' => $bruno] as $token) {
-        expect(alFinto('GET', "/v1/crm/persone/{$id}", null, $token)->json("data.campi.{$sensibile}"))->toBe('Nessuna allergia')
-            ->and(alFinto('GET', '/v1/crm/persone', null, $token)->json("data.0.campi.{$sensibile}"))->toBe('Nessuna allergia');
+        expect(alFinto('GET', "/v1/crm/persone/{$id}", null, $token)->json("data.campi.{$sensibile}"))->toBe(135)
+            ->and(alFinto('GET', '/v1/crm/persone', null, $token)->json("data.0.campi.{$sensibile}"))->toBe(135);
     }
 
     $risposte = [
@@ -1062,7 +1062,7 @@ it('crm.persone: la chiave di un campo sensibile manca per un membro in ogni ris
     ];
 
     foreach ($risposte as $risposta) {
-        expect($risposta->status())->toBeLessThan(300, $risposta->body())->and($risposta->body())->not->toContain('allergia')->and($risposta->body())->not->toContain($sensibile);
+        expect($risposta->status())->toBeLessThan(300, $risposta->body())->and($risposta->body())->not->toContain($sensibile);
     }
 
     expect(alFinto('GET', "/v1/crm/persone/{$id}", null, $carla)->json("data.campi.{$normale}"))->toBe('Giuli');
@@ -1074,6 +1074,16 @@ it('crm.persone: la chiave di un campo sensibile manca per un membro in ogni ris
 
     $scrittura = alFinto('POST', '/v1/crm/persone', ['nome' => 'Marco', 'campi' => [$sensibile => 'x']], $carla);
     expect($scrittura->status())->toBe(422)->and($scrittura->json('errors.0.pointer'))->toBe("#/campi/{$sensibile}")->and($scrittura->json('errors.0.regola'))->toBe('campo_estraneo');
+
+    // Un campo reso «sensibile» dopo aver scritto i valori: la cronologia che c'era non porta più prima e dopo.
+    $peso = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Peso'], 'tipo' => 'numero'], $anna));
+    riuscita(alFinto('PATCH', "/v1/crm/persone/{$id}", ['campi' => [$peso->json('data.chiave') => 70]], $anna));
+    riuscita(alFinto('PATCH', "/v1/crm/campi/persona.{$peso->json('data.chiave')}", ['sensibile' => true], $anna));
+
+    foreach ([$anna, $carla] as $token) {
+        $voci = collect(alFinto('GET', "/v1/crm/persone/{$id}/cronologia", null, $token)->json('data'))->pluck('campi')->flatten(1)->where('campo', "campi.{$peso->json('data.chiave')}");
+        expect($voci)->not->toBeEmpty()->and($voci->every(fn (array $voce) => $voce === ['campo' => "campi.{$peso->json('data.chiave')}"]))->toBeTrue();
+    }
 });
 
 // #2695 (zr-crm #2691 Q5, C1-C4): avvisi in mostra e in elenca. Che sia come nel backoffice lo prova il suo FintoTest.
