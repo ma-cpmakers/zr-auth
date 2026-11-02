@@ -1982,6 +1982,7 @@ trait Crm
                 $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $id, $validati['campi'] ?? []);
                 $this->scriviIValoriCrm('persona', $id, $piano);
                 $this->seguiLeScadenzeDeiCampiCrm($chi['workspace'], $id, $chi['persona'], $piano);
+                $this->cambioDiNascitaPersonaCrm($chi, $id);
             } catch (\Throwable $errore) {
                 $this->crm = $prima;
 
@@ -2039,10 +2040,18 @@ trait Crm
             'ultima_attivita_il' => null, 'prossima_scadenza' => null, 'trattative_aperte' => 0, 'valore_aperto' => 0, 'trattative_aperte_senza_valore' => 0,
             'archiviata_il' => null, 'anonimizzata_il' => null, 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
         ];
-        $this->cambioCrm('persone', $id, $chi['persona'], 'creata', [], $importazione);
         $this->contaIContattiCrm(null, false, $campi['organizzazione_id'], true);
 
         return $id;
+    }
+
+    /**
+     * La riga `creata` della cronologia di un contatto nato. Viene dopo i valori dei campi e le scadenze che seguono (#2696): come nel
+     * backoffice, dove ValoriDeiCampi::scrivi gira prima della riga di nascita, e a pari istante l'ordine delle righe è quello degli id.
+     */
+    private function cambioDiNascitaPersonaCrm(array $chi, string $id, ?string $importazione = null): void
+    {
+        $this->cambioCrm('persone', $id, $chi['persona'], 'creata', [], $importazione);
     }
 
     /**
@@ -2315,6 +2324,7 @@ trait Crm
                         $piano = $this->pianoDeiValoriCrm($chi['workspace'], 'persona', $esiti[$indice]['id'], $valida['campi'] ?? []);
                         $this->scriviIValoriCrm('persona', $esiti[$indice]['id'], $piano);
                         $this->seguiLeScadenzeDeiCampiCrm($chi['workspace'], $esiti[$indice]['id'], $chi['persona'], $piano);
+                        $this->cambioDiNascitaPersonaCrm($chi, $esiti[$indice]['id'], $importazione);
                     }
                 }
             }
