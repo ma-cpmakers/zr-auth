@@ -247,6 +247,8 @@ return [
     'lista_del_todo' => 'You have no To-do list with this id: board.todo.liste.elenca gives the ids of the lists you see.',
     'todo_giorno_fuori_intervallo' => 'The day of a to-do is between 2000-01-01 and 2100-12-31.',
     'todo_ora_senza_giorno' => 'A time needs a day: send the day as well, or remove the time.',
+    'todo_ripetizione_senza_giorno' => 'A repeat needs a day: send the day as well, or remove the repeat.',
+    'todo_giorno_di_un_todo_che_si_ripete' => 'A to-do that repeats needs its day: remove the repeat first, or keep the day.',
     'todo_promemoria_senza_giorno' => 'A reminder comes before a moment: give the to-do a day, then add the reminder.',
     'todo_posizione' => 'The :attribute field is not written: to put a to-do somewhere else use dopo_id (and lista_id if it changes list).',
     'todo_dopo_id' => 'The :attribute field takes the id of another to-do of yours, in the list where the to-do ends up; null puts it first.',

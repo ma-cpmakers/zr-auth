@@ -248,6 +248,8 @@ return [
     'lista_del_todo' => 'Non hai una lista del To-do con questo id: gli id delle liste che vedi li dà board.todo.liste.elenca.',
     'todo_giorno_fuori_intervallo' => 'Il giorno di un to-do sta fra 2000-01-01 e 2100-12-31.',
     'todo_ora_senza_giorno' => "L'ora vuole un giorno: dai anche il giorno, o togli l'ora.",
+    'todo_ripetizione_senza_giorno' => 'La ripetizione vuole un giorno: dai anche il giorno, o togli la ripetizione.',
+    'todo_giorno_di_un_todo_che_si_ripete' => 'Un to-do che si ripete vuole il giorno: togli prima la ripetizione, o lascia il giorno.',
     'todo_promemoria_senza_giorno' => 'Un promemoria sta prima di un momento: dai un giorno al to-do, poi aggiungi il promemoria.',
     'todo_posizione' => 'Il campo :attribute non si scrive: per mettere un to-do in un altro posto usa dopo_id (e lista_id se cambia lista).',
     'todo_dopo_id' => "Il campo :attribute vuole l'id di un altro to-do tuo, della lista dove il to-do va a finire; null lo mette in testa.",

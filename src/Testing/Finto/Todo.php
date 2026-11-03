@@ -42,6 +42,10 @@ trait Todo
 
     private const TODO_NOTE = 10000;
 
+    private const TODO_INDIRIZZO = 300;
+
+    private const TODO_RIPETIZIONI = ['giornaliera', 'lavorativa', 'settimanale', 'mensile', 'annuale'];
+
     private const TODO_TAG = 20;
 
     private const TODO_TAG_LUNGHEZZA = 50;
@@ -336,6 +340,7 @@ trait Todo
             $this->frena('board.todo.elementi.crea:persona:'.$chi['persona'].':'.$chi['workspace'], self::FRENI['board_todo_elementi_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, $this->regoleElementoTodo(true));
             $this->oraSenzaGiornoTodo($campi['giorno'] ?? null, $campi['ora'] ?? null);
+            $this->ripetizioneSenzaGiornoTodo($campi['giorno'] ?? null, $campi['ripetizione'] ?? null);
             $personale = $this->personaleTodo($chi);
             $lista = match (true) {
                 isset($campi['lista_id']) => $this->listaDelCampoTodo($chi, (string) $campi['lista_id']),
@@ -351,6 +356,7 @@ trait Todo
             $this->todoElementi[$id] = [
                 'id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'lista' => $lista['id'], 'scheda' => $legami['scheda'], 'assegnato' => $legami['assegnato'],
                 'titolo' => trim((string) $campi['titolo']), 'note' => $campi['note'] ?? null, 'giorno' => $campi['giorno'] ?? null, 'ora' => $campi['ora'] ?? null,
+                'ripetizione' => $campi['ripetizione'] ?? null, 'indirizzo' => $campi['indirizzo'] ?? null, 'generato_da' => null,
                 'tag' => $this->tagSenzaDoppioniTodo($campi['tag'] ?? []), 'colore' => $campi['colore'] ?? 'neutral',
                 'posizione' => $this->posizioneTodo($lista['id'], null, null, false), 'fatto_il' => null, 'archiviato' => false,
                 'creato_il' => $ora, 'aggiornato_il' => $ora,
@@ -401,7 +407,7 @@ trait Todo
         }
 
         $this->pretendiLaVersioneCrm($richiesta, $this->versioneTodo($corrente, 'aggiornato_il'));
-        $campi = $this->modificaTodo($corpo, $this->regoleElementoTodo(false), ['titolo', 'lista_id', 'giorno', 'ora', 'tag', 'note', 'colore', 'assegnato_a', 'scheda_id', 'dopo_id']);
+        $campi = $this->modificaTodo($corpo, $this->regoleElementoTodo(false), ['titolo', 'lista_id', 'giorno', 'ora', 'ripetizione', 'tag', 'note', 'colore', 'indirizzo', 'assegnato_a', 'scheda_id', 'dopo_id']);
         $cambi = [];
 
         if (array_key_exists('titolo', $campi)) {
@@ -416,6 +422,10 @@ trait Todo
             $cambi['colore'] = $campi['colore'];
         }
 
+        if (array_key_exists('indirizzo', $campi)) {
+            $cambi['indirizzo'] = $campi['indirizzo'];
+        }
+
         if (array_key_exists('tag', $campi)) {
             $cambi['tag'] = $this->tagSenzaDoppioniTodo($campi['tag']);
         }
@@ -426,6 +436,10 @@ trait Todo
         $this->oraSenzaGiornoTodo($giorno, $ora);
         $cambi['giorno'] = $giorno;
         $cambi['ora'] = $ora;
+        // Un to-do che si ripete ha il suo giorno: né si ripete senza, né il giorno gli si toglie (#2922).
+        $ripetizione = array_key_exists('ripetizione', $campi) ? $campi['ripetizione'] : $corrente['ripetizione'];
+        $this->ripetizioneSenzaGiornoTodo($giorno, $ripetizione, ! array_key_exists('ripetizione', $campi));
+        $cambi['ripetizione'] = $ripetizione;
         $cambi += $this->collocaTodo($chi, $corrente, $campi);
         $cambi += $this->legamiCambiatiTodo($chi, $corrente, $campi, $cambi['lista'] ?? null);
         $assegnatarioTolto = $this->togliAssegnatarioDiUnaltraBoardTodo($chi, $corrente, $campi, $cambi);
@@ -498,6 +512,8 @@ trait Todo
         if ($corrente['fatto_il'] === null) {
             $ora = $this->dopoTodo($corrente['aggiornato_il']);
             $this->todoElementi[$id] = [...$corrente, 'fatto_il' => $ora, 'aggiornato_il' => $ora];
+            // Se si ripete, il prossimo nasce qui (TodoRipetizione::generaLaProssima, #2922).
+            $this->generaLaProssimaTodo($this->todoElementi[$id], $chi);
         }
 
         $voce = $this->voceElementoTodo($this->todoElementi[$id]);
@@ -685,10 +701,12 @@ trait Todo
                 }
             }],
             'ora' => ['bail', 'sometimes', ...($creazione ? [] : ['nullable']), 'string', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9]$/'],
+            'ripetizione' => ['bail', 'sometimes', 'nullable', 'string', Rule::in(self::TODO_RIPETIZIONI)],
             'tag' => ['bail', 'sometimes', 'array', 'list', 'max:'.self::TODO_TAG],
             'tag.*' => ['bail', 'string', 'min:1', 'max:'.self::TODO_TAG_LUNGHEZZA, 'not_regex:/#/', new NomeScritto],
             'note' => ['bail', 'sometimes', 'nullable', 'string', 'max:'.self::TODO_NOTE, new SenzaCarattereNullo],
             'colore' => ['bail', 'sometimes', Rule::in(self::TODO_COLORI)],
+            'indirizzo' => ['bail', 'sometimes', 'nullable', 'string', 'max:'.self::TODO_INDIRIZZO, new SenzaCarattereNullo],
             'fatto_il' => [$this->rifiutaIlCampoTodo('regole.campo_di_un_altro_metodo', ['metodo' => 'board.todo.elementi.completamento.crea'])],
             'posizione' => [$this->rifiutaIlCampoTodo('regole.todo_posizione')],
             ...($creazione ? [] : ['dopo_id' => ['bail', 'sometimes', 'nullable', 'string', 'max:64']]),
@@ -707,7 +725,9 @@ trait Todo
             'id' => $e['id'], 'lista_id' => $e['lista'], 'scheda_id' => $e['scheda'] ?? null, 'assegnato_a' => $e['assegnato'] ?? null, 'titolo' => $e['titolo'],
             ...($intero ? ['note' => $e['note'] ?? ''] : []),
             'fatto_il' => $e['fatto_il'] === null ? null : self::iso($e['fatto_il']), 'giorno' => $e['giorno'], 'ora' => $e['ora'],
+            'ripetizione' => $e['ripetizione'] ?? null,
             'tag' => $e['tag'], 'colore' => $e['colore'],
+            'indirizzo' => $e['indirizzo'] ?? null,
             'crm' => $this->crmDelTodo($e['id'], $e['workspace'], $intero),
             'promemoria_n' => $this->quantiPromemoriaTodo($e['id']),
             'posizione' => $e['posizione'],
@@ -760,6 +780,88 @@ trait Todo
             $this->testi->dichiara($attributo, Regola::CAMPO_VIETATO);
             $rifiuta($testo)->translate(['attribute' => $this->testi->nome($attributo), ...$parametri]);
         };
+    }
+
+    /**
+     * Un to-do che si ripete ha il suo giorno (Todo::ripetizioneSenzaGiorno): senza, 422 `campo_indispensabile` su `#/ripetizione`, o su `#/giorno` se
+     * è la richiesta a toglierlo a un to-do che già si ripete.
+     */
+    private function ripetizioneSenzaGiornoTodo(?string $giorno, ?string $ripetizione, bool $togliendoIlGiorno = false): void
+    {
+        if ($ripetizione === null || $giorno !== null) {
+            return;
+        }
+
+        $testo = $togliendoIlGiorno ? 'regole.todo_giorno_di_un_todo_che_si_ripete' : 'regole.todo_ripetizione_senza_giorno';
+
+        throw new Problema('dati_non_validi', [['detail' => $this->testi->testo($testo), 'regola' => Regola::CAMPO_INDISPENSABILE, 'pointer' => $togliendoIlGiorno ? '#/giorno' : '#/ripetizione']]);
+    }
+
+    /**
+     * Il giorno del prossimo (TodoRipetizione::prossimoGiorno): un passo dopo `$giorno`; `null` oltre l'ultimo giorno ammesso.
+     */
+    private function prossimoGiornoTodo(string $ripetizione, string $giorno): ?string
+    {
+        $data = CarbonImmutable::createFromFormat('!Y-m-d', $giorno, 'UTC');
+
+        $prossimo = match ($ripetizione) {
+            'giornaliera' => $data->addDay(),
+            'lavorativa' => (function () use ($data) {
+                do {
+                    $data = $data->addDay();
+                } while ($data->isWeekend());
+
+                return $data;
+            })(),
+            'settimanale' => $data->addWeek(),
+            'mensile' => $data->addMonthNoOverflow(),
+            default => $data->addYearNoOverflow(),
+        };
+        $testo = $prossimo->format('Y-m-d');
+
+        return $testo > self::TODO_GIORNO_MASSIMO ? null : $testo;
+    }
+
+    /**
+     * Chiuso un to-do che si ripete nasce il prossimo, una volta sola per to-do, anche se è stato eliminato (TodoRipetizione::generaLaProssima): in
+     * coda alla stessa lista, col giorno spostato, e con i suoi promemoria (stesso anticipo) e i collegamenti al CRM.
+     *
+     * @param  array<string, mixed>  $fatto
+     * @param  array<string, mixed>  $chi
+     */
+    private function generaLaProssimaTodo(array $fatto, array $chi): void
+    {
+        if (($fatto['ripetizione'] ?? null) === null || $fatto['giorno'] === null) {
+            return;
+        }
+
+        if (array_filter($this->todoElementi, fn (array $e) => ($e['generato_da'] ?? null) === $fatto['id']) !== []) {
+            return;
+        }
+
+        $giorno = $this->prossimoGiornoTodo($fatto['ripetizione'], $fatto['giorno']);
+
+        if ($giorno === null) {
+            return;
+        }
+
+        $this->tettoDegliApertiTodo($fatto['lista']);
+        $id = self::id();
+        $ora = now()->toImmutable()->startOfMillisecond();
+        $this->todoElementi[$id] = [
+            ...$fatto, 'id' => $id, 'giorno' => $giorno, 'fatto_il' => null, 'generato_da' => $fatto['id'], 'archiviato' => false,
+            'posizione' => $this->posizioneTodo($fatto['lista'], null, null, false), 'creato_il' => $ora, 'aggiornato_il' => $ora,
+        ];
+
+        foreach ($this->promemoriaDelTodo($fatto['id']) as $promemoria) {
+            $nuovo = self::id();
+            $this->todoPromemoria[$nuovo] = [...$promemoria, 'id' => $nuovo, 'elemento' => $id];
+        }
+
+        foreach ($this->collegamentiDelTodoCrm($fatto['id']) as $collegamento) {
+            $nuovo = self::id();
+            $this->todoCrm[$nuovo] = [...$collegamento, 'id' => $nuovo, 'elemento' => $id];
+        }
     }
 
     /** L'ora senza il giorno è 422 `campo_vietato` su `#/ora`. */

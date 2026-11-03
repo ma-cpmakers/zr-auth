@@ -247,6 +247,8 @@ return [
     'lista_del_todo' => 'No tienes una lista del To-do con este id: board.todo.liste.elenca da los ids de las listas que ves.',
     'todo_giorno_fuori_intervallo' => 'El día de una tarea está entre 2000-01-01 y 2100-12-31.',
     'todo_ora_senza_giorno' => 'La hora necesita un día: manda también el día, o quita la hora.',
+    'todo_ripetizione_senza_giorno' => 'La repetición necesita un día: manda también el día, o quita la repetición.',
+    'todo_giorno_di_un_todo_che_si_ripete' => 'Una tarea que se repite necesita su día: quita primero la repetición, o deja el día.',
     'todo_promemoria_senza_giorno' => 'Un recordatorio va antes de un momento: pon un día a la tarea y luego añade el recordatorio.',
     'todo_posizione' => 'El campo :attribute no se escribe: para poner una tarea en otro sitio usa dopo_id (y lista_id si cambia de lista).',
     'todo_dopo_id' => 'El campo :attribute lleva el id de otra tarea tuya, de la lista donde la tarea termina; null la pone la primera.',
