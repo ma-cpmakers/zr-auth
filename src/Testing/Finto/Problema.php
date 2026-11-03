@@ -39,6 +39,7 @@ final class Problema extends RuntimeException
         'lista_gia_esistente' => 409,
         'board_chiusa' => 409,
         'board_senza_metodo' => 409,
+        'metodo_waterfall_fisso' => 409,
         'sprint_attivo' => 409,
         'sprint_chiuso' => 409,
         'sprint_non_pianificato' => 409,

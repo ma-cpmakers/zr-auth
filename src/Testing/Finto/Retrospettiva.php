@@ -92,7 +92,7 @@ trait Retrospettiva
         $board = self::id();
         $nome = mb_substr($this->testi->testo('retrospettiva.nome', ['sprint' => $sprint['nome']]), 0, 100);
         $this->boards[$board] = [
-            'id' => $board, 'workspace' => $chi['workspace'], 'nome' => $nome, 'cartella' => $origine['cartella'], 'metodo' => null, 'stato' => 'attiva', 'creata_il' => $ora, 'aggiornata_il' => $ora,
+            'id' => $board, 'workspace' => $chi['workspace'], 'nome' => $nome, 'cartella' => $origine['cartella'], 'metodo' => 'kanban', 'stato' => 'attiva', 'creata_il' => $ora, 'aggiornata_il' => $ora,
             'chiusa_il' => null, 'nel_cestino_il' => null,
         ];
         $this->sprint[$id]['retrospettiva_board'] = $board;
@@ -119,7 +119,7 @@ trait Retrospettiva
             'id' => $board,
             'nome' => $nome,
             'cartella_id' => $origine['cartella'],
-            'metodo' => null,
+            'metodo' => 'kanban',
             'funzione_attiva' => true,
             'creata_il' => self::iso($ora),
             'aggiornata_il' => self::iso($ora),

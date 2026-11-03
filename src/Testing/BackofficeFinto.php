@@ -135,6 +135,9 @@ final class BackofficeFinto
     /** L'app di un tipo di evento, dal primo prefisso che il tipo ha (config/catalogo.php del backoffice, `prefissi`). */
     private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm'];
 
+    /** I quattro metodi di una board (#2928). */
+    public const METODI_DELLA_BOARD = ['kanban', 'scrum', 'scrumban', 'waterfall'];
+
     private const SCHEDE_VISITATE = 2000;
 
     /** Le voci di ogni fonte nuova di ricerca.crea, e le parole distinte del termine che contano (FontiDellaCornice del backoffice). */
@@ -818,8 +821,8 @@ final class BackofficeFinto
     /**
      * Una cartella delle board del workspace, per provare `board.cartelle.elenca` e il selettore di cartelle di un frontend.
      *
-     * Il `settore` e il `metodo` (#2348) vengono insieme o non vengono, come in `board.cartelle.crea`: `edilizia` con `waterfall`,
-     * `digitale` con `scrum` o `scrumban`; una coppia che il backoffice rifiuta con 422 qui è un `InvalidArgumentException`.
+     * Il `settore` (`edilizia` o `digitale`) e il `metodo` (`kanban`, `scrum`, `scrumban` o `waterfall`) sono indipendenti (#2928), come in
+     * `board.cartelle.crea`: ognuno anche `null`; un valore che il backoffice rifiuta con 422 qui è un `InvalidArgumentException`.
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @return array{id: string, nome: string, colore: string, settore: ?string, metodo: ?string, stato: string}
@@ -827,14 +830,13 @@ final class BackofficeFinto
     public function cartella(array $workspace, string $nome, string $colore = 'pine', string $stato = 'attiva', ?string $settore = null, ?string $metodo = null): array
     {
         $idWorkspace = $this->workspaceDelFinto($workspace);
-        $metodiDelSettore = ['edilizia' => ['waterfall'], 'digitale' => ['scrum', 'scrumban']];
 
-        if (($settore === null) !== ($metodo === null)) {
-            throw new InvalidArgumentException('Il settore e il metodo di una cartella vengono insieme o non vengono.');
+        if ($settore !== null && ! in_array($settore, ['edilizia', 'digitale'], true)) {
+            throw new InvalidArgumentException("Il settore «{$settore}» non c'è: sono edilizia e digitale.");
         }
 
-        if ($settore !== null && ! in_array($metodo, $metodiDelSettore[$settore] ?? [], true)) {
-            throw new InvalidArgumentException("Il metodo «{$metodo}» non va con il settore «{$settore}»: edilizia vuole waterfall, digitale scrum o scrumban.");
+        if ($metodo !== null && ! in_array($metodo, self::METODI_DELLA_BOARD, true)) {
+            throw new InvalidArgumentException("Il metodo «{$metodo}» non c'è: sono kanban, scrum, scrumban e waterfall.");
         }
 
         if (! in_array($colore, ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'], true)) {
@@ -859,8 +861,8 @@ final class BackofficeFinto
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  array<string, mixed>|null  $cartella  una cartella di cartella() dello stesso workspace
-     * Il `metodo` (#2646: waterfall, scrum, scrumban o null) è quello che la board porta in board.board.elenca: il finto non controlla che
-     * vada col settore della cartella, come non modella le liste.
+     * Il `metodo` (#2928: kanban, scrum, scrumban o waterfall, mai null) è quello che la board porta in board.board.elenca; senza, è
+     * `kanban` (come una board di prima nel backoffice). Il finto non controlla la cartella, come non modella le liste.
      *
      * @return array{id: string, nome: string, cartella_id: string, stato: string}
      */
@@ -883,10 +885,14 @@ final class BackofficeFinto
             throw new InvalidArgumentException('La cartella non è di questo workspace: nasce con cartella().');
         }
 
+        if ($metodo !== null && ! in_array($metodo, self::METODI_DELLA_BOARD, true)) {
+            throw new InvalidArgumentException("Il metodo «{$metodo}» non c'è: sono kanban, scrum, scrumban e waterfall.");
+        }
+
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
         $this->boards[$id] = [
-            'id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'cartella' => $idCartella, 'metodo' => $metodo, 'stato' => $stato, 'creata_il' => $ora, 'aggiornata_il' => $ora,
+            'id' => $id, 'workspace' => $idWorkspace, 'nome' => $nome, 'cartella' => $idCartella, 'metodo' => $metodo ?? 'kanban', 'stato' => $stato, 'creata_il' => $ora, 'aggiornata_il' => $ora,
             'chiusa_il' => $stato === 'chiusa' ? $ora : null, 'nel_cestino_il' => $stato === 'cestino' ? $ora : null,
         ];
 
@@ -1883,7 +1889,7 @@ final class BackofficeFinto
         foreach ($this->boards as $board) {
             if ($board['workspace'] === $chi['workspace'] && $board['stato'] === $stato) {
                 $voci[] = [
-                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'metodo' => $board['metodo'] ?? null, 'funzione_attiva' => true, 'creata_il' => self::iso($board['creata_il']),
+                    'id' => $board['id'], 'nome' => $board['nome'], 'cartella_id' => $board['cartella'], 'metodo' => $board['metodo'] ?? 'kanban', 'funzione_attiva' => true, 'creata_il' => self::iso($board['creata_il']),
                     'aggiornata_il' => self::iso($board['aggiornata_il']), 'numero_schede' => $this->schedeDellaBoard($board['id']), 'descrizione' => null,
                     'sfondo' => 'neutral', 'stato' => $board['stato'], 'applica_regole' => true,
                     'chiusa_il' => $board['chiusa_il'] === null ? null : self::iso($board['chiusa_il']),

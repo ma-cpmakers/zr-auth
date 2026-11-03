@@ -98,8 +98,12 @@ return [
         'detail' => 'Questa cartella ha ancora delle board attive o chiuse, e il suo settore non si cambia da edilizia a digitale né si toglie: non ripetere la richiesta uguale.',
     ],
     'board_senza_metodo' => [
-        'title' => 'Board senza metodo',
-        'detail' => "Questa board non ha un metodo di lavoro (è nata senza, o la sua area non ha un settore), quindi non c'è un metodo da cambiare: non ripetere la richiesta uguale.",
+        'title' => 'Board senza il metodo giusto',
+        'detail' => 'Questa board non ha il metodo che serve a questa operazione (la pianificazione e il flusso sono di una board scrumban, gli sprint di una board scrum): cambia il metodo della board con board.board.metodo.modifica. Non ripetere la richiesta uguale.',
+    ],
+    'metodo_waterfall_fisso' => [
+        'title' => 'Metodo waterfall fisso',
+        'detail' => 'Il metodo waterfall si sceglie solo quando la board nasce: una board waterfall non passa a un altro metodo, e una board di un altro metodo non diventa waterfall. Non ripetere la richiesta uguale.',
     ],
     'sprint_attivo' => [
         'title' => 'Sprint attivo',
@@ -368,6 +372,26 @@ return [
     'provider_gia_collegato' => [
         'title' => 'Provider già collegato',
         'detail' => 'Il tuo account ha già un altro account di questo provider collegato. Scollegalo e ripeti. Il metodo non ha scritto niente.',
+    ],
+    'secondo_fattore_non_valido' => [
+        'title' => 'Secondo fattore non valido',
+        'detail' => "Il codice non vale: è sbagliato, è già stato usato, la sfida è scaduta o è esaurita. Rifai l'ingresso dalla password.",
+    ],
+    'invito_non_valido' => [
+        'title' => 'Invito non valido',
+        'detail' => 'Questo invito non vale: è scaduto, è già stato usato, è stato annullato, o la password non è quella giusta. Chiedi a un superadmin un invito nuovo.',
+    ],
+    'staff_gia_presente' => [
+        'title' => 'Persona già nello staff',
+        'detail' => 'Questa persona è già nello staff di Zeiras. Per cambiarle il ruolo usa staff.modifica; per rifarle l\'invito, il reset del secondo fattore. Il metodo non ha scritto niente.',
+    ],
+    'ultimo_superadmin' => [
+        'title' => 'Ultimo superadmin',
+        'detail' => 'Questa è l\'ultima persona con il ruolo superadmin, e lo staff ne ha sempre almeno una: dai prima il ruolo a un\'altra persona. Il metodo non ha scritto niente.',
+    ],
+    'dominio_non_ammesso' => [
+        'title' => 'Dominio non ammesso',
+        'detail' => 'L\'email non è di un dominio ammesso per lo staff di Zeiras (o ha un \'+\' nella parte locale, o è una casella esclusa). Il metodo non ha scritto niente.',
     ],
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
