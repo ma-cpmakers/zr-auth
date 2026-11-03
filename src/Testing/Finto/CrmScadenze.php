@@ -444,7 +444,7 @@ trait CrmScadenze
             $nuova = self::id();
             $ora = self::adessoCrm();
             $this->crm['scadenze'][$nuova] = [
-                ...$riga, 'id' => $nuova, 'origine' => 'manuale', 'scade_il' => $campi['scade_il'], 'preavviso_dal' => self::preavvisoDalCrm($campi['scade_il'], $riga['preavvisi']),
+                ...$riga, 'id' => $nuova, 'origine' => $riga['origine'] === 'acquisto' ? 'manuale' : $riga['origine'], 'scade_il' => $campi['scade_il'], 'preavviso_dal' => self::preavvisoDalCrm($campi['scade_il'], $riga['preavvisi']),
                 'stato' => 'attiva', 'chiusa_il' => null, 'motivo' => null, 'rinnovata_da' => null,
                 'creata_da' => $riga['creata_da'], 'creata_il' => $ora, 'aggiornata_il' => $ora,
             ];
