@@ -369,6 +369,26 @@ return [
         'title' => 'Provider already linked',
         'detail' => 'Your account already has another account of this provider linked. Unlink it and try again. The method wrote nothing.',
     ],
+    'secondo_fattore_non_valido' => [
+        'title' => 'Second factor not valid',
+        'detail' => 'The code is not valid: it is wrong, it was already used, or the challenge has expired or run out of attempts. Start the sign-in again from the password.',
+    ],
+    'invito_non_valido' => [
+        'title' => 'Invitation not valid',
+        'detail' => 'This invitation is not valid: it has expired, it was already used, it was cancelled, or the password is wrong. Ask a superadmin for a new invitation.',
+    ],
+    'staff_gia_presente' => [
+        'title' => 'Person already on the staff',
+        'detail' => 'This person is already on the Zeiras staff. To change the role use staff.modifica; to send a new invitation, reset the second factor. The method wrote nothing.',
+    ],
+    'ultimo_superadmin' => [
+        'title' => 'Last superadmin',
+        'detail' => 'This is the last person with the superadmin role, and the staff always has at least one: give the role to another person first. The method wrote nothing.',
+    ],
+    'dominio_non_ammesso' => [
+        'title' => 'Domain not allowed',
+        'detail' => 'The email is not on a domain allowed for the Zeiras staff (or it has a \'+\' in the local part, or it is an excluded mailbox). The method wrote nothing.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',

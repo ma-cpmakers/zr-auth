@@ -369,6 +369,26 @@ return [
         'title' => 'Proveedor ya vinculado',
         'detail' => 'Tu cuenta ya tiene vinculada otra cuenta de este proveedor. Desvincúlala y repite. El método no escribió nada.',
     ],
+    'secondo_fattore_non_valido' => [
+        'title' => 'Segundo factor no válido',
+        'detail' => 'El código no es válido: es incorrecto, ya se usó, o el desafío caducó o agotó sus intentos. Vuelve a iniciar sesión desde la contraseña.',
+    ],
+    'invito_non_valido' => [
+        'title' => 'Invitación no válida',
+        'detail' => 'Esta invitación no es válida: caducó, ya se usó, fue anulada, o la contraseña es incorrecta. Pide a un superadmin una invitación nueva.',
+    ],
+    'staff_gia_presente' => [
+        'title' => 'Persona ya en el staff',
+        'detail' => 'Esta persona ya está en el staff de Zeiras. Para cambiarle el rol usa staff.modifica; para enviarle una invitación nueva, el reinicio del segundo factor. El método no escribió nada.',
+    ],
+    'ultimo_superadmin' => [
+        'title' => 'Último superadmin',
+        'detail' => 'Esta es la última persona con el rol superadmin, y el staff siempre tiene al menos una: da antes el rol a otra persona. El método no escribió nada.',
+    ],
+    'dominio_non_ammesso' => [
+        'title' => 'Dominio no admitido',
+        'detail' => 'El email no es de un dominio admitido para el staff de Zeiras (o tiene un \'+\' en la parte local, o es un buzón excluido). El método no escribió nada.',
+    ],
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',

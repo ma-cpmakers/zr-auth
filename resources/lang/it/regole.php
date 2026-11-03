@@ -282,6 +282,7 @@ return [
     'foto_peso' => 'La foto pesa troppo: al più 2 MB.',
     'foto_formato' => 'La foto deve essere un file JPEG, PNG o WebP che si legge (un WebP animato o un file rotto non vale).',
     'foto_lato' => 'La foto ha un lato oltre i :lato pixel.',
+    'staff_persona_non_trovata' => 'Non c\'è una persona di Zeiras con questa email verificata: l\'account deve esistere ed essere verificato prima di entrare nello staff.',
     'board_diversa' => "La board d'arrivo è quella di partenza: per cambiare posto dentro la stessa board c'è lo spostamento (board.schede.spostamento.crea, board.liste.spostamento.crea).",
     'tipo_nella_board_d_arrivo' => "Il tipo di una scheda da portare non è fra quelli del metodo della board d'arrivo (:tipi): i tipi ammessi li dà board.board.mostra nel campo `tipi`.",
     'lista_d_arrivo' => "Questa lista non è della board d'arrivo: gli id delle liste li dà board.board.mostra.",
