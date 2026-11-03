@@ -98,8 +98,12 @@ return [
         'detail' => 'Questa cartella ha ancora delle board attive o chiuse, e il suo settore non si cambia da edilizia a digitale né si toglie: non ripetere la richiesta uguale.',
     ],
     'board_senza_metodo' => [
-        'title' => 'Board senza metodo',
-        'detail' => "Questa board non ha un metodo di lavoro (è nata senza, o la sua area non ha un settore), quindi non c'è un metodo da cambiare: non ripetere la richiesta uguale.",
+        'title' => 'Board senza il metodo giusto',
+        'detail' => 'Questa board non ha il metodo che serve a questa operazione (la pianificazione e il flusso sono di una board scrumban, gli sprint di una board scrum): cambia il metodo della board con board.board.metodo.modifica. Non ripetere la richiesta uguale.',
+    ],
+    'metodo_waterfall_fisso' => [
+        'title' => 'Metodo waterfall fisso',
+        'detail' => 'Il metodo waterfall si sceglie solo quando la board nasce: una board waterfall non passa a un altro metodo, e una board di un altro metodo non diventa waterfall. Non ripetere la richiesta uguale.',
     ],
     'sprint_attivo' => [
         'title' => 'Sprint attivo',

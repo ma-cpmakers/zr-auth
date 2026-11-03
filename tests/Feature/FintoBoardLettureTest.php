@@ -301,32 +301,50 @@ it('un ordina fuori dai tre valori è 422 sul parametro; il cursore di un ordine
     }
 })->with(['/v1/board/cartelle', '/v1/board/board']);
 
-// #2348 (AR.1, AR.2, AR.5): il settore e il metodo di una cartella, nel finto come nel backoffice: insieme o nessuno dei due, e con le coppie che
-// board.cartelle.crea ammette (le altre là sono 422, qui un'eccezione del fixture).
-it('board.cartelle.elenca dà il settore e il metodo di ogni cartella, null e null per quelle nate senza (#2348)', function () {
+// #2348 (AR.1, AR.2, AR.5) e #2928: il settore e il metodo di una cartella, nel finto come nel backoffice: indipendenti, ognuno anche null, e il
+// metodo è uno dei quattro di una board (i valori che board.cartelle.crea rifiuta con 422 qui sono un'eccezione del fixture).
+it('board.cartelle.elenca dà il settore e il metodo di ogni cartella, in qualunque coppia, null e null per quelle nate senza (#2348, #2928)', function () {
     [$finto, $studio, , , $gettone] = conLeBoard();
     $finto->cartella($studio, 'Cantiere', 'sky', settore: 'edilizia', metodo: 'waterfall');
     $finto->cartella($studio, 'Prodotto', 'plum', settore: 'digitale', metodo: 'scrumban');
+    $finto->cartella($studio, 'Misto', 'coral', settore: 'edilizia', metodo: 'scrum');
+    $finto->cartella($studio, 'Solo metodo', 'pine', metodo: 'kanban');
+    $finto->cartella($studio, 'Solo settore', 'citrus', settore: 'digitale');
     $finto->cartella($studio, 'Vecchia');
 
     $voci = array_column(alFinto('GET', '/v1/board/cartelle', null, $gettone)->json('data'), null, 'nome');
 
     expect(array_map(fn (array $voce) => [$voce['settore'], $voce['metodo']], $voci))->toBe([
         'Cantiere' => ['edilizia', 'waterfall'],
+        'Misto' => ['edilizia', 'scrum'],
         'Prodotto' => ['digitale', 'scrumban'],
+        'Solo metodo' => [null, 'kanban'],
+        'Solo settore' => ['digitale', null],
         'Vecchia' => [null, null],
     ]);
 });
 
-it('il fixture di una cartella rifiuta un solo dei due, un valore fuori elenco e una coppia incoerente, come board.cartelle.crea (#2348)', function (?string $settore, ?string $metodo) {
+it('il fixture di una cartella rifiuta un settore o un metodo fuori elenco, come board.cartelle.crea (#2348, #2928)', function (?string $settore, ?string $metodo) {
     [$finto, $studio] = conLeBoard();
 
     expect(fn () => $finto->cartella($studio, 'Cantiere', settore: $settore, metodo: $metodo))->toThrow(InvalidArgumentException::class);
 })->with([
-    'il solo settore' => ['digitale', null],
-    'il solo metodo' => [null, 'scrum'],
-    'edilizia con scrum' => ['edilizia', 'scrum'],
-    'digitale con waterfall' => ['digitale', 'waterfall'],
     'un settore fuori elenco' => ['generico', 'scrum'],
+    'un settore fuori elenco, da solo' => ['lean', null],
     'un metodo fuori elenco' => ['digitale', 'lean'],
+    'un metodo fuori elenco, da solo' => [null, 'edilizia'],
 ]);
+
+it('board.board.elenca dà kanban a una board senza metodo, mai null (#2928)', function () {
+    [$finto, $studio, , , $gettone] = conLeBoard();
+    $digitale = $finto->cartella($studio, 'Prodotto', 'plum', settore: 'digitale', metodo: 'scrum');
+    $libera = $finto->cartella($studio, 'Libera');
+    $finto->board($studio, 'Del reparto', $digitale, metodo: 'scrum');
+    $finto->board($studio, 'Senza', $libera);
+    $finto->board($studio, 'Cantiere', $libera, metodo: 'waterfall');
+
+    $voci = array_column(alFinto('GET', '/v1/board/board', null, $gettone)->json('data'), 'metodo', 'nome');
+
+    expect($voci)->toBe(['Cantiere' => 'waterfall', 'Del reparto' => 'scrum', 'Senza' => 'kanban']);
+    expect(fn () => $finto->board($studio, 'Strana', $libera, metodo: 'lean'))->toThrow(InvalidArgumentException::class);
+});

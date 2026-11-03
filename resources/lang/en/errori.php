@@ -98,8 +98,12 @@ return [
         'detail' => 'This folder still has active or closed boards, so its sector cannot be changed from construction to digital or removed: do not repeat the same request.',
     ],
     'board_senza_metodo' => [
-        'title' => 'Board without a method',
-        'detail' => 'This board has no working method (it was created without one, or its area has no sector), so there is no method to change: do not repeat the same request.',
+        'title' => 'Board without the right method',
+        'detail' => "This board does not have the method this operation needs (planning and flow belong to a scrumban board, sprints to a scrum board): change the board's method with board.board.metodo.modifica. Do not repeat the same request.",
+    ],
+    'metodo_waterfall_fisso' => [
+        'title' => 'Waterfall method is fixed',
+        'detail' => 'The waterfall method is chosen only when the board is created: a waterfall board does not move to another method, and a board of another method does not become waterfall. Do not repeat the same request.',
     ],
     'sprint_attivo' => [
         'title' => 'Sprint is active',

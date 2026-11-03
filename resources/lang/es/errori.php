@@ -98,8 +98,12 @@ return [
         'detail' => 'Esta carpeta todavía tiene tableros activos o cerrados, y su sector no se puede cambiar de construcción a digital ni quitar: no repitas la misma solicitud.',
     ],
     'board_senza_metodo' => [
-        'title' => 'Tablero sin método',
-        'detail' => 'Este tablero no tiene un método de trabajo (nació sin él, o su área no tiene sector), así que no hay un método que cambiar: no repitas la misma solicitud.',
+        'title' => 'Tablero sin el método adecuado',
+        'detail' => 'Este tablero no tiene el método que necesita esta operación (la planificación y el flujo son de un tablero scrumban, los sprints de un tablero scrum): cambia el método del tablero con board.board.metodo.modifica. No repitas la misma solicitud.',
+    ],
+    'metodo_waterfall_fisso' => [
+        'title' => 'Método waterfall fijo',
+        'detail' => 'El método waterfall se elige solo cuando el tablero nace: un tablero waterfall no pasa a otro método, y un tablero de otro método no se vuelve waterfall. No repitas la misma solicitud.',
     ],
     'sprint_attivo' => [
         'title' => 'Sprint activo',
