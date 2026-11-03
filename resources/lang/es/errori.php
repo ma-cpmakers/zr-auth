@@ -165,6 +165,10 @@ return [
         'title' => 'Lista archivada',
         'detail' => 'Esta lista está archivada: restáurala antes de modificarla o de modificar sus tarjetas.',
     ],
+    'lista_non_trasferibile' => [
+        'title' => "Lista no transferible",
+        'detail' => "La lista de acciones de una retrospectiva se queda en su tablero: no se puede llevar a otro. No repitas la solicitud.",
+    ],
     'board_chiusa' => [
         'title' => 'Tablero no activo',
         'detail' => 'Este tablero está cerrado o en la papelera: vuelve a activarlo antes de modificar sus listas, sus tarjetas o sus etiquetas.',
