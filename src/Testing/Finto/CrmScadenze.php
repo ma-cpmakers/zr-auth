@@ -523,6 +523,18 @@ trait CrmScadenze
         ];
     }
 
+    /** Il `voce_nome` della scadenza (Scadenze::voceNome, #2967): il nome della voce alla vendita se l'origine è `acquisto`, altrimenti `null`. */
+    private function voceNomeDellaScadenzaCrm(array $riga): ?string
+    {
+        if ($riga['origine'] !== 'acquisto' || ($riga['acquisto_id'] ?? null) === null) {
+            return null;
+        }
+
+        $acquisto = $this->crm['acquisti'][$riga['acquisto_id']] ?? null;
+
+        return $acquisto !== null && $acquisto['workspace'] === $riga['workspace'] ? $acquisto['voce_nome'] : null;
+    }
+
     /**
      * Lo schema Scadenza (Forme::scadenza): `stato` è quello che si vede oggi (`$oggi`, nel fuso del workspace). Se la scadenza è nata da un
      * campo «sensibile» che chi chiama non vede, `scade_il`, `prossimo_preavviso_il` e `motivo` sono `null` (lo `stato` resta).
@@ -535,7 +547,8 @@ trait CrmScadenze
 
         return [
             'id' => $riga['id'], 'tipo_id' => $riga['tipo_id'], 'persona_id' => $riga['persona_id'], 'organizzazione_id' => $riga['organizzazione_id'],
-            'acquisto_id' => $riga['acquisto_id'], 'scade_il' => $nascosta ? null : $riga['scade_il'], 'preavvisi' => $riga['preavvisi'],
+            'acquisto_id' => $riga['acquisto_id'], 'voce_nome' => $this->voceNomeDellaScadenzaCrm($riga),
+            'scade_il' => $nascosta ? null : $riga['scade_il'], 'preavvisi' => $riga['preavvisi'],
             'responsabile_id' => $riga['responsabile_id'], 'origine' => $riga['origine'], 'stato' => self::statoDellaScadenzaCrm($riga, $oggi),
             'chiusa_il' => $riga['chiusa_il'], 'motivo' => $nascosta ? null : $riga['motivo'], 'rinnovata_da' => $riga['rinnovata_da'],
             'prossimo_preavviso_il' => $nascosta ? null : self::prossimoPreavvisoCrm($riga, $oggi), 'creata_da' => $riga['creata_da'],
