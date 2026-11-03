@@ -162,16 +162,17 @@ trait CrmScadenze
         $entro = isset($query['entro']) && $query['entro'] !== '' ? (string) $query['entro'] : null;
         $ordina = (string) ($query['ordina'] ?? self::CRM_SCADENZE_ORDINI[0]);
         $oggi = self::oggiAcquistoCrm();
+        $nascoste = $this->chiaviNascosteDelleScadenzeCrm($workspace);
         $righe = array_values(array_filter(
             $this->righeCrm('scadenze', $workspace),
             fn (array $riga) => ($filtri[0] === null || $riga['persona_id'] === $filtri[0]) && ($filtri[1] === null || $riga['organizzazione_id'] === $filtri[1])
                 && ($filtri[2] === null || $riga['acquisto_id'] === $filtri[2]) && ($filtri[3] === null || $riga['tipo_id'] === $filtri[3])
-                && ($filtri[4] === null || $riga['responsabile_id'] === $filtri[4]) && ($entro === null || $riga['scade_il'] <= $entro)
+                && ($filtri[4] === null || $riga['responsabile_id'] === $filtri[4]) && ($entro === null || self::dataDiOrdineDellaScadenzaCrm($riga, $nascoste) <= $entro)
                 && in_array(self::statoDellaScadenzaCrm($riga, $oggi), $stati, true),
         ));
         $verso = str_starts_with($ordina, '-') ? -1 : 1;
         $lista = 'crm.scadenze.elenca:'.substr(hash('sha256', json_encode([$ordina, $filtri, $stati, $entro], JSON_THROW_ON_ERROR)), 0, 16);
-        $risposta = $this->paginaCrm($richiesta, $lista, $righe, fn (array $una, array $altra): int => $verso * strcmp($una['scade_il'], $altra['scade_il']) ?: $una['id'] <=> $altra['id'], fn (array $riga) => $this->voceScadenzaCrm($riga, $oggi));
+        $risposta = $this->paginaCrm($richiesta, $lista, $righe, fn (array $una, array $altra): int => $verso * strcmp(self::dataDiOrdineDellaScadenzaCrm($una, $nascoste), self::dataDiOrdineDellaScadenzaCrm($altra, $nascoste)) ?: $una['id'] <=> $altra['id'], fn (array $riga) => $this->voceScadenzaCrm($riga, $oggi));
 
         if (($query['totale'] ?? null) === 'true') {
             $risposta[1]['totale'] = min(count($righe), self::CRM_TETTO_DEL_TOTALE);
@@ -210,7 +211,8 @@ trait CrmScadenze
             $this->righeCrm('scadenze', $workspace),
             fn (array $riga) => $riga['stato'] === 'attiva' && ($id('responsabile_id') === null || $riga['responsabile_id'] === $id('responsabile_id')) && ($id('tipo_id') === null || $riga['tipo_id'] === $id('tipo_id')),
         );
-        $entro = fn (int $giorni): int => count(array_filter($aperte, fn (array $riga) => $riga['scade_il'] >= $oggi && $riga['scade_il'] <= $fino($giorni)));
+        $nascoste = $this->chiaviNascosteDelleScadenzeCrm($workspace);
+        $entro = fn (int $giorni): int => count(array_filter($aperte, fn (array $riga) => self::dataDiOrdineDellaScadenzaCrm($riga, $nascoste) >= $oggi && self::dataDiOrdineDellaScadenzaCrm($riga, $nascoste) <= $fino($giorni)));
 
         return [200, ['data' => [
             'scadute' => count(array_filter($aperte, fn (array $riga) => $riga['scade_il'] < $oggi)),
@@ -291,6 +293,7 @@ trait CrmScadenze
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('scadenze', $chi['workspace'], $id);
+        $this->pretendiLaScadenzaVisibileCrm($riga);
         $this->pretendiLaVersioneCrm($richiesta, $this->voceScadenzaCrm($riga, self::oggiAcquistoCrm()));
         $campi = $this->modificaCrm($corpo, [
             'scade_il' => $this->regolaDellaDataDiScadenzaCrm(false),
@@ -347,7 +350,7 @@ trait CrmScadenze
     private function rinnovaScadenzaCrm(Request $richiesta, array $corpo, string $id): array
     {
         $chi = $this->conCrm($richiesta);
-        $this->rigaCrm('scadenze', $chi['workspace'], $id);
+        $this->pretendiLaScadenzaVisibileCrm($this->rigaCrm('scadenze', $chi['workspace'], $id));
 
         return $this->conIdempotenza($richiesta, 'crm.scadenze.rinnovo.crea', $chi, ['corpo' => $corpo, 'percorso' => ['scadenza' => strtolower($id)]], function () use ($richiesta, $chi, $corpo, $id) {
             $riga = $this->rigaCrm('scadenze', $chi['workspace'], $id);
@@ -380,6 +383,7 @@ trait CrmScadenze
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('scadenze', $chi['workspace'], $id);
+        $this->pretendiLaScadenzaVisibileCrm($riga);
         $this->pretendiLaVersioneCrm($richiesta, $this->voceScadenzaCrm($riga, self::oggiAcquistoCrm()));
         $campi = $this->testi->validaCorpo($corpo, ['motivo' => ['bail', 'sometimes', 'nullable', 'string', 'max:'.self::CRM_SCADENZE_MOTIVO, new SenzaCarattereNullo]]);
         self::controllaCheSiaApertaCrm($riga);
@@ -435,18 +439,21 @@ trait CrmScadenze
     }
 
     /**
-     * Lo schema Scadenza (Forme::scadenza): `stato` è quello che si vede oggi (`$oggi`, nel fuso del workspace).
+     * Lo schema Scadenza (Forme::scadenza): `stato` è quello che si vede oggi (`$oggi`, nel fuso del workspace). Se la scadenza è nata da un
+     * campo «sensibile» che chi chiama non vede, `scade_il`, `prossimo_preavviso_il` e `motivo` sono `null` (lo `stato` resta).
      *
      * @return array<string, mixed>
      */
     private function voceScadenzaCrm(array $riga, string $oggi): array
     {
+        $nascosta = self::scadenzaNascostaCrm($riga, $this->chiaviNascosteDelleScadenzeCrm($riga['workspace']));
+
         return [
             'id' => $riga['id'], 'tipo_id' => $riga['tipo_id'], 'persona_id' => $riga['persona_id'], 'organizzazione_id' => $riga['organizzazione_id'],
-            'acquisto_id' => $riga['acquisto_id'], 'scade_il' => $riga['scade_il'], 'preavvisi' => $riga['preavvisi'],
+            'acquisto_id' => $riga['acquisto_id'], 'scade_il' => $nascosta ? null : $riga['scade_il'], 'preavvisi' => $riga['preavvisi'],
             'responsabile_id' => $riga['responsabile_id'], 'origine' => $riga['origine'], 'stato' => self::statoDellaScadenzaCrm($riga, $oggi),
-            'chiusa_il' => $riga['chiusa_il'], 'motivo' => $riga['motivo'], 'rinnovata_da' => $riga['rinnovata_da'],
-            'prossimo_preavviso_il' => self::prossimoPreavvisoCrm($riga, $oggi), 'creata_da' => $riga['creata_da'],
+            'chiusa_il' => $riga['chiusa_il'], 'motivo' => $nascosta ? null : $riga['motivo'], 'rinnovata_da' => $riga['rinnovata_da'],
+            'prossimo_preavviso_il' => $nascosta ? null : self::prossimoPreavvisoCrm($riga, $oggi), 'creata_da' => $riga['creata_da'],
             'creata_il' => self::iso($riga['creata_il']), 'aggiornata_il' => self::iso($riga['aggiornata_il']),
         ];
     }
@@ -588,18 +595,72 @@ trait CrmScadenze
     }
 
     /**
+     * Le chiavi dei campi «sensibili» dei contatti, anche eliminati, che chi chiama non vede (Scadenze::chiaviNascoste): nessuna per il
+     * proprietario e gli amministratori.
+     *
+     * @return list<string>
+     */
+    private function chiaviNascosteDelleScadenzeCrm(string $workspace): array
+    {
+        return $this->vedeISensibiliCrm ? [] : $this->chiaviSensibiliDeiContattiCrm($workspace);
+    }
+
+    /** @return list<string> */
+    private function chiaviSensibiliDeiContattiCrm(string $workspace): array
+    {
+        $this->campiDelWorkspaceCrm($workspace);
+        $chiavi = [];
+
+        foreach ($this->campiCrm[$workspace]['persona']['campi'] as $campo) {
+            if ($campo['origine'] === 'tuo' && ($campo['sensibile'] ?? false)) {
+                $chiavi[] = (string) $campo['codice'];
+            }
+        }
+
+        return $chiavi;
+    }
+
+    /** Se la data di questa scadenza è nascosta a chi chiama: nata da un campo sensibile che non vede (Scadenze::nascosta). @param list<string> $nascoste */
+    private static function scadenzaNascostaCrm(array $riga, array $nascoste): bool
+    {
+        return $nascoste !== [] && ($riga['origine'] ?? null) === 'campo' && in_array($riga['campo_chiave'] ?? null, $nascoste, true);
+    }
+
+    /** Il giorno su cui una scadenza si ordina e si filtra: per chi non ne vede la data il più lontano (Scadenze::chiaveDiOrdine). @param list<string> $nascoste */
+    private static function dataDiOrdineDellaScadenzaCrm(array $riga, array $nascoste): string
+    {
+        return self::scadenzaNascostaCrm($riga, $nascoste) ? '9999-12-31' : (string) $riga['scade_il'];
+    }
+
+    /** Chi non vede la data di una scadenza non la cambia, non la rinnova e non la chiude: 403 `permesso_negato` (Scadenze::pretendiVisibile). */
+    private function pretendiLaScadenzaVisibileCrm(array $riga): void
+    {
+        if (self::scadenzaNascostaCrm($riga, $this->chiaviNascosteDelleScadenzeCrm($riga['workspace']))) {
+            throw new Problema('permesso_negato');
+        }
+    }
+
+    /** Se la scadenza è nata da un campo che oggi è sensibile: la sua data è il valore di quel campo (Scadenze::dalCampoSensibile). */
+    private function dalCampoSensibileCrm(array $scadenza): bool
+    {
+        return ($scadenza['origine'] ?? null) === 'campo' && in_array($scadenza['campo_chiave'] ?? null, $this->chiaviSensibiliDeiContattiCrm($scadenza['workspace']), true);
+    }
+
+    /**
      * La riga della cronologia dell'oggetto della scadenza (il contatto o l'azienda), con l'autore e l'id della scadenza (Scadenze::riga): il
-     * `tipo` è `scadenza.<azione>`, le voci il tipo e la data, e per una chiusura il motivo solo se il tipo non è sensibile.
+     * `tipo` è `scadenza.<azione>`, le voci il tipo e la data, e per una chiusura il motivo solo se il tipo non è sensibile. Se la scadenza è
+     * nata da un campo «sensibile» né la data né il motivo entrano (Scadenze::voci e dalCampoSensibile).
      */
     private function rigaDellaScadenzaCrm(array $scadenza, ?string $autore, string $azione, ?string $motivo, bool $conLaData = true): void
     {
         $voci = [['campo' => 'tipo_id', 'dopo' => $scadenza['tipo_id']]];
+        $dalCampo = $this->dalCampoSensibileCrm($scadenza);
 
-        if ($conLaData) {
+        if ($conLaData && ! $dalCampo) {
             $voci[] = ['campo' => 'scade_il', 'dopo' => $scadenza['scade_il']];
         }
 
-        if ($motivo !== null && ! $this->crm['scadenzeTipi'][$scadenza['tipo_id']]['sensibile']) {
+        if ($motivo !== null && ! $dalCampo && ! $this->crm['scadenzeTipi'][$scadenza['tipo_id']]['sensibile']) {
             $voci[] = ['campo' => 'motivo', 'dopo' => $motivo];
         }
 

@@ -1086,6 +1086,33 @@ it('crm.persone: la chiave di un campo sensibile manca per un membro in ogni ris
     }
 });
 
+// #2696, opzione A (zr-pm, 2/11): la scadenza nata da un campo sensibile ha la data nascosta a un membro. Che sia come nel backoffice lo prova il suo FintoTest.
+it('crm.scadenze: la data di una scadenza nata da un campo sensibile è null per un membro, che non la cambia, e filtri, ordine e riepilogo non la rivelano', function () {
+    [, $gettoni] = studioColCrm();
+    ['anna' => $anna, 'carla' => $carla] = $gettoni;
+    $tipo = riuscita(alFinto('POST', '/v1/crm/scadenze/tipi', ['nome' => 'Certificato medico'], $anna))->json('data.id');
+    $campo = riuscita(alFinto('POST', '/v1/crm/campi', ['oggetto' => 'persona', 'nome' => ['it' => 'Certificato'], 'tipo' => 'data', 'sensibile' => true, 'genera_scadenza' => ['tipo_id' => $tipo]], $anna))->json('data.chiave');
+    $data = now()->addDays(10)->format('Y-m-d');
+    $persona = riuscita(alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'campi' => [$campo => $data]], $anna))->json('data.id');
+    $scadenza = alFinto('GET', "/v1/crm/scadenze?persona_id={$persona}", null, $anna)->json('data.0.id');
+
+    expect(alFinto('GET', "/v1/crm/scadenze/{$scadenza}", null, $anna)->json('data.scade_il'))->toBe($data);
+
+    $mostrata = alFinto('GET', "/v1/crm/scadenze/{$scadenza}", null, $carla);
+    expect($mostrata->json('data.scade_il'))->toBeNull()->and($mostrata->json('data.prossimo_preavviso_il'))->toBeNull()->and($mostrata->json('data.stato'))->not->toBeNull();
+
+    // Per un membro è la più lontana: `entro` non la include, e il riepilogo non la conta in nessuna finestra.
+    expect(alFinto('GET', '/v1/crm/scadenze?entro='.now()->addDays(15)->format('Y-m-d'), null, $carla)->json('data'))->toBe([])
+        ->and(alFinto('GET', '/v1/crm/scadenze/riepilogo', null, $carla)->json('data.entro_30'))->toBe(0)
+        ->and(alFinto('GET', '/v1/crm/scadenze/riepilogo', null, $anna)->json('data.entro_30'))->toBe(1)
+        ->and(alFinto('PATCH', "/v1/crm/scadenze/{$scadenza}", ['scade_il' => $data], $carla)->status())->toBe(403)
+        ->and(alFinto('POST', "/v1/crm/scadenze/{$scadenza}/rinnovo", ['scade_il' => $data], $carla)->status())->toBe(403)
+        ->and(alFinto('POST', "/v1/crm/scadenze/{$scadenza}/chiusura", ['motivo' => 'x'], $carla)->status())->toBe(403);
+
+    riuscita(alFinto('POST', "/v1/crm/scadenze/{$scadenza}/chiusura", ['motivo' => 'consegnato'], $anna));
+    expect(alFinto('GET', "/v1/crm/persone/{$persona}/cronologia", null, $anna)->body())->not->toContain($data)->not->toContain('consegnato');
+});
+
 // #2695 (zr-crm #2691 Q5, C1-C4): avvisi in mostra e in elenca. Che sia come nel backoffice lo prova il suo FintoTest.
 it('crm.persone: avvisi dice quali campi data con avvisa mancano o sono scaduti, uguale per i tre ruoli e anche per un campo sensibile (C1-C4)', function () {
     [, $gettoni] = studioColCrm();

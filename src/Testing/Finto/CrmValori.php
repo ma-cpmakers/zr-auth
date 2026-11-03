@@ -187,9 +187,17 @@ trait CrmValori
             }
         }
 
+        // Le scadenze nate da un campo sensibile del contatto: la loro data è il valore del campo, e nessuna riga la porta (anche se scritta prima).
+        $chiavi = in_array('persona', $oggetti, true) ? $this->chiaviSensibiliDeiContattiCrm($workspace) : [];
+        $dalCampo = array_keys(array_filter($this->crm['scadenze'], fn (array $scadenza) => $scadenza['workspace'] === $workspace && $scadenza['origine'] === 'campo' && in_array($scadenza['campo_chiave'], $chiavi, true)));
+
         foreach ($righe as $i => $riga) {
             if ($nomi !== [] && is_array($riga['campi'] ?? null)) {
                 $righe[$i]['campi'] = array_map(fn (mixed $voce) => is_array($voce) && in_array($voce['campo'] ?? null, $nomi, true) ? ['campo' => $voce['campo']] : $voce, $riga['campi']);
+            }
+
+            if (is_string($riga['scadenza_id'] ?? null) && in_array($riga['scadenza_id'], $dalCampo, true) && is_array($righe[$i]['campi'] ?? null)) {
+                $righe[$i]['campi'] = array_values(array_filter($righe[$i]['campi'], fn (mixed $voce) => ! (is_array($voce) && ($voce['campo'] ?? null) === 'scade_il')));
             }
         }
 
