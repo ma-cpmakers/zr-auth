@@ -2312,8 +2312,8 @@ final class BackofficeFinto
             }
         }
 
-        // I tipi del metodo della board d'arrivo (Board::TIPI_DEL_METODO): una scheda senza tipo va dappertutto.
-        $tipi = ['waterfall' => ['fase', 'pratica'], 'scrum' => ['storia', 'bug', 'attivita', 'spike', 'epica'], 'scrumban' => ['storia', 'bug', 'attivita', 'spike', 'epica']][(string) $arrivo['metodo']] ?? [];
+        // I tipi del metodo della board d'arrivo (Board::tipi()): una scheda senza tipo va dappertutto. La `pratica` di waterfall c'è solo in un'area Edilizia (#2928).
+        $tipi = ['waterfall' => ($this->cartelle[$arrivo['cartella']]['settore'] ?? null) === 'edilizia' ? ['fase', 'pratica'] : ['fase'], 'scrum' => ['storia', 'bug', 'attivita', 'spike', 'epica'], 'scrumban' => ['storia', 'bug', 'attivita', 'spike', 'epica']][(string) $arrivo['metodo']] ?? [];
 
         if (($mia['tipo'] ?? null) !== null && ! in_array($mia['tipo'], $tipi, true)) {
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.tipo_nella_board_d_arrivo', ['tipi' => $tipi === [] ? '—' : implode(', ', $tipi)]), 'regola' => 'valore_non_ammesso', 'pointer' => '#/board_id']]);
