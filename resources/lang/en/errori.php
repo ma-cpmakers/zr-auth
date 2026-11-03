@@ -166,8 +166,8 @@ return [
         'detail' => 'This list is archived: restore it before changing it or its cards.',
     ],
     'lista_non_trasferibile' => [
-        'title' => "List cannot be transferred",
-        'detail' => "The actions list of a retrospective stays in its board: it cannot be moved to another one. Do not repeat the request.",
+        'title' => 'List cannot be transferred',
+        'detail' => 'The actions list of a retrospective stays in its board: it cannot be moved to another one. Do not repeat the request.',
     ],
     'board_chiusa' => [
         'title' => 'Board not active',
