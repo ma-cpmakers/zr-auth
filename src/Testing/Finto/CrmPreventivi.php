@@ -533,6 +533,7 @@ trait CrmPreventivi
                 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $autore,
             ];
             $acquisti[] = $nuovo;
+            $this->nasceLaScadenzaDiUnAcquistoCrm($this->crm['acquisti'][$nuovo], $compratore, $autore);
             $parti = $rate === [] ? [] : self::ripartisciPreventivoCrm((int) $this->crm['acquisti'][$nuovo]['prezzo_importo'], array_column($rate, 'importo'));
 
             if ($parti === []) {

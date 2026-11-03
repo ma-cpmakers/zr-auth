@@ -317,6 +317,14 @@ return [
         'title' => 'Horario no disponible',
         'detail' => 'El horario elegido ya no está libre: la franja está llena, el profesional tiene otro compromiso que la toca (una reserva de otro calendario, una pausa). Vuelve a leer las franjas con `bookings.calendari.slot.elenca` y elige otra. No se escribió nada.',
     ],
+    'apertura_con_prenotazioni' => [
+        'title' => 'La apertura tiene reservas',
+        'detail' => 'La apertura tiene reservas vivas y no se elimina mientras existan: las reservas no se tocan. Cancélalas con `bookings.prenotazioni.modifica` (`stato: annullata`) o muévelas, y repite la solicitud. El método no escribió nada.',
+    ],
+    'aperture_non_possibili' => [
+        'title' => 'Aperturas no creadas',
+        'detail' => 'Ninguna de las aperturas pedidas se puede crear, o con `solo_possibili: false` al menos una no se puede: el problema lleva `non_creati`, una lista de `inizio` y `motivo`. Corrige o quita esos inicios, o quita `solo_possibili: false` para abrir los posibles. El método no escribió nada.',
+    ],
     'prenotazioni_future' => [
         'title' => 'Hay reservas futuras',
         'detail' => 'El calendario tiene reservas confirmadas que aún no han empezado, y no se elimina mientras existan. Cancélalas (`bookings.prenotazioni.modifica` con `stato: annullata`) o pon el calendario en pausa con `bookings.calendari.modifica`. No se escribió nada.',

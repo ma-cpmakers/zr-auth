@@ -52,6 +52,8 @@ final class Problema extends RuntimeException
         'prenotazioni_al_limite' => 409,
         'trasferimento_impossibile' => 409,
         'termine_scaduto' => 409,
+        'apertura_con_prenotazioni' => 409,
+        'aperture_non_possibili' => 409,
         'crediti_esauriti' => 409,
         'acquisto_scaduto' => 409,
         'acquisto_necessario' => 409,

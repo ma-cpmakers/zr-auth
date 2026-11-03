@@ -184,6 +184,8 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/schede$#', 'board.schede.elenca'],
         ['GET', '#^/v1/board/schede/([^/]+)$#', 'board.schede.mostra'],
         ['POST', '#^/v1/board/schede/([^/]+)/spostamento$#', 'board.schede.spostamento.crea'],
+        ['POST', '#^/v1/board/schede/([^/]+)/trasferimento$#', 'board.schede.trasferimento.crea'],
+        ['POST', '#^/v1/board/schede/([^/]+)/trasferimento/anteprima$#', 'board.schede.trasferimento.anteprima.crea'],
         ['POST', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.elimina'],
         ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
@@ -1421,6 +1423,8 @@ final class BackofficeFinto
                 'board.schede.elenca' => $this->elencaSchede($richiesta),
                 'board.schede.mostra' => $this->mostraScheda($richiesta, $parametri[0]),
                 'board.schede.spostamento.crea' => $this->spostaScheda($richiesta, $corpo, $parametri[0]),
+                'board.schede.trasferimento.crea' => $this->trasferisciScheda($richiesta, $corpo, $parametri[0], true),
+                'board.schede.trasferimento.anteprima.crea' => $this->trasferisciScheda($richiesta, $corpo, $parametri[0], false),
                 'board.schede.completamento.crea' => $this->completaScheda($richiesta, $parametri[0], true),
                 'board.schede.completamento.elimina' => $this->completaScheda($richiesta, $parametri[0], false),
                 'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
@@ -2230,6 +2234,128 @@ final class BackofficeFinto
         $this->versione([$scheda, ...$cambiate]);
 
         return [200, ['data' => $this->voceScheda($this->schede[$scheda]), 'sbloccate' => []]];
+    }
+
+    /**
+     * board.schede.trasferimento.crea e board.schede.trasferimento.anteprima.crea (TrasferimentoController::schedaCrea e
+     * schedaAnteprimaCrea): la scheda passa nella lista di un'altra board del workspace (la lista sola che il finto ha per board), con
+     * lo stesso id e il numero successivo dell'arrivo, nel posto di `posizione` o `dopo_scheda_id`; l'anteprima dà le stesse liste
+     * senza scrivere. La risposta porta `etichette_create` (il finto non ha etichette: sempre []), `assegnatari_tolti` ([] anche nel
+     * backoffice), `collegamenti_tolti` (le attese con schede che restano indietro, nei due versi), `fuori_dallo_sprint` e
+     * `senza_epica`. Una board d'arrivo di un altro workspace, che non c'è o che è quella di partenza è 422 su `#/board_id` (mai 404:
+     * nessun oracolo fra workspace); una board non attiva, di partenza o d'arrivo, 409 `board_chiusa`; il tipo che il metodo della
+     * board d'arrivo non ha, 422 su `#/board_id`. If-Match, il tetto delle schede, i limiti delle liste e gli sprint chiusi non ci
+     * sono: il finto non modella liste né sprint. Le liste (board.liste.trasferimento.*) il finto non le ha.
+     *
+     * @param  array<string, mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function trasferisciScheda(Request $richiesta, array $corpo, string $scheda, bool $davvero): array
+    {
+        $chi = $this->conPm($richiesta);
+        $mia = $this->schedaDelPercorso($chi['workspace'], $scheda);
+
+        if (($this->boards[$mia['board']]['stato'] ?? 'attiva') !== 'attiva') {
+            throw new Problema('board_chiusa');
+        }
+
+        if ($mia['archiviata_il'] !== null) {
+            throw new Problema('scheda_archiviata');
+        }
+
+        $campi = $this->testi->validaStretta($corpo, [
+            'board_id' => ['required', 'string'],
+            'lista_id' => ['required', 'string'],
+            'posizione' => ['sometimes', 'string', Rule::in(['cima', 'fondo'])],
+            'dopo_scheda_id' => ['sometimes', 'string'],
+        ]);
+
+        if (array_key_exists('posizione', $campi) === array_key_exists('dopo_scheda_id', $campi)) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.una_posizione_o_un_ancora'), 'regola' => 'non_valida', 'pointer' => '#']]);
+        }
+
+        $arrivo = $this->boards[$campi['board_id']] ?? null;
+
+        if ($arrivo === null || $arrivo['workspace'] !== $mia['workspace']) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.board_del_workspace'), 'regola' => 'non_trovato', 'pointer' => '#/board_id']]);
+        }
+
+        if ($arrivo['id'] === $mia['board']) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.board_diversa'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/board_id']]);
+        }
+
+        if ($arrivo['stato'] !== 'attiva') {
+            throw new Problema('board_chiusa');
+        }
+
+        if ($campi['lista_id'] !== self::LISTA_DI_PROVA) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.lista_d_arrivo'), 'regola' => 'non_trovato', 'pointer' => '#/lista_id']]);
+        }
+
+        $ancora = null;
+
+        if (isset($campi['dopo_scheda_id'])) {
+            $ancora = $this->schede[strtolower($campi['dopo_scheda_id'])] ?? null;
+
+            if ($ancora === null || $ancora['workspace'] !== $mia['workspace'] || $ancora['board'] !== $arrivo['id']) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.scheda_d_arrivo'), 'regola' => 'non_trovato', 'pointer' => '#/dopo_scheda_id']]);
+            }
+
+            if ($ancora['archiviata_il'] !== null) {
+                throw new Problema('posizione_cambiata');
+            }
+        }
+
+        // I tipi del metodo della board d'arrivo (Board::TIPI_DEL_METODO): una scheda senza tipo va dappertutto.
+        $tipi = ['waterfall' => ['fase', 'pratica'], 'scrum' => ['storia', 'bug', 'attivita', 'spike', 'epica'], 'scrumban' => ['storia', 'bug', 'attivita', 'spike', 'epica']][(string) $arrivo['metodo']] ?? [];
+
+        if (($mia['tipo'] ?? null) !== null && ! in_array($mia['tipo'], $tipi, true)) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.tipo_nella_board_d_arrivo', ['tipi' => $tipi === [] ? '—' : implode(', ', $tipi)]), 'regola' => 'valore_non_ammesso', 'pointer' => '#/board_id']]);
+        }
+
+        // Le attese con schede che restano indietro escono, nei due versi; un'epica che parte stacca le figlie che restano; la scheda che
+        // parte senza la sua epica la perde; lo sprint si lascia.
+        $tolti = array_values(array_filter($this->collegamenti, fn (array $c) => $c['scheda'] === $mia['id'] || $c['aspettata'] === $mia['id']));
+        $figlie = ($mia['tipo'] ?? null) === 'epica'
+            ? array_values(array_map(fn (array $s) => $s['id'], array_filter($this->schede, fn (array $s) => ($s['epica_id'] ?? null) === $mia['id'])))
+            : [];
+        $senzaEpica = [...(($mia['epica_id'] ?? null) !== null ? [$mia['id']] : []), ...$figlie];
+        $risposta = [
+            'etichette_create' => [],
+            'assegnatari_tolti' => [],
+            'collegamenti_tolti' => array_map(fn (array $c) => ['id' => $c['id'], 'scheda_id' => $c['scheda'], 'scheda_aspettata_id' => $c['aspettata']], $tolti),
+            'fuori_dallo_sprint' => ($mia['sprint_id'] ?? null) !== null ? [$mia['id']] : [],
+            'senza_epica' => $senzaEpica,
+        ];
+
+        if (! $davvero) {
+            return [200, $risposta];
+        }
+
+        $numero = max([0, ...array_map(fn (array $s) => $s['numero'], array_filter($this->schede, fn (array $s) => $s['workspace'] === $mia['workspace'] && $s['board'] === $arrivo['id']))]) + 1;
+        $cambiate = [];
+        $nuova = $this->postoCercato($mia['workspace'], $arrivo['id'], null, $campi['posizione'] ?? '', $ancora['id'] ?? null)
+            ?? $this->rinumera($mia['workspace'], $arrivo['id'], null, $campi['posizione'] ?? '', $ancora['id'] ?? null, $cambiate);
+
+        foreach ($tolti as $c) {
+            unset($this->collegamenti[$c['id']]);
+        }
+
+        foreach ($figlie as $id) {
+            $this->schede[$id]['epica_id'] = null;
+        }
+
+        $ora = now()->toImmutable()->startOfMillisecond();
+        $this->schede[$scheda]['board'] = $arrivo['id'];
+        $this->schede[$scheda]['numero'] = $numero;
+        $this->schede[$scheda]['posizione'] = $nuova;
+        $this->schede[$scheda]['epica_id'] = null;
+        $this->schede[$scheda]['sprint_id'] = null;
+        $this->schede[$scheda]['nello_sprint_dal'] = null;
+        $this->schede[$scheda]['aggiornata_il'] = $ora;
+        $this->versione([$scheda, ...$cambiate, ...$figlie, ...array_map(fn (array $c) => $c['scheda'] === $scheda ? $c['aspettata'] : $c['scheda'], $tolti)]);
+
+        return [200, ['data' => $this->voceScheda($this->schede[$scheda]), ...$risposta]];
     }
 
     /**

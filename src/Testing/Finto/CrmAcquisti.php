@@ -111,6 +111,9 @@ trait CrmAcquisti
                 throw $problema;
             }
 
+            // Con una validità l'acquisto ha la sua scadenza «Fine abbonamento / validità» (#2568).
+            $this->nasceLaScadenzaDiUnAcquistoCrm($this->crm['acquisti'][$id], $persona, $chi['persona']);
+
             // Il primo acquisto fa «cliente» il contatto (D10): la cronologia è quella di una modifica a mano. Dal secondo non cambia più.
             if ($primo && in_array($persona['stato'], ['lead', 'qualificato', 'perso'], true)) {
                 $this->applicaPersona($persona['id'], ['stato' => 'cliente'], $chi['persona']);
@@ -151,6 +154,7 @@ trait CrmAcquisti
         }
 
         $this->salvaCrm('acquisti', $riga['id'], $nuovi);
+        $this->spostaLaScadenzaDiUnAcquistoCrm($this->crm['acquisti'][$riga['id']]);
         $acquisto = $this->voceAcquistoCrm($this->crm['acquisti'][$riga['id']]);
 
         return [200, ['data' => $acquisto], ['ETag' => self::etagCrm($acquisto)]];
