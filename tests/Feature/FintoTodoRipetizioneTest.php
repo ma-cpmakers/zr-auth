@@ -56,6 +56,22 @@ it('un valore fuori elenco, la ripetizione senza giorno e il giorno tolto a un t
     expect(alFinto('PATCH', "/v1/board/todo/elementi/{$ripetuto}", ['giorno' => null, 'ripetizione' => null], $gettone)->status())->toBe(200);
 });
 
+it('la serie mensile tiene il giorno d\'origine: 31/1, 28/2, 31/3, 30/4; l\'annuale del 29/2 torna nel bisestile', function () {
+    $gettone = annaConIlTodoNelFinto();
+
+    foreach ([['mensile', '2027-01-31', ['2027-02-28', '2027-03-31', '2027-04-30']], ['annuale', '2028-02-29', ['2029-02-28', '2030-02-28', '2031-02-28', '2032-02-29']]] as [$ripetizione, $partenza, $attese]) {
+        $id = alFinto('POST', '/v1/board/todo/elementi', ['titolo' => "Serie {$ripetizione}", 'giorno' => $partenza, 'ripetizione' => $ripetizione], $gettone)->json('data.id');
+
+        foreach ($attese as $atteso) {
+            alFinto('POST', "/v1/board/todo/elementi/{$id}/completamento", null, $gettone);
+            $riga = array_values(array_filter(alFinto('GET', '/v1/board/todo/elementi?vista=tutti', null, $gettone)->json('data'), fn (array $r) => $r['titolo'] === "Serie {$ripetizione}"))[0];
+            $id = $riga['id'];
+
+            expect($riga['giorno'])->toBe($atteso);
+        }
+    }
+});
+
 it('completare un to-do che si ripete fa nascere il prossimo: giorno spostato di un passo, stessi campi, promemoria; una volta sola anche riaprendolo', function (string $ripetizione, string $giorno, string $prossimo) {
     $gettone = annaConIlTodoNelFinto();
     $id = alFinto('POST', '/v1/board/todo/elementi', ['titolo' => 'Ripeti', 'giorno' => $giorno, 'ora' => '15:30', 'ripetizione' => $ripetizione, 'tag' => ['a'], 'note' => 'Le note', 'indirizzo' => 'Via Roma 1'], $gettone)->json('data.id');

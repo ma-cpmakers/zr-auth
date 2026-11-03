@@ -356,7 +356,7 @@ trait Todo
             $this->todoElementi[$id] = [
                 'id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'lista' => $lista['id'], 'scheda' => $legami['scheda'], 'assegnato' => $legami['assegnato'],
                 'titolo' => trim((string) $campi['titolo']), 'note' => $campi['note'] ?? null, 'giorno' => $campi['giorno'] ?? null, 'ora' => $campi['ora'] ?? null,
-                'ripetizione' => $campi['ripetizione'] ?? null, 'indirizzo' => $campi['indirizzo'] ?? null, 'generato_da' => null,
+                'ripetizione' => $campi['ripetizione'] ?? null, 'indirizzo' => $campi['indirizzo'] ?? null, 'generato_da' => null, 'giorno_origine' => null,
                 'tag' => $this->tagSenzaDoppioniTodo($campi['tag'] ?? []), 'colore' => $campi['colore'] ?? 'neutral',
                 'posizione' => $this->posizioneTodo($lista['id'], null, null, false), 'fatto_il' => null, 'archiviato' => false,
                 'creato_il' => $ora, 'aggiornato_il' => $ora,
@@ -440,6 +440,11 @@ trait Todo
         $ripetizione = array_key_exists('ripetizione', $campi) ? $campi['ripetizione'] : $corrente['ripetizione'];
         $this->ripetizioneSenzaGiornoTodo($giorno, $ripetizione, ! array_key_exists('ripetizione', $campi));
         $cambi['ripetizione'] = $ripetizione;
+
+        // Cambiare il giorno o la ripetizione a mano ricomincia la serie da quel giorno.
+        if ($giorno !== $corrente['giorno'] || $ripetizione !== $corrente['ripetizione']) {
+            $cambi['giorno_origine'] = null;
+        }
         $cambi += $this->collocaTodo($chi, $corrente, $campi);
         $cambi += $this->legamiCambiatiTodo($chi, $corrente, $campi, $cambi['lista'] ?? null);
         $assegnatarioTolto = $this->togliAssegnatarioDiUnaltraBoardTodo($chi, $corrente, $campi, $cambi);
@@ -800,9 +805,11 @@ trait Todo
     /**
      * Il giorno del prossimo (TodoRipetizione::prossimoGiorno): un passo dopo `$giorno`; `null` oltre l'ultimo giorno ammesso.
      */
-    private function prossimoGiornoTodo(string $ripetizione, string $giorno): ?string
+    private function prossimoGiornoTodo(string $ripetizione, string $giorno, string $origine): ?string
     {
         $data = CarbonImmutable::createFromFormat('!Y-m-d', $giorno, 'UTC');
+        $giornoDelMese = (int) substr($origine, 8, 2);
+        $conIlGiornoDellaSerie = fn (CarbonImmutable $primo) => $primo->day(min($giornoDelMese, $primo->daysInMonth));
 
         $prossimo = match ($ripetizione) {
             'giornaliera' => $data->addDay(),
@@ -814,8 +821,8 @@ trait Todo
                 return $data;
             })(),
             'settimanale' => $data->addWeek(),
-            'mensile' => $data->addMonthNoOverflow(),
-            default => $data->addYearNoOverflow(),
+            'mensile' => $conIlGiornoDellaSerie($data->startOfMonth()->addMonth()),
+            default => $conIlGiornoDellaSerie($data->startOfMonth()->addYear()),
         };
         $testo = $prossimo->format('Y-m-d');
 
@@ -839,7 +846,8 @@ trait Todo
             return;
         }
 
-        $giorno = $this->prossimoGiornoTodo($fatto['ripetizione'], $fatto['giorno']);
+        $origine = $fatto['giorno_origine'] ?? $fatto['giorno'];
+        $giorno = $this->prossimoGiornoTodo($fatto['ripetizione'], $fatto['giorno'], $origine);
 
         if ($giorno === null) {
             return;
@@ -849,7 +857,7 @@ trait Todo
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
         $this->todoElementi[$id] = [
-            ...$fatto, 'id' => $id, 'giorno' => $giorno, 'fatto_il' => null, 'generato_da' => $fatto['id'], 'archiviato' => false,
+            ...$fatto, 'id' => $id, 'giorno' => $giorno, 'fatto_il' => null, 'generato_da' => $fatto['id'], 'giorno_origine' => $origine, 'archiviato' => false,
             'posizione' => $this->posizioneTodo($fatto['lista'], null, null, false), 'creato_il' => $ora, 'aggiornato_il' => $ora,
         ];
 
