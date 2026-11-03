@@ -166,7 +166,7 @@ return [
         'detail' => 'Questa lista è archiviata: ripristinala prima di cambiarla o di cambiare le sue schede.',
     ],
     'lista_non_trasferibile' => [
-        'title' => "Lista non trasferibile",
+        'title' => 'Lista non trasferibile',
         'detail' => "La lista delle azioni di una retrospettiva resta nella sua board: non si porta in un'altra. Non ripetere la richiesta.",
     ],
     'board_chiusa' => [
