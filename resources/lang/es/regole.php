@@ -279,7 +279,6 @@ return [
     'foto_peso' => 'La foto pesa demasiado: 2 MB como máximo.',
     'foto_formato' => 'La foto debe ser un archivo JPEG, PNG o WebP que se pueda leer (un WebP animado o un archivo roto no vale).',
     'foto_lato' => 'La foto tiene un lado de más de :lato píxeles.',
-    'board_del_workspace' => 'Este id no es el de un tablero del espacio de trabajo: board.board.elenca da los tableros.',
     'board_diversa' => 'El tablero de destino es el de origen: para cambiar de lugar dentro del mismo tablero está el movimiento (board.schede.spostamento.crea, board.liste.spostamento.crea).',
     'tipo_nella_board_d_arrivo' => 'El tipo de una tarjeta que se lleva no es uno de los del método del tablero de destino (:tipi): board.board.mostra da los tipos admitidos en su campo `tipi`.',
     'lista_d_arrivo' => 'Esta lista no es del tablero de destino: los ids de las listas los da board.board.mostra.',
