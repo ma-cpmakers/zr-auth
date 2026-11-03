@@ -245,7 +245,8 @@ trait CrmScadenze
             $this->righeCrm('scadenze', $workspace),
             fn (array $riga) => ($filtri[0] === null || $riga['persona_id'] === $filtri[0]) && ($filtri[1] === null || $riga['organizzazione_id'] === $filtri[1])
                 && ($filtri[2] === null || $riga['acquisto_id'] === $filtri[2]) && ($filtri[3] === null || $riga['tipo_id'] === $filtri[3])
-                && ($filtri[4] === null || $riga['responsabile_id'] === $filtri[4]) && ($entro === null || self::dataDiOrdineDellaScadenzaCrm($riga, $nascoste) <= $entro)
+                && ($filtri[4] === null || $riga['responsabile_id'] === $filtri[4]) && ($entro === null || self::dataDiOrdineDellaScadenzaCrm($riga, $nascoste) <= $entro
+                    || (self::scadenzaNascostaCrm($riga, $nascoste) && in_array(self::statoDellaScadenzaCrm($riga, $oggi), ['in_preavviso', 'scaduta'], true)))
                 && in_array(self::statoDellaScadenzaCrm($riga, $oggi), $stati, true),
         ));
         $verso = str_starts_with($ordina, '-') ? -1 : 1;
@@ -297,6 +298,7 @@ trait CrmScadenze
             'entro_30' => $entro(30),
             'entro_60' => $entro(60),
             'entro_90' => $entro(90),
+            'riservate_in_preavviso' => count(array_filter($aperte, fn (array $riga) => self::scadenzaNascostaCrm($riga, $nascoste) && self::statoDellaScadenzaCrm($riga, $oggi) === 'in_preavviso')),
         ]]];
     }
 

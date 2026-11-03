@@ -1101,9 +1101,14 @@ it('crm.scadenze: la data di una scadenza nata da un campo sensibile è null per
     $mostrata = alFinto('GET', "/v1/crm/scadenze/{$scadenza}", null, $carla);
     expect($mostrata->json('data.scade_il'))->toBeNull()->and($mostrata->json('data.prossimo_preavviso_il'))->toBeNull()->and($mostrata->json('data.stato'))->not->toBeNull();
 
-    // Per un membro è la più lontana: `entro` non la include, e il riepilogo non la conta in nessuna finestra.
-    expect(alFinto('GET', '/v1/crm/scadenze?entro='.now()->addDays(15)->format('Y-m-d'), null, $carla)->json('data'))->toBe([])
+    // Per un membro la data è la più lontana: il riepilogo non la conta in nessuna fascia; `entro` la include solo per lo stato (in preavviso o scaduta, #2952) e il riepilogo la conta a parte.
+    $inPreavviso = $mostrata->json('data.stato') === 'in_preavviso';
+    $righe = alFinto('GET', '/v1/crm/scadenze?entro='.now()->addDays(15)->format('Y-m-d'), null, $carla)->json('data');
+    expect(array_column($righe, 'id'))->toBe($inPreavviso ? [$scadenza] : [])
+        ->and(array_unique(array_column($righe, 'scade_il')))->toBe($inPreavviso ? [null] : [])
         ->and(alFinto('GET', '/v1/crm/scadenze/riepilogo', null, $carla)->json('data.entro_30'))->toBe(0)
+        ->and(alFinto('GET', '/v1/crm/scadenze/riepilogo', null, $carla)->json('data.riservate_in_preavviso'))->toBe($inPreavviso ? 1 : 0)
+        ->and(alFinto('GET', '/v1/crm/scadenze/riepilogo', null, $anna)->json('data.riservate_in_preavviso'))->toBe(0)
         ->and(alFinto('GET', '/v1/crm/scadenze/riepilogo', null, $anna)->json('data.entro_30'))->toBe(1)
         ->and(alFinto('PATCH', "/v1/crm/scadenze/{$scadenza}", ['scade_il' => $data], $carla)->status())->toBe(403)
         ->and(alFinto('POST', "/v1/crm/scadenze/{$scadenza}/rinnovo", ['scade_il' => $data], $carla)->status())->toBe(403)
