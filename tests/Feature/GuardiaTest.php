@@ -123,3 +123,20 @@ it('una visita di Inertia (un fetch con X-Inertia) ricorda la pagina anche con S
 
     expect(session('url.intended'))->toBe(url('/pagina'));
 });
+
+// Dalla review di #188: la scrittura di fondo e il caricamento speculativo non toccano il ritorno.
+
+it('un fetch di scrittura (Sec-Fetch-Dest: empty) con il gettone scaduto non cancella né sovrascrive il ritorno ricordato (#2985, review di #188)', function (string $metodo) {
+    Route::middleware('web')->any('modulo', fn () => 'ok');
+
+    $this->get(FRONTEND.'/pagina?vista=2', ['Sec-Fetch-Dest' => 'document'])->assertRedirect(INGRESSO);
+    $this->call($metodo, FRONTEND.'/modulo', [], [], [], ['HTTP_SEC_FETCH_DEST' => 'empty', 'HTTP_REFERER' => 'https://altro.zeiras.com/x'])->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(FRONTEND.'/pagina?vista=2');
+})->with(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+it('un caricamento speculativo (prefetch) di una pagina protetta non diventa il ritorno (#2985, review di #188)', function () {
+    $this->get('/pagina', ['Sec-Fetch-Dest' => 'document', 'Sec-Purpose' => 'prefetch'])->assertRedirect(INGRESSO);
+
+    expect(session()->has('url.intended'))->toBeFalse();
+});

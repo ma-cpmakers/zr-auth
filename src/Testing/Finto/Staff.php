@@ -236,7 +236,8 @@ trait Staff
             throw new Problema('secondo_fattore_non_valido');
         }
 
-        $this->freni->clear($persona);
+        // Come il backoffice (RateLimiter::decrement): un secondo fattore riuscito toglie il solo colpo di questo tentativo, non azzera i precedenti.
+        $this->freni->decrement($persona);
         unset($this->sfideStaff[$dati['sfida']]);
 
         if ($prova === 'totp') {
@@ -526,7 +527,7 @@ trait Staff
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
         $workspace = array_filter(array_keys($this->workspace), fn (string $id) => ! $chi['solo_uat'] || $this->proprietarioDiProva($id));
 
-        return [200, ['data' => $this->conteggiPerStato(count($workspace), count(array_filter($workspace, fn (string $id) => isset($this->eliminazioni[$id]))))]];
+        return [200, ['data' => $this->conteggiPerStato(count($workspace), count(array_filter($workspace, fn (string $id) => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture())))]];
     }
 
     /** Un workspace il cui proprietario è una persona del perimetro di prova. */

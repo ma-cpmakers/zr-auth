@@ -50,13 +50,14 @@ final class ConGettone
             if ($richiesta->isMethod('GET')) {
                 // Un GET che non è una navigazione (un'immagine, un fetch) non ricorda niente, e non cancella il ritorno già ricordato: #2985.
                 if (! Ritorno::eUnaNavigazione($richiesta)) {
-                    return $inertia ? new Response('', 409, ['X-Inertia-Location' => $ingresso]) : redirect()->to($ingresso);
+                    return redirect()->to($ingresso);
                 }
 
                 // La pagina con la query se è corta, altrimenti il solo percorso (Ritorno::dallaRichiesta): la sessione di chi non è entrato resta piccola.
                 $dovEri = Ritorno::dallaRichiesta($richiesta);
                 $dovEri !== null ? $richiesta->session()->put('url.intended', $dovEri) : $richiesta->session()->forget('url.intended');
-            } elseif (in_array($richiesta->getRealMethod(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            } elseif (in_array($richiesta->getRealMethod(), ['POST', 'PUT', 'PATCH', 'DELETE'], true) && Ritorno::eUnaNavigazione($richiesta)) {
+                // Una scrittura di fondo (un fetch di autosalvataggio, `Sec-Fetch-Dest: empty`) non ricorda e non cancella: un form (`document`) e una visita di Inertia sì.
                 $dovEri = Ritorno::dalReferer($richiesta, $richiesta->route('workspace'));
                 // Un ritorno ricordato prima non vale per questa scrittura.
                 $dovEri !== null ? $richiesta->session()->put('url.intended', $dovEri) : $richiesta->session()->forget('url.intended');

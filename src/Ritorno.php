@@ -57,6 +57,11 @@ final class Ritorno
      */
     public static function eUnaNavigazione(Request $richiesta): bool
     {
+        // Un caricamento speculativo (prefetch, prerender) non è la pagina dove la persona vuole tornare.
+        if ($richiesta->prefetch()) {
+            return false;
+        }
+
         if ($richiesta->headers->has('X-Inertia')) {
             return true;
         }
