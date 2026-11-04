@@ -76,3 +76,45 @@ it('il membro vede un documento ridotto, e il PDF è del proprietario e degli am
         ->and($pdf->header('Content-Disposition'))->toStartWith('attachment; filename=consenso_immagini-v1-')
         ->and($pdf->body())->toStartWith('%PDF-');
 });
+
+it('un contatto con un documento firmato non si unisce: contatto_non_unibile con blocchi [documenti], come nel backoffice', function () {
+    [$gettoni, $resta, $unito] = duePersoneDoppie();
+    alFinto('POST', '/v1/crm/documenti', firmaDelFinto($unito), $gettoni['anna'], intestazioni: chiaveDiCreazione('k-1'));
+
+    $unione = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito), $gettoni['anna']);
+
+    expect($unione->status())->toBe(409)
+        ->and($unione->json('codice'))->toBe('contatto_non_unibile')
+        ->and($unione->json('blocchi'))->toBe(['documenti']);
+});
+
+it('un tratto con un a capo nel base64, più largo di 1000 pixel o con i dati troncati è 422 su #/tratto/immagine', function () {
+    [, $gettoni] = studioColCrm();
+    $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia'], $gettoni['anna'])->json('data.id');
+    $png = function (int $larghezza, int $altezza): string {
+        $immagine = imagecreatetruecolor($larghezza, $altezza);
+        ob_start();
+        imagepng($immagine);
+
+        return (string) ob_get_clean();
+    };
+    $rumore = imagecreatetruecolor(80, 80);
+    foreach (range(0, 79) as $y) {
+        foreach (range(0, 79) as $x) {
+            imagesetpixel($rumore, $x, $y, random_int(0, 0xFFFFFF));
+        }
+    }
+    ob_start();
+    imagepng($rumore);
+    $intero = (string) ob_get_clean();
+    $provaCon = fn (string $immagine) => alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['tratto' => ['tipo' => 'immagine', 'immagine' => $immagine]]), $gettoni['anna'], intestazioni: chiaveDiCreazione('k-'.md5($immagine)));
+    $valido = base64_encode($png(10, 10));
+
+    foreach ([substr($valido, 0, 12)."\n".substr($valido, 12), base64_encode($png(1001, 1)), base64_encode(substr($intero, 0, (int) (strlen($intero) * 0.6)))] as $storto) {
+        $risposta = $provaCon($storto);
+
+        expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.pointer'))->toBe('#/tratto/immagine');
+    }
+
+    expect($provaCon($valido)->status())->toBe(201);
+});

@@ -462,6 +462,7 @@ trait CrmUnioni
             'rate' => array_filter($this->crm['rate'], fn (array $rata) => in_array($rata['acquisto_id'], $acquisti, true) && ! ($rata['eliminata'] ?? false)) !== [],
             'profili_fatturazione' => $viva('profili'),
             'indirizzi_spedizione' => $viva('indirizzi'),
+            'documenti' => array_filter($this->crm['documenti'], fn (array $documento) => $documento['persona_id'] === $contatto) !== [],
             'schede_collegate' => array_filter($this->schedeCrm, fn (array $collegamento) => $collegamento['tipo'] === 'crm.persona' && $collegamento['record'] === $contatto) !== []] as $nome => $presente) {
             if ($presente) {
                 $nomi[] = $nome;

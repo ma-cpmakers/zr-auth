@@ -27,7 +27,7 @@ trait CrmDocumenti
     /** Quanto pesa, al più, il PNG del tratto una volta decodificato, e il suo lato più lungo (Documenti::TRATTO_BYTE e TRATTO_LATO). */
     private const CRM_DOCUMENTI_TRATTO_BYTE = 153600;
 
-    private const CRM_DOCUMENTI_TRATTO_LATO = 2000;
+    private const CRM_DOCUMENTI_TRATTO_LATO = 1000;
 
     /** I legami di chi firma (Documento::LEGAMI), quelli del minorenne, e i due tratti (Documento::TRATTI). */
     private const CRM_DOCUMENTI_LEGAMI = ['se_stesso', 'genitore', 'tutore', 'altro'];
@@ -264,10 +264,11 @@ trait CrmDocumenti
             'tratto' => ['bail', 'required', 'array'],
             'tratto.tipo' => ['bail', 'required', 'string', Rule::in(self::CRM_DOCUMENTI_TRATTI)],
             'tratto.immagine' => ['bail', 'required_if:tratto.tipo,immagine', 'prohibited_if:tratto.tipo,spunta', 'string', function (string $campo, mixed $valore, Closure $fail) {
-                $png = is_string($valore) && strlen($valore) <= (int) ceil(self::CRM_DOCUMENTI_TRATTO_BYTE / 3) * 4 ? base64_decode($valore, true) : false;
+                $png = is_string($valore) && strlen($valore) <= (int) ceil(self::CRM_DOCUMENTI_TRATTO_BYTE / 3) * 4 && preg_match('/^[A-Za-z0-9+\/]+={0,2}$/D', $valore) === 1 ? base64_decode($valore, true) : false;
                 $misure = is_string($png) && $png !== '' && strlen($png) <= self::CRM_DOCUMENTI_TRATTO_BYTE && str_starts_with($png, "\x89PNG\r\n\x1a\n") ? @getimagesizefromstring($png) : false;
+                $integro = $misure !== false && (! function_exists('imagecreatefromstring') || @imagecreatefromstring((string) $png) !== false);
 
-                if ($misure === false || $misure[2] !== IMAGETYPE_PNG || max($misure[0], $misure[1]) > self::CRM_DOCUMENTI_TRATTO_LATO) {
+                if (! $integro || $misure[2] !== IMAGETYPE_PNG || max($misure[0], $misure[1]) > self::CRM_DOCUMENTI_TRATTO_LATO) {
                     $this->rifiutaCrm($fail, $campo, Regola::FORMATO, 'regole.documento_tratto_immagine', ['max' => (int) (self::CRM_DOCUMENTI_TRATTO_BYTE / 1024), 'lato' => self::CRM_DOCUMENTI_TRATTO_LATO]);
                 }
             }],
