@@ -99,6 +99,14 @@ trait Crm
         ['GET', '#^/v1/crm/preventivi/([^/]+)/richieste$#', 'crm.preventivi.richieste.elenca'],
         ['DELETE', '#^/v1/crm/preventivi/([^/]+)/link$#', 'crm.preventivi.link.elimina'],
         ['GET', '#^/v1/crm/preventivi/([^/]+)/pdf$#', 'crm.preventivi.pdf.mostra'],
+        ['GET', '#^/v1/crm/modelli$#', 'crm.modelli.elenca'],
+        ['GET', '#^/v1/crm/modelli/([^/]+)$#', 'crm.modelli.mostra'],
+        ['GET', '#^/v1/crm/documenti$#', 'crm.documenti.elenca'],
+        ['POST', '#^/v1/crm/documenti$#', 'crm.documenti.crea'],
+        ['POST', '#^/v1/crm/documenti/link$#', 'crm.documenti.link.crea'],
+        ['DELETE', '#^/v1/crm/documenti/link/([^/]+)$#', 'crm.documenti.link.elimina'],
+        ['POST', '#^/v1/crm/documenti/([^/]+)/revoca$#', 'crm.documenti.revoca.crea'],
+        ['GET', '#^/v1/crm/documenti/([^/]+)/pdf$#', 'crm.documenti.pdf.mostra'],
         ['GET', '#^/v1/crm/personalizzazione$#', 'crm.personalizzazione.mostra'],
         ['POST', '#^/v1/crm/personalizzazione/installazione$#', 'crm.personalizzazione.installazione.crea'],
         ['GET', '#^/v1/crm/personalizzazioni$#', 'crm.personalizzazioni.elenca'],
@@ -276,7 +284,7 @@ trait Crm
      *
      * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, elenchi: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'elenchi' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'unioni' => [], 'indirizzi' => [], 'profili' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'elenchi' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'unioni' => [], 'indirizzi' => [], 'profili' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'documenti' => [], 'link_documenti' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -375,6 +383,14 @@ trait Crm
             'crm.preventivi.richieste.elenca' => $this->elencaRichiestePreventivoCrm($richiesta, $parametri[0]),
             'crm.preventivi.link.elimina' => $this->revocaLinkDelPreventivoCrm($richiesta, $parametri[0]),
             'crm.preventivi.pdf.mostra' => $this->mostraPdfPreventivoCrm($richiesta, $parametri[0]),
+            'crm.modelli.elenca' => $this->elencaModelliCrm($richiesta),
+            'crm.modelli.mostra' => $this->mostraModelloCrm($richiesta, $parametri[0]),
+            'crm.documenti.elenca' => $this->elencaDocumentiCrm($richiesta),
+            'crm.documenti.crea' => $this->creaDocumentoCrm($richiesta, $corpo),
+            'crm.documenti.link.crea' => $this->creaLinkDocumentoCrm($richiesta, $corpo),
+            'crm.documenti.link.elimina' => $this->eliminaLinkDocumentoCrm($richiesta, $parametri[0]),
+            'crm.documenti.revoca.crea' => $this->revocaDocumentoCrm($richiesta, $corpo, $parametri[0]),
+            'crm.documenti.pdf.mostra' => $this->mostraPdfDocumentoCrm($richiesta, $parametri[0]),
             'crm.rate.pagamenti.crea' => $this->creaPagamentoCrm($richiesta, $corpo, $parametri[0]),
             'crm.pagamenti.annullamento.crea' => $this->annullaPagamentoCrm($richiesta, $corpo, $parametri[0]),
             'crm.sezioni.elenca' => $this->elencaSezioniCrm($richiesta),
@@ -2738,6 +2754,7 @@ trait Crm
         $this->dimenticaIPreventiviCrm($persona['id']);
         $this->dimenticaLeScadenzeCrm($persona['id']);
         $this->dimenticaIProfiliCrm($persona['id']);
+        $this->dimenticaIDocumentiCrm($persona['id']);
 
         foreach ($this->crm['note'] as $nota => $riga) {
             if ($riga['persona_id'] === $persona['id']) {

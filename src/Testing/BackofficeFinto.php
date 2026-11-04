@@ -32,6 +32,7 @@ use Zeiras\Auth\Testing\Finto\BoardFunzioni;
 use Zeiras\Auth\Testing\Finto\BoardRuoliEpiche;
 use Zeiras\Auth\Testing\Finto\CrmPersonalizzazione;
 use Zeiras\Auth\Testing\Finto\CrmPreventivi;
+use Zeiras\Auth\Testing\Finto\CrmDocumenti;
 use Zeiras\Auth\Testing\Finto\CrmPreventiviPubblici;
 use Zeiras\Auth\Testing\Finto\CrmProfili;
 use Zeiras\Auth\Testing\Finto\CrmScadenze;
@@ -89,6 +90,7 @@ final class BackofficeFinto
     use CrmEsiti;
     use CrmPersonalizzazione;
     use CrmPreventivi;
+    use CrmDocumenti;
     use CrmPreventiviPubblici;
     use SchedeCrm;
     use Retrospettiva;
@@ -268,6 +270,8 @@ final class BackofficeFinto
         ['POST', '#^/v1/preventivi/pubblici/lettura$#', 'preventivi.pubblici.lettura.crea'],
         ['POST', '#^/v1/preventivi/pubblici/accettazione$#', 'preventivi.pubblici.accettazione.crea'],
         ['POST', '#^/v1/preventivi/pubblici/richieste$#', 'preventivi.pubblici.richieste.crea'],
+        ['POST', '#^/v1/documenti/pubblici/lettura$#', 'documenti.pubblici.lettura.crea'],
+        ['POST', '#^/v1/documenti/pubblici/firma$#', 'documenti.pubblici.firma.crea'],
         ['POST', '#^/v1/link/accettazione$#', 'link.accettazione.crea'],
         ['POST', '#^/v1/link/verifica$#', 'link.verifica.crea'],
         ['GET', '#^/v1/io$#', 'io.mostra'],
@@ -419,7 +423,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'io_foto_modifica_per_persona' => 20, 'io_foto_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'io_foto_modifica_per_persona' => 20, 'io_foto_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'documenti_pubblici_letture_per_token' => 30, 'documenti_pubblici_firme_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -1336,7 +1340,7 @@ final class BackofficeFinto
     /** I metodi che chi non ha accettato i documenti legali può chiamare (Accettazione::ESENTI del backoffice, #1699). */
     private const APERTI_SENZA_ACCETTAZIONE = ['legale.documenti.elenca', 'legale.accettazioni.crea', 'io.mostra', 'accessi.corrente.elimina', 'accessi.elimina'];
 
-    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.link.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'password.recupero.crea', 'password.reimpostazione.crea', 'notifiche.disiscrizione.crea', 'notifiche.disiscrizione.verifica.crea'];
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.link.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'documenti.pubblici.lettura.crea', 'documenti.pubblici.firma.crea', 'password.recupero.crea', 'password.reimpostazione.crea', 'notifiche.disiscrizione.crea', 'notifiche.disiscrizione.verifica.crea'];
 
     /**
      * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
@@ -1520,6 +1524,8 @@ final class BackofficeFinto
                 'preventivi.pubblici.lettura.crea' => $this->leggiPreventivoPubblico($corpo),
                 'preventivi.pubblici.accettazione.crea' => $this->accettaPreventivoPubblico($corpo),
                 'preventivi.pubblici.richieste.crea' => $this->chiediModificaPreventivoPubblico($corpo),
+                'documenti.pubblici.lettura.crea' => $this->leggiDocumentoPubblicoCrm($corpo),
+                'documenti.pubblici.firma.crea' => $this->firmaDocumentoPubblicoCrm($corpo),
                 'legale.documenti.elenca' => $this->elencaDocumentiLegali($richiesta),
                 'legale.accettazioni.elenca' => $this->elencaAccettazioniLegali($richiesta),
                 'legale.accettazioni.crea' => $this->accettaDocumentoLegale($richiesta, $corpo),

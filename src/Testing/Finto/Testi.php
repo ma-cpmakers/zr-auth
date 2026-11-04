@@ -65,6 +65,12 @@ final class Testi
         $this->dichiarate[$attributo] = $regola;
     }
 
+    /** La lingua dei testi di adesso (quella impostata da usa()). */
+    public function lingua(): string
+    {
+        return $this->traduttore->getLocale();
+    }
+
     /** Da qui i testi sono in questa lingua: quella di Accept-Language, o della persona del gettone. */
     public function usa(string $lingua): void
     {
