@@ -224,7 +224,7 @@ it('workspace.membri.elenca dà le persone del workspace del gettone, con id del
     $finto->membro($altro, $franco, 'membro');
     $finto->membro($altro, $bruno, 'amministratore');
     $chi = ['proprietario' => 'anna@example.com', 'amministratore' => 'carla@example.com', 'membro' => 'bruno@example.com'][$ruolo];
-    $membro = fn (array $persona, string $ruolo, string $entrato) => ['id' => $persona['id'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => $ruolo, 'entrato_il' => $entrato];
+    $membro = fn (array $persona, string $ruolo, string $entrato) => ['id' => $persona['id'], 'nome' => $persona['nome'], 'email' => $persona['email'], 'ruolo' => $ruolo, 'entrato_il' => $entrato, 'foto_aggiornata_il' => null];
     $inizio = '2026-10-01T08:00:00.123Z';
     $poi = '2026-10-05T09:30:00.456Z';
     $infine = '2026-10-09T17:45:10.789Z';

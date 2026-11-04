@@ -327,6 +327,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/workspace/inviti/([^/]+)/reinvio$#', 'workspace.inviti.reinvio.crea'],
         ['GET', '#^/v1/workspace/primi-passi$#', 'workspace.primi-passi.mostra'],
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
+        ['GET', '#^/v1/workspace/membri/([^/]+)/foto$#', 'workspace.membri.foto.mostra'],
         ['PATCH', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.modifica'],
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
         ['POST', '#^/v1/workspace/uscita$#', 'workspace.uscita.crea'],
@@ -1605,6 +1606,7 @@ final class BackofficeFinto
                 'workspace.inviti.reinvio.crea' => $this->reinviaInvito($richiesta, $corpo, $parametri[0]),
                 'workspace.primi-passi.mostra' => $this->mostraPrimiPassi($richiesta),
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
+                'workspace.membri.foto.mostra' => $this->leggiFotoDelMembro($richiesta, $parametri[0]),
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
                 'workspace.uscita.crea' => $this->esceDalWorkspace($richiesta, $corpo),
@@ -3668,8 +3670,30 @@ final class BackofficeFinto
      */
     private function leggiFoto(Request $richiesta): array
     {
-        $chi = $this->autentica($richiesta);
-        $foto = $this->foto[$chi['persona']] ?? throw new Problema('foto_assente');
+        return $this->fileDellaFoto($richiesta, $this->autentica($richiesta)['persona']);
+    }
+
+    /**
+     * workspace.membri.foto.mostra (MembriController::fotoMostra, #2983): il file della foto di un membro del workspace del gettone, come
+     * io.foto.file.mostra. Chi non è membro di questo workspace è 404 foto_assente come chi non ha la foto: nessun oracolo fra workspace.
+     *
+     * @return array{0: int, 1: ?string, 2: array<string, string>}
+     */
+    private function leggiFotoDelMembro(Request $richiesta, string $persona): array
+    {
+        $workspace = $this->delWorkspace($richiesta);
+
+        if (! isset($this->membri[$workspace][$persona])) {
+            throw new Problema('foto_assente');
+        }
+
+        return $this->fileDellaFoto($richiesta, $persona);
+    }
+
+    /** @return array{0: int, 1: ?string, 2: array<string, string>} */
+    private function fileDellaFoto(Request $richiesta, string $persona): array
+    {
+        $foto = $this->foto[$persona] ?? throw new Problema('foto_assente');
         $etag = '"'.$foto['etag'].'"';
         $header = ['ETag' => $etag, 'Cache-Control' => 'max-age=300, private', 'X-Content-Type-Options' => 'nosniff'];
         $chiesti = array_map(fn (string $voce) => preg_replace('#^W/#', '', trim($voce)), explode(',', self::header($richiesta, 'If-None-Match') ?? ''));
@@ -7088,10 +7112,10 @@ final class BackofficeFinto
     }
 
     /**
-     * Lo schema Membro (workspace.membri.elenca, .modifica e le due accettazioni): l'id della persona, il nome, l'email, il ruolo e
-     * da quando è nel workspace.
+     * Lo schema Membro (workspace.membri.elenca, .modifica e le due accettazioni): l'id della persona, il nome, l'email, il ruolo,
+     * da quando è nel workspace e `foto_aggiornata_il` della persona (#2983, null senza foto).
      *
-     * @return array<string, string>
+     * @return array<string, string|null>
      */
     private function voceMembro(string $workspace, string $persona): array
     {
@@ -7101,6 +7125,7 @@ final class BackofficeFinto
             'email' => $this->persone[$persona]['email'],
             'ruolo' => $this->membri[$workspace][$persona],
             'entrato_il' => self::iso($this->entrati[$workspace][$persona]),
+            'foto_aggiornata_il' => ($this->persone[$persona]['foto_aggiornata_il'] ?? null) === null ? null : self::iso($this->persone[$persona]['foto_aggiornata_il']),
         ];
     }
 
