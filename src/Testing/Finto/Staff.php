@@ -499,6 +499,54 @@ trait Staff
         return [201, ['data' => $this->voceDelloStaff($bersaglio['id'])]];
     }
 
+    // ── I numeri della Panoramica ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * staff.utenti.conteggi.mostra (#2995): quante persone, per stato, solo numeri. `in_eliminazione` ha chiesto di eliminare l'account (io.elimina); il finto non anonimizza, quindi nessuna
+     * persona esce dal conto. Superadmin e supporto; una persona `solo_uat` conta le persone `uat+*@castroandpartners.com`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function contaLePersoneDelloStaff(Request $richiesta): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        $persone = array_filter(array_keys($this->persone), fn (string $id) => ! $chi['solo_uat'] || $this->emailDelPerimetroUat($this->persone[$id]['email']));
+
+        return [200, ['data' => $this->conteggiPerStato(count($persone), count(array_filter($persone, fn (string $id) => isset($this->eliminazioniPersona[$id]))))]];
+    }
+
+    /**
+     * staff.workspace.conteggi.mostra (#2995): quanti workspace, per stato, solo numeri. `in_eliminazione` ha l'eliminazione programmata viva. Una persona `solo_uat` conta i workspace
+     * il cui proprietario ha un'email `uat+*@castroandpartners.com`, non quelli con lo slug `uat-`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function contaIWorkspaceDelloStaff(Request $richiesta): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        $workspace = array_filter(array_keys($this->workspace), fn (string $id) => ! $chi['solo_uat'] || $this->proprietarioDiProva($id));
+
+        return [200, ['data' => $this->conteggiPerStato(count($workspace), count(array_filter($workspace, fn (string $id) => isset($this->eliminazioni[$id]))))]];
+    }
+
+    /** Un workspace il cui proprietario è una persona del perimetro di prova. */
+    private function proprietarioDiProva(string $workspace): bool
+    {
+        foreach ($this->membri[$workspace] ?? [] as $persona => $ruolo) {
+            if ($ruolo === 'proprietario' && isset($this->persone[$persona]) && $this->emailDelPerimetroUat($this->persone[$persona]['email'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @return array{tutti: int, attivo: int, in_eliminazione: int} */
+    private function conteggiPerStato(int $tutti, int $inEliminazione): array
+    {
+        return ['tutti' => $tutti, 'attivo' => $tutti - $inEliminazione, 'in_eliminazione' => $inEliminazione];
+    }
+
     // ── Il registro ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
     /**

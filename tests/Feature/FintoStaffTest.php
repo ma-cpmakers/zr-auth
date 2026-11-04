@@ -415,3 +415,33 @@ it('dieci codici sbagliati in 24 ore bloccano la persona: poi lo stesso secondo_
 
     expect(esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $primoPasso(), 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])))->toBe([401, 'secondo_fattore_non_valido']);
 });
+
+it('staff.utenti.conteggi.mostra e staff.workspace.conteggi.mostra: solo numeri, superadmin e supporto, la fatturazione 403, senza gettone 401, e il perimetro solo_uat conta le sole persone uat+ (#2995)', function () {
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com');
+    $supporto = personaDelloStaff($this->finto, 'sup@lucianocastro.com', 'supporto');
+    $fatturazione = personaDelloStaff($this->finto, 'fat@lucianocastro.com', 'fatturazione');
+    $prova = personaDelloStaff($this->finto, 'prova@lucianocastro.com', 'superadmin', true, true);
+    $uat = $this->finto->persona('uat+uno@castroandpartners.com', PASSWORD, nome: 'Prova');
+    $vera = $this->finto->persona('vera@example.com', PASSWORD, nome: 'Vera');
+    $this->finto->workspace('Studio uat', $uat);
+    $this->finto->workspace('Studio vero', $vera);
+    $inEliminazione = $this->finto->workspace('Studio che se ne va', $vera);
+    $accessoVera = entraNelFinto('vera@example.com')['gettone']['gettone'];
+    $gettoneVera = alFinto('POST', '/v1/gettoni', ['workspace_id' => $inEliminazione['id']], $accessoVera)->json('data.gettone');
+    expect(alFinto('DELETE', '/v1/workspace', gettone: $gettoneVera)->status())->toBe(202);
+
+    $conta = fn (string $gettone, string $percorso) => Api::staff($gettone)->get($percorso);
+    [$gettoneSara, $gettoneSupporto, $gettoneProva, $gettoneFatturazione] = [entraComeStaff($sara), entraComeStaff($supporto), entraComeStaff($prova), entraComeStaff($fatturazione)];
+
+    // Tutti: le quattro persone dello staff, `uat+uno` e Vera; Vera non ha chiesto di eliminare l'account, ha programmato l'eliminazione di un workspace.
+    expect($conta($gettoneSara, '/v1/staff/utenti/conteggi'))->toBe(['data' => ['tutti' => 6, 'attivo' => 6, 'in_eliminazione' => 0]])
+        ->and($conta($gettoneSupporto, '/v1/staff/workspace/conteggi'))->toBe(['data' => ['tutti' => 3, 'attivo' => 2, 'in_eliminazione' => 1]])
+        // solo_uat: le persone `uat+*` (una) e i workspace il cui proprietario è una di loro (uno).
+        ->and($conta($gettoneProva, '/v1/staff/utenti/conteggi'))->toBe(['data' => ['tutti' => 1, 'attivo' => 1, 'in_eliminazione' => 0]])
+        ->and($conta($gettoneProva, '/v1/staff/workspace/conteggi'))->toBe(['data' => ['tutti' => 1, 'attivo' => 1, 'in_eliminazione' => 0]]);
+
+    foreach (['/v1/staff/utenti/conteggi', '/v1/staff/workspace/conteggi'] as $percorso) {
+        expect(esitoDelloStaff(fn () => Api::staff($gettoneFatturazione)->get($percorso)))->toBe([403, 'permesso_negato'])
+            ->and(esitoDelloStaff(fn () => Api::staff()->get($percorso)))->toBe([401, 'gettone_assente']);
+    }
+});
