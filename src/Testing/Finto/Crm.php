@@ -1923,7 +1923,7 @@ trait Crm
             'organizzazione' => $azienda === null ? null : ['id' => $azienda['id'], 'nome' => $azienda['nome'], 'archiviata_il' => self::isoCrm($azienda['archiviata_il'])],
             'unito_in' => $this->unitoInCrm($riga['id']),
             'paga_per' => $this->chiPagaCrm($riga),
-            'minorenne' => $this->minorenneCrm($riga),
+            'minorenne' => $this->minorenneDelContattoCrm($riga),
             'email' => $riga['email'],
             'telefoni' => $riga['telefoni'],
             'stato' => $riga['stato'],
@@ -1974,7 +1974,7 @@ trait Crm
      *
      * @param  array<string, mixed>  $riga
      */
-    private function minorenneCrm(array $riga): bool
+    private function minorenneDelContattoCrm(array $riga): bool
     {
         $campo = $this->campiTuoiCrm($riga['workspace'], 'persona')['data_nascita'] ?? null;
         $nato = $this->crm['valori']['persona'][$riga['id']]['data_nascita'] ?? null;
