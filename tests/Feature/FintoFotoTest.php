@@ -70,11 +70,34 @@ it('rifiuta peso, formato e lato con 422 sul file, un campo in più, e il file m
     $senza = alFinto('PATCH', '/v1/io/foto', [], gettone: $gettone);
     expect(esito($senza))->toBe([422, 'dati_non_validi'])->and($senza->json('errors.0.pointer'))->toBe('#/file')->and($senza->json('errors.0.regola'))->toBe('obbligatorio');
 
-    $inPiu = Illuminate\Support\Facades\Http::baseUrl(API)->acceptJson()->withToken($gettone)->asMultipart()
-        ->attach('file', jpegFinto(), 'foto.jpg')->patch('/v1/io/foto', [['name' => 'nome', 'contents' => 'Anna']]);
-    expect(esito($inPiu))->toBe([422, 'dati_non_validi'])->and($inPiu->json('errors.0.pointer'))->toBe('#/nome')->and($inPiu->json('errors.0.regola'))->toBe('campo_estraneo');
+    $inPiu = formFoto($gettone)->post('/v1/io/foto', ['_method' => 'PATCH', 'nome' => 'Anna']);
+    expect(esito($inPiu))->toBe([422, 'dati_non_validi'])->and($inPiu->json('errors'))->toHaveCount(1)->and($inPiu->json('errors.0.pointer'))->toBe('#/nome')->and($inPiu->json('errors.0.regola'))->toBe('campo_estraneo');
 
     expect(alFinto('GET', '/v1/io', gettone: $gettone)->json('data.utente.foto_aggiornata_il'))->toBeNull();
+});
+
+/** Un form multipart col file e il gettone, da completare con il verbo: la richiesta che un browser manda a un backoffice di PHP. */
+function formFoto(string $gettone): Illuminate\Http\Client\PendingRequest
+{
+    return Illuminate\Support\Facades\Http::baseUrl(API)->acceptJson()->withToken($gettone)->attach('file', jpegFinto(), 'foto.jpg');
+}
+
+it('un PATCH multipart arriva senza il file, come in PHP (422 obbligatorio su #/file); il POST con _method=PATCH lo carica, e senza _method non è una rotta (#2870)', function () {
+    $finto = BackofficeFinto::attiva();
+    [, $gettone] = personaConSessione($finto);
+
+    $patch = formFoto($gettone)->patch('/v1/io/foto');
+    expect(esito($patch))->toBe([422, 'dati_non_validi'])->and($patch->json('errors.0.pointer'))->toBe('#/file')->and($patch->json('errors.0.regola'))->toBe('obbligatorio')
+        ->and(alFinto('GET', '/v1/io', gettone: $gettone)->json('data.utente.foto_aggiornata_il'))->toBeNull();
+
+    $grande = Illuminate\Support\Facades\Http::baseUrl(API)->acceptJson()->withToken($gettone)->attach('file', str_repeat('a', 2 * 1024 * 1024 + 70000), 'foto.jpg')->patch('/v1/io/foto');
+    expect($grande->json('errors.0.regola'))->toBe('troppo_lungo');
+
+    $post = formFoto($gettone)->post('/v1/io/foto', ['_method' => 'PATCH']);
+    expect($post->status())->toBe(200)->and(array_keys($post->json('data')))->toBe(['aggiornata_il'])
+        ->and(alFinto('GET', '/v1/io', gettone: $gettone)->json('data.utente.foto_aggiornata_il'))->toBe($post->json('data.aggiornata_il'));
+
+    expect(fn () => formFoto($gettone)->post('/v1/io/foto'))->toThrow(Zeiras\Auth\Testing\Finto\RichiestaSconosciuta::class);
 });
 
 it('elimina toglie la foto: 204, poi 404 foto_assente, e foto_aggiornata_il torna null; la foto di una persona non è di un\'altra (#2870, D.4)', function () {

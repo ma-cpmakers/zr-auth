@@ -1386,13 +1386,37 @@ final class BackofficeFinto
             return null;
         }
 
+        $instradato = $this->verboInstradato($richiesta);
+
         foreach ([...self::METODI, ...self::METODI_CRM] as [$verbo, $forma, $operazione]) {
-            if ($richiesta->method() === $verbo && preg_match($forma, $percorso, $parti) === 1) {
+            if ($instradato === $verbo && preg_match($forma, $percorso, $parti) === 1) {
                 return $this->esegue($operazione, $richiesta, array_map(rawurldecode(...), array_slice($parti, 1)));
             }
         }
 
         throw new RichiestaSconosciuta($richiesta->method(), $percorso);
+    }
+
+    /**
+     * Il verbo con cui il backoffice instrada la richiesta: quello vero, o, per un `POST` multipart, il campo `_method` (il method override di Laravel, l'unico modo di far
+     * arrivare un file a PHP per una modifica: i file di un `PATCH` multipart non si leggono).
+     */
+    private function verboInstradato(Request $richiesta): string
+    {
+        if ($richiesta->method() !== 'POST' || ! $richiesta->isMultipart()) {
+            return $richiesta->method();
+        }
+
+        foreach ($richiesta->data() as $parte) {
+            if (is_array($parte) && ($parte['name'] ?? null) === '_method' && ! isset($parte['filename'])) {
+                $contenuto = $parte['contents'] ?? '';
+                $dichiarato = strtoupper(is_resource($contenuto) ? (string) stream_get_contents($contenuto) : (string) $contenuto);
+
+                return in_array($dichiarato, ['PUT', 'PATCH', 'DELETE'], true) ? $dichiarato : 'POST';
+            }
+        }
+
+        return 'POST';
     }
 
     /**
@@ -3536,8 +3560,11 @@ final class BackofficeFinto
         $file = null;
         $errori = [];
 
-        foreach ($richiesta->isMultipart() ? $richiesta->data() : [] as $parte) {
-            if (! is_array($parte) || ! isset($parte['name'])) {
+        // PHP legge i campi e i file di un multipart solo in un POST: un PATCH multipart arriva senza niente, e il file «manca» (o, oltre il tetto di PHP, pesa troppo).
+        $lette = $richiesta->method() === 'POST' && $richiesta->isMultipart() ? $richiesta->data() : [];
+
+        foreach ($lette as $parte) {
+            if (! is_array($parte) || ! isset($parte['name']) || $parte['name'] === '_method') {
                 continue;
             }
 
@@ -3552,7 +3579,9 @@ final class BackofficeFinto
         }
 
         if ($file === null) {
-            $errori[] = ['detail' => $this->testi->testo('validation.required', ['attribute' => $this->testi->nome('file')]), 'regola' => 'obbligatorio', 'pointer' => '#/file'];
+            $errori[] = strlen($richiesta->body()) > 2 * 1024 * 1024 + 65536
+                ? ['detail' => $this->testi->testo('regole.foto_peso'), 'regola' => 'troppo_lungo', 'pointer' => '#/file']
+                : ['detail' => $this->testi->testo('validation.required', ['attribute' => $this->testi->nome('file')]), 'regola' => 'obbligatorio', 'pointer' => '#/file'];
         }
 
         if ($errori === [] && $file !== null) {
