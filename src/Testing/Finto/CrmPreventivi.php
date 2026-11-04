@@ -369,7 +369,22 @@ trait CrmPreventivi
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('preventivi', $chi['workspace'], $id);
         $voce = $this->vocePreventivoCrm($riga);
-        $testo = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], 'Preventivo '.$voce['numero']);
+        $pdf = $this->pdfDiUnaRigaCrm('Preventivo '.$voce['numero']);
+
+        return [200, $pdf, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename='.str_replace('/', '-', $voce['numero']).'.pdf',
+            'Cache-Control' => 'no-store, private',
+            'X-Content-Type-Options' => 'nosniff',
+        ]];
+    }
+
+    /**
+     * Un PDF minimo e valido con una riga di testo (Helvetica, A4): la forma di un PDF, non il documento. Lo usano i PDF dei preventivi e dei documenti firmati.
+     */
+    private function pdfDiUnaRigaCrm(string $riga): string
+    {
+        $testo = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $riga);
         $contenuto = "BT /F1 18 Tf 72 720 Td ({$testo}) Tj ET";
         $oggetti = [
             '<< /Type /Catalog /Pages 2 0 R >>',
@@ -395,12 +410,7 @@ trait CrmPreventivi
 
         $pdf .= "trailer\n<< /Size ".(count($oggetti) + 1)." /Root 1 0 R >>\nstartxref\n{$tabella}\n%%EOF\n";
 
-        return [200, $pdf, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename='.str_replace('/', '-', $voce['numero']).'.pdf',
-            'Cache-Control' => 'no-store, private',
-            'X-Content-Type-Options' => 'nosniff',
-        ]];
+        return $pdf;
     }
 
     /**
