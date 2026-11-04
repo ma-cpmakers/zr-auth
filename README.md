@@ -584,8 +584,8 @@ che dà, con `codice` e `state`. Un esempio per intero: `tests/Feature/IngressoT
 ## La guardia, e il suo test
 
 `ConGettone` entra da sé nei gruppi `web` e `api`: senza una sessione col gettone, una pagina rimanda all'ingresso; una
-visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401. Un GET ricorda la pagina chiesta
-(`url.intended`, l'indirizzo della richiesta); una scrittura (POST, PUT, PATCH, DELETE) ricorda solo la pagina da cui è partita,
+visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401. Un GET di navigazione ricorda la pagina chiesta
+(`url.intended`, l'indirizzo della richiesta); un'immagine o un fetch bloccati (`Sec-Fetch-Dest` diverso da `document`, salvo una visita di Inertia; senza l'intestazione, un `Accept` che non chiede HTML) rimandano all'ingresso e non ricordano niente, così dopo l'accesso non si torna al file di una foto (`Ritorno::eUnaNavigazione`); una scrittura (POST, PUT, PATCH, DELETE) ricorda solo la pagina da cui è partita,
 dal `Referer` a condizioni strette (sotto, «Il ritorno dopo una scrittura»); HEAD non ricorda niente.
 
 Dopo l'accesso si torna lì con `Sessione::ritorno()`, **al posto di `redirect()->intended()`**, che manderebbe la persona
@@ -790,7 +790,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   ogni scheda aperta dello sprint con la sua destinazione (`backlog` o `sprint_dopo`; `422` su `#/schede`, `#/schede/N/id` o
   `#/schede/N/destinazione`), sposta le schede e registra la velocità: i punti delle completate se almeno una li ha, altrimenti il loro
   numero. Le schede portano `sprint_id` e `nello_sprint_dal`; il finto non ha `board.schede.modifica`, quindi lo sprint di una scheda lo
-  cambia solo la chiusura. Il finto non tiene il registro dei movimenti e non emette gli eventi. `board.sprint.andamento.mostra` (#2665) dà la serie
+  cambia solo la chiusura. Il finto non tiene il registro dei movimenti e non emette gli eventi. Uno sprint chiuso congela `pianificate`, `completate` e `non_completate` (#2980: la chiusura del finto li calcola; `sprint()` li prende da `$velocita` e dal nuovo `$nonCompletate`), e `board.sprint.schede-non-completate.elenca` elenca le schede non finite con la loro `destinazione` (il finto le congela alla chiusura; `nonCompletate($sprint, [['scheda' => id, 'destinazione' => 'backlog']])` le semina per uno sprint nato chiuso; `409` `sprint_non_chiuso` se non è chiuso). `board.sprint.mostra` (#2976) dà lo sprint con la forma di una riga dell'elenco, `404` se è di un altro workspace o non c'è. `board.sprint.andamento.mostra` (#2665) dà la serie
   che il test semina con `andamento($sprint, $giorni, 'punti'|'schede')` (i cinque interi cumulativi di ogni giorno, come li dà il backoffice), vuota in `schede` senza
   semina: il finto non la calcola.
 - **La pianificazione e il flusso di Scrumban.** `board.board.pianificazione.crea` (`POST /v1/board/board/{board}/pianificazione`, #2666) risponde

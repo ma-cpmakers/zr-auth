@@ -172,6 +172,8 @@ final class BackofficeFinto
         ['POST', '#^/v1/staff/inviti/accettazione$#', 'staff.inviti.accettazione.crea'],
         ['POST', '#^/v1/staff/totp$#', 'staff.totp.crea'],
         ['POST', '#^/v1/staff/totp/conferma$#', 'staff.totp.conferma.crea'],
+        ['GET', '#^/v1/staff/utenti/conteggi$#', 'staff.utenti.conteggi.mostra'],
+        ['GET', '#^/v1/staff/workspace/conteggi$#', 'staff.workspace.conteggi.mostra'],
         ['GET', '#^/v1/staff/registro$#', 'staff.registro.elenca'],
         ['POST', '#^/v1/staff/registro/esportazioni$#', 'staff.registro.esportazioni.crea'],
         ['GET', '#^/v1/staff$#', 'staff.elenca'],
@@ -219,9 +221,11 @@ final class BackofficeFinto
         ['DELETE', '#^/v1/board/schede/([^/]+)/crm/([^/]+)$#', 'board.schede.crm.elimina'],
         ['GET', '#^/v1/board/sprint$#', 'board.sprint.elenca'],
         ['POST', '#^/v1/board/sprint$#', 'board.sprint.crea'],
+        ['GET', '#^/v1/board/sprint/([^/]+)$#', 'board.sprint.mostra'],
         ['PATCH', '#^/v1/board/sprint/([^/]+)$#', 'board.sprint.modifica'],
         ['POST', '#^/v1/board/sprint/([^/]+)/avvio$#', 'board.sprint.avvio.crea'],
         ['POST', '#^/v1/board/sprint/([^/]+)/chiusura$#', 'board.sprint.chiusura.crea'],
+        ['GET', '#^/v1/board/sprint/([^/]+)/schede-non-completate$#', 'board.sprint.schede-non-completate.elenca'],
         ['GET', '#^/v1/board/sprint/([^/]+)/andamento$#', 'board.sprint.andamento.mostra'],
         ['POST', '#^/v1/board/sprint/([^/]+)/retrospettiva$#', 'board.sprint.retrospettiva.crea'],
         ['GET', '#^/v1/board/schede/([^/]+)/voti$#', 'board.schede.voti.elenca'],
@@ -325,6 +329,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/workspace/inviti/([^/]+)/reinvio$#', 'workspace.inviti.reinvio.crea'],
         ['GET', '#^/v1/workspace/primi-passi$#', 'workspace.primi-passi.mostra'],
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
+        ['GET', '#^/v1/workspace/membri/([^/]+)/foto$#', 'workspace.membri.foto.mostra'],
         ['PATCH', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.modifica'],
         ['DELETE', '#^/v1/workspace/membri/([^/]+)$#', 'workspace.membri.elimina'],
         ['POST', '#^/v1/workspace/uscita$#', 'workspace.uscita.crea'],
@@ -1454,6 +1459,8 @@ final class BackofficeFinto
                 'staff.modifica' => $this->modificaUnoDelloStaff($richiesta, $corpo, $parametri[0]),
                 'staff.elimina' => $this->eliminaUnoDelloStaff($richiesta, $parametri[0]),
                 'staff.totp.reimpostazione.crea' => $this->reimpostaIlTotpDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.utenti.conteggi.mostra' => $this->contaLePersoneDelloStaff($richiesta),
+                'staff.workspace.conteggi.mostra' => $this->contaIWorkspaceDelloStaff($richiesta),
                 'staff.registro.elenca' => $this->elencaIlRegistroDelloStaff($richiesta),
                 'staff.registro.esportazioni.crea' => $this->esportaIlRegistroDelloStaff($richiesta, $corpo),
                 'accessi.crea' => $this->creaAccesso($corpo),
@@ -1504,9 +1511,11 @@ final class BackofficeFinto
                 'board.schede.crm.elimina' => $this->eliminaSchedaCrm($richiesta, $parametri[0], $parametri[1]),
                 'board.sprint.elenca' => $this->elencaSprint($richiesta),
                 'board.sprint.crea' => $this->creaSprint($richiesta, $corpo),
+                'board.sprint.mostra' => $this->mostraSprint($richiesta, $parametri[0]),
                 'board.sprint.modifica' => $this->modificaSprint($richiesta, $corpo, $parametri[0]),
                 'board.sprint.avvio.crea' => $this->avviaSprint($richiesta, $parametri[0]),
                 'board.sprint.chiusura.crea' => $this->chiudiSprint($richiesta, $corpo, $parametri[0]),
+                'board.sprint.schede-non-completate.elenca' => $this->elencaNonCompletate($richiesta, $parametri[0]),
                 'board.sprint.andamento.mostra' => $this->mostraAndamentoSprint($richiesta, $parametri[0]),
                 'board.sprint.retrospettiva.crea' => $this->creaRetrospettiva($richiesta, $corpo, $parametri[0]),
                 'board.schede.voti.elenca' => $this->elencaVoti($richiesta, $parametri[0]),
@@ -1601,6 +1610,7 @@ final class BackofficeFinto
                 'workspace.inviti.reinvio.crea' => $this->reinviaInvito($richiesta, $corpo, $parametri[0]),
                 'workspace.primi-passi.mostra' => $this->mostraPrimiPassi($richiesta),
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
+                'workspace.membri.foto.mostra' => $this->leggiFotoDelMembro($richiesta, $parametri[0]),
                 'workspace.membri.modifica' => $this->modificaMembro($richiesta, $corpo, $parametri[0]),
                 'workspace.membri.elimina' => $this->eliminaMembro($richiesta, $parametri[0]),
                 'workspace.uscita.crea' => $this->esceDalWorkspace($richiesta, $corpo),
@@ -3664,8 +3674,30 @@ final class BackofficeFinto
      */
     private function leggiFoto(Request $richiesta): array
     {
-        $chi = $this->autentica($richiesta);
-        $foto = $this->foto[$chi['persona']] ?? throw new Problema('foto_assente');
+        return $this->fileDellaFoto($richiesta, $this->autentica($richiesta)['persona']);
+    }
+
+    /**
+     * workspace.membri.foto.mostra (MembriController::fotoMostra, #2983): il file della foto di un membro del workspace del gettone, come
+     * io.foto.file.mostra. Chi non è membro di questo workspace è 404 foto_assente come chi non ha la foto: nessun oracolo fra workspace.
+     *
+     * @return array{0: int, 1: ?string, 2: array<string, string>}
+     */
+    private function leggiFotoDelMembro(Request $richiesta, string $persona): array
+    {
+        $workspace = $this->delWorkspace($richiesta);
+
+        if (! isset($this->membri[$workspace][$persona])) {
+            throw new Problema('foto_assente');
+        }
+
+        return $this->fileDellaFoto($richiesta, $persona);
+    }
+
+    /** @return array{0: int, 1: ?string, 2: array<string, string>} */
+    private function fileDellaFoto(Request $richiesta, string $persona): array
+    {
+        $foto = $this->foto[$persona] ?? throw new Problema('foto_assente');
         $etag = '"'.$foto['etag'].'"';
         $header = ['ETag' => $etag, 'Cache-Control' => 'max-age=300, private', 'X-Content-Type-Options' => 'nosniff'];
         $chiesti = array_map(fn (string $voce) => preg_replace('#^W/#', '', trim($voce)), explode(',', self::header($richiesta, 'If-None-Match') ?? ''));
@@ -7084,10 +7116,10 @@ final class BackofficeFinto
     }
 
     /**
-     * Lo schema Membro (workspace.membri.elenca, .modifica e le due accettazioni): l'id della persona, il nome, l'email, il ruolo e
-     * da quando è nel workspace.
+     * Lo schema Membro (workspace.membri.elenca, .modifica e le due accettazioni): l'id della persona, il nome, l'email, il ruolo,
+     * da quando è nel workspace e `foto_aggiornata_il` della persona (#2983, null senza foto).
      *
-     * @return array<string, string>
+     * @return array<string, string|null>
      */
     private function voceMembro(string $workspace, string $persona): array
     {
@@ -7097,6 +7129,7 @@ final class BackofficeFinto
             'email' => $this->persone[$persona]['email'],
             'ruolo' => $this->membri[$workspace][$persona],
             'entrato_il' => self::iso($this->entrati[$workspace][$persona]),
+            'foto_aggiornata_il' => ($this->persone[$persona]['foto_aggiornata_il'] ?? null) === null ? null : self::iso($this->persone[$persona]['foto_aggiornata_il']),
         ];
     }
 

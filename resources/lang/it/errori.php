@@ -131,7 +131,7 @@ return [
     ],
     'sprint_non_chiuso' => [
         'title' => 'Sprint non chiuso',
-        'detail' => 'La retrospettiva si apre sullo sprint chiuso: questo è ancora pianificato o attivo. Chiudilo con `board.sprint.chiusura.crea` e poi ripeti la richiesta.',
+        'detail' => 'Questa richiesta riguarda uno sprint chiuso (la retrospettiva, le schede non completate): questo è ancora pianificato o attivo. Chiudilo con `board.sprint.chiusura.crea` e poi ripeti la richiesta.',
     ],
     'retrospettiva_esistente' => [
         'title' => 'Retrospettiva già aperta',

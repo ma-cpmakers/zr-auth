@@ -76,3 +76,67 @@ it('senza sessione HEAD, POST, PUT, PATCH e DELETE rimandano all\'ingresso e non
 
     expect(session()->has('url.intended'))->toBeFalse();
 })->with(['HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
+
+// #2985: il ritorno si ricorda solo per una navigazione. Un'immagine o un fetch bloccati rimandano all'ingresso come prima, ma non lasciano la loro
+// pagina come «dove tornare»: dopo l'accesso si finirebbe sul file della foto.
+
+it('senza sessione una navigazione (Sec-Fetch-Dest: document) ricorda la pagina (#2985, G1)', function () {
+    $this->get('/pagina', ['Sec-Fetch-Dest' => 'document', 'Sec-Fetch-Mode' => 'navigate', 'Accept' => 'text/html,application/xhtml+xml'])->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(url('/pagina'));
+});
+
+it('senza sessione un\'immagine, uno script, uno stile, un font o un fetch bloccati non ricordano niente e rimandano all\'ingresso come prima (#2985, G1, deve fallire se la pagina diventa il ritorno)', function (string $destinazione) {
+    $this->get('/pagina', ['Sec-Fetch-Dest' => $destinazione, 'Accept' => 'image/avif,image/webp,image/*,*/*;q=0.8'])->assertRedirect(INGRESSO);
+
+    expect(session()->has('url.intended'))->toBeFalse();
+})->with(['image', 'script', 'style', 'font', 'empty', 'iframe', 'frame', 'object']);
+
+it('una richiesta che non è una navigazione non cancella il ritorno che una navigazione ha già ricordato (#2985, G1)', function () {
+    $this->get('/pagina?vista=2', ['Sec-Fetch-Dest' => 'document'])->assertRedirect(INGRESSO);
+    $this->get('/pagina', ['Sec-Fetch-Dest' => 'image'])->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(url('/pagina?vista=2'));
+});
+
+it('dopo l\'accesso si torna alla pagina, mai al file di un\'immagine che ha trovato il gettone scaduto (#2985, G1)', function () {
+    $this->get('/pagina', ['Sec-Fetch-Dest' => 'document']);
+    $this->get('/pagina?x=1', ['Sec-Fetch-Dest' => 'image']);
+
+    expect(Sessione::ritorno(url('/')))->toBe(url('/pagina'));
+});
+
+it('senza Sec-Fetch-Dest (un browser vecchio) una navigazione ricorda la pagina: Accept con HTML o senza Accept (#2985, G2, deve fallire se smette di ricordare)', function (?string $accept) {
+    $this->get('/pagina', $accept === null ? [] : ['Accept' => $accept])->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(url('/pagina'));
+})->with([null, 'text/html', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'application/xhtml+xml']);
+
+it('senza Sec-Fetch-Dest un\'immagine (Accept di sole immagini) non ricorda niente (#2985, G1)', function () {
+    $this->get('/pagina', ['Accept' => 'image/avif,image/webp,image/apng,image/*;q=0.8'])->assertRedirect(INGRESSO);
+
+    expect(session()->has('url.intended'))->toBeFalse();
+});
+
+it('una visita di Inertia (un fetch con X-Inertia) ricorda la pagina anche con Sec-Fetch-Dest: empty (#2985, G1)', function () {
+    $this->get('/pagina', ['X-Inertia' => 'true', 'Sec-Fetch-Dest' => 'empty', 'Accept' => 'text/html, application/xhtml+xml'])->assertStatus(409);
+
+    expect(session('url.intended'))->toBe(url('/pagina'));
+});
+
+// Dalla review di #188: la scrittura di fondo e il caricamento speculativo non toccano il ritorno.
+
+it('un fetch di scrittura (Sec-Fetch-Dest: empty) con il gettone scaduto non cancella né sovrascrive il ritorno ricordato (#2985, review di #188)', function (string $metodo) {
+    Route::middleware('web')->any('modulo', fn () => 'ok');
+
+    $this->get(FRONTEND.'/pagina?vista=2', ['Sec-Fetch-Dest' => 'document'])->assertRedirect(INGRESSO);
+    $this->call($metodo, FRONTEND.'/modulo', [], [], [], ['HTTP_SEC_FETCH_DEST' => 'empty', 'HTTP_REFERER' => 'https://altro.zeiras.com/x'])->assertRedirect(INGRESSO);
+
+    expect(session('url.intended'))->toBe(FRONTEND.'/pagina?vista=2');
+})->with(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+it('un caricamento speculativo (prefetch) di una pagina protetta non diventa il ritorno (#2985, review di #188)', function () {
+    $this->get('/pagina', ['Sec-Fetch-Dest' => 'document', 'Sec-Purpose' => 'prefetch'])->assertRedirect(INGRESSO);
+
+    expect(session()->has('url.intended'))->toBeFalse();
+});

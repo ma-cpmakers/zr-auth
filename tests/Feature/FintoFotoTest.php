@@ -134,3 +134,45 @@ it('immagine() rifiuta un tipo che non è un\'immagine, un file oltre il tetto e
         ->and(fn () => Api::persona()->immagine('/v1/io/foto/file', 'senza-virgolette'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => Api::persona()->immagine('/v1/io/foto/file?x=1'))->toThrow(InvalidArgumentException::class);
 });
+
+it('workspace.membri.elenca porta foto_aggiornata_il di ogni membro, e workspace.membri.foto.mostra dà il file ai tre ruoli (#2983, F1-F3)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
+    $bruno = $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
+    $carla = $finto->persona('carla@example.com', PASSWORD, nome: 'Carla');
+    $studio = $finto->workspace('Studio Anna', $anna);
+    $finto->membro($studio, $bruno, 'membro');
+    $finto->membro($studio, $carla, 'amministratore');
+    Sessione::apri(entraNelFinto('bruno@example.com'));
+    $caricata = Api::persona()->caricaFile('/v1/io/foto', 'file', jpegFinto(), 'foto.jpg')['data']['aggiornata_il'];
+
+    foreach (['anna@example.com', 'carla@example.com', 'bruno@example.com'] as $chi) {
+        $gettone = gettoneDelFinto($chi, $studio);
+        $voci = collect(alFinto('GET', '/v1/workspace/membri', gettone: $gettone)->json('data'))->keyBy('id');
+        $file = alFinto('GET', '/v1/workspace/membri/'.$bruno['id'].'/foto', gettone: $gettone);
+
+        expect($voci[$bruno['id']]['foto_aggiornata_il'])->toBe($caricata)
+            ->and($voci[$anna['id']]['foto_aggiornata_il'])->toBeNull()
+            ->and($file->status())->toBe(200)
+            ->and($file->header('Content-Type'))->toBe('image/webp')
+            ->and($file->header('X-Content-Type-Options'))->toBe('nosniff')
+            ->and(alFinto('GET', '/v1/workspace/membri/'.$bruno['id'].'/foto', gettone: $gettone, intestazioni: ['If-None-Match' => $file->header('ETag')])->status())->toBe(304);
+    }
+});
+
+it('workspace.membri.foto.mostra è 404 foto_assente, uguale, senza foto, per chi non è membro e per un id che non c\'è; 403 al gettone dell\'accesso (#2983, F3)', function () {
+    $finto = BackofficeFinto::attiva();
+    $anna = $finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
+    $elena = $finto->persona('elena@example.com', PASSWORD, nome: 'Elena');
+    $studio = $finto->workspace('Studio Anna', $anna);
+    $finto->workspace('Altro', $elena);
+    Sessione::apri(entraNelFinto('elena@example.com'));
+    Api::persona()->caricaFile('/v1/io/foto', 'file', jpegFinto(), 'foto.jpg');
+    $gettone = gettoneDelFinto('anna@example.com', $studio);
+
+    expect(esito(alFinto('GET', '/v1/workspace/membri/'.$anna['id'].'/foto', gettone: $gettone)))->toBe([404, 'foto_assente'])
+        ->and(esito(alFinto('GET', '/v1/workspace/membri/'.$elena['id'].'/foto', gettone: $gettone)))->toBe([404, 'foto_assente'])
+        ->and(esito(alFinto('GET', '/v1/workspace/membri/01k6r4c9f2h6k0n4r8v2x6z0b4/foto', gettone: $gettone)))->toBe([404, 'foto_assente'])
+        ->and(esito(alFinto('GET', '/v1/workspace/membri/'.$anna['id'].'/foto', gettone: entraNelFinto('anna@example.com')['gettone']['gettone'])))->toBe([403, 'gettone_senza_workspace'])
+        ->and(esito(alFinto('GET', '/v1/workspace/membri/'.$anna['id'].'/foto')))->toBe([401, 'gettone_assente']);
+});

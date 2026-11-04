@@ -49,7 +49,7 @@ it('crea uno sprint pianificato: 201 senza Location, la forma del backoffice con
     $nato = alFinto('POST', '/v1/board/sprint', corpoDelloSprint($board, ['obiettivo' => 'Il carrello']), $gettone);
 
     expect($nato->status())->toBe(201)->and($nato->header('Location'))->toBe('')
-        ->and(array_keys($nato->json('data')))->toBe(['id', 'board_id', 'nome', 'obiettivo', 'stato', 'inizio', 'fine', 'durata_settimane', 'avviato_il', 'chiuso_il', 'obiettivo_raggiunto', 'retrospettiva_board_id', 'velocita', 'velocita_unita', 'creata_il', 'aggiornata_il'])
+        ->and(array_keys($nato->json('data')))->toBe(['id', 'board_id', 'nome', 'obiettivo', 'stato', 'inizio', 'fine', 'durata_settimane', 'avviato_il', 'chiuso_il', 'obiettivo_raggiunto', 'retrospettiva_board_id', 'velocita', 'velocita_unita', 'pianificate', 'completate', 'non_completate', 'creata_il', 'aggiornata_il'])
         ->and($nato->json('data'))->toMatchArray([
             'board_id' => $board['id'], 'nome' => 'Sprint 1', 'obiettivo' => 'Il carrello', 'stato' => 'pianificato', 'inizio' => '2026-11-02', 'fine' => '2026-11-15',
             'durata_settimane' => 2, 'avviato_il' => null, 'chiuso_il' => null, 'obiettivo_raggiunto' => null, 'velocita' => null, 'velocita_unita' => null,
@@ -202,7 +202,7 @@ it('la chiusura manda le schede aperte nel backlog o nello sprint dopo, tiene le
     ], $gettone);
 
     expect($chiuso->status())->toBe(201)
-        ->and($chiuso->json('data'))->toMatchArray(['stato' => 'chiuso', 'velocita' => 5, 'velocita_unita' => 'punti', 'obiettivo_raggiunto' => true])
+        ->and($chiuso->json('data'))->toMatchArray(['stato' => 'chiuso', 'velocita' => 5, 'velocita_unita' => 'punti', 'obiettivo_raggiunto' => true, 'pianificate' => 16, 'completate' => 5, 'non_completate' => 11])
         ->and($chiuso->json('data.chiuso_il'))->not->toBeNull();
 
     $sprintDelleSchede = fn (string $scheda) => alFinto('GET', "/v1/board/schede/{$scheda}", null, $gettone)->json('data.sprint_id');
@@ -215,6 +215,42 @@ it('la chiusura manda le schede aperte nel backlog o nello sprint dopo, tiene le
         ->and(alFinto('GET', "/v1/board/schede/{$esce['id']}", null, $gettone)->json('data.nello_sprint_dal'))->toBeNull();
 
     expect(alFinto('POST', "/v1/board/sprint/{$attivo['id']}/chiusura", ['schede' => []], $gettone)->json('codice'))->toBe('sprint_non_attivo');
+});
+
+it('le schede non finite alla chiusura sono congelate: elenco per id con la destinazione e lo stato di adesso, 409 sprint_non_chiuso se lo sprint non è chiuso, 404 se è altrui', function () {
+    [$finto, $studio, $board, $gettone] = conLaBoardScrum();
+    $attivo = $finto->sprint($studio, $board, 'In corso', 'attivo');
+    $dopo = $finto->sprint($studio, $board, 'Dopo');
+    $resta = $finto->scheda($studio, 'Resta', $board['id'], punti: 3, sprint: $attivo['id']);
+    $esce = $finto->scheda($studio, 'Esce', $board['id'], punti: 8, sprint: $attivo['id']);
+    [, $altrui] = unaBoardScrumAltrui($finto);
+
+    expect(alFinto('GET', "/v1/board/sprint/{$attivo['id']}/schede-non-completate", null, $gettone)->json('codice'))->toBe('sprint_non_chiuso');
+
+    alFinto('POST', "/v1/board/sprint/{$attivo['id']}/chiusura", ['schede' => [['id' => $resta['id'], 'destinazione' => 'sprint_dopo'], ['id' => $esce['id'], 'destinazione' => 'backlog']]], $gettone);
+    alFinto('POST', "/v1/board/schede/{$esce['id']}/completamento", null, $gettone);
+
+    $elenco = alFinto('GET', "/v1/board/sprint/{$attivo['id']}/schede-non-completate", null, $gettone);
+    $righe = collect($elenco->json('data'))->sortBy('scheda.titolo')->values();
+
+    expect($elenco->status())->toBe(200)
+        ->and(array_keys($elenco->json()))->toBe(['data', 'successivo'])
+        ->and($righe->pluck('destinazione')->all())->toBe(['backlog', 'sprint_dopo'])
+        ->and($righe->pluck('scheda.titolo')->all())->toBe(['Esce', 'Resta'])
+        ->and($righe[0]['scheda']['completata_il'])->not->toBeNull()
+        ->and($righe[1]['scheda']['sprint_id'])->toBe($dopo['id'])
+        ->and(array_keys($righe[0]))->toBe(['destinazione', 'scheda'])
+        ->and(alFinto('GET', "/v1/board/sprint/{$attivo['id']}/schede-non-completate?limite=1", null, $gettone)->json('successivo'))->toBeString()
+        ->and(alFinto('GET', '/v1/board/sprint/01k6w9a1c3e5g7j9m1p3r5t7v9/schede-non-completate', null, $gettone)->status())->toBe(404)
+        ->and(alFinto('GET', "/v1/board/sprint/{$altrui['id']}/schede-non-completate", null, $gettone)->status())->toBe(404);
+
+    $seminato = $finto->sprint($studio, $board, 'Vecchio', 'chiuso');
+    $finto->nonCompletate($seminato, [['scheda' => $resta['id'], 'destinazione' => 'backlog']]);
+
+    expect(alFinto('GET', "/v1/board/sprint/{$seminato['id']}/schede-non-completate", null, $gettone)->json('data.0.destinazione'))->toBe('backlog')
+        ->and(fn () => $finto->nonCompletate($dopo, []))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $finto->nonCompletate($seminato, [['scheda' => 'x', 'destinazione' => 'backlog']]))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $finto->nonCompletate($seminato, [['scheda' => $resta['id'], 'destinazione' => 'altrove']]))->toThrow(InvalidArgumentException::class);
 });
 
 it('la chiusura senza punti conta le schede completate, in unità schede; senza schede la velocità è 0', function () {
@@ -305,6 +341,22 @@ it('con l\'app pm spenta elenca e crea sono 403 app_non_attiva; la Idempotency-K
 
     expect(alFinto('GET', "/v1/board/sprint?board_id={$board['id']}", null, $gettone)->json('codice'))->toBe('app_non_attiva')
         ->and(alFinto('POST', '/v1/board/sprint', $corpo, $gettone)->json('codice'))->toBe('app_non_attiva');
+});
+
+it('mostra dà lo sprint con la forma di una riga dell\'elenco, board_id compreso; 404 per uno che non c\'è o di un altro workspace', function () {
+    [$finto, $studio, $board, $gettone] = conLaBoardScrum();
+    $sprint = $finto->sprint($studio, $board, 'In corso', 'attivo', '2026-10-12');
+    [, $altrui] = unaBoardScrumAltrui($finto);
+
+    $riga = collect(alFinto('GET', "/v1/board/sprint?board_id={$board['id']}", null, $gettone)->json('data'))->firstWhere('id', $sprint['id']);
+    $mostra = alFinto('GET', "/v1/board/sprint/{$sprint['id']}", null, $gettone);
+
+    expect($mostra->status())->toBe(200)
+        ->and(array_keys($mostra->json()))->toBe(['data'])
+        ->and($mostra->json('data'))->toBe($riga)
+        ->and($mostra->json('data.board_id'))->toBe($board['id'])
+        ->and(alFinto('GET', '/v1/board/sprint/01k6w9a1c3e5g7j9m1p3r5t7v9', null, $gettone)->json('codice'))->toBe('non_trovato')
+        ->and(alFinto('GET', "/v1/board/sprint/{$altrui['id']}", null, $gettone)->status())->toBe(404);
 });
 
 it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine, giorni), vuota senza semina; 404 per uno sprint che non c\'è o di un altro workspace', function () {

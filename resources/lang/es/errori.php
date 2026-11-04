@@ -131,7 +131,7 @@ return [
     ],
     'sprint_non_chiuso' => [
         'title' => 'Sprint no cerrado',
-        'detail' => 'La retrospectiva se abre sobre el sprint cerrado: este sigue planificado o activo. Ciérralo con `board.sprint.chiusura.crea` y repite la petición.',
+        'detail' => 'Esta petición trata de un sprint cerrado (la retrospectiva, las tarjetas sin terminar): este sigue planificado o activo. Ciérralo con `board.sprint.chiusura.crea` y repite la petición.',
     ],
     'retrospettiva_esistente' => [
         'title' => 'Retrospectiva ya abierta',

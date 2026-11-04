@@ -105,7 +105,10 @@ trait Staff
      */
     public function invitoDelloStaff(array $staff): string
     {
-        return $this->nuovoInvitoDelloStaff($this->rigaDelloStaff((string) $staff['id']));
+        $id = (string) $staff['id'];
+        $this->rigaDelloStaff($id);
+
+        return $this->nuovoInvitoDelloStaff($id);
     }
 
     /** L'ultimo invito nato per quest'email (da staff.crea, dal reset del secondo fattore o da invitoDelloStaff()), ancora da consumare; null se non ce n'è. */
@@ -198,7 +201,7 @@ trait Staff
     /**
      * staff.accessi.verifica.crea: il secondo passo, con la sfida e il codice del TOTP (`000000`, una volta per passo) o uno di recupero (una volta sola). Un solo errore,
      * `secondo_fattore_non_valido`, per ogni caso: sfida sconosciuta, scaduta, esaurita (cinque codici sbagliati), di un altro IP, codice sbagliato o già usato. Dieci
-     * codici sbagliati in 24 ore per persona bloccano (429).
+     * codici sbagliati in 24 ore per persona bloccano: da lì lo stesso errore, anche col codice giusto, senza 429 né minuti (M2).
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -220,7 +223,12 @@ trait Staff
         }
 
         $persona = 'staff-fattore:'.$staff['id'];
-        $this->frena($persona, 10, self::GIORNO_DELLO_STAFF);
+
+        // Come il backoffice (M2): la persona bloccata risponde come una sfida inventata, senza il 429 né i minuti.
+        if ($this->freni->hit($persona, self::GIORNO_DELLO_STAFF) > 10) {
+            throw new Problema('secondo_fattore_non_valido');
+        }
+
         $this->sfideStaff[$dati['sfida']]['errori']++;
         $prova = $this->provaIlCodiceDelloStaff($staff, $dati['codice']);
 
@@ -228,7 +236,8 @@ trait Staff
             throw new Problema('secondo_fattore_non_valido');
         }
 
-        $this->freni->clear($persona);
+        // Come il backoffice (RateLimiter::decrement): un secondo fattore riuscito toglie il solo colpo di questo tentativo, non azzera i precedenti.
+        $this->freni->decrement($persona);
         unset($this->sfideStaff[$dati['sfida']]);
 
         if ($prova === 'totp') {
@@ -489,6 +498,54 @@ trait Staff
         $this->scriviNelRegistroDelloStaff($chi, 'staff.totp.reimpostazione.crea', 'staff', $bersaglio['id'], ['totp'], $dati['motivo']);
 
         return [201, ['data' => $this->voceDelloStaff($bersaglio['id'])]];
+    }
+
+    // ── I numeri della Panoramica ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * staff.utenti.conteggi.mostra (#2995): quante persone, per stato, solo numeri. `in_eliminazione` ha chiesto di eliminare l'account (io.elimina); il finto non anonimizza, quindi nessuna
+     * persona esce dal conto. Superadmin e supporto; una persona `solo_uat` conta le persone `uat+*@castroandpartners.com`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function contaLePersoneDelloStaff(Request $richiesta): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        $persone = array_filter(array_keys($this->persone), fn (string $id) => ! $chi['solo_uat'] || $this->emailDelPerimetroUat($this->persone[$id]['email']));
+
+        return [200, ['data' => $this->conteggiPerStato(count($persone), count(array_filter($persone, fn (string $id) => isset($this->eliminazioniPersona[$id]))))]];
+    }
+
+    /**
+     * staff.workspace.conteggi.mostra (#2995): quanti workspace, per stato, solo numeri. `in_eliminazione` ha l'eliminazione programmata viva. Una persona `solo_uat` conta i workspace
+     * il cui proprietario ha un'email `uat+*@castroandpartners.com`, non quelli con lo slug `uat-`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function contaIWorkspaceDelloStaff(Request $richiesta): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        $workspace = array_filter(array_keys($this->workspace), fn (string $id) => ! $chi['solo_uat'] || $this->proprietarioDiProva($id));
+
+        return [200, ['data' => $this->conteggiPerStato(count($workspace), count(array_filter($workspace, fn (string $id) => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture())))]];
+    }
+
+    /** Un workspace il cui proprietario è una persona del perimetro di prova. */
+    private function proprietarioDiProva(string $workspace): bool
+    {
+        foreach ($this->membri[$workspace] ?? [] as $persona => $ruolo) {
+            if ($ruolo === 'proprietario' && isset($this->persone[$persona]) && $this->emailDelPerimetroUat($this->persone[$persona]['email'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @return array{tutti: int, attivo: int, in_eliminazione: int} */
+    private function conteggiPerStato(int $tutti, int $inEliminazione): array
+    {
+        return ['tutti' => $tutti, 'attivo' => $tutti - $inEliminazione, 'in_eliminazione' => $inEliminazione];
     }
 
     // ── Il registro ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
