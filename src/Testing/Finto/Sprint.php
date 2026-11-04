@@ -34,15 +34,18 @@ trait Sprint
     /** @var array<string, array{unita: string, giorni: list<array<string, mixed>>}> le serie seminate dal test, per id dello sprint */
     private array $andamenti = [];
 
+    /** @var array<string, list<array{scheda: string, destinazione: string|null}>> per sprint chiuso, le schede non finite alla chiusura (#2980) */
+    private array $nonCompletate = [];
+
     /**
-     * Uno sprint per i test: nasce `pianificato`, `attivo` (avviato il giorno dell'inizio) o `chiuso` (alla fine della sua durata) (con `$velocita` e la sua unità, `punti` o `schede`). La board è di
+     * Uno sprint per i test: nasce `pianificato`, `attivo` (avviato il giorno dell'inizio) o `chiuso` (alla fine della sua durata) (con `$velocita` e la sua unità, `punti` o `schede`, e `$nonCompletate`, ciò che era ancora aperto alla chiusura: `pianificate` è la loro somma). La board è di
      * board() e va con il metodo `scrum`; come nel backoffice una board ha al più uno sprint attivo e uno pianificato.
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  array<string, mixed>  $board  una board di board(), con il metodo `scrum`
      * @return array{id: string, board_id: string, nome: string, stato: string}
      */
-    public function sprint(array $workspace, array $board, string $nome, string $stato = 'pianificato', ?string $inizio = null, int $durataSettimane = 2, ?string $obiettivo = null, int $velocita = 0, string $unita = 'schede'): array
+    public function sprint(array $workspace, array $board, string $nome, string $stato = 'pianificato', ?string $inizio = null, int $durataSettimane = 2, ?string $obiettivo = null, int $velocita = 0, string $unita = 'schede', int $nonCompletate = 0): array
     {
         $idWorkspace = $this->workspaceDelFinto($workspace);
         $idBoard = $board['id'] ?? null;
@@ -73,6 +76,7 @@ trait Sprint
             'inizio' => $inizio, 'durata_settimane' => $durataSettimane,
             'avviato_il' => $stato === 'pianificato' ? null : $partenza, 'chiuso_il' => $stato === 'chiuso' ? $partenza->addWeeks($durataSettimane) : null, 'obiettivo_raggiunto' => null,
             'velocita' => $stato === 'chiuso' ? $velocita : null, 'velocita_unita' => $stato === 'chiuso' ? $unita : null,
+            'pianificate' => $stato === 'chiuso' ? $velocita + $nonCompletate : null, 'completate' => $stato === 'chiuso' ? $velocita : null, 'non_completate' => $stato === 'chiuso' ? $nonCompletate : null,
             'creata_il' => $ora, 'aggiornata_il' => $ora,
         ];
 
@@ -106,6 +110,73 @@ trait Sprint
         $this->andamenti[$sprint['id']] = ['unita' => $unita, 'giorni' => $giorni];
 
         return $this;
+    }
+
+    /**
+     * Semina le schede non finite di uno sprint chiuso, come le elencherebbe `board.sprint.schede-non-completate.elenca` (#2980): il finto le congela da sé
+     * quando lo sprint si chiude con `board.sprint.chiusura.crea`, ma uno sprint nato chiuso da sprint() non ha chiusura. Ogni voce ha l'id di una
+     * scheda del finto e la sua `destinazione` (`backlog` o `sprint_dopo`).
+     *
+     * @param  array{id: string}  $sprint  uno sprint chiuso di sprint()
+     * @param  list<array{scheda: string, destinazione: string}>  $schede
+     */
+    public function nonCompletate(array $sprint, array $schede): self
+    {
+        if (($this->sprint[$sprint['id']]['stato'] ?? null) !== 'chiuso') {
+            throw new InvalidArgumentException('Le non completate sono di uno sprint chiuso: nasce con sprint() e stato «chiuso».');
+        }
+
+        foreach ($schede as $voce) {
+            if (! isset($this->schede[$voce['scheda'] ?? ''])) {
+                throw new InvalidArgumentException('La scheda non è del finto: nasce con scheda().');
+            }
+
+            if (! in_array($voce['destinazione'] ?? null, ['backlog', 'sprint_dopo'], true)) {
+                throw new InvalidArgumentException('La destinazione è backlog o sprint_dopo.');
+            }
+        }
+
+        usort($schede, fn (array $una, array $altra) => $una['scheda'] <=> $altra['scheda']);
+        $this->nonCompletate[$sprint['id']] = $schede;
+
+        return $this;
+    }
+
+    /**
+     * board.sprint.schede-non-completate.elenca (SprintNonCompletateController::elenca): le schede non finite alla chiusura, per id, a cursore, ciascuna
+     * con la sua `destinazione` e nella forma breve di adesso; una scheda eliminata o archiviata dal sistema non compare. Uno sprint di un altro
+     * workspace, o che non c'è, è 404; uno che non è chiuso 409 `sprint_non_chiuso`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaNonCompletate(Request $richiesta, string $id): array
+    {
+        $chi = $this->conPm($richiesta);
+        $sprint = $this->sprint[$id] ?? null;
+
+        if ($sprint === null || $sprint['workspace'] !== $chi['workspace']) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->sprintScrum($this->boards[$sprint['board']]);
+
+        if ($sprint['stato'] !== 'chiuso') {
+            throw new Problema('sprint_non_chiuso');
+        }
+
+        $voci = [];
+
+        foreach ($this->nonCompletate[$id] ?? [] as $voce) {
+            if (isset($this->schede[$voce['scheda']])) {
+                // `id` serve solo al cursore, che lo vuole sulla voce: dalla risposta si toglie.
+                $voci[] = ['id' => $voce['scheda'], 'destinazione' => $voce['destinazione'], 'scheda' => array_diff_key($this->voceScheda($this->schede[$voce['scheda']]), ['descrizione' => true])];
+            }
+        }
+
+        [$stato, $pagina] = $this->pagina($richiesta, 'board.sprint.schede-non-completate.elenca', 'id', $voci, fn (array $voce) => [$voce['id']], fn (string $scheda) => [$scheda]);
+        $pagina['data'] = array_map(fn (array $voce) => array_diff_key($voce, ['id' => true]), $pagina['data'] ?? []);
+
+        return [$stato, $pagina];
     }
 
     /**
@@ -233,6 +304,7 @@ trait Sprint
                 'id' => $id, 'workspace' => $chi['workspace'], 'board' => $board['id'], 'nome' => trim((string) $campi['nome']), 'obiettivo' => $campi['obiettivo'] ?? null,
                 'stato' => 'pianificato', 'inizio' => $campi['inizio'], 'durata_settimane' => $campi['durata_settimane'],
                 'avviato_il' => null, 'chiuso_il' => null, 'obiettivo_raggiunto' => null, 'velocita' => null, 'velocita_unita' => null,
+                'pianificate' => null, 'completate' => null, 'non_completate' => null,
                 'creata_il' => $ora, 'aggiornata_il' => $ora,
             ];
 
@@ -362,7 +434,10 @@ trait Sprint
 
         $ora = now()->toImmutable()->startOfMillisecond();
 
+        $congelate = [];
+
         foreach ($destinazioni as $scheda => $destinazione) {
+            $congelate[] = ['scheda' => $scheda, 'destinazione' => $destinazione];
             $verso = $destinazione === 'sprint_dopo' && $dopo !== null ? $dopo['id'] : null;
             $this->schede[$scheda]['sprint_id'] = $verso;
             $this->schede[$scheda]['nello_sprint_dal'] = $verso === null ? null : $ora;
@@ -373,10 +448,15 @@ trait Sprint
         }
 
         $conPunti = array_filter($completate, fn (array $scheda) => ($scheda['punti'] ?? null) !== null) !== [];
+        $velocita = $conPunti ? array_sum(array_map(fn (array $scheda) => (int) ($scheda['punti'] ?? 0), $completate)) : count($completate);
+        $nonCompletate = $conPunti ? array_sum(array_map(fn (array $scheda) => (int) ($scheda['punti'] ?? 0), $aperte)) : count($aperte);
+        usort($congelate, fn (array $una, array $altra) => $una['scheda'] <=> $altra['scheda']);
+        $this->nonCompletate[$id] = $congelate;
         $this->sprint[$id] = [
             'stato' => 'chiuso', 'chiuso_il' => $ora, 'aggiornata_il' => $ora,
-            'velocita' => $conPunti ? array_sum(array_map(fn (array $scheda) => (int) ($scheda['punti'] ?? 0), $completate)) : count($completate),
+            'velocita' => $velocita,
             'velocita_unita' => $conPunti ? 'punti' : 'schede',
+            'pianificate' => $velocita + $nonCompletate, 'completate' => $velocita, 'non_completate' => $nonCompletate,
             'obiettivo_raggiunto' => $campi['obiettivo_raggiunto'] ?? null,
         ] + $corrente;
 
@@ -508,6 +588,9 @@ trait Sprint
             'retrospettiva_board_id' => $sprint['retrospettiva_board'] ?? null,
             'velocita' => $sprint['velocita'],
             'velocita_unita' => $sprint['velocita_unita'],
+            'pianificate' => $sprint['pianificate'] ?? null,
+            'completate' => $sprint['completate'] ?? null,
+            'non_completate' => $sprint['non_completate'] ?? null,
             'creata_il' => self::iso($sprint['creata_il']),
             'aggiornata_il' => self::iso($sprint['aggiornata_il']),
         ];
