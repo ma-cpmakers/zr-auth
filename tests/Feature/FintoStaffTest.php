@@ -390,3 +390,28 @@ it('i codici di recupero hanno il formato del backoffice e si accettano come li 
         ->and($verifica($primo))->toBe([401, 'secondo_fattore_non_valido'])
         ->and($verifica(strtolower($secondo)))->toBe(['ok', null]);
 });
+
+it('invitoDelloStaff() dà un invito nuovo per la persona dello staff e annulla il precedente; una persona che non c\'è è un errore', function () {
+    $nuova = personaDelloStaff($this->finto, 'nuova@lucianocastro.com', 'supporto', conTotp: false);
+    $primo = $this->finto->ultimoInvitoDelloStaff('nuova@lucianocastro.com');
+    $secondo = $this->finto->invitoDelloStaff($nuova);
+
+    expect($secondo)->toBeString()->not->toBe($primo)
+        ->and($this->finto->ultimoInvitoDelloStaff('nuova@lucianocastro.com'))->toBe($secondo)
+        ->and(esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/inviti/accettazione', ['segreto' => $primo, 'password' => PASSWORD])))->toBe([401, 'invito_non_valido'])
+        ->and(fn () => $this->finto->invitoDelloStaff(['id' => 'inesistente']))->toThrow(LogicException::class);
+});
+
+it('dieci codici sbagliati in 24 ore bloccano la persona: poi lo stesso secondo_fattore_non_valido, anche col codice giusto, senza 429 né Retry-After (M2)', function () {
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com', 'superadmin');
+    $primoPasso = fn () => Api::staff()->post('/v1/staff/accessi', ['email' => 'sara@lucianocastro.com', 'password' => PASSWORD])['data']['sfida']['id'];
+
+    for ($i = 0; $i < 10; $i++) {
+        Carbon::setTestNow(Carbon::now()->addMinutes(16));
+        expect(esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $primoPasso(), 'codice' => '111111'])))->toBe([401, 'secondo_fattore_non_valido']);
+    }
+
+    Carbon::setTestNow(Carbon::now()->addMinutes(16));
+
+    expect(esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $primoPasso(), 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])))->toBe([401, 'secondo_fattore_non_valido']);
+});

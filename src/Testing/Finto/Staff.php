@@ -105,7 +105,10 @@ trait Staff
      */
     public function invitoDelloStaff(array $staff): string
     {
-        return $this->nuovoInvitoDelloStaff($this->rigaDelloStaff((string) $staff['id']));
+        $id = (string) $staff['id'];
+        $this->rigaDelloStaff($id);
+
+        return $this->nuovoInvitoDelloStaff($id);
     }
 
     /** L'ultimo invito nato per quest'email (da staff.crea, dal reset del secondo fattore o da invitoDelloStaff()), ancora da consumare; null se non ce n'è. */
@@ -198,7 +201,7 @@ trait Staff
     /**
      * staff.accessi.verifica.crea: il secondo passo, con la sfida e il codice del TOTP (`000000`, una volta per passo) o uno di recupero (una volta sola). Un solo errore,
      * `secondo_fattore_non_valido`, per ogni caso: sfida sconosciuta, scaduta, esaurita (cinque codici sbagliati), di un altro IP, codice sbagliato o già usato. Dieci
-     * codici sbagliati in 24 ore per persona bloccano (429).
+     * codici sbagliati in 24 ore per persona bloccano: da lì lo stesso errore, anche col codice giusto, senza 429 né minuti (M2).
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -220,7 +223,12 @@ trait Staff
         }
 
         $persona = 'staff-fattore:'.$staff['id'];
-        $this->frena($persona, 10, self::GIORNO_DELLO_STAFF);
+
+        // Come il backoffice (M2): la persona bloccata risponde come una sfida inventata, senza il 429 né i minuti.
+        if ($this->freni->hit($persona, self::GIORNO_DELLO_STAFF) > 10) {
+            throw new Problema('secondo_fattore_non_valido');
+        }
+
         $this->sfideStaff[$dati['sfida']]['errori']++;
         $prova = $this->provaIlCodiceDelloStaff($staff, $dati['codice']);
 
