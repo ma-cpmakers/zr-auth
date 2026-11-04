@@ -540,14 +540,14 @@ trait CrmDocumenti
     }
 
     /**
-     * L'oblio del contatto (Anonimizzazione::documenti): il testo compilato, il firmatario e il tratto dei suoi documenti si svuotano, revocati compresi.
-     * Restano lo stato, le date, il modello, la versione e l'impronta.
+     * L'oblio del contatto (Anonimizzazione::documenti): il testo compilato, il firmatario, il tratto e l'impronta dei suoi documenti si svuotano,
+     * revocati compresi. Restano lo stato, le date, il modello e la versione.
      */
     private function dimenticaIDocumentiCrm(string $persona): void
     {
         foreach ($this->crm['documenti'] as $id => $riga) {
             if ($riga['persona_id'] === $persona) {
-                $this->crm['documenti'][$id] = [...$riga, 'testo' => '', 'firmatario_nome' => '', 'firmatario_cognome' => '', 'tratto_immagine' => null];
+                $this->crm['documenti'][$id] = [...$riga, 'testo' => '', 'firmatario_nome' => '', 'firmatario_cognome' => '', 'tratto_immagine' => null, 'impronta' => null];
             }
         }
     }

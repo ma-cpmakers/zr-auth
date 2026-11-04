@@ -118,3 +118,17 @@ it('un tratto con un a capo nel base64, più largo di 1000 pixel o con i dati tr
 
     expect($provaCon($valido)->status())->toBe(201);
 });
+
+it('dopo l\'oblio del contatto il documento non ha più firmatario né impronta (null), e restano modello, versione, stato e data', function () {
+    [, $gettoni] = studioColCrm();
+    $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia', 'cognome' => 'Bianchi'], $gettoni['anna'])->json('data.id');
+    alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona), $gettoni['anna'], intestazioni: chiaveDiCreazione('k-1'));
+
+    $oblio = alFinto('POST', "/v1/crm/persone/{$persona}/anonimizzazione", null, $gettoni['anna']);
+    $elenco = alFinto('GET', "/v1/crm/documenti?persona_id={$persona}", null, $gettoni['anna']);
+
+    expect($oblio->status())->toBeIn([200, 201, 202, 204])
+        ->and($elenco->status())->toBe(200)
+        ->and($elenco->json('data.0'))->toMatchArray(['modello' => 'consenso_immagini', 'versione' => 1, 'stato' => 'firmato', 'impronta' => null])
+        ->and($elenco->json('data.0.firmatario'))->toMatchArray(['nome' => '', 'cognome' => '']);
+});
