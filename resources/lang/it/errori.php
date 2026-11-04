@@ -341,6 +341,10 @@ return [
         'title' => 'Prenotazione non modificabile',
         'detail' => 'Questa prenotazione è già annullata, svolta o segnata come non presentata, e non cambia più: una annullata non si riapre, si prenota di nuovo. Il metodo non ha scritto niente.',
     ],
+    'senza_collegamento' => [
+        'title' => 'Senza collegamento',
+        'detail' => 'Questa prenotazione non ha un evento che Zeiras possa rimettere: nessun evento è stato scritto, oppure il calendario è stato scollegato e l\'evento non segue più la prenotazione. Il metodo non ha scritto niente.',
+    ],
     'termini_cambiati' => [
         'title' => 'Termini cambiati',
         'detail' => 'I Termini della pagina sono cambiati da quando li hai visti: la versione che mandi non è più quella in vigore, e nessun consenso è stato registrato. Rileggi la pagina con `bookings.pubblico.pagine.mostra`, mostra i Termini nuovi e ripeti la richiesta. Il metodo non ha scritto niente.',
@@ -396,6 +400,14 @@ return [
     'pagamento_annullato' => [
         'title' => 'Pagamento già annullato',
         'detail' => 'Questo pagamento è già annullato e non si annulla due volte. Il metodo non ha scritto niente.',
+    ],
+    'permessi_mancanti' => [
+        'title' => 'Permessi mancanti',
+        'detail' => 'Il consenso al calendario non ha dato tutto ciò che serve a Bookings: guarda `non_concessi` accanto al codice (`occupato`: l\'elenco dei calendari, `eventi`: leggere e scrivere gli impegni). Non è stato collegato niente: ripeti «Collega» e lascia attivi tutti i permessi richiesti.',
+    ],
+    'account_gia_collegato' => [
+        'title' => 'Account già collegato',
+        'detail' => 'Hai già collegato un altro account di questo provider: ogni membro ne ha uno solo per provider. Scollegalo con bookings.collegamenti.elimina prima di collegare quello nuovo. Il metodo non ha scritto niente.',
     ],
     'versione_non_corrente' => [
         'title' => 'Versione non più corrente',
