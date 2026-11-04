@@ -521,7 +521,7 @@ chiamata: la firma dei quattro header (`Zr-Cliente`, `Zr-Ip`, `Zr-Istante`, `Zr-
   `fallisciLoStaff($operazione, $codice)` fa rispondere la prossima chiamata di un metodo `staff.*`, superata la guardia, con un errore del catalogo, una volta: per i rami
   che il finto non raggiunge da solo (`ultimo_superadmin` si produce solo con due richieste in gara; `servizio_non_disponibile`). Non modella la catena di hash del registro,
   la posta, l'avviso ai superadmin, i freni di 600 richieste l'ora per gettone e di 30 esportazioni l'ora, né il controllo del client: il finto accetta il solo nome `finto`
-  (`ZR_AUTH_CLIENTE`) da qualunque IP, mentre il backoffice vero vuole `superadmin` e uno `Zr-Ip` della VPN della VPN: un modulo configurato male lo scopre in produzione.
+  (`ZR_AUTH_CLIENTE`) da qualunque IP, mentre il backoffice vero vuole `superadmin` e uno `Zr-Ip` della VPN: un modulo configurato male lo scopre in produzione.
   Il gettone che il backoffice rifiuta con 401 (`gettone_assente`, `gettone_non_valido`) è `GettoneRifiutato`: **il modulo dello staff lo cattura lui**, perché il rendering di
   default chiude la sessione della persona e rimanda al suo ingresso; un gettone del tipo sbagliato è invece un 403 `permesso_negato` (`ErroreApi`).
 
