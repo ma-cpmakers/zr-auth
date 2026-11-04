@@ -341,6 +341,10 @@ return [
         'title' => 'Booking cannot be changed',
         'detail' => 'This booking is already cancelled, completed or marked as a no-show, and it no longer changes: a cancelled booking is not reopened, a new one is made. Nothing was written.',
     ],
+    'senza_collegamento' => [
+        'title' => 'No connected calendar',
+        'detail' => 'This booking has no event that Zeiras can put back: none was written, or the calendar was disconnected and the event no longer follows the booking. The method wrote nothing.',
+    ],
     'termini_cambiati' => [
         'title' => 'Terms changed',
         'detail' => "The page's Terms have changed since you saw them: the version you sent is no longer the one in force, and no consent has been recorded. Reread the page with `bookings.pubblico.pagine.mostra`, show the new Terms and repeat the request. The method wrote nothing.",
@@ -396,6 +400,14 @@ return [
     'pagamento_annullato' => [
         'title' => 'Payment already cancelled',
         'detail' => 'This payment is already cancelled and cannot be cancelled twice. Nothing was written.',
+    ],
+    'permessi_mancanti' => [
+        'title' => 'Missing permissions',
+        'detail' => 'The calendar consent did not grant everything Bookings needs: see `non_concessi` next to the code (`occupato`: the list of calendars, `eventi`: reading and writing events). Nothing was connected: repeat "Connect" and leave every requested permission on.',
+    ],
+    'account_gia_collegato' => [
+        'title' => 'Account already connected',
+        'detail' => 'You have already connected another account of this provider: each member has one per provider. Disconnect it with bookings.collegamenti.elimina before connecting the new one. Nothing was written.',
     ],
     'versione_non_corrente' => [
         'title' => 'Version no longer current',
