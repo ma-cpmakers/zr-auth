@@ -499,6 +499,29 @@ cartelle, caratteri di controllo né a capo); senza, quello del tipo (`Scaricame
   `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.
 - Il finto (`BackofficeFinto`) risponde ai due metodi con il CSV dei suoi contatti e delle sue aziende, a proprietario e amministratore.
 
+## Lo staff di Zeiras: `Api::staff()` (da #2911, F1)
+
+Per il frontend dello staff (zr-superadmin), che chiama i quattordici metodi `staff.*` di `/v1/staff/*`. Il backoffice li vuole dal client `superadmin` e a **ogni**
+chiamata: la firma dei quattro header (`Zr-Cliente`, `Zr-Ip`, `Zr-Istante`, `Zr-Firma`, come sopra) parte sempre, anche col gettone.
+
+- Le variabili le legge zr-auth dall'ambiente del modulo: `ZR_AUTH_CLIENTE=superadmin` (`zr-auth.cliente`), `ZR_BACKOFFICE_SEGRETO` (`zr-auth.segreto`, il segreto del client
+  `superadmin`: lo mette zr-devops nel `.env`) e `ZR_API_URL`, che resta `https://api.zeiras.com`.
+- `Api::staff()` senza gettone: `staff.accessi.crea`, `staff.accessi.verifica.crea`, `staff.inviti.accettazione.crea`. `Api::staff($gettone)` col gettone dello staff, o di
+  enrolment per `staff.totp.*`. Il gettone lo tiene il modulo nella sua sessione lato server (mai in HTML, nei props o in un cookie): non sta nella sessione della persona di
+  zr-auth. Un gettone vuoto è `InvalidArgumentException`.
+- Gli errori: `gettone_assente` e `gettone_non_valido` sono `GettoneRifiutato` (il modulo rifà l'ingresso dello staff); `secondo_fattore_non_valido` e `invito_non_valido`
+  (401 anch'essi) sono `ErroreApi`: un codice sbagliato non chiude niente. `cliente_non_riconosciuto` resta `ErroreApi`: è il modulo configurato male.
+- L'esportazione del registro (`staff.registro.esportazioni.crea`, CSV) è `Api::staff($gettone)->scaricaConPost('/v1/staff/registro/esportazioni', corpo: [...filtri])`.
+- Il finto (`BackofficeFinto`) ha tutti i quattordici metodi, con le regole che un controller dello staff deve rispettare: lo stesso primo passo per chiunque (R16), i
+  freni (5 primi passi per email e 20 per IP in 15 minuti, 5 codici per sfida, 10 per persona in 24 ore, 5 tentativi per invito, 5 codici di enrolment), il TOTP `000000`
+  (`BackofficeFinto::CODICE_TOTP_DELLO_STAFF`) che vale per **un passo di 30 secondi alla volta** (`Carbon::setTestNow` per andare avanti), i dieci codici di recupero una volta
+  sola, il gettone dello staff (8 ore, 30 minuti senza chiamate) e quello di enrolment (15 minuti, solo `staff.totp.*`), i ruoli (403), il perimetro `solo_uat` (404 fuori da
+  `uat+…@castroandpartners.com`), l'ultimo superadmin e il registro. Il test prepara le persone con `staffDi($persona, $ruolo, $conTotp, $soloUat)`, prende l'invito con
+  `ultimoInvitoDelloStaff($email)` o `invitoDelloStaff($staff)` e i codici di recupero con `codiciDiRecuperoDelloStaff($staff)`; `registroDelloStaff()` dice le righe scritte.
+  `fallisciLoStaff($operazione, $codice)` fa rispondere la prossima chiamata di un metodo `staff.*`, superata la guardia, con un errore del catalogo, una volta: per i rami
+  che il finto non raggiunge da solo (`ultimo_superadmin` si produce solo con due richieste in gara; `servizio_non_disponibile`). Non modella la catena di hash del registro,
+  la posta, l'avviso ai superadmin né il freno di 600 richieste l'ora per gettone.
+
 ## L'ingresso da zr-home: la partenza e il ricevitore
 
 Un modulo non ha una pagina di accesso sua: la persona entra da zr-home e torna con un codice monouso. zr-auth fa le due
