@@ -306,7 +306,9 @@ trait Staff
     {
         [$gettone, $staff] = $this->autenticaLoStaff($richiesta, self::RUOLI_DELLO_STAFF);
 
-        return [200, ['data' => ['id' => $staff['id']] + $this->nomeDelloStaff($staff) + ['ruolo' => $staff['ruolo'], 'gettone' => $this->gettoneDelloStaff($gettone, false)]]];
+        $persona = $this->persone[$staff['utente_id']];
+
+        return [200, ['data' => ['id' => $staff['id']] + $this->nomeDelloStaff($staff) + ['ruolo' => $staff['ruolo'], 'lingua' => $persona['lingua'], 'fuso_orario' => $persona['fuso_orario'], 'gettone' => $this->gettoneDelloStaff($gettone, false)]]];
     }
 
     // ── Il secondo fattore ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -379,7 +381,7 @@ trait Staff
     /** @return array{int, array<string, mixed>} */
     private function elencaLoStaff(Request $richiesta): array
     {
-        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
 
         return $this->pagina(
             $richiesta, 'staff', 'id',
