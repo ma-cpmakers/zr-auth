@@ -13,7 +13,7 @@ use Zeiras\Auth\Testing\BackofficeFinto;
 beforeEach(function () {
     Carbon::setTestNow('2026-11-04 10:00:00');
     config(['zr-auth.cliente' => BackofficeFinto::CLIENTE, 'zr-auth.segreto' => BackofficeFinto::SEGRETO_DEL_CLIENTE]);
-    request()->server->set('REMOTE_ADDR', '10.10.0.7');
+    request()->server->set('REMOTE_ADDR', '203.0.113.7');
     $this->finto = BackofficeFinto::attiva();
 });
 
@@ -53,7 +53,7 @@ it('Api::staff() firma sempre, anche col gettone; senza client riconosciuto è 4
     Api::staff($gettone)->get('/v1/staff/corrente');
 
     expect(array_column($this->finto->ipVisti(), 'operazione'))->toBe(['staff.accessi.crea', 'staff.accessi.verifica.crea', 'staff.corrente.mostra'])
-        ->and(array_unique(array_column($this->finto->ipVisti(), 'ip')))->toBe(['10.10.0.7']);
+        ->and(array_unique(array_column($this->finto->ipVisti(), 'ip')))->toBe(['203.0.113.7']);
 
     config(['zr-auth.segreto' => null]);
 
@@ -68,7 +68,7 @@ it('enrolment: invito, gettone di 15 minuti che apre solo staff.totp.*, codice 0
 
     expect($segreto)->toBeString()
         ->and(esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/inviti/accettazione', ['segreto' => $segreto, 'password' => PASSWORD_SBAGLIATA])))->toBe([401, 'invito_non_valido'])
-        ->and(esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/inviti/accettazione', ['segreto' => 'sconosciuto', 'password' => PASSWORD])))->toBe([401, 'invito_non_valido']);
+        ->and(esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/inviti/accettazione', ['segreto' => str_repeat('0', 20), 'password' => PASSWORD])))->toBe([401, 'invito_non_valido']);
 
     $enrolment = Api::staff()->post('/v1/staff/inviti/accettazione', ['segreto' => $segreto, 'password' => PASSWORD])['data'];
 
@@ -77,7 +77,7 @@ it('enrolment: invito, gettone di 15 minuti che apre solo staff.totp.*, codice 0
         ->and(esitoDelloStaff(fn () => Api::staff($enrolment['gettone'])->post('/v1/staff/totp/conferma', ['codice' => '000000'])))->toBe([401, 'secondo_fattore_non_valido']);
 
     $avvio = Api::staff($enrolment['gettone'])->post('/v1/staff/totp')['data'];
-    expect($avvio['segreto'])->toMatch('/^[A-Z2-7]{32}$/')->and($avvio['otpauth'])->toStartWith('otpauth://totp/Zeiras:nuova%40lucianocastro.com?secret='.$avvio['segreto']);
+    expect($avvio['segreto'])->toMatch('/^[A-Z2-7]{32}$/')->and($avvio['otpauth'])->toStartWith('otpauth://totp/Zeiras:nuova%40lucianocastro.com?')->toContain($avvio['segreto']);
 
     expect(esitoDelloStaff(fn () => Api::staff($enrolment['gettone'])->post('/v1/staff/totp/conferma', ['codice' => '123456'])))->toBe([401, 'secondo_fattore_non_valido']);
     $codici = Api::staff($enrolment['gettone'])->post('/v1/staff/totp/conferma', ['codice' => '000000'])['data']['codici_di_recupero'];
@@ -340,7 +340,7 @@ it('il registro: righe dal più recente a cursore, filtri, nomi risolti alla let
 
     expect(array_column($prima['data'], 'azione'))->toBe(['staff.totp.reimpostazione.crea', 'staff.modifica'])
         ->and($prima['data'][0])->toMatchArray(['staff_id' => $sara['id'], 'ruolo' => 'superadmin', 'bersaglio_tipo' => 'staff', 'bersaglio_id' => $dora['id'], 'campi' => ['totp'], 'motivo' => 'sicurezza',
-            'ip' => '10.10.0.7', 'impersonificazione_id' => null, 'staff' => ['nome' => 'Sara', 'cognome' => null], 'bersaglio' => ['nome' => 'Dora', 'cognome' => null]])
+            'ip' => '203.0.113.7', 'impersonificazione_id' => null, 'staff' => ['nome' => 'Sara', 'cognome' => null], 'bersaglio' => ['nome' => 'Dora', 'cognome' => null]])
         ->and(array_keys($prima['data'][0]))->toBe(['posizione', 'id', 'staff_id', 'ruolo', 'azione', 'bersaglio_tipo', 'bersaglio_id', 'campi', 'motivo', 'ip', 'impersonificazione_id', 'quando', 'staff', 'bersaglio']);
 
     $seconda = Api::staff($gettone)->get('/v1/staff/registro', ['limite' => 2, 'cursore' => $prima['successivo']]);

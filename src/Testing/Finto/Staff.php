@@ -325,7 +325,7 @@ trait Staff
         $this->scriviNelRegistroDelloStaff($staff, 'staff.totp.crea', 'staff', $staff['id']);
         $email = $this->persone[$staff['utente_id']]['email'];
 
-        return [201, ['data' => ['segreto' => $segreto, 'otpauth' => 'otpauth://totp/Zeiras:'.rawurlencode($email).'?secret='.$segreto.'&issuer=Zeiras']]];
+        return [201, ['data' => ['segreto' => $segreto, 'otpauth' => 'otpauth://totp/Zeiras:'.rawurlencode($email).'?'.http_build_query(['secret' => $segreto, 'issuer' => 'Zeiras'])]]];
     }
 
     /**
