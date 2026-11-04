@@ -1410,7 +1410,7 @@ final class BackofficeFinto
         foreach ($richiesta->data() as $parte) {
             if (is_array($parte) && ($parte['name'] ?? null) === '_method' && ! isset($parte['filename'])) {
                 $contenuto = $parte['contents'] ?? '';
-                $dichiarato = strtoupper(is_resource($contenuto) ? (string) stream_get_contents($contenuto) : (string) $contenuto);
+                $dichiarato = strtoupper(is_resource($contenuto) ? (string) stream_get_contents($contenuto) : (is_string($contenuto) ? $contenuto : ''));
 
                 return in_array($dichiarato, ['PUT', 'PATCH', 'DELETE'], true) ? $dichiarato : 'POST';
             }

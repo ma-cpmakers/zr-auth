@@ -97,7 +97,13 @@ it('un PATCH multipart arriva senza il file, come in PHP (422 obbligatorio su #/
     expect($post->status())->toBe(200)->and(array_keys($post->json('data')))->toBe(['aggiornata_il'])
         ->and(alFinto('GET', '/v1/io', gettone: $gettone)->json('data.utente.foto_aggiornata_il'))->toBe($post->json('data.aggiornata_il'));
 
-    expect(fn () => formFoto($gettone)->post('/v1/io/foto'))->toThrow(Zeiras\Auth\Testing\Finto\RichiestaSconosciuta::class);
+    expect(fn () => formFoto($gettone)->post('/v1/io/foto'))->toThrow(Zeiras\Auth\Testing\Finto\RichiestaSconosciuta::class)
+        ->and(fn () => formFoto($gettone)->post('/v1/io/foto', ['_method' => 'XYZ']))->toThrow(Zeiras\Auth\Testing\Finto\RichiestaSconosciuta::class)
+        ->and(fn () => formFoto($gettone)->post('/v1/io/foto', ['_method' => ['PATCH']]))->toThrow(Zeiras\Auth\Testing\Finto\RichiestaSconosciuta::class);
+
+    // Il verbo dichiarato vale per ogni verbo (anche in minuscolo), ma solo in un multipart: un POST in JSON con _method resta un POST.
+    expect(formFoto($gettone)->post('/v1/io/foto', ['_method' => 'delete'])->status())->toBe(204)
+        ->and(fn () => alFinto('POST', '/v1/io/foto', ['_method' => 'DELETE'], gettone: $gettone))->toThrow(Zeiras\Auth\Testing\Finto\RichiestaSconosciuta::class);
 });
 
 it('elimina toglie la foto: 204, poi 404 foto_assente, e foto_aggiornata_il torna null; la foto di una persona non è di un\'altra (#2870, D.4)', function () {
