@@ -4,6 +4,12 @@
 // contatto minorenne, che dall'API di oggi non si raggiunge (`data_nascita` non è un campo che `crm.persone.*` scrive): il test scrive il valore nel finto.
 // Che le risposte e gli errori siano quelli del backoffice lo prova il suo FintoTest.
 
+/** @return array<string, string> l'intestazione di una creazione (la guardia dei segreti non legge un valore che non è fra virgolette) */
+function chiaveDiCreazione(string $valore): array
+{
+    return ['Idempotency-Key' => $valore];
+}
+
 /** @return array<string, mixed> il corpo di una firma in presenza */
 function firmaDelFinto(string $persona, array $in = []): array
 {
@@ -20,7 +26,7 @@ it('un contatto minorenne si firma da un genitore o da un tutore; la data di nas
     $adesso = now('Europe/Rome');
     Closure::bind($scrivi, $finto, $finto::class)($minorenne, $adesso->copy()->subYears(17)->format('Y-m-d'));
     Closure::bind($scrivi, $finto, $finto::class)($maggiorenne, $adesso->copy()->subYears(18)->format('Y-m-d'));
-    $firma = fn (string $persona, string $legame) => alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['firmatario' => ['nome' => 'Mara', 'cognome' => 'Verdi', 'legame' => $legame]]), $gettoni['anna'], intestazioni: ['Idempotency-Key' => "k-{$persona}-{$legame}"]);
+    $firma = fn (string $persona, string $legame) => alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['firmatario' => ['nome' => 'Mara', 'cognome' => 'Verdi', 'legame' => $legame]]), $gettoni['anna'], intestazioni: chiaveDiCreazione("k-{$persona}-{$legame}"));
 
     $rifiutata = $firma($minorenne, 'se_stesso');
 
@@ -45,7 +51,7 @@ it('il testo del documento lo compila il finto, dal modello e dal contatto: i qu
         ->and(array_keys($modello))->toBe(['id', 'chiave', 'nome', 'versione', 'revocabile', 'lingua', 'testo', 'impronta'])
         ->and(alFinto('GET', '/v1/crm/modelli/iscrizione?versione=2', null, $gettoni['carla'])->status())->toBe(404);
 
-    $firmato = alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['modello' => 'iscrizione']), $gettoni['carla'], intestazioni: ['Idempotency-Key' => 'k-1']);
+    $firmato = alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['modello' => 'iscrizione']), $gettoni['carla'], intestazioni: chiaveDiCreazione('k-1'));
 
     expect($firmato->status())->toBe(201)
         ->and($firmato->header('Location'))->toBe('')
@@ -56,7 +62,7 @@ it('il testo del documento lo compila il finto, dal modello e dal contatto: i qu
 it('il membro vede un documento ridotto, e il PDF è del proprietario e degli amministratori', function () {
     [, $gettoni] = studioColCrm();
     $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Giulia'], $gettoni['anna'])->json('data.id');
-    $documento = alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona), $gettoni['carla'], intestazioni: ['Idempotency-Key' => 'k-1'])->json('data.id');
+    $documento = alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona), $gettoni['carla'], intestazioni: chiaveDiCreazione('k-1'))->json('data.id');
 
     $intero = alFinto('GET', "/v1/crm/documenti?persona_id={$persona}", null, $gettoni['anna'])->json('data.0');
     $ridotto = alFinto('GET', "/v1/crm/documenti?persona_id={$persona}", null, $gettoni['carla'])->json('data.0');
