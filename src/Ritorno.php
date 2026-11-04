@@ -48,6 +48,29 @@ final class Ritorno
         return $richiesta->fullUrl();
     }
 
+    /**
+     * Se un GET bloccato è una navigazione, cioè una pagina dove la persona vuole tornare dopo l'accesso (#2985): non l'immagine di una foto, uno
+     * script o un fetch di fondo, che dopo l'accesso porterebbero sul file. Lo dice `Sec-Fetch-Dest`, che il browser manda e la pagina non cambia:
+     * `document` sì, ogni altro valore no (`image`, `script`, `style`, `font`, `empty`, `iframe`...). Una visita di Inertia è un fetch (`empty`) ma
+     * è la pagina: vale con `X-Inertia`. Senza l'intestazione (un browser vecchio, una richiesta di prova) vale `Accept`: nessuno, o uno che chiede
+     * HTML (`text/html`, `application/xhtml+xml`); un `Accept` di sole immagini o di `*` + `/` + `*` non è una pagina.
+     */
+    public static function eUnaNavigazione(Request $richiesta): bool
+    {
+        if ($richiesta->headers->has('X-Inertia')) {
+            return true;
+        }
+
+        $destinazione = $richiesta->headers->get('Sec-Fetch-Dest');
+        if ($destinazione !== null) {
+            return strtolower(trim($destinazione)) === 'document';
+        }
+
+        $accetta = strtolower((string) $richiesta->headers->get('Accept'));
+
+        return trim($accetta) === '' || str_contains($accetta, 'text/html') || str_contains($accetta, 'application/xhtml+xml');
+    }
+
     public static function dalReferer(Request $richiesta, mixed $slug): ?string
     {
         $referer = $richiesta->headers->get('referer');

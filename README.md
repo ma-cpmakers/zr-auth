@@ -584,8 +584,8 @@ che dà, con `codice` e `state`. Un esempio per intero: `tests/Feature/IngressoT
 ## La guardia, e il suo test
 
 `ConGettone` entra da sé nei gruppi `web` e `api`: senza una sessione col gettone, una pagina rimanda all'ingresso; una
-visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401. Un GET ricorda la pagina chiesta
-(`url.intended`, l'indirizzo della richiesta); una scrittura (POST, PUT, PATCH, DELETE) ricorda solo la pagina da cui è partita,
+visita di Inertia riceve 409 con `X-Inertia-Location`; una richiesta JSON 401. Un GET di navigazione ricorda la pagina chiesta
+(`url.intended`, l'indirizzo della richiesta); un'immagine o un fetch bloccati (`Sec-Fetch-Dest` diverso da `document`, salvo una visita di Inertia; senza l'intestazione, un `Accept` che non chiede HTML) rimandano all'ingresso e non ricordano niente, così dopo l'accesso non si torna al file di una foto (`Ritorno::eUnaNavigazione`); una scrittura (POST, PUT, PATCH, DELETE) ricorda solo la pagina da cui è partita,
 dal `Referer` a condizioni strette (sotto, «Il ritorno dopo una scrittura»); HEAD non ricorda niente.
 
 Dopo l'accesso si torna lì con `Sessione::ritorno()`, **al posto di `redirect()->intended()`**, che manderebbe la persona

@@ -33,7 +33,7 @@ class AvviaLaSessioneSenzaQuery extends StartSession
             return;
         }
 
-        if ($request->isMethod('GET') && $rotta instanceof Route && ! $request->ajax() && ! $request->prefetch() && ! $request->isPrecognitive()) {
+        if ($request->isMethod('GET') && $rotta instanceof Route && ! $request->ajax() && Ritorno::eUnaNavigazione($request) && ! $request->prefetch() && ! $request->isPrecognitive()) {
             $percorso = Ritorno::dallaRichiesta($request, ! $ricevitore);
             if ($percorso !== null) {
                 $session->setPreviousUrl($percorso);
