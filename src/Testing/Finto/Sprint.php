@@ -109,6 +109,24 @@ trait Sprint
     }
 
     /**
+     * board.sprint.mostra (SprintController::mostra): lo sprint dato, con la forma di una riga di `board.sprint.elenca` (`board_id` compreso). Uno
+     * sprint di un altro workspace, o che non c'è, è 404. Uno sprint sta solo su una board Scrum e il finto non cambia il metodo: il 409 `board_senza_metodo` qui non c'è.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraSprint(Request $richiesta, string $id): array
+    {
+        $chi = $this->conPm($richiesta);
+        $sprint = $this->sprint[$id] ?? null;
+
+        if ($sprint === null || $sprint['workspace'] !== $chi['workspace']) {
+            throw new Problema('non_trovato');
+        }
+
+        return [200, ['data' => $this->voceSprint($sprint)]];
+    }
+
+    /**
      * board.sprint.andamento.mostra (SprintAndamentoController::mostra): la serie seminata di uno sprint, o vuota. Uno sprint di un altro workspace,
      * o che non c'è, è 404; una board che non è Scrum 409 `board_senza_metodo`.
      *

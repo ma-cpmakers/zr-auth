@@ -307,6 +307,22 @@ it('con l\'app pm spenta elenca e crea sono 403 app_non_attiva; la Idempotency-K
         ->and(alFinto('POST', '/v1/board/sprint', $corpo, $gettone)->json('codice'))->toBe('app_non_attiva');
 });
 
+it('mostra dà lo sprint con la forma di una riga dell\'elenco, board_id compreso; 404 per uno che non c\'è o di un altro workspace', function () {
+    [$finto, $studio, $board, $gettone] = conLaBoardScrum();
+    $sprint = $finto->sprint($studio, $board, 'In corso', 'attivo', '2026-10-12');
+    [, $altrui] = unaBoardScrumAltrui($finto);
+
+    $riga = collect(alFinto('GET', "/v1/board/sprint?board_id={$board['id']}", null, $gettone)->json('data'))->firstWhere('id', $sprint['id']);
+    $mostra = alFinto('GET', "/v1/board/sprint/{$sprint['id']}", null, $gettone);
+
+    expect($mostra->status())->toBe(200)
+        ->and(array_keys($mostra->json()))->toBe(['data'])
+        ->and($mostra->json('data'))->toBe($riga)
+        ->and($mostra->json('data.board_id'))->toBe($board['id'])
+        ->and(alFinto('GET', '/v1/board/sprint/01k6w9a1c3e5g7j9m1p3r5t7v9', null, $gettone)->json('codice'))->toBe('non_trovato')
+        ->and(alFinto('GET', "/v1/board/sprint/{$altrui['id']}", null, $gettone)->status())->toBe(404);
+});
+
 it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine, giorni), vuota senza semina; 404 per uno sprint che non c\'è o di un altro workspace', function () {
     [$finto, $studio, $board, $gettone] = conLaBoardScrum();
     $sprint = $finto->sprint($studio, $board, 'In corso', 'attivo', '2026-10-12');
