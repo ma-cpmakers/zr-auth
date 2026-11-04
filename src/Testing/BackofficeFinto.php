@@ -44,6 +44,7 @@ use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\Retrospettiva;
+use Zeiras\Auth\Testing\Finto\Staff;
 use Zeiras\Auth\Testing\Finto\SchedeCrm;
 use Zeiras\Auth\Testing\Finto\Scrumban;
 use Zeiras\Auth\Testing\Finto\Sprint;
@@ -91,6 +92,7 @@ final class BackofficeFinto
     use CrmPreventiviPubblici;
     use SchedeCrm;
     use Retrospettiva;
+    use Staff;
     use Scrumban;
     use Sprint;
     use CrmProfili;
@@ -161,6 +163,21 @@ final class BackofficeFinto
 
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
+        ['POST', '#^/v1/staff/accessi$#', 'staff.accessi.crea'],
+        ['POST', '#^/v1/staff/accessi/verifica$#', 'staff.accessi.verifica.crea'],
+        ['DELETE', '#^/v1/staff/accessi/corrente$#', 'staff.accessi.corrente.elimina'],
+        ['GET', '#^/v1/staff/corrente$#', 'staff.corrente.mostra'],
+        ['POST', '#^/v1/staff/inviti/accettazione$#', 'staff.inviti.accettazione.crea'],
+        ['POST', '#^/v1/staff/totp$#', 'staff.totp.crea'],
+        ['POST', '#^/v1/staff/totp/conferma$#', 'staff.totp.conferma.crea'],
+        ['GET', '#^/v1/staff/registro$#', 'staff.registro.elenca'],
+        ['POST', '#^/v1/staff/registro/esportazioni$#', 'staff.registro.esportazioni.crea'],
+        ['GET', '#^/v1/staff$#', 'staff.elenca'],
+        ['POST', '#^/v1/staff$#', 'staff.crea'],
+        ['GET', '#^/v1/staff/([^/]+)$#', 'staff.mostra'],
+        ['PATCH', '#^/v1/staff/([^/]+)$#', 'staff.modifica'],
+        ['DELETE', '#^/v1/staff/([^/]+)$#', 'staff.elimina'],
+        ['POST', '#^/v1/staff/([^/]+)/totp/reimpostazione$#', 'staff.totp.reimpostazione.crea'],
         ['POST', '#^/v1/accessi$#', 'accessi.crea'],
         ['POST', '#^/v1/accessi/codici$#', 'accessi.codici.crea'],
         ['POST', '#^/v1/accessi/codici/verifica$#', 'accessi.codici.verifica.crea'],
@@ -1396,6 +1413,21 @@ final class BackofficeFinto
             }
 
             $esito = match ($operazione) {
+                'staff.accessi.crea' => $this->creaAccessoDelloStaff($richiesta, $corpo),
+                'staff.accessi.verifica.crea' => $this->verificaAccessoDelloStaff($richiesta, $corpo),
+                'staff.accessi.corrente.elimina' => $this->eliminaAccessoDelloStaff($richiesta),
+                'staff.corrente.mostra' => $this->mostraLoStaffCorrente($richiesta),
+                'staff.inviti.accettazione.crea' => $this->accettaLInvitoDelloStaff($richiesta, $corpo),
+                'staff.totp.crea' => $this->avviaIlTotpDelloStaff($richiesta),
+                'staff.totp.conferma.crea' => $this->confermaIlTotpDelloStaff($richiesta, $corpo),
+                'staff.elenca' => $this->elencaLoStaff($richiesta),
+                'staff.mostra' => $this->mostraUnoDelloStaff($richiesta, $parametri[0]),
+                'staff.crea' => $this->creaUnoDelloStaff($richiesta, $corpo),
+                'staff.modifica' => $this->modificaUnoDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.elimina' => $this->eliminaUnoDelloStaff($richiesta, $parametri[0]),
+                'staff.totp.reimpostazione.crea' => $this->reimpostaIlTotpDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.registro.elenca' => $this->elencaIlRegistroDelloStaff($richiesta),
+                'staff.registro.esportazioni.crea' => $this->esportaIlRegistroDelloStaff($richiesta, $corpo),
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.codici.crea' => $this->creaCodiceDiAccesso($corpo),
                 'accessi.codici.verifica.crea' => $this->verificaCodiceDiAccesso($richiesta, $corpo),

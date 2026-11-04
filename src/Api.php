@@ -41,13 +41,16 @@ final class Api
     /** I freni dell'ultima risposta di questa istanza (#1911): `null` prima della prima, o se non ne diceva nessuno. */
     private ?Freni $freni = null;
 
-    private function __construct(private readonly ?string $gettone) {}
+    private function __construct(private readonly ?string $gettone, private readonly bool $conLaFirma = false) {}
 
     /** I tipi di un'immagine di `immagine()` (#2870). */
     public const IMMAGINI = ['image/webp', 'image/jpeg', 'image/png'];
 
     /** Il peso massimo di un'immagine di `immagine()`, in byte: sta in memoria, quindi un tetto (la foto della persona è al più 512 KB). */
     public const IMMAGINE_MASSIMA = 512 * 1024;
+
+    /** I codici di un 401 che non dicono «il gettone non vale»: il client non chiude la sessione, li dà come ErroreApi. */
+    private const UNAUTORIZZATI_CHE_NON_SONO_IL_GETTONE = ['cliente_non_riconosciuto', 'secondo_fattore_non_valido', 'invito_non_valido'];
 
     /** Senza gettone: i metodi che lo fanno nascere (accessi.crea) o che non lo vogliono (utenti.crea). */
     public static function senzaGettone(): self
@@ -62,6 +65,22 @@ final class Api
     public static function persona(): self
     {
         return new self(self::gettone('accesso') ?? self::gettone('workspace') ?? throw new GettoneRifiutato);
+    }
+
+    /**
+     * I metodi dello staff di Zeiras (`/v1/staff/*`, #2911), per il frontend dello staff (zr-superadmin). Il backoffice li vuole dal client `superadmin`
+     * e a ogni chiamata: la firma dei quattro header parte SEMPRE, anche col gettone (le altre istanze la mandano solo senza). `$gettone` è quello
+     * dello staff, o di enrolment per `staff.totp.*`, che il modulo tiene nella sua sessione lato server (mai in HTML, nei props o in un cookie):
+     * non sta nella sessione della persona di zr-auth. Senza gettone: `staff.accessi.crea`, `staff.accessi.verifica.crea` e
+     * `staff.inviti.accettazione.crea`.
+     */
+    public static function staff(?string $gettone = null): self
+    {
+        if ($gettone === '') {
+            throw new InvalidArgumentException('Un gettone dello staff vuoto non è un gettone: null per le chiamate senza.');
+        }
+
+        return new self($gettone, true);
     }
 
     /** Col gettone del workspace in cui la persona è entrata (Sessione::entra): i metodi del workspace. */
@@ -313,12 +332,17 @@ final class Api
      * #2015), dove il metodo è una POST perché ha un effetto (consuma lo ZIP). Stesso gettone, stessi errori, stesso `Scaricamento` di `scarica`; il
      * percorso è dentro /v1 senza query, e un 403 `conferma_richiesta` arriva come `ErroreApi` prima del primo byte. `$nome` è il nome del file
      * che resta se il backoffice non ne manda uno che vale (ripulito come ogni nome), per esempio `zeiras-workspace-dati.zip`: senza, quello del tipo.
+     * `$corpo` è il corpo JSON, se il metodo ne ha uno (i filtri di `staff.registro.esportazioni.crea`); vuoto, la POST non porta corpo.
+     *
+     * @param  array<string, mixed>  $corpo
      *
      *     return Api::workspace()->scaricaConPost("/v1/workspace/esportazioni/{$id}/scaricamento")->comeRisposta();
      */
-    public function scaricaConPost(string $percorso, ?string $nome = null): Scaricamento
+    public function scaricaConPost(string $percorso, ?string $nome = null, array $corpo = []): Scaricamento
     {
-        return $this->scaricamento($percorso, fn (PendingRequest $richiesta) => $richiesta->withOptions($this->aFlusso())->post($percorso), $nome);
+        return $this->scaricamento($percorso, fn (PendingRequest $richiesta) => $corpo === []
+            ? $richiesta->withOptions($this->aFlusso())->post($percorso)
+            : $richiesta->withOptions($this->aFlusso())->post($percorso, $corpo), $nome);
     }
 
     /** @return array{stream: true, read_timeout: int<1, max>} */
@@ -387,7 +411,9 @@ final class Api
 
         if ($this->gettone !== null) {
             $richiesta = $richiesta->withToken($this->gettone);
-        } else {
+        }
+
+        if ($this->gettone === null || $this->conLaFirma) {
             $richiesta = $this->firmata($richiesta);
         }
 
@@ -425,8 +451,9 @@ final class Api
 
         // Un 401 è il gettone che non vale: si chiude la sessione. Non lo è `cliente_non_riconosciuto` di una rotta senza gettone:
         // quello è il frontend configurato male (nome o segreto sbagliati, orologio spostato), e deve vedersi nel log, non
-        // rimandare in silenzio all'ingresso (che rimanderebbe qui, e a ogni registrazione).
-        if ($risposta->status() === 401 && ($corpo['codice'] ?? null) !== 'cliente_non_riconosciuto') {
+        // rimandare in silenzio all'ingresso (che rimanderebbe qui, e a ogni registrazione). Né lo sono i due 401 dell'ingresso dello staff
+        // (#2911): un codice del secondo fattore sbagliato e un invito che non vale sono risposte, non un gettone chiuso.
+        if ($risposta->status() === 401 && ! in_array($corpo['codice'] ?? null, self::UNAUTORIZZATI_CHE_NON_SONO_IL_GETTONE, true)) {
             throw new GettoneRifiutato(ErroreApi::daRisposta($risposta, $corpo));
         }
 
