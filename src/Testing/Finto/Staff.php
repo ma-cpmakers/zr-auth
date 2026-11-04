@@ -176,7 +176,7 @@ trait Staff
     private function creaAccessoDelloStaff(Request $richiesta, array $corpo): array
     {
         $this->riconosciLoStaff($richiesta);
-        $dati = $this->testi->validaStretta($corpo, self::credenziali());
+        $dati = $this->testi->valida($corpo, self::credenziali());
         $this->eventualeFallimentoDelloStaff();
         $email = self::normalizza($dati['email']);
         $this->frena('staff-ingresso:'.$email, 5, self::FINESTRA_DELLO_STAFF);
@@ -206,7 +206,7 @@ trait Staff
     private function verificaAccessoDelloStaff(Request $richiesta, array $corpo): array
     {
         $this->riconosciLoStaff($richiesta);
-        $dati = $this->testi->validaStretta($corpo, ['sfida' => ['bail', 'required', 'string', 'max:128'], 'codice' => ['bail', 'required', 'string', 'max:32']]);
+        $dati = $this->testi->valida($corpo, ['sfida' => ['bail', 'required', 'string', 'max:128'], 'codice' => ['bail', 'required', 'string', 'max:32']]);
         $this->eventualeFallimentoDelloStaff();
         $this->frena('staff-verifica-ip:'.($this->ipFirmato ?? 'anonimo'), 20, self::FINESTRA_DELLO_STAFF);
 
@@ -234,7 +234,7 @@ trait Staff
         if ($prova === 'totp') {
             $this->righeStaff[$staff['id']]['ultimo_passo'] = self::passoDelloStaff();
         } else {
-            $this->righeStaff[$staff['id']]['recupero'][$dati['codice']] = true;
+            $this->righeStaff[$staff['id']]['recupero'][self::codiceDiRecuperoPulito($dati['codice'])] = true;
         }
 
         $gettone = $this->emettiIlGettoneDelloStaff($staff['id'], 'staff');
@@ -253,7 +253,7 @@ trait Staff
     private function accettaLInvitoDelloStaff(Request $richiesta, array $corpo): array
     {
         $this->riconosciLoStaff($richiesta);
-        $dati = $this->testi->validaStretta($corpo, ['segreto' => ['bail', 'required', 'string', 'max:128'], 'password' => ['required', 'string', new SenzaCarattereNullo]]);
+        $dati = $this->testi->valida($corpo, ['segreto' => ['bail', 'required', 'string', 'max:128'], 'password' => ['required', 'string', new SenzaCarattereNullo]]);
         $this->eventualeFallimentoDelloStaff();
         $this->frena('staff-invito-ip:'.($this->ipFirmato ?? 'anonimo'), 20, self::FINESTRA_DELLO_STAFF);
         $this->frena('staff-invito:'.hash('sha256', $dati['segreto']), 5, self::FINESTRA_DELLO_STAFF);
@@ -303,7 +303,7 @@ trait Staff
     // ── Il secondo fattore ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
     /**
-     * staff.totp.crea: il segreto del TOTP, nuovo a ogni chiamata finché non è confermato. Col gettone di enrolment (o dello staff); chi lo ha già confermato è 403.
+     * staff.totp.crea: il segreto del TOTP, nuovo a ogni chiamata finché non è confermato. Col solo gettone di enrolment; chi lo ha già confermato è 403.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -325,7 +325,7 @@ trait Staff
         $this->scriviNelRegistroDelloStaff($staff, 'staff.totp.crea', 'staff', $staff['id']);
         $email = $this->persone[$staff['utente_id']]['email'];
 
-        return [201, ['data' => ['segreto' => $segreto, 'otpauth' => 'otpauth://totp/Zeiras:'.rawurlencode($email).'?'.http_build_query(['secret' => $segreto, 'issuer' => 'Zeiras'])]]];
+        return [201, ['data' => ['segreto' => $segreto, 'otpauth' => 'otpauth://totp/'.rawurlencode('Zeiras:'.$email).'?'.http_build_query(['secret' => $segreto, 'issuer' => 'Zeiras', 'algorithm' => 'SHA1', 'digits' => 6, 'period' => 30])]]];
     }
 
     /**
@@ -338,7 +338,7 @@ trait Staff
     private function confermaIlTotpDelloStaff(Request $richiesta, array $corpo): array
     {
         [$gettone, $staff] = $this->autenticaLoStaff($richiesta, self::RUOLI_DELLO_STAFF, true);
-        $dati = $this->testi->validaStretta($corpo, ['codice' => ['bail', 'required', 'string', 'max:32']]);
+        $dati = $this->testi->valida($corpo, ['codice' => ['bail', 'required', 'string', 'max:32']]);
         $errori = ++$this->gettoniStaff[$gettone]['errori'];
 
         if ($staff['totp'] === null || $staff['totp_confermato_il'] !== null || $dati['codice'] !== self::CODICE_TOTP_DELLO_STAFF) {
@@ -436,8 +436,8 @@ trait Staff
     private function modificaUnoDelloStaff(Request $richiesta, array $corpo, string $id): array
     {
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
-        $this->nonSeStessi($chi, $id);
         $dati = $this->testi->validaStretta($corpo, ['ruolo' => ['bail', 'required', 'string', 'in:'.implode(',', self::RUOLI_DELLO_STAFF)]]);
+        $this->nonSeStessi($chi, $id);
         $bersaglio = $this->bersaglioDelloStaff($chi, $id);
 
         if ($bersaglio['ruolo'] !== $dati['ruolo']) {
@@ -477,8 +477,8 @@ trait Staff
     private function reimpostaIlTotpDelloStaff(Request $richiesta, array $corpo, string $id): array
     {
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
-        $this->nonSeStessi($chi, $id);
         $dati = $this->testi->validaStretta($corpo, ['motivo' => ['bail', 'required', 'string', 'in:'.implode(',', self::MOTIVI_DELLO_STAFF)]]);
+        $this->nonSeStessi($chi, $id);
         $bersaglio = $this->bersaglioDelloStaff($chi, $id);
         $this->righeStaff[$bersaglio['id']]['totp'] = null;
         $this->righeStaff[$bersaglio['id']]['totp_confermato_il'] = null;
@@ -533,19 +533,21 @@ trait Staff
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
         $filtri = $this->testi->validaStretta($corpo, $this->regoleDelRegistro());
         $colonne = ['posizione', 'id', 'staff_id', 'ruolo', 'azione', 'bersaglio_tipo', 'bersaglio_id', 'campi', 'motivo', 'ip', 'impersonificazione_id', 'quando'];
-        $righe = array_reverse($this->righeDelRegistro($chi, $filtri));
+        // La riga di questa esportazione si scrive prima, e il file arriva fino a lei: dalla più vecchia, come il backoffice.
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.registro.esportazioni.crea', 'registro', null);
+        $righe = $this->righeDelRegistro($chi, $filtri);
         $file = implode(',', $colonne)."\r\n";
 
         foreach ($righe as $riga) {
             $celle = array_map(function (string $colonna) use ($riga) {
                 $valore = $riga[$colonna];
+                $testo = is_array($valore) ? json_encode($valore) : (string) ($valore instanceof \DateTimeInterface ? self::iso($valore) : ($valore ?? ''));
 
-                return is_array($valore) ? json_encode($valore) : (string) ($valore ?? '');
+                // Una cella che comincia con = + - @ o un a capo non è una formula nel foglio di calcolo: un apostrofo davanti, come nel backoffice.
+                return $testo !== '' && str_contains("=+-@\t\r\n", $testo[0]) ? "'".$testo : $testo;
             }, $colonne);
             $file .= implode(',', array_map(fn (string $cella) => preg_match('/[",\r\n]/', $cella) === 1 ? '"'.str_replace('"', '""', $cella).'"' : $cella, $celle))."\r\n";
         }
-
-        $this->scriviNelRegistroDelloStaff($chi, 'staff.registro.esportazioni.crea', 'registro', null);
 
         return [200, "\xEF\xBB\xBF".$file, [
             'Content-Type' => 'text/csv; charset=utf-8',
@@ -600,8 +602,8 @@ trait Staff
 
     /**
      * La guardia di un metodo dello staff: il client firmato, poi il gettone (gettone_assente; sconosciuto, chiuso, scaduto, nato per un'altra cosa o di una persona tolta
-     * dallo staff: gettone_non_valido), poi il ruolo (permesso_negato). Il gettone dello staff scade dopo 8 ore o 30 minuti senza chiamate, e ogni chiamata rinnova i 30 minuti;
-     * quello di enrolment dopo 15 minuti e apre solo `staff.totp.*` (`$conEnrolment`).
+     * dallo staff: gettone_non_valido), il tipo (permesso_negato: un gettone di una persona, o di enrolment fuori da `staff.totp.*`, o dello staff dentro), poi il ruolo (permesso_negato). Il gettone dello staff scade dopo 8 ore o 30 minuti senza chiamate, e ogni chiamata rinnova i 30 minuti;
+     * quello di enrolment dopo 15 minuti e apre solo `staff.totp.*`, dove invece quello dello staff non vale (`$conEnrolment`).
      *
      * @param  list<string>  $ruoli
      * @return array{0: string, 1: array<string, mixed>} il gettone e la persona dello staff
@@ -617,18 +619,30 @@ trait Staff
 
         $riga = $this->gettoniStaff[$gettone] ?? null;
         $staff = $riga === null ? null : ($this->righeStaff[$riga['staff']] ?? null);
+
+        // Un gettone di una persona (di accesso o di workspace) non apre lo staff: 403, come AmbitoDelGettone del backoffice, e non un 401.
+        if ($riga === null && isset($this->gettoni[$gettone])) {
+            throw new Problema('permesso_negato');
+        }
+
         $limite = $riga === null ? null : $this->scadenzaDelGettoneDelloStaff($riga);
 
-        if ($riga === null || $staff === null || $staff['archiviato_il'] !== null || $riga['chiuso'] || ! $limite->gt(now())
-            || ($riga['tipo'] === 'enrolment' && ! $conEnrolment)) {
+        if ($riga === null || $staff === null || $staff['archiviato_il'] !== null || $riga['chiuso'] || ! $limite->gt(now())) {
             throw new Problema('gettone_non_valido', header: ['WWW-Authenticate' => 'Bearer realm="zeiras", error="invalid_token"']);
         }
+
+        // Il tipo giusto per il metodo (ConStaff): `staff.totp.*` vuole l'enrolment, tutti gli altri lo staff; l'altro è 403.
+        if ($riga['tipo'] !== ($conEnrolment ? 'enrolment' : 'staff')) {
+            throw new Problema('permesso_negato');
+        }
+
+        // L'inattività si rinnova prima del controllo del ruolo, come nel backoffice: un 403 la rinnova.
+        $this->gettoniStaff[$gettone]['ultima'] = now()->toImmutable();
 
         if (! in_array($staff['ruolo'], $ruoli, true)) {
             throw new Problema('permesso_negato');
         }
 
-        $this->gettoniStaff[$gettone]['ultima'] = now()->toImmutable();
         $this->eventualeFallimentoDelloStaff();
 
         return [$gettone, $staff];
@@ -697,8 +711,17 @@ trait Staff
     {
         $codici = [];
 
+        // Come CodiciDiRecupero del backoffice: cinque più cinque caratteri maiuscoli senza I, O, 0 e 1 (i confronti ignorano maiuscole, trattini e spazi).
+        $alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
         while (count($codici) < 10) {
-            $codici[bin2hex(random_bytes(4)).'-'.bin2hex(random_bytes(4))] = false;
+            $codice = '';
+
+            foreach (range(1, 10) as $_) {
+                $codice .= $alfabeto[random_int(0, strlen($alfabeto) - 1)];
+            }
+
+            $codici[substr($codice, 0, 5).'-'.substr($codice, 5)] = false;
         }
 
         $this->righeStaff[$staff]['recupero'] = $codici;
@@ -717,7 +740,16 @@ trait Staff
             return $codice === self::CODICE_TOTP_DELLO_STAFF && $staff['ultimo_passo'] !== self::passoDelloStaff() ? 'totp' : null;
         }
 
+        $codice = self::codiceDiRecuperoPulito($codice);
+
         return isset($staff['recupero'][$codice]) && $staff['recupero'][$codice] === false ? 'recupero' : null;
+    }
+
+    private static function codiceDiRecuperoPulito(string $codice): string
+    {
+        $pulito = strtoupper(str_replace(['-', ' '], '', trim($codice)));
+
+        return strlen($pulito) === 10 ? substr($pulito, 0, 5).'-'.substr($pulito, 5) : $pulito;
     }
 
     private static function passoDelloStaff(): int

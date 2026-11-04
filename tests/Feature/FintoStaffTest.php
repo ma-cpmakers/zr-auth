@@ -73,11 +73,11 @@ it('enrolment: invito, gettone di 15 minuti che apre solo staff.totp.*, codice 0
     $enrolment = Api::staff()->post('/v1/staff/inviti/accettazione', ['segreto' => $segreto, 'password' => PASSWORD])['data'];
 
     expect($enrolment['scade_il'])->toBe('2026-11-04T10:15:00.000Z')
-        ->and(esitoDelloStaff(fn () => Api::staff($enrolment['gettone'])->get('/v1/staff/corrente')))->toBe([401, 'gettone_non_valido'])
+        ->and(esitoDelloStaff(fn () => Api::staff($enrolment['gettone'])->get('/v1/staff/corrente')))->toBe([403, 'permesso_negato'])
         ->and(esitoDelloStaff(fn () => Api::staff($enrolment['gettone'])->post('/v1/staff/totp/conferma', ['codice' => '000000'])))->toBe([401, 'secondo_fattore_non_valido']);
 
     $avvio = Api::staff($enrolment['gettone'])->post('/v1/staff/totp')['data'];
-    expect($avvio['segreto'])->toMatch('/^[A-Z2-7]{32}$/')->and($avvio['otpauth'])->toStartWith('otpauth://totp/Zeiras:nuova%40lucianocastro.com?')->toContain($avvio['segreto']);
+    expect($avvio['segreto'])->toMatch('/^[A-Z2-7]{32}$/')->and($avvio['otpauth'])->toStartWith('otpauth://totp/Zeiras%3Anuova%40lucianocastro.com?')->toContain($avvio['segreto']);
 
     expect(esitoDelloStaff(fn () => Api::staff($enrolment['gettone'])->post('/v1/staff/totp/conferma', ['codice' => '123456'])))->toBe([401, 'secondo_fattore_non_valido']);
     $codici = Api::staff($enrolment['gettone'])->post('/v1/staff/totp/conferma', ['codice' => '000000'])['data']['codici_di_recupero'];
@@ -356,4 +356,37 @@ it('il registro: righe dal più recente a cursore, filtri, nomi risolti alla let
         ->and($contenuto)->toStartWith("\xEF\xBB\xBFposizione,id,staff_id,ruolo,azione,bersaglio_tipo,bersaglio_id,campi,motivo,ip,impersonificazione_id,quando\r\n")
         ->and($contenuto)->toContain('staff.modifica')->not->toContain('staff.totp.reimpostazione.crea')
         ->and(Api::staff($gettone)->get('/v1/staff/registro', ['azione' => 'staff.registro.esportazioni.crea'])['data'])->toHaveCount(1);
+
+    // Senza filtri il file va dalla riga più vecchia a quella di questa stessa esportazione, che c'è.
+    $tutto = implode('', iterator_to_array(Api::staff($gettone)->scaricaConPost('/v1/staff/registro/esportazioni')->blocchi(), false));
+    $azioni = array_map(fn (string $riga) => str_getcsv($riga, escape: '')[4] ?? null, array_slice(explode("\r\n", trim($tutto)), 1));
+
+    expect($azioni[0])->toBe('staff.accessi.verifica.crea')->and(end($azioni))->toBe('staff.registro.esportazioni.crea');
+});
+
+it('il tipo del gettone: lo staff non apre staff.totp.*, l\'enrolment non apre il resto, un gettone di persona non apre niente: tutti 403 (F1.1, F1.10)', function () {
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com');
+    $gettone = entraComeStaff($sara);
+    $persona = $this->finto->persona('anna@example.com', PASSWORD);
+    $accesso = Api::senzaGettone()->post('/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])['data']['gettone']['gettone'];
+
+    expect(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/totp')))->toBe([403, 'permesso_negato'])
+        ->and(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/totp/conferma', ['codice' => '000000'])))->toBe([403, 'permesso_negato'])
+        ->and(esitoDelloStaff(fn () => Api::staff($accesso)->get('/v1/staff/corrente')))->toBe([403, 'permesso_negato'])
+        ->and(esitoDelloStaff(fn () => Api::staff('zr_'.str_repeat('a', 48))->get('/v1/staff/corrente')))->toBe([401, 'gettone_non_valido']);
+});
+
+it('i codici di recupero hanno il formato del backoffice e si accettano come li scrive una persona: maiuscoli o minuscoli, con o senza trattino (F1.2)', function () {
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com');
+    [$primo, $secondo] = $this->finto->codiciDiRecuperoDelloStaff($sara);
+    $verifica = function (string $codice) {
+        $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => 'sara@lucianocastro.com', 'password' => PASSWORD])['data']['sfida']['id'];
+
+        return esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => $codice]));
+    };
+
+    expect($primo)->toMatch('/^[ABCDEFGHJKLMNPQRSTUVWXYZ2-9]{5}-[ABCDEFGHJKLMNPQRSTUVWXYZ2-9]{5}$/')
+        ->and($verifica(' '.strtolower(str_replace('-', '', $primo)).' '))->toBe(['ok', null])
+        ->and($verifica($primo))->toBe([401, 'secondo_fattore_non_valido'])
+        ->and($verifica(strtolower($secondo)))->toBe(['ok', null]);
 });
