@@ -341,6 +341,10 @@ return [
         'title' => 'Reserva no modificable',
         'detail' => 'Esta reserva ya está cancelada, realizada o marcada como no presentada, y no cambia más: una cancelada no se reabre, se hace una nueva. No se escribió nada.',
     ],
+    'senza_collegamento' => [
+        'title' => 'Sin calendario conectado',
+        'detail' => 'Esta reserva no tiene un evento que Zeiras pueda restablecer: no se escribió ninguno, o el calendario se desconectó y el evento ya no sigue a la reserva. El método no escribió nada.',
+    ],
     'termini_cambiati' => [
         'title' => 'Términos cambiados',
         'detail' => 'Los Términos de la página han cambiado desde que los viste: la versión que envías ya no es la vigente y no se ha registrado ningún consentimiento. Vuelve a leer la página con `bookings.pubblico.pagine.mostra`, muestra los Términos nuevos y repite la solicitud. El método no escribió nada.',
@@ -396,6 +400,14 @@ return [
     'pagamento_annullato' => [
         'title' => 'Pago ya anulado',
         'detail' => 'Este pago ya está anulado y no se anula dos veces. No se escribió nada.',
+    ],
+    'permessi_mancanti' => [
+        'title' => 'Permisos que faltan',
+        'detail' => 'El consentimiento del calendario no dio todo lo que Bookings necesita: mira `non_concessi` junto al código (`occupato`: la lista de calendarios, `eventi`: leer y escribir los eventos). No se conectó nada: repite «Conectar» y deja activos todos los permisos pedidos.',
+    ],
+    'account_gia_collegato' => [
+        'title' => 'Cuenta ya conectada',
+        'detail' => 'Ya conectaste otra cuenta de este proveedor: cada miembro tiene una por proveedor. Desconéctala con bookings.collegamenti.elimina antes de conectar la nueva. No se escribió nada.',
     ],
     'ultima_opzione' => [
         'title' => 'Última opción',
