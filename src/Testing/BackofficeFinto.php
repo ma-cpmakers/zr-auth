@@ -49,6 +49,7 @@ use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\Retrospettiva;
 use Zeiras\Auth\Testing\Finto\Staff;
 use Zeiras\Auth\Testing\Finto\StaffUtenti;
+use Zeiras\Auth\Testing\Finto\StaffWorkspace;
 use Zeiras\Auth\Testing\Finto\SchedeCrm;
 use Zeiras\Auth\Testing\Finto\Scrumban;
 use Zeiras\Auth\Testing\Finto\Sprint;
@@ -101,6 +102,7 @@ final class BackofficeFinto
     use Retrospettiva;
     use Staff;
     use StaffUtenti;
+    use StaffWorkspace;
     use Scrumban;
     use Sprint;
     use CrmProfili;
@@ -180,6 +182,8 @@ final class BackofficeFinto
         ['POST', '#^/v1/staff/totp/conferma$#', 'staff.totp.conferma.crea'],
         ['GET', '#^/v1/staff/utenti/conteggi$#', 'staff.utenti.conteggi.mostra'],
         ['GET', '#^/v1/staff/workspace/conteggi$#', 'staff.workspace.conteggi.mostra'],
+        ['GET', '#^/v1/staff/workspace$#', 'staff.workspace.elenca'],
+        ['POST', '#^/v1/staff/workspace/ricerca$#', 'staff.workspace.ricerca.crea'],
         ['GET', '#^/v1/staff/utenti$#', 'staff.utenti.elenca'],
         ['POST', '#^/v1/staff/utenti/ricerca$#', 'staff.utenti.ricerca.crea'],
         ['POST', '#^/v1/staff/utenti/ricerca/esportazioni$#', 'staff.utenti.ricerca.esportazioni.crea'],
@@ -1485,6 +1489,8 @@ final class BackofficeFinto
                 'staff.totp.reimpostazione.crea' => $this->reimpostaIlTotpDelloStaff($richiesta, $corpo, $parametri[0]),
                 'staff.utenti.conteggi.mostra' => $this->contaLePersoneDelloStaff($richiesta),
                 'staff.workspace.conteggi.mostra' => $this->contaIWorkspaceDelloStaff($richiesta),
+                'staff.workspace.elenca' => $this->elencaIWorkspaceDelloStaff($richiesta),
+                'staff.workspace.ricerca.crea' => $this->cercaIWorkspaceDelloStaff($richiesta, $corpo),
                 'staff.utenti.elenca' => $this->elencaGliUtentiDelloStaff($richiesta),
                 'staff.utenti.ricerca.crea' => $this->cercaGliUtentiDelloStaff($richiesta, $corpo),
                 'staff.utenti.ricerca.esportazioni.crea' => $this->esportaGliUtentiDelloStaff($richiesta, $corpo),
