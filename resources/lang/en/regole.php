@@ -305,5 +305,6 @@ return [
     'cancella_occupati_valore' => 'cancella_occupati takes `true` or `false`: `true` deletes the saved busy times, `false` (or nothing) keeps them archived.',
     'documento_versione_inesistente' => 'This version of the model does not exist: the latest published is :corrente. crm.modelli.mostra gives the versions.',
     'documento_legame_minorenne' => 'The contact is a minor: a parent or a guardian signs, so the relationship is `genitore` or `tutore`.',
+    'nome_di_chi_firma' => 'The :attribute field may contain only letters, spaces, apostrophes, hyphens and full stops, and starts with a letter.',
     'documento_tratto_immagine' => 'The stroke image wants a PNG in strict base64 (no `data:` prefix and no line breaks), at most :max KB and :lato pixels per side.',
 ];

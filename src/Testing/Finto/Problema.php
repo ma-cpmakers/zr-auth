@@ -75,6 +75,7 @@ final class Problema extends RuntimeException
         'rate_con_pagamenti' => 409,
         'pagamento_annullato' => 409,
         'versione_non_corrente' => 409,
+        'impronta_non_corrispondente' => 409,
         'documento_non_revocabile' => 409,
         'documento_gia_revocato' => 409,
         'esportazione_in_corso' => 409,

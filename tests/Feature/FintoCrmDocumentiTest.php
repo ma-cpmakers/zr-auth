@@ -132,3 +132,39 @@ it('dopo l\'oblio del contatto il documento non ha più firmatario né impronta 
         ->and($elenco->json('data.0'))->toMatchArray(['modello' => 'consenso_immagini', 'versione' => 2, 'stato' => 'firmato', 'impronta' => null])
         ->and($elenco->json('data.0.firmatario'))->toMatchArray(['nome' => '', 'cognome' => '']);
 });
+
+it('la firma legata al testo letto (#3039): l\'impronta uguale a quella di testo.crea è 201, un\'altra è 409 impronta_non_corrispondente senza documento, una malformata è 422', function () {
+    [, $gettoni] = studioColCrm();
+    $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Pia', 'cognome' => 'Verdi'], $gettoni['anna'])->json('data.id');
+    $genitore = ['nome' => 'Mara', 'cognome' => 'Verdi', 'legame' => 'genitore'];
+    $letta = alFinto('POST', '/v1/crm/modelli/consenso_immagini/testo', ['persona_id' => $persona, 'lingua' => 'it', 'firmatario' => $genitore], $gettoni['anna'])->json('data.impronta');
+    $senza = alFinto('POST', '/v1/crm/modelli/consenso_immagini/testo', ['persona_id' => $persona, 'lingua' => 'it', 'firmatario' => ['nome' => 'Pia', 'cognome' => 'Verdi', 'legame' => 'se_stesso']], $gettoni['anna'])->json('data.impronta');
+    $firma = fn (string $impronta, string $chiave) => alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['firmatario' => $genitore, 'impronta' => $impronta]), $gettoni['anna'], intestazioni: chiaveDiCreazione($chiave));
+
+    $diversa = $firma($senza, 'k-fl-1');
+    $malformata = $firma(strtoupper($letta), 'k-fl-2');
+    $uguale = $firma($letta, 'k-fl-3');
+
+    expect($diversa->status())->toBe(409)->and($diversa->json('codice'))->toBe('impronta_non_corrispondente')
+        ->and($malformata->status())->toBe(422)->and($malformata->json('errors.0.pointer'))->toBe('#/impronta')
+        ->and($uguale->status())->toBe(201)->and($uguale->json('data.impronta'))->toBe($letta)
+        ->and(alFinto('GET', '/v1/crm/documenti?persona_id='.$persona, null, $gettoni['anna'])->json('data'))->toHaveCount(1);
+});
+
+it('nome e cognome di chi firma (#3040): al più 80 caratteri, solo lettere, spazi, apostrofo, trattino e punto; una virgola, una cifra o 81 caratteri sono 422 sul campo', function (string $campo, string $valore, int $stato) {
+    [, $gettoni] = studioColCrm();
+    $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Pia', 'cognome' => 'Verdi'], $gettoni['anna'])->json('data.id');
+    $firmatario = ['nome' => 'Mara', 'cognome' => 'Verdi', 'legame' => 'se_stesso'];
+    $firmatario[$campo] = $valore;
+
+    $r = alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['firmatario' => $firmatario]), $gettoni['anna'], intestazioni: chiaveDiCreazione('k-nm-'.md5($campo.$valore)));
+
+    expect($r->status())->toBe($stato);
+
+    if ($stato === 422) {
+        expect($r->json('errors.0.pointer'))->toBe("#/firmatario/{$campo}");
+    }
+})->with([
+    'virgola' => ['nome', 'Mara, che', 422], 'cifra' => ['cognome', 'Verdi2', 422], 'ottantuno' => ['cognome', str_repeat('b', 81), 422], 'graffa' => ['nome', 'Ma{x}', 422],
+    'apostrofo' => ['cognome', "D'Angelo", 201], 'trattino' => ['cognome', 'De-Luca', 201], 'accenti' => ['nome', 'José María', 201], 'ottanta' => ['cognome', str_repeat('é', 80), 201],
+]);

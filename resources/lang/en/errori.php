@@ -437,6 +437,10 @@ return [
         'title' => 'Document already revoked',
         'detail' => 'This document is already revoked and a revocation cannot be undone: if the client gives consent again, have a new document signed with crm.documenti.crea. Nothing was written.',
     ],
+    'impronta_non_corrispondente' => [
+        'title' => 'The text is not the one read',
+        'detail' => 'The fingerprint you sent is not the one of the text the server compiles from the same data (template, version, language, contact and signer): the signer may have read a different text, and no document was signed. Read the text again with crm.modelli.testo.crea (or with the link reading), show it again to the signer and repeat the signature with its fingerprint. The method has written nothing.',
+    ],
     'ultima_opzione' => [
         'title' => 'Last option',
         'detail' => 'This is the field\'s last live option, and a list or multiple-choice field always has at least one. Add another with crm.campi.opzioni.crea and then remove this one. Nothing was written.',

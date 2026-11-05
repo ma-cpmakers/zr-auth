@@ -437,6 +437,10 @@ return [
         'title' => 'Documento ya revocado',
         'detail' => 'Este documento ya está revocado y una revocación no se anula: si el cliente vuelve a dar su consentimiento, haz firmar un documento nuevo con crm.documenti.crea. No se escribió nada.',
     ],
+    'impronta_non_corrispondente' => [
+        'title' => 'El texto no es el leído',
+        'detail' => 'La huella que envías no es la del texto que el servidor compila con los mismos datos (modelo, versión, idioma, contacto y firmante): el firmante puede haber leído un texto distinto, y no se ha firmado ningún documento. Vuelve a leer el texto con crm.modelli.testo.crea (o con la lectura del enlace), muéstraselo otra vez al firmante y repite la firma con su huella. El método no ha escrito nada.',
+    ],
     'ultima_opzione' => [
         'title' => 'Última opción',
         'detail' => 'Esta es la última opción viva del campo, y un campo de lista o de selección múltiple siempre tiene al menos una. Añade otra con crm.campi.opzioni.crea y luego quita esta. No se escribió nada.',
