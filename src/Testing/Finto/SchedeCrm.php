@@ -47,7 +47,7 @@ trait SchedeCrm
      * board.schede.crm.crea (SchedeCrmController::crea): 201 con il collegamento e la `Location`. Nell'ordine del backoffice: il ruolo
      * e l'app `pm` (403), la scheda del percorso (404), la Idempotency-Key, il freno per persona (429), la scheda archiviata (409), il
      * corpo (422), l'app `crm` spenta (403), il record che non c'è nel workspace (422 su `#/id`, un testo solo per l'id di un altro
-     * workspace e per uno inventato), il doppione (409 `record_gia_collegato`), il tetto di 50 (409 `limite_raggiunto` con `limite`).
+     * workspace e per uno inventato), il doppione (409 `record_gia_collegato`), il tetto di 50 (409 `limite_raggiunto` con `limite`). Con il ruolo `approvatore`: 409 `gate_in_approvazione` se il Gate è in approvazione e l'approvatore è disponibile, prima di `approvatore_gia_indicato`.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>, array<string, string>}
@@ -93,7 +93,14 @@ trait SchedeCrm
                 throw new Problema('record_gia_collegato');
             }
 
-            if ($ruolo !== null && $this->approvatoreDelGate($mia['id'], $chi['workspace']) !== null) {
+            $approvatore = $ruolo === null ? null : $this->approvatoreDelGate($mia['id'], $chi['workspace']);
+
+            // Con la richiesta pendente e l'approvatore disponibile l'approvatore non cambia: prima si annulla la richiesta (SchedeCrmController::crea).
+            if ($ruolo !== null && $this->esitoDelGate($mia) === 'in_approvazione' && ($approvatore[1]['titolo'] ?? null) !== null) {
+                throw new Problema('gate_in_approvazione');
+            }
+
+            if ($approvatore !== null) {
                 throw new Problema('approvatore_gia_indicato');
             }
 
@@ -112,7 +119,7 @@ trait SchedeCrm
 
     /**
      * board.schede.crm.elimina (SchedeCrmController::elimina): toglie il collegamento, 204; da lì non è più in lista e non si elimina
-     * di nuovo (404), e lo stesso record si può ricollegare. Non legge il CRM. Un collegamento che non è della scheda del percorso
+     * di nuovo (404), e lo stesso record si può ricollegare. Legge il CRM solo per il collegamento dell'approvatore di un Gate in approvazione (409 `gate_in_approvazione` se il contatto è disponibile). Un collegamento che non è della scheda del percorso
      * è 404; la scheda archiviata è 409.
      *
      * @return array{int, null}
@@ -129,6 +136,11 @@ trait SchedeCrm
 
         if ($mia['archiviata_il'] !== null) {
             throw new Problema('scheda_archiviata');
+        }
+
+        // Lo stesso vincolo del collegamento: l'approvatore disponibile di un Gate in approvazione non si toglie (SchedeCrmController::elimina).
+        if (($voce['ruolo'] ?? null) === 'approvatore' && $this->esitoDelGate($mia) === 'in_approvazione' && ($this->voceSchedaCrm($voce, $chi['workspace'])['titolo'] ?? null) !== null) {
+            throw new Problema('gate_in_approvazione');
         }
 
         unset($this->schedeCrm[$collegamento]);

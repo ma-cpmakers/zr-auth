@@ -783,6 +783,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `decisione` in ogni lettura. Rispondono `board.schede.gate.richiesta.crea` (`in_approvazione`, con `richiesto_il` e `richiesto_da`; `409`
   `scheda_non_gate`, `gate_gia_richiesto`, `gate_deciso`, `gate_senza_approvatore`) e `board.schede.gate.decisione.crea` (`approvato`, `con_prescrizioni`
   o `respinto` con `motivo` e `prescrizioni`, che nascono come schede della board; `409` `gate_non_richiesto` e `approvatore_non_disponibile`).
+  Con la richiesta aperta e l'approvatore disponibile, `board.schede.crm.crea` (con `ruolo` `approvatore`) e `board.schede.crm.elimina` (del collegamento dell'approvatore) rispondono 409 `gate_in_approvazione`; se il contatto non c'è più (archiviato o anonimizzato) il collegamento si toglie e si sostituisce. Il cambio di `tipo` della scheda con la richiesta aperta il finto non lo vincola.
   `board.schede.spostamento.crea` risponde con `avvisi: []`: il finto ha una lista sola per board e non salta mai un Gate.
 - **Gli sprint.** `sprint($workspace, $board, $nome, 'pianificato'|'attivo'|'chiuso', $inizio, $durataSettimane, $obiettivo, $velocita, $unita)`
   (#2664) fa nascere uno sprint di una board con il metodo `scrum` (una board per volta ha al più uno sprint attivo e uno

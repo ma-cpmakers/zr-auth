@@ -525,6 +525,10 @@ return [
         'title' => 'Gate already approved',
         'detail' => 'The Gate is approved, which is the final state: it cannot be requested again. Create another Gate for a new check.',
     ],
+    'gate_in_approvazione' => [
+        'title' => 'Approval request pending',
+        'detail' => 'The Gate is awaiting approval and its approver is available: the approver cannot be changed or removed, nor the card\'s type changed, while the request is open. Record the decision with board.schede.gate.decisione.crea, or cancel the request first.',
+    ],
     'gate_senza_approvatore' => [
         'title' => 'Gate without an approver',
         'detail' => 'The Gate has no available approver: no contact is linked with the approver role, or the contact is archived or anonymised. Link a contact with board.schede.crm.crea (role approvatore), removing the one that is gone first, and request again.',
