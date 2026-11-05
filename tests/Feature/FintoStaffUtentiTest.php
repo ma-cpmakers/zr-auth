@@ -237,10 +237,17 @@ it('chiudere le sessioni e avviare il recupero: superadmin e supporto, 204 e 202
 
 it('le esportazioni dei dati di un utente: in_corso, poi pronta; si scarica più volte fino a scade_il; dopo un\'ora è 409; un altro dello staff 404 (F2.3, F2.10)', function () {
     $sara = gettoneDelloStaffDi($this->finto, 'sara@lucianocastro.com');
-    $paola = gettoneDelloStaffDi($this->finto, 'paola@lucianocastro.com', 'supporto');
+    $paola = gettoneDelloStaffDi($this->finto, 'paola@lucianocastro.com');
+    $gino = gettoneDelloStaffDi($this->finto, 'gino@lucianocastro.com', 'supporto');
     $anna = $this->finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
 
+    // L'esportazione dei dati di un utente è del solo superadmin (zr-pm 05/11): il supporto ha 403 sulla richiesta, sulla lettura e sullo scaricamento.
+    expect(esitoUtentiStaff(fn () => Api::staff($gino)->post("/v1/staff/utenti/{$anna['id']}/esportazioni")))->toBe([403, 'permesso_negato']);
+
     $creata = Api::staff($paola)->post("/v1/staff/utenti/{$anna['id']}/esportazioni")['data'];
+
+    expect(esitoUtentiStaff(fn () => Api::staff($gino)->get("/v1/staff/esportazioni/{$creata['id']}")))->toBe([403, 'permesso_negato'])
+        ->and(esitoUtentiStaff(fn () => Api::staff($gino)->scaricaConPost("/v1/staff/esportazioni/{$creata['id']}/scaricamento")))->toBe([403, 'permesso_negato']);
 
     expect($creata)->toMatchArray(['tipo' => 'utente_gdpr', 'stato' => 'in_corso', 'creata_il' => '2026-11-05T10:00:00.000Z', 'scade_il' => '2026-11-05T11:00:00.000Z', 'dimensione_byte' => null, 'errore' => null])
         ->and(esitoUtentiStaff(fn () => Api::staff($paola)->scaricaConPost("/v1/staff/esportazioni/{$creata['id']}/scaricamento")))->toBe([409, 'esportazione_non_disponibile'])
