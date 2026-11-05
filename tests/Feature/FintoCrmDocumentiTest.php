@@ -168,3 +168,18 @@ it('nome e cognome di chi firma (#3040): al più 80 caratteri, solo lettere, spa
     'virgola' => ['nome', 'Mara, che', 422], 'cifra' => ['cognome', 'Verdi2', 422], 'ottantuno' => ['cognome', str_repeat('b', 81), 422], 'graffa' => ['nome', 'Ma{x}', 422],
     'apostrofo' => ['cognome', "D'Angelo", 201], 'trattino' => ['cognome', 'De-Luca', 201], 'accenti' => ['nome', 'José María', 201], 'ottanta' => ['cognome', str_repeat('é', 80), 201],
 ]);
+
+it('nome di chi firma (#3040): un segno combinante o un riempitivo invisibile al posto di una lettera è 422; testo.crea non accetta una impronta (come il backoffice)', function () {
+    [, $gettoni] = studioColCrm();
+    $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Pia', 'cognome' => 'Verdi'], $gettoni['anna'])->json('data.id');
+
+    foreach (["\u{0301}Verdi", "Ve\u{3164}rdi", '..', "Ve\u{FE0F}rdi", 'A'.str_repeat("\u{0301}", 5).'b'] as $i => $cognome) {
+        $r = alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['firmatario' => ['nome' => 'Mara', 'cognome' => $cognome, 'legame' => 'se_stesso']]), $gettoni['anna'], intestazioni: chiaveDiCreazione("k-nm2-{$i}"));
+
+        expect($r->status())->toBe(422)->and($r->json('errors.0.pointer'))->toBe('#/firmatario/cognome');
+    }
+
+    $testo = alFinto('POST', '/v1/crm/modelli/iscrizione/testo', ['persona_id' => $persona, 'firmatario' => ['nome' => 'Mara', 'cognome' => 'Verdi', 'legame' => 'genitore'], 'impronta' => str_repeat('a', 64)], $gettoni['anna']);
+
+    expect($testo->status())->toBe(422)->and($testo->json('errors.0.pointer'))->toBe('#/impronta');
+});

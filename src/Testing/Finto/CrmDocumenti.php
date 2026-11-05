@@ -192,7 +192,7 @@ trait CrmDocumenti
             'persona_id' => ['bail', 'required', 'string', 'regex:/^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/D'],
             'lingua' => ['sometimes', 'bail', 'string', Rule::in(self::MODELLI_LINGUE_CRM)],
             'versione' => ['sometimes', 'bail', 'integer:strict', 'min:1'],
-        ] + array_diff_key($this->regoleDelDocumentoCrm(), array_flip(['persona_id', 'modello', 'versione', 'lingua', 'tratto', 'tratto.tipo', 'tratto.immagine'])));
+        ] + array_diff_key($this->regoleDelDocumentoCrm(), array_flip(['persona_id', 'modello', 'versione', 'lingua', 'impronta', 'tratto', 'tratto.tipo', 'tratto.immagine'])));
         $modello = self::trovaModelloCrm($id) ?? throw new Problema('non_trovato');
         $versione = isset($campi['versione']) ? (int) $campi['versione'] : self::versioneCorrenteCrm($modello);
 
@@ -361,7 +361,7 @@ trait CrmDocumenti
     private function regolaNomeDiChiFirmaCrm(): Closure
     {
         return function (string $campo, mixed $valore, Closure $fail) {
-            if (is_string($valore) && preg_match("/^[\\p{L}\\p{M}][\\p{L}\\p{M} '\u{2019}.\\-]*$/Du", $valore) !== 1) {
+            if (is_string($valore) && preg_match("/^(?!.*[\\x{034F}\\x{115F}\\x{1160}\\x{16FE4}\\x{17B4}\\x{17B5}\\x{180B}-\\x{180F}\\x{3164}\\x{FE00}-\\x{FE0F}\\x{FFA0}\\x{E0100}-\\x{E01EF}])\\p{L}\\p{M}{0,4}(?:[\\p{L} '\\x{2019}.\\-]\\p{M}{0,4})*$/Du", $valore) !== 1) {
                 $this->rifiutaCrm($fail, $campo, Regola::FORMATO, 'regole.nome_di_chi_firma');
             }
         };
@@ -581,12 +581,15 @@ trait CrmDocumenti
         $modello = self::trovaModelloCrm($link['modello']) ?? throw new Problema('non_trovato');
         $versione = self::versioneCorrenteCrm($modello);
 
+        $testo = $this->testoDelModelloCrm($modello, $versione, $link['lingua'], $persona, $campi['firmatario'] ?? null);
+
         return [200, ['data' => [
             'modello' => $modello['chiave'],
             'titolo' => $modello['nome'][$link['lingua']],
             'versione' => $versione,
             'lingua' => $link['lingua'],
-            'testo' => $this->testoDelModelloCrm($modello, $versione, $link['lingua'], $persona, $campi['firmatario'] ?? null),
+            'testo' => $testo,
+            'impronta' => hash('sha256', $testo),
             'workspace' => ['nome' => $this->workspace[$link['workspace']]['nome'], 'logo' => null],
             'scade_il' => self::iso($link['scade_il']),
         ]]];
