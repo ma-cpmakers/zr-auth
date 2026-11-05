@@ -167,6 +167,8 @@ it('nome e cognome di chi firma (#3040): al più 80 caratteri, solo lettere, spa
 })->with([
     'virgola' => ['nome', 'Mara, che', 422], 'cifra' => ['cognome', 'Verdi2', 422], 'ottantuno' => ['cognome', str_repeat('b', 81), 422], 'graffa' => ['nome', 'Ma{x}', 422],
     'apostrofo' => ['cognome', "D'Angelo", 201], 'trattino' => ['cognome', 'De-Luca', 201], 'accenti' => ['nome', 'José María', 201], 'ottanta' => ['cognome', str_repeat('é', 80), 201],
+    'sei parole' => ['nome', 'a b c d e f', 422], 'una frase' => ['cognome', 'Rossi che non accetta alcuna clausola', 422], 'frase coi punti' => ['nome', 'Rossi.Dichiaro.di.non.accetto.nulla', 422], 'cinque parole' => ['cognome', 'Maria De Los Angeles Pilar', 201],
+    'ZWNJ fra due lettere' => ['nome', "\u{0645}\u{06CC}\u{200C}\u{062E}\u{0648}\u{0627}\u{0647}\u{0645}", 201], 'ZWJ dopo un segno' => ['nome', "\u{0915}\u{094D}\u{200D}\u{0937}", 201], 'ZWNJ doppio' => ['nome', "Ma\u{200C}\u{200C}ra", 422], 'ZWNJ dopo uno spazio' => ['cognome', "Verdi \u{200C}Neri", 422],
 ]);
 
 it('nome di chi firma (#3040): un segno combinante o un riempitivo invisibile al posto di una lettera è 422; testo.crea non accetta una impronta (come il backoffice)', function () {

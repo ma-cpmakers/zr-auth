@@ -361,7 +361,7 @@ trait CrmDocumenti
     private function regolaNomeDiChiFirmaCrm(): Closure
     {
         return function (string $campo, mixed $valore, Closure $fail) {
-            if (is_string($valore) && preg_match("/^(?!.*[\\x{034F}\\x{115F}\\x{1160}\\x{16FE4}\\x{17B4}\\x{17B5}\\x{180B}-\\x{180F}\\x{3164}\\x{FE00}-\\x{FE0F}\\x{FFA0}\\x{E0100}-\\x{E01EF}])\\p{L}\\p{M}{0,4}(?:[\\p{L} '\\x{2019}.\\-]\\p{M}{0,4})*$/Du", $valore) !== 1) {
+            if (is_string($valore) && preg_match("/^(?!.*[\\x{034F}\\x{115F}\\x{1160}\\x{16FE4}\\x{17B4}\\x{17B5}\\x{180B}-\\x{180F}\\x{3164}\\x{FE00}-\\x{FE0F}\\x{FFA0}\\x{E0100}-\\x{E01EF}])\\p{L}\\p{M}{0,4}(?:[\\p{L} '\\x{2019}.\\-]\\p{M}{0,4}|(?<=[\\p{L}\\p{M}])[\\x{200C}\\x{200D}](?=\\p{L}))*$/Du", $valore) !== 1 || count(preg_split('/[ .]+/u', $valore, -1, PREG_SPLIT_NO_EMPTY) ?: []) > 5) {
                 $this->rifiutaCrm($fail, $campo, Regola::FORMATO, 'regole.nome_di_chi_firma');
             }
         };
