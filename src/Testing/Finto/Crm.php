@@ -4273,7 +4273,7 @@ trait Crm
     }
 
     /**
-     * NoteController::elimina: solo l'autore (403 permesso_negato); la nota passa nell'archivio di sistema e da lì è 404. Risponde 204.
+     * NoteController::elimina: l'autore, il proprietario o un amministratore (un membro non autore è 403 permesso_negato); la nota passa nell'archivio di sistema e da lì è 404. Risponde 204.
      *
      * @return array{int, null}
      */
@@ -4282,7 +4282,10 @@ trait Crm
         $chi = $this->conCrm($richiesta);
         $nota = $this->rigaCrm('note', $chi['workspace'], $id);
 
-        if ($nota['creata_da'] !== $chi['persona']) {
+        // La toglie l'autore, il proprietario o un amministratore del workspace (#3073); un membro che non è l'autore è 403.
+        $alto = in_array($this->membri[$chi['workspace']][$chi['persona']] ?? null, ['proprietario', 'amministratore'], true);
+
+        if ($nota['creata_da'] !== $chi['persona'] && ! $alto) {
             throw new Problema('permesso_negato');
         }
 
