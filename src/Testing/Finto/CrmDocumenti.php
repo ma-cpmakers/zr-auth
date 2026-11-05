@@ -322,9 +322,10 @@ trait CrmDocumenti
             'versione' => ['bail', 'required', 'integer:strict', 'min:1'],
             'lingua' => ['bail', 'required', 'string', Rule::in(self::MODELLI_LINGUE_CRM)],
             'firmatario' => ['bail', 'required', 'array'],
-            'firmatario.nome' => ['bail', 'required', 'string', 'max:200', new NomeScritto],
-            'firmatario.cognome' => ['bail', 'required', 'string', 'max:200', new NomeScritto],
+            'firmatario.nome' => ['bail', 'required', 'string', 'max:80', new NomeScritto, $this->regolaNomeDiChiFirmaCrm()],
+            'firmatario.cognome' => ['bail', 'required', 'string', 'max:80', new NomeScritto, $this->regolaNomeDiChiFirmaCrm()],
             'firmatario.legame' => ['bail', 'required', 'string', Rule::in(self::CRM_DOCUMENTI_LEGAMI)],
+            'impronta' => ['sometimes', 'bail', 'string', 'regex:/^[0-9a-f]{64}$/D'],
             'tratto' => ['bail', 'required', 'array'],
             'tratto.tipo' => ['bail', 'required', 'string', Rule::in(self::CRM_DOCUMENTI_TRATTI)],
             'tratto.immagine' => ['bail', 'required_if:tratto.tipo,immagine', 'prohibited_if:tratto.tipo,spunta', 'string', function (string $campo, mixed $valore, Closure $fail) {
@@ -356,6 +357,16 @@ trait CrmDocumenti
         return CarbonImmutable::parse($nascita, self::CRM_ACQUISTI_FUSO)->addYears(self::CRM_DOCUMENTI_MAGGIORE_ETA)->format('Y-m-d') > self::oggiAcquistoCrm();
     }
 
+    /** La regola del nome o del cognome di chi firma (App\Rules\NomeDiChiFirma): lettere, spazi, apostrofo, trattino e punto, e comincia con una lettera (zr-pm-07, 5/11). */
+    private function regolaNomeDiChiFirmaCrm(): Closure
+    {
+        return function (string $campo, mixed $valore, Closure $fail) {
+            if (is_string($valore) && preg_match("/^[\\p{L}\\p{M}][\\p{L}\\p{M} '\u{2019}.\\-]*$/Du", $valore) !== 1) {
+                $this->rifiutaCrm($fail, $campo, Regola::FORMATO, 'regole.nome_di_chi_firma');
+            }
+        };
+    }
+
     /**
      * Firma un documento di `$persona` (Documenti::firma): la versione deve essere la corrente (una più vecchia è 409 `versione_non_corrente`, una che
      * non esiste 422), e il contatto minorenne si firma da un genitore o da un tutore. Il testo si compila qui.
@@ -383,6 +394,12 @@ trait CrmDocumenti
         }
 
         $testo = $this->testoDelModelloCrm($modello, $versione, (string) $campi['lingua'], $persona, $campi['firmatario']);
+
+        // La firma legata al testo letto (#3039): l'impronta che chi firma manda deve essere quella del testo compilato qui.
+        if (isset($campi['impronta']) && ! hash_equals(hash('sha256', $testo), (string) $campi['impronta'])) {
+            throw new Problema('impronta_non_corrispondente');
+        }
+
         $id = self::id();
         $this->crm['documenti'][$id] = [
             'id' => $id, 'workspace' => $persona['workspace'], 'persona_id' => $persona['id'], 'modello' => $modello['chiave'], 'versione' => $versione, 'lingua' => (string) $campi['lingua'],
