@@ -777,6 +777,13 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   `crm` spenta restano tutti con il motivo `non_leggibile` (il finto non ha i gettoni nati da un client della base: lì il backoffice
   lascia leggibili i contatti). Il doppione è `409` `record_gia_collegato`, il cinquantunesimo `409` `limite_raggiunto` con
   `limite` 50, un id che non c'è nel workspace `422` su `#/id`.
+  Il collegamento porta `ruolo` (`approvatore` o `null`, #2791): `approvatore` solo per un contatto (`crm.persona`) su una scheda di tipo `gate`,
+  al più uno (`409` `approvatore_gia_indicato`), altrimenti `422` su `#/ruolo`. **Il Gate** (#2791): una scheda nata con `scheda($workspace, $titolo, tipo: 'gate')`
+  porta `esito` (`in_preparazione` finché non si chiede; le altre schede `null`), `approvatore` (`{persona_id, titolo}`, letto oggi dal CRM del finto) e
+  `decisione` in ogni lettura. Rispondono `board.schede.gate.richiesta.crea` (`in_approvazione`, con `richiesto_il` e `richiesto_da`; `409`
+  `scheda_non_gate`, `gate_gia_richiesto`, `gate_deciso`, `gate_senza_approvatore`) e `board.schede.gate.decisione.crea` (`approvato`, `con_prescrizioni`
+  o `respinto` con `motivo` e `prescrizioni`, che nascono come schede della board; `409` `gate_non_richiesto` e `approvatore_non_disponibile`).
+  `board.schede.spostamento.crea` risponde con `avvisi: []`: il finto ha una lista sola per board e non salta mai un Gate.
 - **Gli sprint.** `sprint($workspace, $board, $nome, 'pianificato'|'attivo'|'chiuso', $inizio, $durataSettimane, $obiettivo, $velocita, $unita)`
   (#2664) fa nascere uno sprint di una board con il metodo `scrum` (una board per volta ha al più uno sprint attivo e uno
   pianificato), e `scheda(…, sprint: $sprint['id'])` mette una scheda in uno sprint non chiuso della sua board. Rispondono

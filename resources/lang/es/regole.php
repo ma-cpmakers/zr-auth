@@ -36,6 +36,7 @@ return [
     'passaggio_doppio' => 'Una posición aparece dos veces en los passaggi.',
     'lista_della_board' => 'Esta lista no es del mismo tablero que la tarjeta: los ids de las listas los da board.board.mostra.',
     'scheda_della_board' => 'Esta tarjeta no es del mismo tablero: los ids de las tarjetas los da board.schede.elenca.',
+    'ruolo_approvatore' => 'El rol de aprobador solo vale para un contacto (crm.persona) vinculado a una tarjeta de tipo gate.',
     'record_del_crm' => 'En el workspace no hay un registro del CRM de este tipo con este id: los ids los dan crm.persone.ricerca.crea, crm.organizzazioni.ricerca.crea y crm.trattative.ricerca.crea.',
     'una_posizione_o_un_ancora' => 'El cuerpo necesita exactamente uno de posizione y dopo_scheda_id, ni ninguno ni los dos.',
     'lista_della_stessa_board' => 'Esta lista no es del mismo tablero que la lista que se mueve: los ids de las listas los da board.board.mostra.',
