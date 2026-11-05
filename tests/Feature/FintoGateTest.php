@@ -6,18 +6,18 @@ use Zeiras\Auth\Testing\BackofficeFinto;
 // decisione, le prescrizioni come schede, l'approvatore letto dal CRM); che risposte ed errori siano quelli del backoffice lo prova il FintoTest
 // del backoffice, che confronta finto e backoffice sulle stesse chiamate.
 
-/**
- * Un workspace con `pm` e `crm`, un Gate e un contatto del CRM: [finto, workspace, Gate, contatto, gettone]. Con `$conApprovatore` il contatto è già
- * collegato al Gate con il ruolo di approvatore.
- *
- * @return array{BackofficeFinto, array<string, mixed>, array<string, mixed>, string, string}
- */
 /** @return array<string, string> l'intestazione di una creazione (la guardia dei segreti non legge un valore che non è fra virgolette) */
 function chiaveDelGate(string $valore): array
 {
     return ['Idempotency-Key' => $valore];
 }
 
+/**
+ * Un workspace con `pm` e `crm`, un Gate e un contatto del CRM: [finto, workspace, Gate, contatto, gettone]. Con `$conApprovatore` il contatto è già
+ * collegato al Gate con il ruolo di approvatore.
+ *
+ * @return array{BackofficeFinto, array<string, mixed>, array<string, mixed>, string, string}
+ */
 function conUnGate(bool $conApprovatore = false): array
 {
     $finto = BackofficeFinto::attiva();
@@ -185,6 +185,21 @@ it('il contatto anonimizzato o scollegato dopo la richiesta: 409 approvatore_non
         ->and(count(alFinto('GET', '/v1/board/schede?board_id='.alFinto('GET', "/v1/board/schede/{$gate['id']}", null, $gettone)->json('data.board_id'), null, $gettone)->json('data')))->toBe($schede)
         ->and(alFinto('GET', "/v1/board/schede/{$gate['id']}", null, $gettone)->json('data.esito'))->toBe('in_approvazione');
 })->with(['scollegato', 'anonimizzato']);
+
+it('l\'ordine dei controlli della decisione: lo stato prima del corpo (409 gate_non_richiesto anche con un corpo non valido), il corpo prima dell\'approvatore (422 anche se non c\'è più)', function () {
+    [, , $gate, , $gettone] = conUnGate(true);
+    $nonValido = ['decisione' => 'forse'];
+
+    $senzaRichiesta = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/decisione", $nonValido, $gettone);
+    expect([$senzaRichiesta->status(), $senzaRichiesta->json('codice')])->toBe([409, 'gate_non_richiesto']);
+
+    alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone);
+    $collegamento = alFinto('GET', "/v1/board/schede/{$gate['id']}/crm", null, $gettone)->json('data.0.id');
+    expect(alFinto('DELETE', "/v1/board/schede/{$gate['id']}/crm/{$collegamento}", null, $gettone)->status())->toBe(204);
+
+    $senzaApprovatore = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/decisione", $nonValido, $gettone);
+    expect($senzaApprovatore->status())->toBe(422);
+});
 
 it('lo spostamento di una scheda risponde con avvisi vuoto: il finto ha una lista sola per board e non salta nessun Gate', function () {
     [$finto, $studio, $gate, , $gettone] = conUnGate(true);
