@@ -13,7 +13,7 @@ function chiaveDiCreazione(string $valore): array
 /** @return array<string, mixed> il corpo di una firma in presenza */
 function firmaDelFinto(string $persona, array $in = []): array
 {
-    return $in + ['persona_id' => $persona, 'modello' => 'consenso_immagini', 'versione' => 1, 'lingua' => 'it', 'firmatario' => ['nome' => 'Giulia', 'cognome' => 'Bianchi', 'legame' => 'se_stesso'], 'tratto' => ['tipo' => 'spunta']];
+    return $in + ['persona_id' => $persona, 'modello' => 'consenso_immagini', 'versione' => 2, 'lingua' => 'it', 'firmatario' => ['nome' => 'Giulia', 'cognome' => 'Bianchi', 'legame' => 'se_stesso'], 'tratto' => ['tipo' => 'spunta']];
 }
 
 it('un contatto minorenne si firma da un genitore o da un tutore; la data di nascita è il valore del campo data_nascita (Documenti::minorenne)', function () {
@@ -49,7 +49,7 @@ it('il testo del documento lo compila il finto, dal modello e dal contatto: i qu
         ->and($senza['testo'])->toContain('{{nome}} {{cognome}}')->toContain('{{palestra}}')
         ->and($modello['impronta'])->toBe(hash('sha256', $modello['testo']))
         ->and(array_keys($modello))->toBe(['id', 'chiave', 'nome', 'versione', 'revocabile', 'lingua', 'testo', 'impronta'])
-        ->and(alFinto('GET', '/v1/crm/modelli/iscrizione?versione=2', null, $gettoni['carla'])->status())->toBe(404);
+        ->and(alFinto('GET', '/v1/crm/modelli/iscrizione?versione=3', null, $gettoni['carla'])->status())->toBe(404);
 
     $firmato = alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['modello' => 'iscrizione']), $gettoni['carla'], intestazioni: chiaveDiCreazione('k-1'));
 
@@ -73,7 +73,7 @@ it('il membro vede un documento ridotto, e il PDF è del proprietario e degli am
         ->and(alFinto('GET', "/v1/crm/documenti/{$documento}/pdf", null, $gettoni['carla'])->json('codice'))->toBe('permesso_negato')
         ->and($pdf->status())->toBe(200)
         ->and($pdf->header('Content-Type'))->toBe('application/pdf')
-        ->and($pdf->header('Content-Disposition'))->toStartWith('attachment; filename=consenso_immagini-v1-')
+        ->and($pdf->header('Content-Disposition'))->toStartWith('attachment; filename=consenso_immagini-v2-')
         ->and($pdf->body())->toStartWith('%PDF-');
 });
 
@@ -129,6 +129,6 @@ it('dopo l\'oblio del contatto il documento non ha più firmatario né impronta 
 
     expect($oblio->status())->toBeIn([200, 201, 202, 204])
         ->and($elenco->status())->toBe(200)
-        ->and($elenco->json('data.0'))->toMatchArray(['modello' => 'consenso_immagini', 'versione' => 1, 'stato' => 'firmato', 'impronta' => null])
+        ->and($elenco->json('data.0'))->toMatchArray(['modello' => 'consenso_immagini', 'versione' => 2, 'stato' => 'firmato', 'impronta' => null])
         ->and($elenco->json('data.0.firmatario'))->toMatchArray(['nome' => '', 'cognome' => '']);
 });

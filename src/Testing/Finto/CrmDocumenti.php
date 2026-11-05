@@ -88,13 +88,15 @@ trait CrmDocumenti
      *
      * @param  array<string, mixed>  $modello
      * @param  array<string, mixed>|null  $persona
+     * @param  array<string, mixed>|null  $firmatario  chi firma: con un genitore o un tutore il testo è quello della tutela (versione 2)
      */
-    private function testoDelModelloCrm(array $modello, int $versione, string $lingua, ?array $persona): string
+    private function testoDelModelloCrm(array $modello, int $versione, string $lingua, ?array $persona, ?array $firmatario = null): string
     {
         $testo = $modello['versioni'][$versione][$lingua];
+        $tutela = $firmatario !== null && isset(self::LEGAMI_DEI_MODELLI_CRM[$lingua][$firmatario['legame']]) ? ($modello['versioni'][$versione]['tutela'][$lingua] ?? null) : null;
 
         if ($persona === null) {
-            return $testo;
+            return $tutela ?? $testo;
         }
 
         $valori = [
@@ -103,6 +105,15 @@ trait CrmDocumenti
             '{{data}}' => self::oggiAcquistoCrm(),
             '{{palestra}}' => (string) $this->workspace[$persona['workspace']]['nome'],
         ];
+
+        if ($tutela !== null && $firmatario !== null) {
+            $testo = $tutela;
+            $valori += [
+                '{{firmatario_nome}}' => trim((string) $firmatario['nome']),
+                '{{firmatario_cognome}}' => trim((string) $firmatario['cognome']),
+                '{{legame}}' => self::LEGAMI_DEI_MODELLI_CRM[$lingua][$firmatario['legame']],
+            ];
+        }
 
         return trim((string) preg_replace('/ {2,}/', ' ', strtr($testo, $valori)));
     }
@@ -166,6 +177,59 @@ trait CrmDocumenti
 
         return [200, ['data' => self::voceModelloCrm($modello, $versione) + ['lingua' => $lingua, 'testo' => $testo, 'impronta' => hash('sha256', $testo)]]];
     }
+
+    /**
+     * crm.modelli.testo.crea (ModelliController::testoCrea): il testo del modello per un contatto e per chi firma, nel corpo di un POST. Come `mostra`,
+     * con `persona_id` e `firmatario` obbligatori; `lingua` e `versione` facoltativi. Il contatto che non c'è è 404, uno anonimizzato 409.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function testoDelModelloPerChiFirmaCrm(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conCrm($richiesta);
+        $campi = $this->testi->validaCorpo($corpo, [
+            'persona_id' => ['bail', 'required', 'string', 'regex:/^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/D'],
+            'lingua' => ['sometimes', 'bail', 'string', Rule::in(self::MODELLI_LINGUE_CRM)],
+            'versione' => ['sometimes', 'bail', 'integer:strict', 'min:1'],
+        ] + array_diff_key($this->regoleDelDocumentoCrm(), array_flip(['persona_id', 'modello', 'versione', 'lingua', 'tratto', 'tratto.tipo', 'tratto.immagine'])));
+        $modello = self::trovaModelloCrm($id) ?? throw new Problema('non_trovato');
+        $versione = isset($campi['versione']) ? (int) $campi['versione'] : self::versioneCorrenteCrm($modello);
+
+        if (! isset($modello['versioni'][$versione])) {
+            throw new Problema('non_trovato');
+        }
+
+        $persona = $this->rigaCrm('persone', $chi['workspace'], strtolower($campi['persona_id']));
+
+        if ($persona['anonimizzata_il'] !== null) {
+            throw new Problema('persona_anonimizzata');
+        }
+
+        $lingua = $campi['lingua'] ?? (in_array($this->testi->lingua(), self::MODELLI_LINGUE_CRM, true) ? $this->testi->lingua() : 'it');
+        $testo = $this->testoDelModelloCrm($modello, $versione, $lingua, $persona, $campi['firmatario']);
+
+        return [200, ['data' => self::voceModelloCrm($modello, $versione) + ['lingua' => $lingua, 'testo' => $testo, 'impronta' => hash('sha256', $testo)]]];
+    }
+
+    /**
+     * Il `firmatario` come lo accetta la lettura del link: facoltativo, ma se c'è ha nome, cognome e legame.
+     *
+     * @return array<string, mixed>
+     */
+    private function regoleDelFirmatarioFacoltativoCrm(): array
+    {
+        $firmatario = array_intersect_key($this->regoleDelDocumentoCrm(), array_flip(['firmatario.nome', 'firmatario.cognome', 'firmatario.legame']));
+
+        return ['firmatario' => ['sometimes', 'bail', 'array']] + array_map(fn (array $regole) => array_map(fn (mixed $regola) => $regola === 'required' ? 'required_with:firmatario' : $regola, $regole), $firmatario);
+    }
+
+    /** Come si dice, in ogni lingua, il legame di chi firma al posto del contatto (Modelli::LEGAMI). */
+    private const LEGAMI_DEI_MODELLI_CRM = [
+        'it' => ['genitore' => 'genitore', 'tutore' => 'tutore'],
+        'en' => ['genitore' => 'the parent', 'tutore' => 'the legal guardian'],
+        'es' => ['genitore' => 'padre o madre', 'tutore' => 'tutor legal'],
+    ];
 
     /** Le lingue dei modelli (Modelli::LINGUE). */
     private const MODELLI_LINGUE_CRM = ['it', 'en', 'es'];
@@ -318,7 +382,7 @@ trait CrmDocumenti
             throw $this->erroreCrm('firmatario.legame', 'regole.documento_legame_minorenne', Regola::VALORE_NON_AMMESSO);
         }
 
-        $testo = $this->testoDelModelloCrm($modello, $versione, (string) $campi['lingua'], $persona);
+        $testo = $this->testoDelModelloCrm($modello, $versione, (string) $campi['lingua'], $persona, $campi['firmatario']);
         $id = self::id();
         $this->crm['documenti'][$id] = [
             'id' => $id, 'workspace' => $persona['workspace'], 'persona_id' => $persona['id'], 'modello' => $modello['chiave'], 'versione' => $versione, 'lingua' => (string) $campi['lingua'],
@@ -494,7 +558,7 @@ trait CrmDocumenti
      */
     private function leggiDocumentoPubblicoCrm(array $corpo): array
     {
-        $campi = $this->testi->validaStretta($corpo, ['token' => $this->regolaDelTokenDocumentoCrm()]);
+        $campi = $this->testi->validaStretta($corpo, ['token' => $this->regolaDelTokenDocumentoCrm()] + $this->regoleDelFirmatarioFacoltativoCrm());
         $this->frena('documenti-pubblici-lettura:'.hash('sha256', $campi['token']), self::FRENI['documenti_pubblici_letture_per_token'], self::MINUTO);
         [$link, $persona] = $this->apriIlLinkDocumentoCrm($campi['token']);
         $modello = self::trovaModelloCrm($link['modello']) ?? throw new Problema('non_trovato');
@@ -505,7 +569,7 @@ trait CrmDocumenti
             'titolo' => $modello['nome'][$link['lingua']],
             'versione' => $versione,
             'lingua' => $link['lingua'],
-            'testo' => $this->testoDelModelloCrm($modello, $versione, $link['lingua'], $persona),
+            'testo' => $this->testoDelModelloCrm($modello, $versione, $link['lingua'], $persona, $campi['firmatario'] ?? null),
             'workspace' => ['nome' => $this->workspace[$link['workspace']]['nome'], 'logo' => null],
             'scade_il' => self::iso($link['scade_il']),
         ]]];
