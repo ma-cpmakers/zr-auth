@@ -3068,6 +3068,7 @@ final class BackofficeFinto
 
         $email = self::normalizza($profilo['email']);
         $persona = $this->identita[$provider.'|'.$profilo['id']] ?? null;
+        $this->rifiutaSeSospeso($persona);
 
         // Un'identità scollegata (io.provider.elimina) è archiviata: scollegata, non fa entrare e non si ricollega da qui.
         if ($persona === null && isset($this->identitaScollegate[$provider.'|'.$profilo['id']])) {
@@ -3076,6 +3077,7 @@ final class BackofficeFinto
 
         if ($persona === null) {
             $persona = $this->conEmail($email);
+            $this->rifiutaSeSospeso($persona);
 
             if ($persona === null) {
                 // Google e LinkedIn fanno nascere la persona anche a registrazione chiusa (#1554); Facebook resta alla lista,
@@ -6818,14 +6820,15 @@ final class BackofficeFinto
             ];
             $this->accettaIDocumentiOspite($persona);
         } elseif ($this->persone[$persona]['email_verificata_il'] === null) {
+            $this->rifiutaSeSospeso($persona);
             // Il codice prova che l'email è di chi chiama: la verifica, e la password scelta prima non vale più (AccessoConProvider::riconosce).
             $this->persone[$persona]['email_verificata_il'] = now()->toImmutable();
             $this->persone[$persona]['password'] = Str::random(64);
         }
 
+        $this->rifiutaSeSospeso($persona);
         unset($this->codiciDiAccesso[$email]);
         $accesso = self::id();
-        $this->rifiutaSeSospeso($persona);
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'codice'];
 
         return [201, ['data' => [
@@ -6853,6 +6856,8 @@ final class BackofficeFinto
             throw new Problema('non_trovato');
         }
 
+        // Un account sospeso non entra, e il link resta buono: il 403 viene prima di consumarlo.
+        $this->rifiutaSeSospeso($link['persona']);
         $this->linkDiAccesso[$dati['codice']]['usato'] = true;
 
         // Il contatto senza account (OspiteDalLink): un gettone di sola lettura per la sua prenotazione, due ore, senza accesso né persona.
@@ -6870,7 +6875,6 @@ final class BackofficeFinto
         }
 
         $accesso = self::id();
-        $this->rifiutaSeSospeso($link['persona']);
         $this->accessi[$accesso] = ['utente' => $link['persona'], 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'link'];
 
         return [201, ['data' => [

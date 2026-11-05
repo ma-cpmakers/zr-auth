@@ -41,6 +41,14 @@ function gettoneDelloStaffDi(BackofficeFinto $finto, string $email, string $ruol
     return Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
 }
 
+/** Una persona dello staff già esistente rientra: un gettone nuovo (il codice TOTP vale un passo alla volta, il tempo del test deve essere avanzato). */
+function rientraComeStaff(string $email): string
+{
+    $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => $email, 'password' => PASSWORD])['data']['sfida']['id'];
+
+    return Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+}
+
 /** Le azioni di F2 nel registro dello staff, nell'ordine: gli ingressi dello staff non contano. */
 function azioniUtentiStaff(BackofficeFinto $finto): array
 {
@@ -249,16 +257,17 @@ it('le esportazioni dei dati di un utente: in_corso, poi pronta; si scarica più
         ->and($file->nome)->toStartWith('utente-')
         ->and(esitoUtentiStaff(fn () => Api::staff($paola)->scaricaConPost("/v1/staff/esportazioni/{$creata['id']}/scaricamento")))->toBe(['ok', null]);
 
+    // Passata l'ora: la stessa persona rientra con un gettone nuovo, e il file non si scarica più.
     Carbon::setTestNow('2026-11-05 11:00:01');
-    $sara = gettoneDelloStaffDi($this->finto, 'sara2@lucianocastro.com');
-    $paola = gettoneDelloStaffDi($this->finto, 'paola2@lucianocastro.com', 'supporto');
+    $paola = rientraComeStaff('paola@lucianocastro.com');
 
-    expect(esitoUtentiStaff(fn () => Api::staff($paola)->get("/v1/staff/esportazioni/{$creata['id']}")))->toBe([404, 'non_trovato']);
+    expect(Api::staff($paola)->get("/v1/staff/esportazioni/{$creata['id']}")['data'])->toMatchArray(['stato' => 'scaduta', 'dimensione_byte' => 22])
+        ->and(esitoUtentiStaff(fn () => Api::staff($paola)->scaricaConPost("/v1/staff/esportazioni/{$creata['id']}/scaricamento")))->toBe([409, 'esportazione_non_disponibile']);
     // Le righe: la richiesta e due scaricamenti.
-    expect(array_count_values(array_column($this->finto->registroDelloStaff(), 'azione')))->toMatchArray(['staff.utenti.esportazioni.crea' => 1, 'staff.esportazioni.scaricamento.crea' => 2]);
+    expect(array_count_values(azioniUtentiStaff($this->finto)))->toMatchArray(['staff.utenti.esportazioni.crea' => 1, 'staff.esportazioni.scaricamento.crea' => 2]);
 });
 
-it('una esportazione scade dopo un\'ora e finisce fallita oltre il tetto; il CSV dell\'elenco è solo del superadmin, con i campi della riga e le formule con l\'apostrofo (F2.10)', function () {
+it('il CSV dell\'elenco rispetta i filtri; una esportazione finisce fallita oltre il tetto; il CSV dell\'elenco è solo del superadmin, con i campi della riga e le formule con l\'apostrofo (F2.10)', function () {
     $sara = gettoneDelloStaffDi($this->finto, 'sara@lucianocastro.com');
     $paola = gettoneDelloStaffDi($this->finto, 'paola@lucianocastro.com', 'supporto');
     $this->finto->persona('anna@example.com', PASSWORD, nome: '=SOMMA(A1)');
@@ -268,20 +277,30 @@ it('una esportazione scade dopo un\'ora e finisce fallita oltre il tetto; il CSV
         ->and(esitoUtentiStaff(fn () => Api::staff($sara)->post('/v1/staff/utenti/ricerca/esportazioni', ['limite' => 5])))->toBe([422, 'dati_non_validi'])
         ->and(esitoUtentiStaff(fn () => Api::staff($sara)->post('/v1/staff/utenti/ricerca/esportazioni', ['cursore' => 'x'])))->toBe([422, 'dati_non_validi']);
 
-    $csv = Api::staff($sara)->post('/v1/staff/utenti/ricerca/esportazioni', ['q' => 'anna'])['data'];
+    $conFiltro = Api::staff($sara)->post('/v1/staff/utenti/ricerca/esportazioni', ['q' => 'somma'])['data'];
     $tutti = Api::staff($sara)->post('/v1/staff/utenti/ricerca/esportazioni', [])['data'];
-    $grande = Api::staff($sara)->post('/v1/staff/utenti/ricerca/esportazioni', ['stato' => 'attivo'])['data'];
-    expect($csv['tipo'])->toBe('elenco_utenti');
+    expect($conFiltro['tipo'])->toBe('elenco_utenti');
     $this->finto->preparaLeEsportazioniDelloStaff();
+    $leggi = function (string $id) use ($sara) {
+        $contenuto = '';
+        $file = Api::staff($sara)->scaricaConPost("/v1/staff/esportazioni/{$id}/scaricamento");
 
-    $contenuto = '';
-    foreach (Api::staff($sara)->scaricaConPost("/v1/staff/esportazioni/{$tutti['id']}/scaricamento")->blocchi() as $blocco) {
-        $contenuto .= $blocco;
-    }
+        foreach ($file->blocchi() as $blocco) {
+            $contenuto .= $blocco;
+        }
 
-    expect($contenuto)->toStartWith("\xEF\xBB\xBFid,nome,cognome,email,stato,mai_acceduto,workspace_n,ultimo_accesso,creato_il\r\n")
-        ->and($contenuto)->toContain(",'=SOMMA(A1),,anna@example.com,attivo,true,0,,")
-        ->and(substr_count($contenuto, "\r\n"))->toBe(5);
+        return $contenuto;
+    };
+    $filtrato = $leggi($conFiltro['id']);
+    $intero = $leggi($tutti['id']);
+
+    expect($filtrato)->toStartWith("\xEF\xBB\xBFid,nome,cognome,email,stato,mai_acceduto,workspace_n,ultimo_accesso,creato_il\r\n")
+        // Il filtro del corpo c'è: solo la riga di «=SOMMA(A1)», con l'apostrofo davanti alla formula.
+        ->and(substr_count($filtrato, "\r\n"))->toBe(2)
+        ->and($filtrato)->toContain(",'=SOMMA(A1),,anna@example.com,attivo,true,0,,")
+        // Senza filtro: sara, paola, anna e bruno, nell'ordine dell'elenco (dal più recente), e il peso dichiarato è quello del file col BOM.
+        ->and(substr_count($intero, "\r\n"))->toBe(5)
+        ->and(Api::staff($sara)->get("/v1/staff/esportazioni/{$tutti['id']}")['data']['dimensione_byte'])->toBe(strlen($intero));
 
     $quarta = Api::staff($sara)->post('/v1/staff/utenti/ricerca/esportazioni', ['mai_acceduto' => true])['data'];
     $this->finto->fallisciLeEsportazioniDelloStaff();
@@ -289,7 +308,7 @@ it('una esportazione scade dopo un\'ora e finisce fallita oltre il tetto; il CSV
 
     expect($fallita)->toMatchArray(['stato' => 'fallita', 'errore' => 'esportazione_troppo_grande', 'dimensione_byte' => null])
         ->and(esitoUtentiStaff(fn () => Api::staff($sara)->scaricaConPost("/v1/staff/esportazioni/{$quarta['id']}/scaricamento")))->toBe([409, 'esportazione_non_disponibile'])
-        ->and($grande['id'])->not->toBe($csv['id']);
+        ;
 });
 
 it('i due tetti: 30 azioni sensibili all\'ora senza riga oltre, 300 pagine di lettura con Retry-After e una riga; per persona, non per gettone (F2.11)', function () {
@@ -303,7 +322,19 @@ it('i due tetti: 30 azioni sensibili all\'ora senza riga oltre, 300 pagine di le
 
     $righe = count($this->finto->registroDelloStaff());
 
-    expect(esitoUtentiStaff(fn () => Api::staff($sara)->delete("/v1/staff/utenti/{$anna['id']}/sessioni")))->toBe([429, 'troppe_richieste'])
+    $frenata = null;
+    try {
+        Api::staff($sara)->delete("/v1/staff/utenti/{$anna['id']}/sessioni");
+    } catch (ErroreApi $errore) {
+        $frenata = $errore;
+    }
+
+    // Retry-After in secondi interi; e le altre azioni sensibili contano nello stesso tetto.
+    expect($frenata?->stato)->toBe(429)
+        ->and($frenata?->riprovaFra)->toBe(3600)
+        ->and(esitoUtentiStaff(fn () => Api::staff($sara)->post("/v1/staff/utenti/{$anna['id']}/password/recupero")))->toBe([429, 'troppe_richieste'])
+        ->and(esitoUtentiStaff(fn () => Api::staff($sara)->post("/v1/staff/utenti/{$anna['id']}/esportazioni")))->toBe([429, 'troppe_richieste'])
+        ->and(esitoUtentiStaff(fn () => Api::staff($sara)->post("/v1/staff/utenti/{$anna['id']}/sospensione", ['motivo' => 'altro'])))->toBe([429, 'troppe_richieste'])
         ->and(count($this->finto->registroDelloStaff()))->toBe($righe)
         ->and(esitoUtentiStaff(fn () => Api::staff($paola)->delete("/v1/staff/utenti/{$anna['id']}/sessioni")))->toBe(['ok', null]);
 

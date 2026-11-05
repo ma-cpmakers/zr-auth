@@ -78,7 +78,7 @@ trait StaffUtenti
                 continue;
             }
 
-            $file = $voce['tipo'] === 'elenco_utenti' ? $this->csvDegliUtenti($voce['staff'], $voce['filtri']) : "PK\x05\x06".str_repeat("\x00", 18);
+            $file = $voce['tipo'] === 'elenco_utenti' ? "\xEF\xBB\xBF".$this->csvDegliUtenti($voce['staff'], $voce['filtri']) : "PK\x05\x06".str_repeat("\x00", 18);
             $this->esportazioniStaff[$id]['stato'] = 'pronta';
             $this->esportazioniStaff[$id]['file'] = $file;
             $this->esportazioniStaff[$id]['byte'] = strlen($file);
@@ -313,7 +313,7 @@ trait StaffUtenti
         $this->scriviNelRegistroDelloStaff($chi, 'staff.esportazioni.scaricamento.crea', 'esportazione', $esportazione);
         $csv = $voce['tipo'] === 'elenco_utenti';
 
-        return [200, $csv ? "\xEF\xBB\xBF".$voce['file'] : (string) $voce['file'], [
+        return [200, (string) $voce['file'], [
             'Content-Type' => $csv ? 'text/csv; charset=utf-8' : 'application/zip',
             'Content-Disposition' => 'attachment; filename="'.($csv ? 'utenti-' : 'utente-').gmdate('Y-m-d').($csv ? '.csv' : '.zip').'"',
             'X-Content-Type-Options' => 'nosniff',
@@ -550,7 +550,7 @@ trait StaffUtenti
         if (count($this->lettureStaff[$chi['id']]) >= self::LETTURE_ALL_ORA) {
             $this->scriviNelRegistroDelloStaff($chi, $this->operazioneInCorso, 'registro', null);
 
-            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, $this->lettureStaff[$chi['id']][0]->addHour()->diffInSeconds($adesso, true))]);
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, (int) ceil($this->lettureStaff[$chi['id']][0]->addHour()->diffInSeconds($adesso, true)))]);
         }
 
         $this->lettureStaff[$chi['id']][] = $adesso;
@@ -563,7 +563,7 @@ trait StaffUtenti
         $this->azioniSensibiliStaff[$chi['id']] = array_values(array_filter($this->azioniSensibiliStaff[$chi['id']] ?? [], fn (\Carbon\CarbonImmutable $quando) => $quando->gt($adesso->subHour())));
 
         if (count($this->azioniSensibiliStaff[$chi['id']]) >= self::AZIONI_SENSIBILI_ALL_ORA) {
-            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, $this->azioniSensibiliStaff[$chi['id']][0]->addHour()->diffInSeconds($adesso, true))]);
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, (int) ceil($this->azioniSensibiliStaff[$chi['id']][0]->addHour()->diffInSeconds($adesso, true)))]);
         }
 
         $this->azioniSensibiliStaff[$chi['id']][] = $adesso;
@@ -628,7 +628,8 @@ trait StaffUtenti
     {
         $colonne = ['id', 'nome', 'cognome', 'email', 'stato', 'mai_acceduto', 'workspace_n', 'ultimo_accesso', 'creato_il'];
         $righe = $this->righeDegliUtenti($this->righeStaff[$staff], $filtri);
-        usort($righe, fn (array $una, array $altra) => self::confronta([$una['creato_il'], $una['id']], [$altra['creato_il'], $altra['id']]));
+        // Nell'ordine dell'elenco: dal più recente.
+        usort($righe, fn (array $una, array $altra) => self::confronta([$altra['creato_il'], $altra['id']], [$una['creato_il'], $una['id']]));
         $file = implode(',', $colonne)."\r\n";
 
         foreach ($righe as $riga) {
