@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
  * I workspace dei clienti nel backoffice finto (#3255, F3.1, F3.8): `staff.workspace.elenca` e `staff.workspace.ricerca.crea`, per il frontend dello staff (zr-superadmin). Le regole sono
  * quelle di `Staff`: il client firmato, il gettone dello staff, il ruolo (superadmin e supporto), il perimetro `solo_uat` (i workspace il cui proprietario ha un'email `uat+*@castroandpartners.com`).
  * Il termine di ricerca non sta nell'URL: `q`, `nome`, `indirizzo` e `azienda` nella query sono 422 sul parametro. Leggere conta nel tetto delle pagine letture e non scrive nel registro dello staff.
+ * La scheda (#3256, F3b) aggiunge `consumi`, `eliminazione` e `fatturazione` e, a differenza dell'elenco, lascia una riga nel registro dello staff; la apre anche la fatturazione. Il finto non ha prenotazioni di Bookings: `prenotazioni_n` è 0.
  * Ogni campo che il vero manda `null` il finto lo manda `null` (il proprietario di un workspace che non ne ha uno, il cognome). Uno stato `sospeso` non c'è ancora.
  */
 trait StaffWorkspace
@@ -63,6 +64,38 @@ trait StaffWorkspace
         } finally {
             $this->parametriDelCorpo = false;
         }
+    }
+
+    /**
+     * La scheda di un workspace: la riga dell'elenco più i consumi, l'eliminazione e la fatturazione dell'azienda. Un id che non c'è, o fuori dal perimetro di chi è solo_uat, è 404 e non scrive nel registro.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraUnWorkspaceDelloStaff(Request $richiesta, string $id): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto', 'fatturazione']);
+        $id = strtolower($id);
+
+        if (! isset($this->workspace[$id]) || ($chi['solo_uat'] && ! $this->proprietarioDiProva($id))) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.mostra', 'workspace', $id);
+        $riga = $this->rigaDelWorkspace($id);
+        $azienda = $this->workspace[$id]['azienda_id'] ?? null;
+        $dati = $azienda === null ? [] : ($this->datiAziende[$azienda] ?? []);
+
+        return [200, ['data' => $riga + [
+            'consumi' => [
+                'membri_n' => $riga['membri_n'],
+                'board_n' => count(array_filter($this->boards, fn (array $board) => $board['workspace'] === $id)),
+                'schede_n' => count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $id)),
+                'contatti_n' => count(array_filter($this->crm['persone'], fn (array $persona) => $persona['workspace'] === $id && ! ($persona['eliminata'] ?? false))),
+                'prenotazioni_n' => 0,
+            ],
+            'eliminazione' => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture() ? ['prevista_il' => self::iso($this->eliminazioni[$id])] : null,
+            'fatturazione' => $azienda === null || ! isset($this->aziende[$azienda]) ? null : ['partita_iva' => $dati['partita_iva'] ?? null, 'paese' => $dati['paese'] ?? null, 'valuta' => $dati['valuta'] ?? null],
+        ]]];
     }
 
     /**
