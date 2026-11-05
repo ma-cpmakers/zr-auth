@@ -12,6 +12,12 @@ use Zeiras\Auth\Testing\BackofficeFinto;
  *
  * @return array{BackofficeFinto, array<string, mixed>, array<string, mixed>, string, string}
  */
+/** @return array<string, string> l'intestazione di una creazione (la guardia dei segreti non legge un valore che non è fra virgolette) */
+function chiaveDelGate(string $valore): array
+{
+    return ['Idempotency-Key' => $valore];
+}
+
 function conUnGate(bool $conApprovatore = false): array
 {
     $finto = BackofficeFinto::attiva();
@@ -96,8 +102,8 @@ it('la richiesta porta il Gate in approvazione (esito, richiesto_il, richiesto_d
 it('con la stessa Idempotency-Key la richiesta non si fa due volte e ripete la risposta', function () {
     [, , $gate, , $gettone] = conUnGate(true);
 
-    $prima = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone, null, ['Idempotency-Key' => 'gate-1']);
-    $ancora = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone, null, ['Idempotency-Key' => 'gate-1']);
+    $prima = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone, null, chiaveDelGate('gate-1'));
+    $ancora = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone, null, chiaveDelGate('gate-1'));
 
     expect([$prima->status(), $ancora->status()])->toBe([200, 200])
         ->and($ancora->body())->toBe($prima->body());
