@@ -4273,7 +4273,7 @@ trait Crm
     }
 
     /**
-     * NoteController::elimina: solo l'autore (403 permesso_negato); la nota passa nell'archivio di sistema e da lì è 404. Risponde 204.
+     * NoteController::elimina: l'autore, il proprietario o un amministratore (un membro non autore è 403 permesso_negato); la nota passa nell'archivio di sistema e da lì è 404. Risponde 204.
      *
      * @return array{int, null}
      */
