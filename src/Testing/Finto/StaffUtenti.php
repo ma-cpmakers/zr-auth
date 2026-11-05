@@ -266,7 +266,7 @@ trait StaffUtenti
     /** @return array{int, array<string, mixed>, array<string, string>} */
     private function esportaUnUtenteDelloStaff(Request $richiesta, string $id): array
     {
-        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
         $utente = $this->bersaglioUtente($chi, $id);
         $this->contaUnaAzioneSensibile($chi);
         $esportazione = $this->avviaUnaEsportazioneDelloStaff($chi, 'utente_gdpr', $utente, []);
@@ -293,7 +293,7 @@ trait StaffUtenti
     /** @return array{int, array<string, mixed>} */
     private function mostraUnaEsportazioneDelloStaff(Request $richiesta, string $id): array
     {
-        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
 
         return [200, ['data' => $this->formaDellEsportazioneDelloStaff($this->esportazioneDi($chi, $id))]];
     }
@@ -301,7 +301,7 @@ trait StaffUtenti
     /** @return array{int, string, array<string, string>} */
     private function scaricaUnaEsportazioneDelloStaff(Request $richiesta, string $id): array
     {
-        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
         $esportazione = $this->esportazioneDi($chi, $id);
         $voce = $this->esportazioniStaff[$esportazione];
 
