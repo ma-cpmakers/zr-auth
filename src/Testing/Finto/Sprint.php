@@ -85,11 +85,11 @@ trait Sprint
 
     /**
      * Semina la serie di uno sprint, come la darebbe `board.sprint.andamento.mostra` (#2665): il finto non tiene il registro dei movimenti né il
-     * flusso delle schede da cui il backoffice la calcola. Ogni giorno ha `data` e i cinque interi cumulativi `pianificato`, `aggiunto`, `rimosso`,
-     * `completato` e `rimasto`; `$unita` è `punti` o `schede`. Senza semina la serie è vuota, in `schede`.
+     * flusso delle schede da cui il backoffice la calcola. Ogni giorno ha `data` e i sei interi cumulativi `pianificato`, `aggiunto`, `rimosso`,
+     * `ristimato` (la quota di `aggiunto` che viene da una nuova stima, 0 se manca), `completato` e `rimasto`; `$unita` è `punti` o `schede`. Senza semina la serie è vuota, in `schede`.
      *
      * @param  array{id: string}  $sprint  uno sprint di sprint()
-     * @param  list<array{data: string, pianificato: int, aggiunto: int, rimosso: int, completato: int, rimasto: int}>  $giorni
+     * @param  list<array{data: string, pianificato: int, aggiunto: int, rimosso: int, ristimato?: int, completato: int, rimasto: int}>  $giorni
      */
     public function andamento(array $sprint, array $giorni, string $unita = 'punti'): self
     {
@@ -101,10 +101,17 @@ trait Sprint
             throw new InvalidArgumentException("L'unità «{$unita}» non c'è: sono punti e schede.");
         }
 
-        foreach ($giorni as $giorno) {
-            if (array_keys($giorno) !== ['data', 'pianificato', 'aggiunto', 'rimosso', 'completato', 'rimasto']) {
-                throw new InvalidArgumentException('Un giorno ha data, pianificato, aggiunto, rimosso, completato e rimasto, in quest\'ordine.');
+        foreach ($giorni as $i => $giorno) {
+            // Il vero porta sempre `ristimato` (#3033): un giorno seminato senza (come prima) lo riceve a 0, e la serie ha sempre le stesse sette chiavi.
+            if (array_keys($giorno) === ['data', 'pianificato', 'aggiunto', 'rimosso', 'completato', 'rimasto']) {
+                $giorno = ['data' => $giorno['data'], 'pianificato' => $giorno['pianificato'], 'aggiunto' => $giorno['aggiunto'], 'rimosso' => $giorno['rimosso'], 'ristimato' => 0, 'completato' => $giorno['completato'], 'rimasto' => $giorno['rimasto']];
             }
+
+            if (array_keys($giorno) !== ['data', 'pianificato', 'aggiunto', 'rimosso', 'ristimato', 'completato', 'rimasto']) {
+                throw new InvalidArgumentException('Un giorno ha data, pianificato, aggiunto, rimosso, ristimato, completato e rimasto, in quest\'ordine.');
+            }
+
+            $giorni[$i] = $giorno;
         }
 
         $this->andamenti[$sprint['id']] = ['unita' => $unita, 'giorni' => $giorni];
