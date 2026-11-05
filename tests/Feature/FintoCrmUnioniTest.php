@@ -49,7 +49,7 @@ it('unire due contatti sposta note e attività, prende i campi in conflitto da `
         ->and($senzaScelta->json('errors.0.pointer'))->toBe('#/scelte/ruolo')
         ->and($unione->status())->toBe(201)
         ->and($unione->header('Location'))->toBe('/v1/crm/persone/unioni/'.$unione->json('data.id'))
-        ->and($unione->json('data.spostati'))->toBe(['note' => 1, 'attivita' => 1, 'trattative' => 0])
+        ->and($unione->json('data.spostati'))->toBe(['note' => 1, 'attivita' => 1, 'trattative' => 0, 'paganti' => 0])
         ->and($unione->json('data.annullata_il'))->toBeNull();
 
     $diResta = alFinto('GET', "/v1/crm/persone/{$resta}", null, $gettoni['anna'])->json('data');
@@ -91,7 +91,7 @@ it('l\'annullamento rimette note, attività e campi a chi si era unito, una volt
 
     expect($mostra->json('data.dopo'))->toBe(['note' => 0, 'attivita' => 0, 'trattative' => 0, 'campi' => []])
         ->and($annulla->status())->toBe(200)
-        ->and($annulla->json('data.rimessi'))->toBe(['note' => 1, 'attivita' => 1, 'trattative' => 0, 'campi' => ['ruolo', 'email', 'telefoni']])
+        ->and($annulla->json('data.rimessi'))->toBe(['note' => 1, 'attivita' => 1, 'trattative' => 0, 'paganti' => 0, 'campi' => ['ruolo', 'email', 'telefoni']])
         ->and($annulla->json('data.non_rimesse'))->toBe([])
         ->and(alFinto('POST', "/v1/crm/persone/unioni/{$id}/annullamento", null, $gettoni['anna'])->json('codice'))->toBe('gia_annullata')
         ->and(alFinto('GET', "/v1/crm/persone/{$resta}", null, $gettoni['anna'])->json('data.ruolo'))->toBe('Direttrice')
@@ -181,4 +181,36 @@ it('l\'oblio chiesto su un contatto unito è 409 contatto_unito e non scrive nie
     expect(alFinto('POST', "/v1/crm/persone/unioni/{$unione}/annullamento", null, $gettoni['anna'])->status())->toBe(200)
         ->and(alFinto('POST', "/v1/crm/persone/{$unito}/anonimizzazione", null, $gettoni['anna'])->status())->toBe(200)
         ->and(alFinto('GET', "/v1/crm/persone/{$resta}", null, $gettoni['anna'])->json('data.anonimizzata_il'))->toBeNull();
+});
+
+it('chi pagava per il contatto che si unisce paga chi resta, anche se archiviato; l\'annullamento li riporta, e chi ha cambiato pagante resta com\'è (#3208)', function () {
+    [$gettoni, $resta, $unito] = duePersoneDoppie();
+    $luca = alFinto('POST', '/v1/crm/persone', ['nome' => 'Luca', 'cognome' => 'Verdi', 'paga_per_id' => $unito], $gettoni['anna'])->json('data.id');
+    $mara = alFinto('POST', '/v1/crm/persone', ['nome' => 'Mara', 'cognome' => 'Neri', 'paga_per_id' => $unito], $gettoni['anna'])->json('data.id');
+    $pagante = fn (string $id) => alFinto('GET', "/v1/crm/persone/{$id}", null, $gettoni['anna'])->json('data.paga_per.id');
+
+    $unione = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'unito']]), $gettoni['anna']);
+
+    expect($unione->status())->toBe(201)
+        ->and($unione->json('data.spostati.paganti'))->toBe(2)
+        ->and($pagante($luca))->toBe($resta)
+        ->and($pagante($mara))->toBe($resta);
+
+    alFinto('PATCH', "/v1/crm/persone/{$mara}", ['paga_per_id' => $luca], $gettoni['anna']);
+    $annulla = alFinto('POST', '/v1/crm/persone/unioni/'.$unione->json('data.id').'/annullamento', null, $gettoni['anna']);
+
+    expect($annulla->status())->toBe(200)
+        ->and($annulla->json('data.rimessi.paganti'))->toBe(1)
+        ->and($pagante($luca))->toBe($unito)
+        ->and($pagante($mara))->toBe($luca);
+});
+
+it('nessuno resta pagante di sé: chi resta che pagava per l\'unito prende il pagante dell\'unito, o niente (#3208)', function () {
+    [$gettoni, $resta, $unito] = duePersoneDoppie();
+    alFinto('PATCH', "/v1/crm/persone/{$resta}", ['paga_per_id' => $unito], $gettoni['anna']);
+
+    $unione = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'unito']]), $gettoni['anna']);
+
+    expect($unione->status())->toBe(201)
+        ->and(alFinto('GET', "/v1/crm/persone/{$resta}", null, $gettoni['anna'])->json('data.paga_per'))->toBeNull();
 });
