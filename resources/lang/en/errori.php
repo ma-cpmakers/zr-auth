@@ -513,6 +513,34 @@ return [
         'title' => 'Record already linked',
         'detail' => 'This card is already linked to that CRM record: do not repeat the request. You will find the link in board.schede.crm.elenca.',
     ],
+    'scheda_non_gate' => [
+        'title' => 'The card is not a Gate',
+        'detail' => 'This card is not of type `gate`: requests and decisions only apply to a Gate. Use a card of type `gate`, or change the type with board.schede.modifica if it is a Gate.',
+    ],
+    'gate_gia_richiesto' => [
+        'title' => 'Gate already awaiting approval',
+        'detail' => 'The Gate is already awaiting approval: do not repeat the request. Wait for the approver\'s decision and record it with board.schede.gate.decisione.crea.',
+    ],
+    'gate_deciso' => [
+        'title' => 'Gate already approved',
+        'detail' => 'The Gate is approved, which is the final state: it cannot be requested again. Create another Gate for a new check.',
+    ],
+    'gate_senza_approvatore' => [
+        'title' => 'Gate without an approver',
+        'detail' => 'The Gate has no available approver: no contact is linked with the approver role, or the contact is archived or anonymised. Link a contact with board.schede.crm.crea (role approvatore), removing the one that is gone first, and request again.',
+    ],
+    'gate_non_richiesto' => [
+        'title' => 'Gate not awaiting approval',
+        'detail' => 'The Gate is not awaiting approval, so there is no decision to record. Request approval with board.schede.gate.richiesta.crea, then record the decision.',
+    ],
+    'approvatore_non_disponibile' => [
+        'title' => 'Approver not available',
+        'detail' => 'The contact that must approve is gone (archived or anonymised) or no longer linked: nobody decides on behalf of someone who is not there. Link another contact with the approver role (board.schede.crm.crea), removing the old one first, and request again.',
+    ],
+    'approvatore_gia_indicato' => [
+        'title' => 'Approver already set',
+        'detail' => 'The Gate already has a contact linked with the approver role: only one is allowed. Remove the existing link with board.schede.crm.elimina, then link the new one.',
+    ],
     'promemoria_gia_presente' => [
         'title' => 'Reminder already set',
         'detail' => 'This to-do already has a reminder with that lead time: a second one is not created. You will find it in board.todo.elementi.promemoria.elenca; to change it, remove it with board.todo.elementi.promemoria.elimina. Do not repeat the request.',

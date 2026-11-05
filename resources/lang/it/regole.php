@@ -37,6 +37,7 @@ return [
     'passaggio_doppio' => 'Una posizione compare due volte nei passaggi.',
     'lista_della_board' => 'Questa lista non è della stessa board della scheda: gli id delle liste li dà board.board.mostra.',
     'scheda_della_board' => 'Questa scheda non è della stessa board: gli id delle schede li dà board.schede.elenca.',
+    'ruolo_approvatore' => 'Il ruolo approvatore vale solo per un contatto (crm.persona) collegato a una scheda di tipo gate.',
     'record_del_crm' => "Nel workspace non c'è un record del CRM di questo tipo con questo id: gli id li danno crm.persone.ricerca.crea, crm.organizzazioni.ricerca.crea e crm.trattative.ricerca.crea.",
     'una_posizione_o_un_ancora' => 'Il corpo vuole uno solo fra posizione e dopo_scheda_id, non nessuno e non tutti e due.',
     'lista_della_stessa_board' => 'Questa lista non è della stessa board della lista da spostare: gli id delle liste li dà board.board.mostra.',

@@ -39,6 +39,7 @@ use Zeiras\Auth\Testing\Finto\CrmScadenze;
 use Zeiras\Auth\Testing\Finto\CrmUnioni;
 use Zeiras\Auth\Testing\Finto\CrmValori;
 use Zeiras\Auth\Testing\Finto\Eventi;
+use Zeiras\Auth\Testing\Finto\Gate;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
 use Zeiras\Auth\Testing\Finto\NotifichePreferenze;
 use Zeiras\Auth\Testing\Finto\Problema;
@@ -93,6 +94,7 @@ final class BackofficeFinto
     use CrmPreventivi;
     use CrmDocumenti;
     use CrmPreventiviPubblici;
+    use Gate;
     use SchedeCrm;
     use Retrospettiva;
     use Staff;
@@ -233,6 +235,8 @@ final class BackofficeFinto
         ['GET', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.crea'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/crm/([^/]+)$#', 'board.schede.crm.elimina'],
+        ['POST', '#^/v1/board/schede/([^/]+)/gate/richiesta$#', 'board.schede.gate.richiesta.crea'],
+        ['POST', '#^/v1/board/schede/([^/]+)/gate/decisione$#', 'board.schede.gate.decisione.crea'],
         ['GET', '#^/v1/board/sprint$#', 'board.sprint.elenca'],
         ['POST', '#^/v1/board/sprint$#', 'board.sprint.crea'],
         ['GET', '#^/v1/board/sprint/([^/]+)$#', 'board.sprint.mostra'],
@@ -1536,6 +1540,8 @@ final class BackofficeFinto
                 'board.schede.crm.elenca' => $this->elencaSchedeCrm($richiesta, $parametri[0]),
                 'board.schede.crm.crea' => $this->creaSchedaCrm($richiesta, $corpo, $parametri[0]),
                 'board.schede.crm.elimina' => $this->eliminaSchedaCrm($richiesta, $parametri[0], $parametri[1]),
+                'board.schede.gate.richiesta.crea' => $this->richiediGate($richiesta, $parametri[0]),
+                'board.schede.gate.decisione.crea' => $this->decidiGate($richiesta, $corpo, $parametri[0]),
                 'board.sprint.elenca' => $this->elencaSprint($richiesta),
                 'board.sprint.crea' => $this->creaSprint($richiesta, $corpo),
                 'board.sprint.mostra' => $this->mostraSprint($richiesta, $parametri[0]),
@@ -1778,6 +1784,9 @@ final class BackofficeFinto
             'inizio' => null,
             'scadenza' => $scheda['scadenza'],
             'copertina' => null,
+            'esito' => $this->esitoDelGate($scheda),
+            'approvatore' => $this->dettagliDelGate($scheda)['approvatore'],
+            'decisione' => $this->dettagliDelGate($scheda)['decisione'],
             'tipo' => $scheda['tipo'] ?? null,
             'punti' => $scheda['punti'] ?? null,
             'pronta' => $scheda['pronta'] ?? false,
@@ -1799,7 +1808,7 @@ final class BackofficeFinto
             'archiviata_il' => $scheda['archiviata_il'] === null ? null : self::iso($scheda['archiviata_il']),
             'creata_il' => self::iso($scheda['creata_il']),
             'aggiornata_il' => self::iso($scheda['aggiornata_il']),
-            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 5])).'"',
+            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 6])).'"',
         ];
     }
 
@@ -2338,7 +2347,7 @@ final class BackofficeFinto
         $this->schede[$scheda]['aggiornata_il'] = $ora;
         $this->versione([$scheda, ...$cambiate]);
 
-        return [200, ['data' => $this->voceScheda($this->schede[$scheda]), 'sbloccate' => []]];
+        return [200, ['data' => $this->voceScheda($this->schede[$scheda]), 'sbloccate' => [], 'avvisi' => []]];
     }
 
     /**
@@ -2412,7 +2421,7 @@ final class BackofficeFinto
         }
 
         // I tipi del metodo della board d'arrivo (Board::tipi()): una scheda senza tipo va dappertutto. La `pratica` di waterfall c'è solo in un'area Edilizia (#2928).
-        $tipi = ['waterfall' => ($this->cartelle[$arrivo['cartella']]['settore'] ?? null) === 'edilizia' ? ['fase', 'pratica'] : ['fase'], 'scrum' => ['storia', 'bug', 'attivita', 'spike', 'epica'], 'scrumban' => ['storia', 'bug', 'attivita', 'spike', 'epica']][(string) $arrivo['metodo']] ?? [];
+        $tipi = ['waterfall' => ($this->cartelle[$arrivo['cartella']]['settore'] ?? null) === 'edilizia' ? ['fase', 'pratica', 'gate'] : ['fase', 'gate'], 'scrum' => ['storia', 'bug', 'attivita', 'spike', 'epica'], 'scrumban' => ['storia', 'bug', 'attivita', 'spike', 'epica']][(string) $arrivo['metodo']] ?? [];
 
         if (($mia['tipo'] ?? null) !== null && ! in_array($mia['tipo'], $tipi, true)) {
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.tipo_nella_board_d_arrivo', ['tipi' => $tipi === [] ? '—' : implode(', ', $tipi)]), 'regola' => 'valore_non_ammesso', 'pointer' => '#/board_id']]);

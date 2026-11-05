@@ -513,6 +513,34 @@ return [
         'title' => 'Record già collegato',
         'detail' => 'Questa scheda è già collegata a quel record del CRM: non ripetere la richiesta. Il collegamento lo trovi in board.schede.crm.elenca.',
     ],
+    'scheda_non_gate' => [
+        'title' => 'La scheda non è un Gate',
+        'detail' => 'Questa scheda non è di tipo `gate`: la richiesta e la decisione valgono solo per un Gate. Usa una scheda di tipo `gate`, o cambia il tipo con board.schede.modifica se è un Gate.',
+    ],
+    'gate_gia_richiesto' => [
+        'title' => 'Gate già in approvazione',
+        'detail' => 'Il Gate è già in approvazione: non ripetere la richiesta. Aspetta la decisione dell\'approvatore e registrala con board.schede.gate.decisione.crea.',
+    ],
+    'gate_deciso' => [
+        'title' => 'Gate già approvato',
+        'detail' => 'Il Gate è approvato, che è lo stato finale: non si richiede di nuovo. Per un nuovo controllo si crea un altro Gate.',
+    ],
+    'gate_senza_approvatore' => [
+        'title' => 'Gate senza approvatore',
+        'detail' => 'Il Gate non ha un approvatore disponibile: nessun contatto è collegato con ruolo approvatore, oppure il contatto è archiviato o anonimizzato. Collega un contatto con board.schede.crm.crea (ruolo approvatore), togliendo prima quello che non c\'è più, e rifai la richiesta.',
+    ],
+    'gate_non_richiesto' => [
+        'title' => 'Gate non in approvazione',
+        'detail' => 'Il Gate non è in approvazione, quindi non c\'è una decisione da registrare. Chiedi l\'approvazione con board.schede.gate.richiesta.crea e poi registra la decisione.',
+    ],
+    'approvatore_non_disponibile' => [
+        'title' => 'Approvatore non disponibile',
+        'detail' => 'Il contatto che deve approvare non c\'è più (archiviato o anonimizzato) o non è più collegato: non si decide per conto di chi non c\'è. Collega un altro contatto con ruolo approvatore (board.schede.crm.crea), togliendo prima il vecchio, e rifai la richiesta.',
+    ],
+    'approvatore_gia_indicato' => [
+        'title' => 'Approvatore già indicato',
+        'detail' => 'Il Gate ha già un contatto collegato con ruolo approvatore: ne è ammesso uno solo. Togli il collegamento che c\'è con board.schede.crm.elimina, poi collega il nuovo.',
+    ],
     'promemoria_gia_presente' => [
         'title' => 'Promemoria già presente',
         'detail' => "Questo to-do ha già un promemoria con quell'anticipo: non ne nasce un secondo. Lo trovi in board.todo.elementi.promemoria.elenca; per cambiarlo toglilo con board.todo.elementi.promemoria.elimina. Non ripetere la richiesta.",

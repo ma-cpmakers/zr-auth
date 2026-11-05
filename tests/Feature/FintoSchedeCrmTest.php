@@ -53,7 +53,7 @@ it('collega un contatto: 201, la Location, la forma del backoffice con titolo e 
     $prima = collegaNelFinto($gettone, $scheda, 'crm.persona', $persona, 201);
 
     expect($prima->header('Location'))->toBe("/v1/board/schede/{$scheda['id']}/crm/".$prima->json('data.id'))
-        ->and(array_keys($prima->json('data')))->toBe(['id', 'tipo', 'record_id', 'titolo', 'contesto', 'motivo', 'indirizzo', 'creato_il', 'creato_da'])
+        ->and(array_keys($prima->json('data')))->toBe(['id', 'tipo', 'record_id', 'titolo', 'contesto', 'motivo', 'indirizzo', 'creato_il', 'creato_da', 'ruolo'])
         ->and($prima->json('data'))->toMatchArray([
             'tipo' => 'crm.persona', 'record_id' => $persona, 'titolo' => 'Giulia Verdi',
             'contesto' => ['organizzazione' => 'Rossi Srl', 'ruolo' => 'CEO'], 'motivo' => null, 'indirizzo' => "/v1/crm/persone/{$persona}",

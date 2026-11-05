@@ -67,8 +67,15 @@ trait SchedeCrm
             $campi = $this->testi->validaStretta($corpo, [
                 'tipo' => ['bail', 'required', 'string', Rule::in(array_keys(self::SCHEDE_CRM_TIPI))],
                 'id' => ['bail', 'required', 'string', 'ulid'],
+                'ruolo' => ['bail', 'sometimes', 'nullable', 'string', 'in:approvatore'],
             ]);
             $tipo = (string) $campi['tipo'];
+            $ruolo = $campi['ruolo'] ?? null;
+
+            // L'approvatore di un Gate (#2791) è un contatto, collegato a una scheda di tipo `gate`: altrimenti il ruolo non ha senso.
+            if ($ruolo !== null && ($tipo !== 'crm.persona' || ($mia['tipo'] ?? null) !== 'gate')) {
+                throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.ruolo_approvatore'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/ruolo']]);
+            }
 
             if (! $this->appAttiva($chi['workspace'], 'crm')) {
                 throw new Problema('app_non_attiva');
@@ -86,12 +93,16 @@ trait SchedeCrm
                 throw new Problema('record_gia_collegato');
             }
 
+            if ($ruolo !== null && $this->approvatoreDelGate($mia['id'], $chi['workspace']) !== null) {
+                throw new Problema('approvatore_gia_indicato');
+            }
+
             if (count($vivi) >= self::SCHEDE_CRM_TETTO) {
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::SCHEDE_CRM_TETTO]);
             }
 
             $id = self::id();
-            $this->schedeCrm[$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'scheda' => $mia['id'], 'tipo' => $tipo, 'record' => $record, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'creato_da' => $chi['persona']];
+            $this->schedeCrm[$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'scheda' => $mia['id'], 'tipo' => $tipo, 'record' => $record, 'ruolo' => $ruolo, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'creato_da' => $chi['persona']];
 
             $this->tocca($mia['id']);
 
@@ -149,6 +160,7 @@ trait SchedeCrm
             'indirizzo' => '/v1/crm/'.$lista.'/'.$collegamento['record'],
             'creato_il' => self::iso($collegamento['creato_il']),
             'creato_da' => $collegamento['creato_da'],
+            'ruolo' => $collegamento['ruolo'] ?? null,
         ];
     }
 

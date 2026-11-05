@@ -513,6 +513,34 @@ return [
         'title' => 'Registro ya vinculado',
         'detail' => 'Esta tarjeta ya está vinculada a ese registro del CRM: no repitas la solicitud. El vínculo está en board.schede.crm.elenca.',
     ],
+    'scheda_non_gate' => [
+        'title' => 'La tarjeta no es un Gate',
+        'detail' => 'Esta tarjeta no es de tipo `gate`: la solicitud y la decisión solo valen para un Gate. Usa una tarjeta de tipo `gate`, o cambia el tipo con board.schede.modifica si es un Gate.',
+    ],
+    'gate_gia_richiesto' => [
+        'title' => 'Gate ya en aprobación',
+        'detail' => 'El Gate ya está en aprobación: no repitas la solicitud. Espera la decisión del aprobador y regístrala con board.schede.gate.decisione.crea.',
+    ],
+    'gate_deciso' => [
+        'title' => 'Gate ya aprobado',
+        'detail' => 'El Gate está aprobado, que es el estado final: no se solicita de nuevo. Para un nuevo control se crea otro Gate.',
+    ],
+    'gate_senza_approvatore' => [
+        'title' => 'Gate sin aprobador',
+        'detail' => 'El Gate no tiene un aprobador disponible: ningún contacto está vinculado con el rol de aprobador, o el contacto está archivado o anonimizado. Vincula un contacto con board.schede.crm.crea (rol approvatore), quitando antes el que ya no está, y repite la solicitud.',
+    ],
+    'gate_non_richiesto' => [
+        'title' => 'Gate no en aprobación',
+        'detail' => 'El Gate no está en aprobación, así que no hay una decisión que registrar. Solicita la aprobación con board.schede.gate.richiesta.crea y luego registra la decisión.',
+    ],
+    'approvatore_non_disponibile' => [
+        'title' => 'Aprobador no disponible',
+        'detail' => 'El contacto que debe aprobar ya no está (archivado o anonimizado) o ya no está vinculado: no se decide en nombre de quien no está. Vincula otro contacto con el rol de aprobador (board.schede.crm.crea), quitando antes el anterior, y repite la solicitud.',
+    ],
+    'approvatore_gia_indicato' => [
+        'title' => 'Aprobador ya indicado',
+        'detail' => 'El Gate ya tiene un contacto vinculado con el rol de aprobador: solo se admite uno. Quita el vínculo existente con board.schede.crm.elimina y luego vincula el nuevo.',
+    ],
     'promemoria_gia_presente' => [
         'title' => 'Recordatorio ya existente',
         'detail' => 'Esta tarea ya tiene un recordatorio con esa antelación: no se crea un segundo. Lo encuentras en board.todo.elementi.promemoria.elenca; para cambiarlo, quítalo con board.todo.elementi.promemoria.elimina. No repitas la solicitud.',
