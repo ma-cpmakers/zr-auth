@@ -4282,7 +4282,10 @@ trait Crm
         $chi = $this->conCrm($richiesta);
         $nota = $this->rigaCrm('note', $chi['workspace'], $id);
 
-        if ($nota['creata_da'] !== $chi['persona']) {
+        // La toglie l'autore, il proprietario o un amministratore del workspace (#3073); un membro che non è l'autore è 403.
+        $alto = in_array($this->membri[$chi['workspace']][$chi['persona']] ?? null, ['proprietario', 'amministratore'], true);
+
+        if ($nota['creata_da'] !== $chi['persona'] && ! $alto) {
             throw new Problema('permesso_negato');
         }
 
