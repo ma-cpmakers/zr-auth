@@ -31,7 +31,7 @@ trait CrmUnioni
     private const CRM_UNIONI_ESTRANEI = 10;
 
     /** I campi di testo che `scelte` può decidere (Unioni::SCELTE). */
-    private const CRM_UNIONI_SCELTE = ['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'stato', 'responsabile_id', 'fonte'];
+    private const CRM_UNIONI_SCELTE = ['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'paga_per_id', 'stato', 'responsabile_id', 'fonte'];
 
     /** Dal più restrittivo al meno: vince il primo (Unioni::BASI_GIURIDICHE). */
     private const CRM_UNIONI_BASI = ['consenso', 'interesse_legittimo', 'contratto', 'obbligo_legale'];
@@ -154,6 +154,7 @@ trait CrmUnioni
 
             return [201, ['data' => $this->voceUnioneCrm($unione) + ['spostati' => [
                 'note' => count($unione['parti']['note']), 'attivita' => count($unione['parti']['attivita']), 'trattative' => count($unione['parti']['trattative']),
+                'paganti' => count($unione['parti']['paganti']),
             ]]], ['Location' => "/v1/crm/persone/unioni/{$unione['id']}"]];
         });
     }
@@ -231,7 +232,7 @@ trait CrmUnioni
             }
         }
 
-        $parti = ['note' => [], 'attivita' => [], 'trattative' => []];
+        $parti = ['note' => [], 'attivita' => [], 'trattative' => [], 'paganti' => []];
 
         foreach (['note' => 'note', 'attivita' => 'attivita', 'trattative' => 'trattative'] as $nome => $tipo) {
             foreach ($this->crm[$tipo] as $riga => $voce) {
@@ -239,6 +240,14 @@ trait CrmUnioni
                     $this->crm[$tipo][$riga] = [...$voce, 'persona_id' => $resta['id'], 'aggiornata_il' => $ora];
                     $parti[$nome][] = $riga;
                 }
+            }
+        }
+
+        // Chi aveva l'unito come pagante ha ora chi resta (#3208), anche se archiviato; chi resta l'ha già sistemato con i campi.
+        foreach ($this->crm['persone'] as $riga => $voce) {
+            if ($voce['workspace'] === $workspace && $voce['paga_per_id'] === $unito['id'] && $voce['id'] !== $resta['id']) {
+                $this->crm['persone'][$riga] = [...$voce, 'paga_per_id' => $resta['id'], 'aggiornato_il' => $ora];
+                $parti['paganti'][] = $riga;
             }
         }
 
@@ -329,12 +338,26 @@ trait CrmUnioni
         $decisi = [];
 
         foreach (self::CRM_UNIONI_SCELTE as $campo) {
-            if ($unito[$campo] === null || $resta[$campo] === $unito[$campo]) {
+            $dellUnito = $unito[$campo];
+
+            // Il pagante (#3208): nessuno paga per sé stesso. Chi pagava per l'altro dei due non ha più un pagante da conservare, e il campo si
+            // riscrive; un pagante che era l'altro contatto non conta come un valore da scegliere.
+            if ($campo === 'paga_per_id') {
+                $dellUnito = $dellUnito === $resta['id'] ? null : $dellUnito;
+
+                if ($resta[$campo] === $unito['id']) {
+                    $campi[$campo] = $dellUnito;
+
+                    continue;
+                }
+            }
+
+            if ($dellUnito === null || $resta[$campo] === $dellUnito) {
                 continue;
             }
 
             if ($resta[$campo] === null) {
-                $campi[$campo] = $unito[$campo];
+                $campi[$campo] = $dellUnito;
 
                 continue;
             }
@@ -342,7 +365,7 @@ trait CrmUnioni
             $decisi[$campo] = true;
 
             if ($this->sceltaDellUnioneCrm($scelte, $campo) === 'unito') {
-                $campi[$campo] = $unito[$campo];
+                $campi[$campo] = $dellUnito;
             }
         }
 
@@ -704,11 +727,16 @@ trait CrmUnioni
 
         $this->applicaPersona($unione['unito_id'], ['archiviato' => false, 'email' => $email, 'telefoni' => $unione['unito_telefoni']], $chi['persona']);
 
-        $rimessi = ['note' => 0, 'attivita' => 0, 'trattative' => 0];
+        $rimessi = ['note' => 0, 'attivita' => 0, 'trattative' => 0, 'paganti' => 0];
 
         foreach ($unione['parti'] as $nome => $righe) {
             foreach ($righe as $riga) {
-                if (($this->crm[$nome][$riga]['persona_id'] ?? null) === $resta['id']) {
+                if ($nome === 'paganti') {
+                    if (($this->crm['persone'][$riga]['paga_per_id'] ?? null) === $resta['id']) {
+                        $this->crm['persone'][$riga] = [...$this->crm['persone'][$riga], 'paga_per_id' => $unione['unito_id'], 'aggiornato_il' => $ora];
+                        $rimessi[$nome]++;
+                    }
+                } elseif (($this->crm[$nome][$riga]['persona_id'] ?? null) === $resta['id']) {
                     $this->crm[$nome][$riga] = [...$this->crm[$nome][$riga], 'persona_id' => $unione['unito_id'], 'aggiornata_il' => $ora];
                     $rimessi[$nome]++;
                 }
