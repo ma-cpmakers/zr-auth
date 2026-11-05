@@ -52,6 +52,7 @@ trait Eventi
     private function nascitaDelWorkspace(string $workspace, string $proprietario): void
     {
         $adesso = now()->toImmutable()->startOfMillisecond();
+        $this->workspaceCreatoIl[$workspace] = $adesso;
 
         $this->scriviEvento($workspace, 'com.zeiras.workspace.creato', '/v1/workspace', ['id' => $workspace, 'aggiornata_il' => self::iso($adesso)], $adesso, $proprietario, 'io.workspace.crea');
     }
