@@ -364,8 +364,8 @@ it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine,
     $sprint = $finto->sprint($studio, $board, 'In corso', 'attivo', '2026-10-12');
     $vuoto = $finto->sprint($studio, $board, 'Dopo', 'pianificato', '2026-10-26');
     $giorni = [
-        ['data' => '2026-10-12', 'pianificato' => 8, 'aggiunto' => 0, 'rimosso' => 0, 'completato' => 0, 'rimasto' => 8],
-        ['data' => '2026-10-13', 'pianificato' => 8, 'aggiunto' => 2, 'rimosso' => 0, 'completato' => 3, 'rimasto' => 7],
+        ['data' => '2026-10-12', 'pianificato' => 8, 'aggiunto' => 0, 'rimosso' => 0, 'ristimato' => 0, 'completato' => 0, 'rimasto' => 8],
+        ['data' => '2026-10-13', 'pianificato' => 8, 'aggiunto' => 2, 'rimosso' => 0, 'ristimato' => 2, 'completato' => 3, 'rimasto' => 7],
     ];
     $finto->andamento($sprint, $giorni);
     [, $altrui] = unaBoardScrumAltrui($finto);
@@ -378,6 +378,11 @@ it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine,
         ->and(alFinto('GET', "/v1/board/sprint/{$vuoto['id']}/andamento", null, $gettone)->json('data'))->toMatchArray(['unita' => 'schede', 'giorni' => []])
         ->and(alFinto('GET', '/v1/board/sprint/01k6w9a1c3e5g7j9m1p3r5t7v9/andamento', null, $gettone)->status())->toBe(404)
         ->and(alFinto('GET', "/v1/board/sprint/{$altrui['id']}/andamento", null, $gettone)->status())->toBe(404);
+
+    // Un giorno seminato come prima di #3033, senza `ristimato`, lo riceve a 0 e al suo posto: il finto dà sempre le stesse sette chiavi del vero.
+    $finto->andamento($vuoto, [['data' => '2026-10-26', 'pianificato' => 3, 'aggiunto' => 1, 'rimosso' => 0, 'completato' => 0, 'rimasto' => 4]]);
+    expect(alFinto('GET', "/v1/board/sprint/{$vuoto['id']}/andamento", null, $gettone)->json('data.giorni.0'))
+        ->toBe(['data' => '2026-10-26', 'pianificato' => 3, 'aggiunto' => 1, 'rimosso' => 0, 'ristimato' => 0, 'completato' => 0, 'rimasto' => 4]);
 
     expect(fn () => $finto->andamento($sprint, [['data' => '2026-10-12']]))->toThrow(InvalidArgumentException::class)
         ->and(fn () => $finto->andamento($sprint, [], 'ore'))->toThrow(InvalidArgumentException::class);
