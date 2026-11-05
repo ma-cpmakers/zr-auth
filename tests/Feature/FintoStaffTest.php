@@ -187,7 +187,8 @@ it('il gettone dello staff: 30 minuti senza chiamate lo spengono, ogni chiamata 
     $corrente = Api::staff($gettone)->get('/v1/staff/corrente')['data'];
 
     expect($corrente['gettone'])->toBe(['scade_il' => '2026-11-04T18:00:00.000Z', 'inattivita_scade_il' => '2026-11-04T10:50:00.000Z'])
-        ->and(array_keys($corrente))->toBe(['id', 'nome', 'cognome', 'email', 'ruolo', 'gettone']);
+        ->and(array_keys($corrente))->toBe(['id', 'nome', 'cognome', 'email', 'ruolo', 'lingua', 'fuso_orario', 'gettone'])
+        ->and($corrente['lingua'])->toBe('it')->and($corrente['fuso_orario'])->toBe('Europe/Rome');
 
     Carbon::setTestNow('2026-11-04 10:45:00');
     Api::staff($gettone)->get('/v1/staff/corrente');
@@ -211,7 +212,11 @@ it('i ruoli: solo il superadmin gestisce lo staff; supporto e fatturazione leggo
     Api::staff($gettone)->get('/v1/staff/corrente');
     Api::staff($gettone)->get('/v1/staff/registro');
 
-    $chiamate = [['get', '/v1/staff'], ['get', '/v1/staff/'.$supporto['id']], ['post', '/v1/staff', ['email' => 'x@lucianocastro.com', 'ruolo' => 'supporto']],
+    // Il supporto legge l'elenco (#3020, sola lettura) con la stessa forma del superadmin; tutto il resto dello staff è del superadmin.
+    $elenco = Api::staff($gettone)->get('/v1/staff')['data'];
+    expect(array_column($elenco, 'id'))->toContain($supporto['id'])->and(array_keys($elenco[0]))->toBe(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'totp_confermato', 'totp_confermato_il', 'creato_il', 'creato_da', 'ultimo_ingresso']);
+
+    $chiamate = [['get', '/v1/staff/'.$supporto['id']], ['post', '/v1/staff', ['email' => 'x@lucianocastro.com', 'ruolo' => 'supporto']],
         ['patch', '/v1/staff/'.$supporto['id'], ['ruolo' => 'supporto']], ['delete', '/v1/staff/'.$supporto['id']],
         ['post', '/v1/staff/'.$supporto['id'].'/totp/reimpostazione', ['motivo' => 'assistenza']], ['post', '/v1/staff/registro/esportazioni', []]];
 
@@ -224,6 +229,10 @@ it('i ruoli: solo il superadmin gestisce lo staff; supporto e fatturazione leggo
 
     $righe = Api::staff($gettone)->get('/v1/staff/registro')['data'];
     expect(array_unique(array_column($righe, 'staff_id')))->toBe([$supporto['id']]);
+
+    // La fatturazione non legge l'elenco (#3020, SE.2).
+    $fatturazione = personaDelloStaff($this->finto, 'fat@lucianocastro.com', 'fatturazione');
+    expect(esitoDelloStaff(fn () => Api::staff(entraComeStaff($fatturazione))->get('/v1/staff')))->toBe([403, 'permesso_negato']);
 });
 
 it('staff.crea, modifica, elimina e reimpostazione: dominio, ruoli, nessuno su se stesso, ultimo superadmin, gettoni chiusi (F1.4, F1.9)', function () {
