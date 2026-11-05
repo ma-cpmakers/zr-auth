@@ -93,7 +93,14 @@ trait SchedeCrm
                 throw new Problema('record_gia_collegato');
             }
 
-            if ($ruolo !== null && $this->approvatoreDelGate($mia['id'], $chi['workspace']) !== null) {
+            $approvatore = $ruolo === null ? null : $this->approvatoreDelGate($mia['id'], $chi['workspace']);
+
+            // Con la richiesta pendente e l'approvatore disponibile l'approvatore non cambia: prima si annulla la richiesta (SchedeCrmController::crea).
+            if ($ruolo !== null && $this->esitoDelGate($mia) === 'in_approvazione' && ($approvatore[1]['titolo'] ?? null) !== null) {
+                throw new Problema('gate_in_approvazione');
+            }
+
+            if ($approvatore !== null) {
                 throw new Problema('approvatore_gia_indicato');
             }
 
@@ -129,6 +136,11 @@ trait SchedeCrm
 
         if ($mia['archiviata_il'] !== null) {
             throw new Problema('scheda_archiviata');
+        }
+
+        // Lo stesso vincolo del collegamento: l'approvatore disponibile di un Gate in approvazione non si toglie (SchedeCrmController::elimina).
+        if (($voce['ruolo'] ?? null) === 'approvatore' && $this->esitoDelGate($mia) === 'in_approvazione' && ($this->voceSchedaCrm($voce, $chi['workspace'])['titolo'] ?? null) !== null) {
+            throw new Problema('gate_in_approvazione');
         }
 
         unset($this->schedeCrm[$collegamento]);

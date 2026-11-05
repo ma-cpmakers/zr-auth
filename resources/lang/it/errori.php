@@ -525,6 +525,10 @@ return [
         'title' => 'Gate già approvato',
         'detail' => 'Il Gate è approvato, che è lo stato finale: non si richiede di nuovo. Per un nuovo controllo si crea un altro Gate.',
     ],
+    'gate_in_approvazione' => [
+        'title' => 'Richiesta di approvazione in corso',
+        'detail' => 'Il Gate è in approvazione e il suo approvatore è disponibile: non si cambia né si toglie l\'approvatore, né si cambia il tipo della scheda, finché la richiesta è aperta. Registra la decisione con board.schede.gate.decisione.crea, oppure annulla prima la richiesta.',
+    ],
     'gate_senza_approvatore' => [
         'title' => 'Gate senza approvatore',
         'detail' => 'Il Gate non ha un approvatore disponibile: nessun contatto è collegato con ruolo approvatore, oppure il contatto è archiviato o anonimizzato. Collega un contatto con board.schede.crm.crea (ruolo approvatore), togliendo prima quello che non c\'è più, e rifai la richiesta.',

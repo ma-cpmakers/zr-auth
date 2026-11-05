@@ -36,6 +36,7 @@ final class Problema extends RuntimeException
         'scheda_non_gate' => 409,
         'gate_gia_richiesto' => 409,
         'gate_deciso' => 409,
+        'gate_in_approvazione' => 409,
         'gate_senza_approvatore' => 409,
         'gate_non_richiesto' => 409,
         'approvatore_non_disponibile' => 409,

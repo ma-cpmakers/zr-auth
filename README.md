@@ -781,7 +781,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   al più uno (`409` `approvatore_gia_indicato`), altrimenti `422` su `#/ruolo`. **Il Gate** (#2791): una scheda nata con `scheda($workspace, $titolo, tipo: 'gate')`
   porta `esito` (`in_preparazione` finché non si chiede; le altre schede `null`), `approvatore` (`{persona_id, titolo}`, letto oggi dal CRM del finto) e
   `decisione` in ogni lettura. Rispondono `board.schede.gate.richiesta.crea` (`in_approvazione`, con `richiesto_il` e `richiesto_da`; `409`
-  `scheda_non_gate`, `gate_gia_richiesto`, `gate_deciso`, `gate_senza_approvatore`) e `board.schede.gate.decisione.crea` (`approvato`, `con_prescrizioni`
+  `scheda_non_gate`, `gate_gia_richiesto`, `gate_deciso`, `gate_senza_approvatore`; e `gate_in_approvazione` se con la richiesta aperta e l'approvatore disponibile si crea o si toglie il suo collegamento con `board.schede.crm.crea` e `.elimina`) e `board.schede.gate.decisione.crea` (`approvato`, `con_prescrizioni`
   o `respinto` con `motivo` e `prescrizioni`, che nascono come schede della board; `409` `gate_non_richiesto` e `approvatore_non_disponibile`).
   `board.schede.spostamento.crea` risponde con `avvisi: []`: il finto ha una lista sola per board e non salta mai un Gate.
 - **Gli sprint.** `sprint($workspace, $board, $nome, 'pianificato'|'attivo'|'chiuso', $inizio, $durataSettimane, $obiettivo, $velocita, $unita)`

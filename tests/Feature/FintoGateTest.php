@@ -172,11 +172,12 @@ it('il contatto anonimizzato o scollegato dopo la richiesta: 409 approvatore_non
     alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone);
     $schede = count(alFinto('GET', '/v1/board/schede?board_id='.alFinto('GET', "/v1/board/schede/{$gate['id']}", null, $gettone)->json('data.board_id'), null, $gettone)->json('data'));
 
+    // Con la richiesta aperta il collegamento dell'approvatore si toglie solo se il contatto non c'è più (gate_in_approvazione): `scollegato` è l'anonimizzato che poi si toglie.
+    expect(alFinto('POST', "/v1/crm/persone/{$contatto}/anonimizzazione", null, $gettone)->status())->toBeLessThan(300);
+
     if ($caso === 'scollegato') {
         $collegamento = alFinto('GET', "/v1/board/schede/{$gate['id']}/crm", null, $gettone)->json('data.0.id');
         expect(alFinto('DELETE', "/v1/board/schede/{$gate['id']}/crm/{$collegamento}", null, $gettone)->status())->toBe(204);
-    } else {
-        expect(alFinto('POST', "/v1/crm/persone/{$contatto}/anonimizzazione", null, $gettone)->status())->toBeLessThan(300);
     }
 
     $risposta = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/decisione", ['decisione' => 'con_prescrizioni', 'motivo' => 'Quasi.', 'prescrizioni' => ['Una']], $gettone);
@@ -187,15 +188,14 @@ it('il contatto anonimizzato o scollegato dopo la richiesta: 409 approvatore_non
 })->with(['scollegato', 'anonimizzato']);
 
 it('l\'ordine dei controlli della decisione: lo stato prima del corpo (409 gate_non_richiesto anche con un corpo non valido), il corpo prima dell\'approvatore (422 anche se non c\'è più)', function () {
-    [, , $gate, , $gettone] = conUnGate(true);
+    [, , $gate, $contatto, $gettone] = conUnGate(true);
     $nonValido = ['decisione' => 'forse'];
 
     $senzaRichiesta = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/decisione", $nonValido, $gettone);
     expect([$senzaRichiesta->status(), $senzaRichiesta->json('codice')])->toBe([409, 'gate_non_richiesto']);
 
     alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone);
-    $collegamento = alFinto('GET', "/v1/board/schede/{$gate['id']}/crm", null, $gettone)->json('data.0.id');
-    expect(alFinto('DELETE', "/v1/board/schede/{$gate['id']}/crm/{$collegamento}", null, $gettone)->status())->toBe(204);
+    expect(alFinto('POST', "/v1/crm/persone/{$contatto}/anonimizzazione", null, $gettone)->status())->toBeLessThan(300);
 
     $senzaApprovatore = alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/decisione", $nonValido, $gettone);
     expect($senzaApprovatore->status())->toBe(422);
@@ -210,4 +210,20 @@ it('lo spostamento di una scheda risponde con avvisi vuoto: il finto ha una list
     expect($risposta->status())->toBe(200)
         ->and(array_keys($risposta->json()))->toBe(['data', 'sbloccate', 'avvisi'])
         ->and($risposta->json('avvisi'))->toBe([]);
+});
+
+it('con la richiesta aperta e l\'approvatore disponibile il suo collegamento non si cambia né si toglie: 409 gate_in_approvazione; se il contatto non c\'è più si sostituisce', function () {
+    [, , $gate, $contatto, $gettone] = conUnGate(true);
+    $altro = alFinto('POST', '/v1/crm/persone', ['nome' => 'Elena'], $gettone)->json('data.id');
+    alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone);
+    $collegamento = alFinto('GET', "/v1/board/schede/{$gate['id']}/crm", null, $gettone)->json('data.0.id');
+
+    $nuovo = alFinto('POST', "/v1/board/schede/{$gate['id']}/crm", ['tipo' => 'crm.persona', 'id' => $altro, 'ruolo' => 'approvatore'], $gettone);
+    $tolto = alFinto('DELETE', "/v1/board/schede/{$gate['id']}/crm/{$collegamento}", null, $gettone);
+
+    expect([$nuovo->status(), $nuovo->json('codice'), $tolto->status(), $tolto->json('codice')])->toBe([409, 'gate_in_approvazione', 409, 'gate_in_approvazione']);
+
+    expect(alFinto('POST', "/v1/crm/persone/{$contatto}/anonimizzazione", null, $gettone)->status())->toBeLessThan(300)
+        ->and(alFinto('DELETE', "/v1/board/schede/{$gate['id']}/crm/{$collegamento}", null, $gettone)->status())->toBe(204)
+        ->and(alFinto('POST', "/v1/board/schede/{$gate['id']}/crm", ['tipo' => 'crm.persona', 'id' => $altro, 'ruolo' => 'approvatore'], $gettone)->status())->toBe(201);
 });
