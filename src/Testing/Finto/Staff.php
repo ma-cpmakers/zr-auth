@@ -26,7 +26,7 @@ trait Staff
 
     private const MOTIVI_DELLO_STAFF = ['assistenza', 'problema_tecnico', 'sicurezza', 'verifica_account'];
 
-    private const BERSAGLI_DEL_REGISTRO = ['staff', 'utente', 'workspace', 'registro'];
+    private const BERSAGLI_DEL_REGISTRO = ['staff', 'utente', 'workspace', 'registro', 'esportazione'];
 
     private const FINESTRA_DELLO_STAFF = 900;
 
@@ -382,6 +382,7 @@ trait Staff
     private function elencaLoStaff(Request $richiesta): array
     {
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        $this->contaLaLettura($chi);
 
         return $this->pagina(
             $richiesta, 'staff', 'id',
@@ -515,7 +516,10 @@ trait Staff
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
         $persone = array_filter(array_keys($this->persone), fn (string $id) => ! $chi['solo_uat'] || $this->emailDelPerimetroUat($this->persone[$id]['email']));
 
-        return [200, ['data' => $this->conteggiPerStato(count($persone), count(array_filter($persone, fn (string $id) => isset($this->eliminazioniPersona[$id]))))]];
+        $inEliminazione = array_filter($persone, fn (string $id) => isset($this->eliminazioniPersona[$id]));
+        $sospesi = array_filter($persone, fn (string $id) => isset($this->sospensioniStaff[$id]) && ! isset($this->eliminazioniPersona[$id]));
+
+        return [200, ['data' => $this->conteggiPerStato(count($persone), count($inEliminazione), count($sospesi))]];
     }
 
     /**
@@ -544,10 +548,16 @@ trait Staff
         return false;
     }
 
-    /** @return array{tutti: int, attivo: int, in_eliminazione: int} */
-    private function conteggiPerStato(int $tutti, int $inEliminazione): array
+    /**
+     * I numeri per stato; `$sospesi` solo per gli utenti (i workspace non si sospendono ancora): senza, la chiave `sospeso` non c'è.
+     *
+     * @return array<string, int>
+     */
+    private function conteggiPerStato(int $tutti, int $inEliminazione, ?int $sospesi = null): array
     {
-        return ['tutti' => $tutti, 'attivo' => $tutti - $inEliminazione, 'in_eliminazione' => $inEliminazione];
+        return ['tutti' => $tutti, 'attivo' => $tutti - $inEliminazione - ($sospesi ?? 0)]
+            + ($sospesi === null ? [] : ['sospeso' => $sospesi])
+            + ['in_eliminazione' => $inEliminazione];
     }
 
     // ── Il registro ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -560,6 +570,7 @@ trait Staff
     private function elencaIlRegistroDelloStaff(Request $richiesta): array
     {
         [, $chi] = $this->autenticaLoStaff($richiesta, self::RUOLI_DELLO_STAFF);
+        $this->contaLaLettura($chi);
         $regole = $this->regoleDelRegistro();
 
         return $this->pagina(
@@ -1014,7 +1025,11 @@ trait Staff
             'impersonificazione_id' => $riga['impersonificazione_id'],
             'quando' => self::iso($riga['quando']),
             'staff' => $dellaPersona($riga['staff_id']),
-            'bersaglio' => $riga['bersaglio_tipo'] === 'staff' ? $dellaPersona($riga['bersaglio_id']) : null,
+            'bersaglio' => match ($riga['bersaglio_tipo']) {
+                'staff' => $dellaPersona($riga['bersaglio_id']),
+                'utente' => isset($this->persone[$riga['bersaglio_id']]) ? ['nome' => $this->persone[$riga['bersaglio_id']]['nome'], 'cognome' => $this->persone[$riga['bersaglio_id']]['cognome']] : null,
+                default => null,
+            },
         ];
     }
 }

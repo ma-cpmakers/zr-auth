@@ -393,6 +393,22 @@ return [
         'title' => 'Last superadmin',
         'detail' => 'This is the last person with the superadmin role, and the staff always has at least one: give the role to another person first. The method wrote nothing.',
     ],
+    'account_sospeso' => [
+        'title' => 'Account suspended',
+        'detail' => 'This person\'s account is suspended by Zeiras: the credentials are right, but access is not allowed. The method wrote nothing.',
+    ],
+    'gia_sospeso' => [
+        'title' => 'Already suspended',
+        'detail' => 'This person is already suspended, and the request changed nothing.',
+    ],
+    'esportazione_non_disponibile' => [
+        'title' => 'Export not available',
+        'detail' => 'The export cannot be downloaded now: it is still running, it has expired or it failed. The method wrote nothing.',
+    ],
+    'esportazione_troppo_grande' => [
+        'title' => 'Export too large',
+        'detail' => 'The export is over the size limit and failed: narrow the filters and start a new one.',
+    ],
     'dominio_non_ammesso' => [
         'title' => 'Domain not allowed',
         'detail' => 'The email is not on a domain allowed for the Zeiras staff (or it has a \'+\' in the local part, or it is an excluded mailbox). The method wrote nothing.',

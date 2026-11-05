@@ -393,6 +393,22 @@ return [
         'title' => 'Último superadmin',
         'detail' => 'Esta es la última persona con el rol superadmin, y el staff siempre tiene al menos una: da antes el rol a otra persona. El método no escribió nada.',
     ],
+    'account_sospeso' => [
+        'title' => 'Cuenta suspendida',
+        'detail' => 'La cuenta de esta persona está suspendida por Zeiras: las credenciales son correctas, pero no se permite el acceso. El método no escribió nada.',
+    ],
+    'gia_sospeso' => [
+        'title' => 'Ya suspendida',
+        'detail' => 'Esta persona ya está suspendida, y la solicitud no cambió nada.',
+    ],
+    'esportazione_non_disponibile' => [
+        'title' => 'Exportación no disponible',
+        'detail' => 'La exportación no se puede descargar ahora: sigue en curso, ha caducado o ha fallado. El método no escribió nada.',
+    ],
+    'esportazione_troppo_grande' => [
+        'title' => 'Exportación demasiado grande',
+        'detail' => 'La exportación supera el límite de tamaño y falló: acota los filtros e inicia una nueva.',
+    ],
     'dominio_non_ammesso' => [
         'title' => 'Dominio no admitido',
         'detail' => 'El email no es de un dominio admitido para el staff de Zeiras (o tiene un \'+\' en la parte local, o es un buzón excluido). El método no escribió nada.',
