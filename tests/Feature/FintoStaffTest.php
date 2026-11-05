@@ -443,10 +443,10 @@ it('staff.utenti.conteggi.mostra e staff.workspace.conteggi.mostra: solo numeri,
     [$gettoneSara, $gettoneSupporto, $gettoneProva, $gettoneFatturazione] = [entraComeStaff($sara), entraComeStaff($supporto), entraComeStaff($prova), entraComeStaff($fatturazione)];
 
     // Tutti: le quattro persone dello staff, `uat+uno` e Vera; Vera non ha chiesto di eliminare l'account, ha programmato l'eliminazione di un workspace.
-    expect($conta($gettoneSara, '/v1/staff/utenti/conteggi'))->toBe(['data' => ['tutti' => 6, 'attivo' => 6, 'in_eliminazione' => 0]])
+    expect($conta($gettoneSara, '/v1/staff/utenti/conteggi'))->toBe(['data' => ['tutti' => 6, 'attivo' => 6, 'sospeso' => 0, 'in_eliminazione' => 0]])
         ->and($conta($gettoneSupporto, '/v1/staff/workspace/conteggi'))->toBe(['data' => ['tutti' => 3, 'attivo' => 2, 'in_eliminazione' => 1]])
         // solo_uat: le persone `uat+*` (una) e i workspace il cui proprietario è una di loro (uno).
-        ->and($conta($gettoneProva, '/v1/staff/utenti/conteggi'))->toBe(['data' => ['tutti' => 1, 'attivo' => 1, 'in_eliminazione' => 0]])
+        ->and($conta($gettoneProva, '/v1/staff/utenti/conteggi'))->toBe(['data' => ['tutti' => 1, 'attivo' => 1, 'sospeso' => 0, 'in_eliminazione' => 0]])
         ->and($conta($gettoneProva, '/v1/staff/workspace/conteggi'))->toBe(['data' => ['tutti' => 1, 'attivo' => 1, 'in_eliminazione' => 0]]);
 
     foreach (['/v1/staff/utenti/conteggi', '/v1/staff/workspace/conteggi'] as $percorso) {

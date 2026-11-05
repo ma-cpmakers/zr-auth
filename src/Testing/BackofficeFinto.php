@@ -46,6 +46,7 @@ use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\Retrospettiva;
 use Zeiras\Auth\Testing\Finto\Staff;
+use Zeiras\Auth\Testing\Finto\StaffUtenti;
 use Zeiras\Auth\Testing\Finto\SchedeCrm;
 use Zeiras\Auth\Testing\Finto\Scrumban;
 use Zeiras\Auth\Testing\Finto\Sprint;
@@ -95,6 +96,7 @@ final class BackofficeFinto
     use SchedeCrm;
     use Retrospettiva;
     use Staff;
+    use StaffUtenti;
     use Scrumban;
     use Sprint;
     use CrmProfili;
@@ -174,6 +176,18 @@ final class BackofficeFinto
         ['POST', '#^/v1/staff/totp/conferma$#', 'staff.totp.conferma.crea'],
         ['GET', '#^/v1/staff/utenti/conteggi$#', 'staff.utenti.conteggi.mostra'],
         ['GET', '#^/v1/staff/workspace/conteggi$#', 'staff.workspace.conteggi.mostra'],
+        ['GET', '#^/v1/staff/utenti$#', 'staff.utenti.elenca'],
+        ['POST', '#^/v1/staff/utenti/ricerca$#', 'staff.utenti.ricerca.crea'],
+        ['POST', '#^/v1/staff/utenti/ricerca/esportazioni$#', 'staff.utenti.ricerca.esportazioni.crea'],
+        ['GET', '#^/v1/staff/utenti/([^/]+)$#', 'staff.utenti.mostra'],
+        ['GET', '#^/v1/staff/utenti/([^/]+)/registro$#', 'staff.utenti.registro.elenca'],
+        ['POST', '#^/v1/staff/utenti/([^/]+)/sospensione$#', 'staff.utenti.sospensione.crea'],
+        ['DELETE', '#^/v1/staff/utenti/([^/]+)/sospensione$#', 'staff.utenti.sospensione.elimina'],
+        ['DELETE', '#^/v1/staff/utenti/([^/]+)/sessioni$#', 'staff.utenti.sessioni.elimina'],
+        ['POST', '#^/v1/staff/utenti/([^/]+)/password/recupero$#', 'staff.utenti.password.recupero.crea'],
+        ['POST', '#^/v1/staff/utenti/([^/]+)/esportazioni$#', 'staff.utenti.esportazioni.crea'],
+        ['GET', '#^/v1/staff/esportazioni/([^/]+)$#', 'staff.esportazioni.mostra'],
+        ['POST', '#^/v1/staff/esportazioni/([^/]+)/scaricamento$#', 'staff.esportazioni.scaricamento.crea'],
         ['GET', '#^/v1/staff/registro$#', 'staff.registro.elenca'],
         ['POST', '#^/v1/staff/registro/esportazioni$#', 'staff.registro.esportazioni.crea'],
         ['GET', '#^/v1/staff$#', 'staff.elenca'],
@@ -533,7 +547,7 @@ final class BackofficeFinto
     /** Quanti caratteri può avere la risposta del widget (Turnstile::LUNGHEZZA). */
     private const LUNGHEZZA_TURNSTILE = 2048;
 
-    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, formato_data: ?string, inizio_settimana: ?string, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
+    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, formato_data: ?string, inizio_settimana: ?string, creato_il: CarbonImmutable, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
     private array $persone = [];
 
     /** @var array<string, array{codice: string, email: string, scade: CarbonImmutable, tentativi: int}> per id della persona: il cambio di email in attesa */
@@ -780,6 +794,7 @@ final class BackofficeFinto
             'formato_data' => null,
             'inizio_settimana' => null,
             'foto_aggiornata_il' => null,
+            'creato_il' => now()->toImmutable()->startOfMillisecond(),
             'email' => $email,
             'email_verificata_il' => $verificata ? now()->toImmutable() : null,
             'lingua' => $lingua,
@@ -1461,6 +1476,18 @@ final class BackofficeFinto
                 'staff.totp.reimpostazione.crea' => $this->reimpostaIlTotpDelloStaff($richiesta, $corpo, $parametri[0]),
                 'staff.utenti.conteggi.mostra' => $this->contaLePersoneDelloStaff($richiesta),
                 'staff.workspace.conteggi.mostra' => $this->contaIWorkspaceDelloStaff($richiesta),
+                'staff.utenti.elenca' => $this->elencaGliUtentiDelloStaff($richiesta),
+                'staff.utenti.ricerca.crea' => $this->cercaGliUtentiDelloStaff($richiesta, $corpo),
+                'staff.utenti.ricerca.esportazioni.crea' => $this->esportaGliUtentiDelloStaff($richiesta, $corpo),
+                'staff.utenti.mostra' => $this->mostraUnUtenteDelloStaff($richiesta, $parametri[0]),
+                'staff.utenti.registro.elenca' => $this->elencaIlRegistroDiUnUtente($richiesta, $parametri[0]),
+                'staff.utenti.sospensione.crea' => $this->sospendiUnUtenteDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.utenti.sospensione.elimina' => $this->riattivaUnUtenteDelloStaff($richiesta, $parametri[0]),
+                'staff.utenti.sessioni.elimina' => $this->chiudiLeSessioniDiUnUtente($richiesta, $parametri[0]),
+                'staff.utenti.password.recupero.crea' => $this->avviaIlRecuperoDiUnUtente($richiesta, $parametri[0]),
+                'staff.utenti.esportazioni.crea' => $this->esportaUnUtenteDelloStaff($richiesta, $parametri[0]),
+                'staff.esportazioni.mostra' => $this->mostraUnaEsportazioneDelloStaff($richiesta, $parametri[0]),
+                'staff.esportazioni.scaricamento.crea' => $this->scaricaUnaEsportazioneDelloStaff($richiesta, $parametri[0]),
                 'staff.registro.elenca' => $this->elencaIlRegistroDelloStaff($richiesta),
                 'staff.registro.esportazioni.crea' => $this->esportaIlRegistroDelloStaff($richiesta, $corpo),
                 'accessi.crea' => $this->creaAccesso($corpo),
@@ -2910,6 +2937,7 @@ final class BackofficeFinto
         $this->freni->clear($coppia);
         $accesso = self::id();
         // Al millesimo, come il backoffice (datetime(3)): la scadenza scritta nella risposta è quella vera.
+        $this->rifiutaSeSospeso($persona);
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'password'];
 
         return [201, ['data' => [
@@ -3071,6 +3099,7 @@ final class BackofficeFinto
                     'formato_data' => null,
                     'inizio_settimana' => null,
                     'foto_aggiornata_il' => null,
+                    'creato_il' => now()->toImmutable()->startOfMillisecond(),
                     'email' => $email,
                     'email_verificata_il' => now()->toImmutable(),
                     'lingua' => 'it',
@@ -3103,6 +3132,7 @@ final class BackofficeFinto
         $workspace = $invito !== null ? $this->accettaCodice($invito, $persona, 'provider') : null;
 
         $accesso = self::id();
+        $this->rifiutaSeSospeso($persona);
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => $provider];
 
         return [201, ['data' => [
@@ -4087,6 +4117,7 @@ final class BackofficeFinto
                 'formato_data' => null,
                 'inizio_settimana' => null,
                 'foto_aggiornata_il' => null,
+                'creato_il' => now()->toImmutable()->startOfMillisecond(),
                 'email' => $email,
                 // L'invito è arrivato a quell'indirizzo: la persona che lo accetta ha già verificato l'email.
                 'email_verificata_il' => $invito === null ? null : now()->toImmutable(),
@@ -6589,6 +6620,9 @@ final class BackofficeFinto
             throw new Problema('gettone_non_valido', header: ['WWW-Authenticate' => 'Bearer realm="zeiras", error="invalid_token"']);
         }
 
+        // Un account sospeso non chiama più (M10): il 403 viene a ogni richiesta, anche con un gettone emesso prima.
+        $this->rifiutaSeSospeso($accesso['utente']);
+
         $this->testi->usa($accesso['utente'] === null ? 'it' : $this->persone[$accesso['utente']]['lingua']);
 
         // Il freno del gettone (FrenoPerGettone), dopo la guardia: oltre il tetto in un minuto 429, e la chiamata frenata
@@ -6775,6 +6809,7 @@ final class BackofficeFinto
                 'formato_data' => null,
                 'inizio_settimana' => null,
                 'foto_aggiornata_il' => null,
+                'creato_il' => now()->toImmutable()->startOfMillisecond(),
                 'email' => $email,
                 'email_verificata_il' => now()->toImmutable(),
                 'lingua' => Testi::dellaRichiesta(self::header($richiesta, 'Accept-Language')),
@@ -6790,6 +6825,7 @@ final class BackofficeFinto
 
         unset($this->codiciDiAccesso[$email]);
         $accesso = self::id();
+        $this->rifiutaSeSospeso($persona);
         $this->accessi[$accesso] = ['utente' => $persona, 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'codice'];
 
         return [201, ['data' => [
@@ -6834,6 +6870,7 @@ final class BackofficeFinto
         }
 
         $accesso = self::id();
+        $this->rifiutaSeSospeso($link['persona']);
         $this->accessi[$accesso] = ['utente' => $link['persona'], 'creato_il' => now()->toImmutable()->startOfMillisecond(), 'chiuso' => false, 'via' => 'link'];
 
         return [201, ['data' => [
