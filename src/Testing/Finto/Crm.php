@@ -9,6 +9,7 @@ use DateTimeZone;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -858,6 +859,7 @@ trait Crm
             'persone' => [
                 'stati' => self::vociCrm($testo('stato')), 'responsabile' => self::idCrm($testo('responsabile_id')), 'archiviate' => $vero('archiviati') === true,
                 'ricerca' => null, 'email' => null, 'organizzazione' => self::idCrm($testo('organizzazione_id')), 'id' => self::idDelFiltroCrm($testo('id')),
+                'non_frequentante' => $vero('non_frequentante') === true,
             ],
             'organizzazioni' => [
                 'stati' => self::vociCrm($testo('stato')), 'responsabile' => self::idCrm($testo('responsabile_id')), 'archiviate' => $vero('archiviate') === true,
@@ -893,6 +895,12 @@ trait Crm
                     'id' => $this->regolaDelFiltroPerId(), 'stato' => $voci('stato', self::CRM_STATI),
                     'responsabile_id' => ['sometimes', 'nullable', 'string', 'max:64'], 'organizzazione_id' => ['sometimes', 'nullable', 'string', 'max:64'],
                     'archiviati' => $siONo,
+                    // PersoneElencaRequest: `true` vuole l'app Bookings accesa nel workspace.
+                    'non_frequentante' => ['bail', ...$siONo, function (string $campo, mixed $valore, Closure $fail) use ($chi) {
+                        if ($valore === 'true' && ! $this->appAttiva($chi['workspace'], 'bookings')) {
+                            $this->rifiutaCrm($fail, $campo, Regola::VALORE_NON_AMMESSO, 'validation.in', ['attribute' => 'non_frequentante']);
+                        }
+                    }],
                 ],
                 'organizzazioni' => [
                     'id' => $this->regolaDelFiltroPerId(), 'stato' => $voci('stato', self::CRM_STATI),
@@ -1141,6 +1149,11 @@ trait Crm
             ]) : null,
         ];
 
+        // I filtri speciali che l'elenco dei contatti offre nel workspace (#2711).
+        if ($conCampi && $tipo === 'persone') {
+            $corpo['filtri_disponibili'] = $this->appAttiva($workspace, 'bookings') ? ['non_frequentante'] : [];
+        }
+
         if ($chiesta['totale']) {
             $conteggio = count(array_filter($this->righeCrm($tipo, $workspace), fn (array $riga) => $this->tieneCrm($tipo, $workspace, $chiesta['filtri'], $riga)));
             $corpo['totale'] = min($conteggio, self::CRM_TETTO_DEL_TOTALE);
@@ -1160,6 +1173,34 @@ trait Crm
      * @param  array<string, mixed>  $filtri
      * @param  array<string, mixed>  $riga
      */
+    /**
+     * Apre l'app Bookings nel workspace, come l'anteprima del backoffice (`ZR_BOOKINGS_ANTEPRIMA`) e app.modifica: il catalogo del finto la dà
+     * «in_arrivo» (app.modifica la rifiuta e apps.elenca la mostra così), ma `crm.persone.elenca` la vede accesa e offre `non_frequentante` (#2711).
+     *
+     * @param  array<string, mixed>  $workspace  un workspace di workspace()
+     */
+    public function conBookings(array $workspace): self
+    {
+        $id = $workspace['id'] ?? null;
+
+        if (! is_string($id) || ! isset($this->workspace[$id])) {
+            throw new InvalidArgumentException('Il workspace non è del finto: nasce con workspace().');
+        }
+
+        $this->attive[$id]['bookings'] = true;
+        $this->anteprime[$id]['bookings'] = true;
+
+        return $this;
+    }
+
+    /** Persone::filtrata, «non frequentante»: una lezione viva (confermata o svolta) da 14 giorni fa in poi. */
+    private function haUnaLezioneCrm(string $persona): bool
+    {
+        $dal = now()->toImmutable()->subDays(14);
+
+        return array_filter($this->prenotazioniBookings, fn (array $riga) => $riga['persona'] === $persona && in_array($riga['stato'], ['confermata', 'svolta'], true) && $riga['inizio'] >= $dal) !== [];
+    }
+
     /** Organizzazioni::formeDelTermine: una parola com'è, senza le due lettere del paese davanti a una partita IVA e senza `www.` davanti a un dominio. */
     private static function formeDelTermineCrm(string $parola): array
     {
@@ -1192,7 +1233,8 @@ trait Crm
             'persone' => $uguale('organizzazione', 'organizzazione_id')
                 && array_filter($parole, fn (string $parola) => ! $contiene($riga['nome'], $parola) && ! $contiene($riga['cognome'], $parola)
                     && ! $contiene($riga['organizzazione_id'] === null ? null : ($this->crm['organizzazioni'][$riga['organizzazione_id']]['nome'] ?? null), $parola)) === []
-                && ($filtri['email'] === null || $this->personaConEmailCrm($workspace, $filtri['email']) === $riga['id']),
+                && ($filtri['email'] === null || $this->personaConEmailCrm($workspace, $filtri['email']) === $riga['id'])
+                && (! ($filtri['non_frequentante'] ?? false) || ! $this->haUnaLezioneCrm($riga['id'])),
             'organizzazioni' => array_filter($parole, fn (string $parola) => ! $contiene($riga['nome'], $parola)
                 && array_filter(self::formeDelTermineCrm($parola), fn (string $forma) => $contiene($riga['partita_iva'] ?? null, $forma) || $contiene($riga['dominio'] ?? null, $forma)) === []) === [],
             'trattative' => $uguale('pipeline', 'pipeline_id') && $uguale('fase', 'fase_id') && $uguale('persona', 'persona_id') && $uguale('organizzazione', 'organizzazione_id')
@@ -1880,6 +1922,8 @@ trait Crm
             'organizzazione_id' => $riga['organizzazione_id'],
             'organizzazione' => $azienda === null ? null : ['id' => $azienda['id'], 'nome' => $azienda['nome'], 'archiviata_il' => self::isoCrm($azienda['archiviata_il'])],
             'unito_in' => $this->unitoInCrm($riga['id']),
+            'paga_per' => $this->chiPagaCrm($riga),
+            'minorenne' => $this->minorenneDelContattoCrm($riga),
             'email' => $riga['email'],
             'telefoni' => $riga['telefoni'],
             'stato' => $riga['stato'],
@@ -1901,6 +1945,47 @@ trait Crm
         ];
     }
 
+    /**
+     * Chi paga per il contatto (Forme::pagante): `{id, tipo, nome}`, o `null` se nessuno. Un contatto ha nome e cognome in una riga.
+     *
+     * @param  array<string, mixed>  $riga
+     * @return array{id: string, tipo: string, nome: string}|null
+     */
+    private function chiPagaCrm(array $riga): ?array
+    {
+        $paga = $riga['paga_per_id'] ?? null;
+
+        if ($paga === null) {
+            return null;
+        }
+
+        if (($persona = $this->crm['persone'][$paga] ?? null) !== null && $persona['workspace'] === $riga['workspace'] && ! ($persona['eliminata'] ?? false)) {
+            return ['id' => $persona['id'], 'tipo' => 'persona', 'nome' => trim(($persona['nome'] ?? '').' '.($persona['cognome'] ?? ''))];
+        }
+
+        $azienda = $this->crm['organizzazioni'][$paga] ?? null;
+
+        return $azienda === null ? null : ['id' => $azienda['id'], 'tipo' => 'organizzazione', 'nome' => (string) $azienda['nome']];
+    }
+
+    /**
+     * Se il contatto ha meno di diciotto anni oggi (UTC), dal campo `data_nascita` (ValoriDeiCampi::nascite, Forme::minorenne): `false`
+     * senza il campo o il valore, e se il campo è sensibile per chi chiama.
+     *
+     * @param  array<string, mixed>  $riga
+     */
+    private function minorenneDelContattoCrm(array $riga): bool
+    {
+        $campo = $this->campiTuoiCrm($riga['workspace'], 'persona')['data_nascita'] ?? null;
+        $nato = $this->crm['valori']['persona'][$riga['id']]['data_nascita'] ?? null;
+
+        if ($campo === null || $campo['tipo'] !== 'data' || ! is_string($nato) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $nato) !== 1) {
+            return false;
+        }
+
+        return CarbonImmutable::parse($nato, 'UTC')->startOfDay()->greaterThan(CarbonImmutable::now('UTC')->startOfDay()->subYears(18));
+    }
+
     /** @return array<string, mixed> le regole di `PersonaNuova` (Persone::regole) */
     private function regolePersona(string $workspace): array
     {
@@ -1910,6 +1995,12 @@ trait Crm
             'ruolo' => ['nullable', 'string', 'max:120', new NomeScritto],
             'professione' => ['nullable', 'string', 'max:120', new NomeScritto],
             'organizzazione_id' => ['bail', 'nullable', 'string', 'max:64', $this->regolaCheEsiste($workspace, 'organizzazioni', 'regole.organizzazione_non_esiste')],
+            // Chi paga per il contatto (M8, #2710): un contatto o un'azienda del workspace; sé stesso lo rifiuta applicaPersona.
+            'paga_per_id' => ['bail', 'nullable', 'string', 'max:64', function (string $campo, mixed $id, Closure $fail) use ($workspace) {
+                if (! $this->esisteCrm('persone', $workspace, $id) && ! $this->esisteCrm('organizzazioni', $workspace, $id)) {
+                    $this->rifiutaCrm($fail, $campo, Regola::NON_TROVATO, 'regole.paga_per_non_esiste');
+                }
+            }],
             'email' => ['nullable', 'array', 'list', 'max:5'],
             'email.*.indirizzo' => ['required', 'string', 'email', 'max:254'],
             'email.*.etichetta' => ['required', 'string', Rule::in(self::CRM_ETICHETTE_EMAIL)],
@@ -2037,6 +2128,7 @@ trait Crm
             'ruolo' => $campi['ruolo'] ?? null,
             'professione' => $campi['professione'] ?? null,
             'organizzazione_id' => isset($campi['organizzazione_id']) ? strtolower($campi['organizzazione_id']) : null,
+            'paga_per_id' => isset($campi['paga_per_id']) ? strtolower($campi['paga_per_id']) : null,
             'stato' => $campi['stato'] ?? self::CRM_STATI[0],
             'responsabile_id' => isset($campi['responsabile_id']) ? strtolower($campi['responsabile_id']) : $autore,
             'base_giuridica' => $campi['base_giuridica'] ?? null,
@@ -2115,12 +2207,17 @@ trait Crm
         $nuovi = [];
         $tipi = [];
 
-        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'stato', 'responsabile_id', 'base_giuridica', 'fonte'] as $campo) {
+        // Nessuno paga per sé stesso (M8, #2710).
+        if (isset($campi['paga_per_id']) && strtolower((string) $campi['paga_per_id']) === $id) {
+            throw $this->erroreCrm('paga_per_id', 'regole.paga_per_se_stesso', Regola::NON_VALIDA);
+        }
+
+        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'paga_per_id', 'stato', 'responsabile_id', 'base_giuridica', 'fonte'] as $campo) {
             if (! array_key_exists($campo, $campi)) {
                 continue;
             }
 
-            $nuovo = in_array($campo, ['responsabile_id', 'organizzazione_id'], true) && $campi[$campo] !== null ? strtolower((string) $campi[$campo]) : $campi[$campo];
+            $nuovo = in_array($campo, ['responsabile_id', 'organizzazione_id', 'paga_per_id'], true) && $campi[$campo] !== null ? strtolower((string) $campi[$campo]) : $campi[$campo];
 
             if ($riga[$campo] !== $nuovo) {
                 $nuovi[$campo] = $nuovo;
@@ -2198,7 +2295,7 @@ trait Crm
         $valori = ['organizzazione_id' => 'organizzazione_id', 'stato' => 'stato', 'responsabile_id' => 'responsabile_id', 'base_giuridica' => 'base_giuridica', 'consenso_marketing' => 'consenso_marketing.dato'];
         $voci = [];
 
-        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'email', 'telefoni', 'stato', 'responsabile_id', 'base_giuridica', 'consenso_marketing'] as $campo) {
+        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'paga_per_id', 'email', 'telefoni', 'stato', 'responsabile_id', 'base_giuridica', 'consenso_marketing'] as $campo) {
             if (isset($cambi[$campo])) {
                 $voci[] = isset($valori[$campo]) ? ['campo' => $valori[$campo], ...$cambi[$campo]] : ['campo' => $campo];
             }
@@ -2730,7 +2827,7 @@ trait Crm
     {
         $ora = self::adessoCrm();
         $this->crm['persone'][$persona['id']] = [
-            ...$persona, 'nome' => null, 'cognome' => null, 'ruolo' => null, 'professione' => null, 'fonte' => null, 'email' => [], 'telefoni' => [],
+            ...$persona, 'nome' => null, 'cognome' => null, 'ruolo' => null, 'professione' => null, 'paga_per_id' => null, 'fonte' => null, 'email' => [], 'telefoni' => [],
             'anonimizzata_il' => $ora, 'aggiornato_il' => $ora,
         ];
         // L'oblio svuota anche i valori dei campi «tuoi» del contatto e delle sue opportunità (Anonimizzazione::valori).

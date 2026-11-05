@@ -504,7 +504,8 @@ trait Todo
 
     /**
      * board.todo.elementi.completamento.crea (TodoElementiController::completamentoCrea): `fatto_il` all'istante della prima chiamata, 200
-     * con il to-do. Imposta uno stato e non lo inverte: su un to-do già fatto non cambia niente, `aggiornato_il` compreso.
+     * con il to-do e `successivo_id` accanto a `data`: l'id del to-do nato in questa chiamata dalla ripetizione, altrimenti `null` (#2997). Imposta uno
+     * stato e non lo inverte: su un to-do già fatto non cambia niente, `aggiornato_il` compreso.
      *
      * @return array{int, array<string, mixed>, array<string, string>}
      */
@@ -514,16 +515,18 @@ trait Todo
         $corrente = $this->elementoDelPercorsoTodo($chi, $id);
         $this->scrivibileTodo($this->todoListe[$corrente['lista']]);
 
+        $successivo = null;
+
         if ($corrente['fatto_il'] === null) {
             $ora = $this->dopoTodo($corrente['aggiornato_il']);
             $this->todoElementi[$id] = [...$corrente, 'fatto_il' => $ora, 'aggiornato_il' => $ora];
             // Se si ripete, il prossimo nasce qui (TodoRipetizione::generaLaProssima, #2922).
-            $this->generaLaProssimaTodo($this->todoElementi[$id], $chi);
+            $successivo = $this->generaLaProssimaTodo($this->todoElementi[$id], $chi);
         }
 
         $voce = $this->voceElementoTodo($this->todoElementi[$id]);
 
-        return [200, ['data' => $voce], ['ETag' => $voce['etag']]];
+        return [200, ['data' => $voce, 'successivo_id' => $successivo], ['ETag' => $voce['etag']]];
     }
 
     /**
@@ -831,26 +834,27 @@ trait Todo
 
     /**
      * Chiuso un to-do che si ripete nasce il prossimo, una volta sola per to-do, anche se è stato eliminato (TodoRipetizione::generaLaProssima): in
-     * coda alla stessa lista, col giorno spostato, e con i suoi promemoria (stesso anticipo) e i collegamenti al CRM.
+     * coda alla stessa lista, col giorno spostato, e con i suoi promemoria (stesso anticipo) e i collegamenti al CRM. Torna l'id del nato, o
+     * `null` se non ne nasce uno.
      *
      * @param  array<string, mixed>  $fatto
      * @param  array<string, mixed>  $chi
      */
-    private function generaLaProssimaTodo(array $fatto, array $chi): void
+    private function generaLaProssimaTodo(array $fatto, array $chi): ?string
     {
         if (($fatto['ripetizione'] ?? null) === null || $fatto['giorno'] === null) {
-            return;
+            return null;
         }
 
         if (array_filter($this->todoElementi, fn (array $e) => ($e['generato_da'] ?? null) === $fatto['id']) !== []) {
-            return;
+            return null;
         }
 
         $origine = $fatto['giorno_origine'] ?? $fatto['giorno'];
         $giorno = $this->prossimoGiornoTodo($fatto['ripetizione'], $fatto['giorno'], $origine);
 
         if ($giorno === null) {
-            return;
+            return null;
         }
 
         $this->tettoDegliApertiTodo($fatto['lista']);
@@ -870,6 +874,8 @@ trait Todo
             $nuovo = self::id();
             $this->todoCrm[$nuovo] = [...$collegamento, 'id' => $nuovo, 'elemento' => $id];
         }
+
+        return $id;
     }
 
     /** L'ora senza il giorno è 422 `campo_vietato` su `#/ora`. */

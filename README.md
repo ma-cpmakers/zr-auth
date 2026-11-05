@@ -944,7 +944,10 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   ogni workspace, come in produzione dal 12/10: si attiva con `app.modifica` o con `attivaApp($workspace, 'crm')`. Prima il
   ruolo (`403` `permesso_negato`), poi l'app (`403` `app_non_attiva`), poi l'id del percorso (`404`, anche di un altro
   workspace), poi il corpo (`422` sul pointer coi testi del backoffice). Gli elenchi hanno i filtri, `ordina`, `totale` e il
-  cursore, che vale solo per la stessa lista, lo stesso ordine e gli stessi filtri. Il freno delle importazioni è quello del
+  cursore, che vale solo per la stessa lista, lo stesso ordine e gli stessi filtri. `crm.persone.elenca` porta `filtri_disponibili` e il filtro
+  `non_frequentante` (#2711): Bookings nel finto è «in arrivo» e `filtri_disponibili` è `[]` (con `non_frequentante=true` il `422`), finché il test
+  non la apre con `conBookings($workspace)`; allora `prenotazione($idDelContatto, $inizio, $stato = 'confermata', $servizio = 'Lezione di prova')` dà al contatto una prenotazione, e
+  conta (confermata o svolta, da 14 giorni fa in poi, una nel futuro compresa) per togliere il contatto dai non frequentanti. Il freno delle importazioni è quello del
   backoffice (le chiamate di una persona, 300 all'ora, e le righe all'ora, in prova e in scrittura, per persona e per
   workspace: `429` `troppe_richieste` col `freno` che ha fermato), con `RateLimit-Policy` e `RateLimit` su ogni risposta
   dopo il ruolo e l'app, errori e risposta ricordata compresi. Il finto **non** imita: gli altri freni del CRM

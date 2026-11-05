@@ -63,6 +63,8 @@ return [
     'responsabile_del_workspace' => 'This person is not a member of the workspace: member ids come from workspace.membri.elenca.',
     'azienda_o_azienda_nuova' => 'A contact has an existing company (organizzazione_id) or one created with it (organizzazione_nuova), not both.',
     'organizzazione_non_esiste' => "The contact's company does not exist in this workspace.",
+    'paga_per_non_esiste' => 'The payer of the contact does not exist in this workspace: it must be the id of a contact or of a company.',
+    'paga_per_se_stesso' => 'A contact does not pay for itself: paga_per_id must be another contact or a company.',
     'email_doppia' => 'This address appears twice in the list.',
     'valuta_del_workspace' => "The currency must be the one of the workspace's CRM (:valuta): crm.impostazioni.mostra gives it.",
     'fase_della_pipeline' => 'The pipeline has no stage with this id: crm.pipeline.mostra gives the stage ids.',
