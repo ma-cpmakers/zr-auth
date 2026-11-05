@@ -223,7 +223,15 @@ it('con la richiesta aperta e l\'approvatore disponibile il suo collegamento non
 
     expect([$nuovo->status(), $nuovo->json('codice'), $tolto->status(), $tolto->json('codice')])->toBe([409, 'gate_in_approvazione', 409, 'gate_in_approvazione']);
 
-    expect(alFinto('POST', "/v1/crm/persone/{$contatto}/anonimizzazione", null, $gettone)->status())->toBeLessThan(300)
+    // Un collegamento senza il ruolo si aggiunge e si toglie anche con la richiesta aperta.
+    $semplice = alFinto('POST', "/v1/board/schede/{$gate['id']}/crm", ['tipo' => 'crm.persona', 'id' => $altro], $gettone);
+    expect($semplice->status())->toBe(201)
+        ->and(alFinto('DELETE', "/v1/board/schede/{$gate['id']}/crm/{$semplice->json('data.id')}", null, $gettone)->status())->toBe(204);
+
+    expect(alFinto('POST', "/v1/crm/persone/{$contatto}/anonimizzazione", null, $gettone)->status())->toBeLessThan(300);
+    // Anonimizzato ma ancora collegato: il collegamento nuovo con il ruolo è il doppione dell'approvatore, non il vincolo della richiesta.
+    $doppione = alFinto('POST', "/v1/board/schede/{$gate['id']}/crm", ['tipo' => 'crm.persona', 'id' => $altro, 'ruolo' => 'approvatore'], $gettone);
+    expect([$doppione->status(), $doppione->json('codice')])->toBe([409, 'approvatore_gia_indicato'])
         ->and(alFinto('DELETE', "/v1/board/schede/{$gate['id']}/crm/{$collegamento}", null, $gettone)->status())->toBe(204)
         ->and(alFinto('POST', "/v1/board/schede/{$gate['id']}/crm", ['tipo' => 'crm.persona', 'id' => $altro, 'ruolo' => 'approvatore'], $gettone)->status())->toBe(201);
 });
