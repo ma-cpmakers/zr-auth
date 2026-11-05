@@ -50,6 +50,17 @@ trait CrmValori
             && ($ancheSensibili || $this->vedeISensibiliCrm || ! ($campo['sensibile'] ?? false)));
         uasort($campi, fn (array $a, array $b) => $a['ord'] <=> $b['ord']);
 
+        // `data_nascita` è l'unico standard il cui valore sta in `campi` e che non ha una riga «tua» (ValoriDeiCampi::campiDi, zr-crm #2692, M8).
+        if ($oggetto === 'persona' && ! isset($campi['data_nascita'])) {
+            $campi['data_nascita'] = [
+                'id' => 'persona.data_nascita', 'oggetto' => 'persona', 'codice' => 'data_nascita', 'origine' => 'tuo', 'tipo' => 'data', 'sistema' => null,
+                'opzioni' => null, 'elenco_id' => null, 'obbligatorio' => false, 'aiuto' => null, 'predefinito' => null, 'limiti' => null,
+                'in_elenco' => false, 'nel_crea' => false, 'sensibile' => false, 'genera_scadenza' => null, 'avvisa' => false,
+                'catalogo' => ['nome' => []], 'scritti' => [], 'visibilita' => 'visibile', 'sezione_id' => 'persona.dati_personali', 'ord' => PHP_INT_MAX,
+                'indispensabile' => false, 'in_campi' => true, 'creato_il' => null, 'aggiornato_il' => null,
+            ];
+        }
+
         return array_map(fn (array $campo) => $this->conOpzioniDelloElencoCrm($campo), $campi);
     }
 
