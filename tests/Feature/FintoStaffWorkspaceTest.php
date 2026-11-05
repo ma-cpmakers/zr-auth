@@ -130,3 +130,57 @@ it('il superadmin e il supporto leggono, la fatturazione e un gettone qualsiasi 
             ->and(array_column($chiama($prova)['data'], 'id'))->toBe([$mio['id']]);
     }
 });
+
+it('la scheda: la riga dell\'elenco più consumi, eliminazione e fatturazione, e lascia una riga nel registro dello staff (F3b.1, F3b.2)', function () {
+    $gettone = gettoneWorkspaceStaff($this->finto, 'sara@lucianocastro.com');
+    $anna = $this->finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
+    $uno = $this->finto->workspace('Studio uno', $anna);
+    $this->finto->membro($uno, $this->finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno'), 'membro');
+    $registro = count($this->finto->registroDelloStaff());
+
+    $scheda = Api::staff($gettone)->get('/v1/staff/workspace/'.$uno['id'])['data'];
+
+    expect(array_keys($scheda))->toBe(['id', 'nome', 'indirizzo', 'azienda', 'proprietario', 'membri_n', 'app_attive_n', 'stato', 'creato_il', 'consumi', 'eliminazione', 'fatturazione'])
+        ->and($scheda)->toMatchArray(['id' => $uno['id'], 'nome' => 'Studio uno', 'membri_n' => 2, 'stato' => 'attivo', 'eliminazione' => null])
+        ->and($scheda['consumi'])->toBe(['membri_n' => 2, 'board_n' => 0, 'schede_n' => 0, 'contatti_n' => 0, 'prenotazioni_n' => 0])
+        ->and($scheda['fatturazione'])->toBe(['partita_iva' => null, 'paese' => null, 'valuta' => null])
+        ->and(count($this->finto->registroDelloStaff()))->toBe($registro + 1)
+        ->and(collect($this->finto->registroDelloStaff())->last())->toMatchArray(['azione' => 'staff.workspace.mostra', 'bersaglio_tipo' => 'workspace', 'bersaglio_id' => $uno['id']]);
+});
+
+it('la scheda di un workspace in eliminazione porta la data prevista (F3b.1)', function () {
+    $gettone = gettoneWorkspaceStaff($this->finto, 'sara@lucianocastro.com');
+    $vera = $this->finto->persona('vera@example.com', PASSWORD, nome: 'Vera');
+    $this->finto->workspace('Resta', $vera);
+    $parte = $this->finto->workspace('Se ne va', $vera);
+    $accesso = entraNelFinto('vera@example.com')['gettone']['gettone'];
+    $gettoneVera = alFinto('POST', '/v1/gettoni', ['workspace_id' => $parte['id']], $accesso)->json('data.gettone');
+    expect(alFinto('DELETE', '/v1/workspace', gettone: $gettoneVera)->status())->toBe(202);
+
+    $scheda = Api::staff($gettone)->get('/v1/staff/workspace/'.$parte['id'])['data'];
+
+    expect($scheda['stato'])->toBe('in_eliminazione')->and($scheda['eliminazione'])->toBe(['prevista_il' => '2026-12-05T10:00:00.000Z']);
+});
+
+it('la scheda: la fatturazione la apre, un gettone di persona no, senza gettone 401, un id che non c\'è o fuori dal perimetro è 404 e non scrive (F3b.2)', function () {
+    $sara = gettoneWorkspaceStaff($this->finto, 'sara@lucianocastro.com');
+    $fabio = gettoneWorkspaceStaff($this->finto, 'fabio@lucianocastro.com', 'fatturazione');
+    $prova = gettoneWorkspaceStaff($this->finto, 'prova@lucianocastro.com', 'superadmin', true);
+    $uat = $this->finto->persona('uat+uno@castroandpartners.com', PASSWORD, nome: 'Prova');
+    $vera = $this->finto->persona('vera@example.com', PASSWORD, nome: 'Vera');
+    $mio = $this->finto->workspace('Prova uno', $uat);
+    $suo = $this->finto->workspace('Studio vero', $vera);
+    $gettoneVera = entraNelFinto('vera@example.com')['gettone']['gettone'];
+    $scheda = fn (?string $gettone, string $id) => Api::staff($gettone)->get('/v1/staff/workspace/'.$id);
+
+    expect(esitoWorkspaceStaff(fn () => $scheda($fabio, $mio['id'])))->toBe(['ok', null]);
+
+    $registro = count($this->finto->registroDelloStaff());
+
+    expect(esitoWorkspaceStaff(fn () => $scheda($gettoneVera, $mio['id'])))->toBe([403, 'permesso_negato'])
+        ->and(esitoWorkspaceStaff(fn () => $scheda(null, $mio['id'])))->toBe([401, 'gettone_assente'])
+        ->and(esitoWorkspaceStaff(fn () => $scheda($sara, '01k8x5c9y7f2r6q0s4t8v2w6z0')))->toBe([404, 'non_trovato'])
+        ->and(esitoWorkspaceStaff(fn () => $scheda($prova, $suo['id'])))->toBe([404, 'non_trovato'])
+        ->and(esitoWorkspaceStaff(fn () => $scheda($prova, $mio['id'])))->toBe(['ok', null])
+        ->and(count($this->finto->registroDelloStaff()))->toBe($registro + 1);
+});
