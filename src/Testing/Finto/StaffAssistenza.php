@@ -46,7 +46,7 @@ trait StaffAssistenza
 
     private const NON_SI_SCRIVE_IN_ASSISTENZA = ['board.todo.elementi.promemoria.*', 'crm.persone.unioni.*', 'crm.persone.anonimizzazione.*', 'crm.persone.importazioni.*', 'crm.organizzazioni.importazioni.*', '*.ruoli.*'];
 
-    /** @var array<string, array{staff: string, utente: string, workspace: string, app: string, sola_lettura: bool, accesso: ?string, scade: CarbonImmutable, ultima: ?CarbonImmutable, fine: ?CarbonImmutable}> le assistenze, per id */
+    /** @var array<string, array{staff: string, utente: string, workspace: string, app: string, sola_lettura: bool, accesso: ?string, inizio: CarbonImmutable, scade: CarbonImmutable, ultima: ?CarbonImmutable, fine: ?CarbonImmutable}> le assistenze, per id */
     private array $assistenze = [];
 
     /**
@@ -103,7 +103,7 @@ trait StaffAssistenza
         $assistenza = self::id();
         $this->assistenze[$assistenza] = [
             'staff' => $chi['id'], 'utente' => $id, 'workspace' => $workspace, 'app' => $app, 'sola_lettura' => $chi['ruolo'] === 'supporto',
-            'accesso' => null, 'scade' => $adesso->addHours(self::ORE_DELL_ASSISTENZA), 'ultima' => null, 'fine' => null,
+            'accesso' => null, 'inizio' => $adesso, 'scade' => $adesso->addHours(self::ORE_DELL_ASSISTENZA), 'ultima' => null, 'fine' => null,
         ];
         $this->scriviNelRegistroDelloStaff($chi, 'staff.utenti.impersonificazioni.crea', 'utente', $id, null, 'assistenza', $assistenza);
 
@@ -117,6 +117,57 @@ trait StaffAssistenza
             'ritorno' => $ritorno,
             'scade_il' => self::iso(CarbonImmutable::createFromTimestampUTC($scade)),
         ]]];
+    }
+
+    /**
+     * staff.impersonificazioni.elenca (#3390, StaffImpersonificazioniController::elenca): le assistenze dal più recente (`inizio`, poi id), a cursore, `aperte` di base (senza `fine` e
+     * non scadute), `chiuse` (con `fine`, o scadute) o `tutte`; un altro `stato` è 422 su `stato`. Superadmin e supporto; il superadmin le vede tutte, una persona `solo_uat` solo quelle
+     * di workspace il cui proprietario è `uat+*@castroandpartners.com`. La riga ha i soli campi dichiarati (mai email, codice, gettone, IP, motivo né l'id dello staff). Una lettura:
+     * conta nel tetto delle letture e non scrive nel registro dello staff.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaLeAssistenzeDelloStaff(Request $richiesta): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        $this->contaLaLettura($chi);
+        $stato = self::query($richiesta)['stato'] ?? 'aperte';
+        $lista = 'staff.impersonificazioni.elenca:'.(is_string($stato) && in_array($stato, ['aperte', 'chiuse', 'tutte'], true) ? $stato : 'aperte');
+        $query = $this->testi->validaQuery(self::query($richiesta), [
+            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO_DELLO_STAFF],
+            'cursore' => ['sometimes', 'string', $this->regolaDelCursoreDelloStaff($lista)],
+            'stato' => ['bail', 'sometimes', 'string', 'in:aperte,chiuse,tutte'],
+        ]);
+        $stato = (string) ($query['stato'] ?? 'aperte');
+        $adesso = now()->toImmutable();
+        $voci = [];
+
+        foreach ($this->assistenze as $id => $assistenza) {
+            $aperta = $assistenza['fine'] === null && $assistenza['scade']->gt($adesso);
+
+            if (($stato === 'aperte' && ! $aperta) || ($stato === 'chiuse' && $aperta) || ($chi['solo_uat'] && ! $this->proprietarioDiProva($assistenza['workspace']))) {
+                continue;
+            }
+
+            $persona = $this->persone[$assistenza['utente']] ?? null;
+            $staff = $this->righeStaff[$assistenza['staff']] ?? null;
+            $voci[] = [
+                'id' => $id,
+                'staff' => ['nome' => $staff === null ? null : ($this->persone[$staff['utente_id']]['nome'] ?? null), 'cognome' => $staff === null ? null : ($this->persone[$staff['utente_id']]['cognome'] ?? null)],
+                'utente' => ['id' => $assistenza['utente'], 'nome' => $persona['nome'] ?? null, 'cognome' => $persona['cognome'] ?? null],
+                'app' => $assistenza['app'],
+                'scade_il' => self::iso($assistenza['scade']),
+            ];
+        }
+
+        $inizio = fn (string $id) => self::iso($this->assistenze[$id]['inizio']);
+
+        return $this->impagina(
+            $query, $lista, 'id', $voci,
+            fn (array $voce) => [$inizio($voce['id']), $voce['id']],
+            fn (string $id) => isset($this->assistenze[$id]) ? [$inizio($id), $id] : null,
+            true,
+        );
     }
 
     /**
@@ -149,7 +200,7 @@ trait StaffAssistenza
         $scade = $adesso->addHours(self::ORE_DELL_ASSISTENZA);
         $accesso = self::id();
         $this->accessi[$accesso] = ['utente' => $assistenza['utente'], 'creato_il' => $adesso, 'chiuso' => false, 'via' => 'assistenza', 'scade' => $scade];
-        $this->assistenze[$ingresso['assistenza']] = ['accesso' => $accesso, 'scade' => $scade, 'ultima' => $adesso] + $assistenza;
+        $this->assistenze[$ingresso['assistenza']] = ['accesso' => $accesso, 'inizio' => $adesso, 'scade' => $scade, 'ultima' => $adesso] + $assistenza;
 
         return [201, ['data' => $this->emetti($accesso, $assistenza['workspace'], null, 'assistenza')]];
     }
