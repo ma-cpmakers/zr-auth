@@ -1969,8 +1969,8 @@ trait Crm
     }
 
     /**
-     * Se il contatto ha meno di diciotto anni oggi (UTC), dal campo `data_nascita` (ValoriDeiCampi::nascite, Forme::minorenne): `false`
-     * senza il campo o il valore, e se il campo è sensibile per chi chiama.
+     * Se il contatto ha meno di diciotto anni oggi nel fuso del workspace (Forme::minorenne, #3209), dal campo `data_nascita`
+     * (ValoriDeiCampi::nascite): `false` senza il campo o il valore, e se il campo è sensibile per chi chiama.
      *
      * @param  array<string, mixed>  $riga
      */
@@ -1979,11 +1979,11 @@ trait Crm
         $campo = $this->campiTuoiCrm($riga['workspace'], 'persona')['data_nascita'] ?? null;
         $nato = $this->crm['valori']['persona'][$riga['id']]['data_nascita'] ?? null;
 
-        if ($campo === null || $campo['tipo'] !== 'data' || ! is_string($nato) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $nato) !== 1) {
+        if ($campo === null || $campo['tipo'] !== 'data' || ! is_string($nato) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $nato) !== 1) {
             return false;
         }
 
-        return CarbonImmutable::parse($nato, 'UTC')->startOfDay()->greaterThan(CarbonImmutable::now('UTC')->startOfDay()->subYears(18));
+        return CarbonImmutable::parse($nato, 'UTC')->addYears(18)->format('Y-m-d') > self::oggiAcquistoCrm();
     }
 
     /** @return array<string, mixed> le regole di `PersonaNuova` (Persone::regole) */
