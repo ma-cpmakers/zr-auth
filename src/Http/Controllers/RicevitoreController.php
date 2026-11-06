@@ -106,7 +106,7 @@ final class RicevitoreController
             return self::errore();
         }
 
-        Sessione::entra($gettone);
+        Sessione::entraInAssistenza($gettone);
 
         return redirect()->away(Sessione::ritorno(url((string) config('zr-auth.dopo'))))->withHeaders(Ingresso::INTESTAZIONI);
     }

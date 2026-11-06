@@ -403,6 +403,32 @@ it('il codice di un «Accedi come» senza state si scambia senza verificatore, a
     expect($fascia['utente']['email'])->toBe('anna@example.com')->and($fascia['sola_lettura'])->toBeFalse();
 });
 
+it('l\'ingresso in assistenza parte da una sessione vuota: il gettone vero della stessa persona, già nel browser, non resta accanto a quello di assistenza (#3394)', function () {
+    [$codice, , $studio] = codiceDiAssistenza();
+    // Anna ha già una sessione vera in questo browser: l'accesso e il suo gettone pieno.
+    Sessione::apri(entraNelFinto('anna@example.com'));
+    expect(Sessione::accesso())->not->toBeNull();
+
+    $this->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]))->assertRedirect(FRONTEND);
+
+    expect(Sessione::workspace()['id'])->toBe($studio['id'])
+        ->and(Sessione::accesso())->toBeNull()
+        ->and(array_keys(session(Sessione::CHIAVE)['gettoni']))->toBe(['workspace']);
+
+    // Api::persona() chiama col gettone di assistenza: la fascia c'è, non `null` come per il gettone pieno.
+    expect(Zeiras\Auth\Api::persona()->get('/v1/accessi/corrente')['data']['impersonificazione'])->not->toBeNull();
+});
+
+it('un ingresso ordinario della stessa persona tiene l\'accesso come prima (#3394)', function () {
+    fintoDelModulo();
+    $accesso = entraNelFinto('anna@example.com');
+    Sessione::apri($accesso);
+
+    Sessione::entra([...gettoneDelWorkspace(), 'utente' => $accesso['gettone']['utente']]);
+
+    expect(Sessione::accesso())->toBe($accesso['id']);
+});
+
 it('il codice di assistenza vale una volta: il secondo ritorno è la pagina d\'errore e non apre niente (F4.1)', function () {
     [$codice] = codiceDiAssistenza();
     $indirizzo = FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]);

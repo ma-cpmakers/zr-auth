@@ -187,6 +187,30 @@ final class Sessione
     }
 
     /**
+     * L'ingresso di un «Accedi come» (#3394): come `entra()`, ma sempre da una sessione vuota. Se nel browser la stessa persona aveva già una sessione vera, `entra()` ne terrebbe l'accesso e il
+     * gettone pieno accanto a quello di assistenza (lo azzera solo se cambia l'utente): `Api::persona()` chiamerebbe col gettone pieno e `accessi.corrente.mostra` direbbe
+     * `impersonificazione: null`. Qui ogni gettone di prima esce dalla sessione, e resta il solo gettone di assistenza, quello del workspace. L'id della sessione è nuovo, come per `entra()`.
+     *
+     * @param  array<string, mixed>  $gettone
+     */
+    public static function entraInAssistenza(array $gettone): void
+    {
+        self::controllaIlDriver();
+        // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
+        self::segnaLaVecchia();
+
+        session()->regenerate(true);
+        session()->put(self::CHIAVE, [
+            'accesso' => null,
+            'gettoni' => ['workspace' => $gettone['gettone']],
+            'scade_il' => $gettone['scade_il'],
+            'utente' => $gettone['utente'],
+            'workspace' => $gettone['workspace'],
+            'ruolo' => $gettone['ruolo'],
+        ]);
+    }
+
+    /**
      * Lascia il workspace: toglie dalla sessione il workspace, il ruolo e il gettone del workspace, e tiene l'accesso, il suo
      * gettone, la persona e la scadenza, come subito dopo `apri()`. Serve dopo `workspace.uscita.crea` (o quando il workspace è
      * sparito) a chi non ha un altro workspace in cui far entrare la persona: da qui `Api::persona()` chiama col gettone
