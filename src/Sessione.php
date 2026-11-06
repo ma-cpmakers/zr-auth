@@ -126,8 +126,9 @@ final class Sessione
         self::controllaIlDriver();
         $stato = self::stato() ?? ['accesso' => null, 'gettoni' => []];
 
-        // Il gettone di un ospite vale per la sua prenotazione e basta: non resta accanto a quello di un workspace.
-        if (isset($stato['ospite'])) {
+        // Il gettone di un ospite vale per la sua prenotazione e basta, e quello ristretto di un cliente per i metodi del cliente: non restano
+        // accanto a quello di un workspace, dove `Api::persona()` li manderebbe al posto dell'accesso.
+        if (isset($stato['ospite']) || isset($stato['cliente'])) {
             $stato = ['accesso' => null, 'gettoni' => []];
         }
 
@@ -181,6 +182,7 @@ final class Sessione
             'utente' => $gettone['utente'],
             'workspace' => null,
             'ruolo' => null,
+            'cliente' => true,
         ]);
     }
 
@@ -196,8 +198,8 @@ final class Sessione
     {
         $stato = self::stato();
 
-        // Un ospite non è in un workspace: non c'è da dove uscire, e la sua sessione resta com'è.
-        if ($stato === null || ! self::aperta() || isset($stato['ospite'])) {
+        // Un ospite e un cliente non sono in un workspace: non c'è da dove uscire, e la loro sessione resta com'è.
+        if ($stato === null || ! self::aperta() || isset($stato['ospite']) || isset($stato['cliente'])) {
             return;
         }
 
@@ -390,7 +392,7 @@ final class Sessione
         return Cache::store(config('session.block_store'))->has(self::chiave($id));
     }
 
-    /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: ?array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string, ospite?: array{prenotazione_id: string}}|null */
+    /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: ?array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string, ospite?: array{prenotazione_id: string}, cliente?: true}|null */
     private static function stato(): ?array
     {
         $stato = session(self::CHIAVE);

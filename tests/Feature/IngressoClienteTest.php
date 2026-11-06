@@ -208,3 +208,60 @@ it('entraCliente rifiuta una forma che non è quella di un cliente e non scrive 
     'senza scadenza' => [['scade_il' => null]],
     'senza persona' => [['utente' => null]],
 ]);
+
+/** Il finto con una persona che è anche membro di un workspace con `pm` attiva, e il ritorno di `bookings` e di `pm`. [finto, workspace] */
+function fintoDelClienteConWorkspace(): array
+{
+    $finto = BackofficeFinto::attiva()->ritorno('bookings', FRONTEND.'/ingresso/ritorno')->ritorno('pm', FRONTEND.'/ingresso/ritorno');
+    $studio = $finto->workspace('Studio', $finto->persona('cliente@example.com', PASSWORD));
+    $finto->attivaApp($studio, 'pm');
+
+    return [$finto, $studio];
+}
+
+/** I `data` di gettoni.crea: la persona entra nel workspace. */
+function gettoneDelClienteNelWorkspace(array $studio): array
+{
+    $accesso = entraNelFinto('cliente@example.com')['gettone']['gettone'];
+
+    return alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data');
+}
+
+it('un Sessione::entra() della stessa persona dopo la sessione del cliente scarta il gettone ristretto (D1.2)', function () {
+    [, $studio] = fintoDelClienteConWorkspace();
+    $partenza = queryDelCliente((string) $this->get('/cliente/entra')->headers->get('Location'));
+    $this->get(ritornoDelCliente($partenza));
+    expect(array_keys(session(Sessione::CHIAVE)['gettoni']))->toBe(['accesso']);
+
+    Sessione::entra(gettoneDelClienteNelWorkspace($studio));
+
+    expect(array_keys(session(Sessione::CHIAVE)['gettoni']))->toBe(['workspace'])
+        ->and(Sessione::workspace()['id'])->toBe($studio['id']);
+});
+
+it('la sessione del cliente dopo quella di un workspace nello stesso browser prende il posto di tutta la sessione di prima (D1.2)', function () {
+    [, $studio] = fintoDelClienteConWorkspace();
+    Sessione::entra(gettoneDelClienteNelWorkspace($studio));
+    expect(Sessione::workspace()['id'])->toBe($studio['id']);
+
+    $partenza = queryDelCliente((string) $this->get('/cliente/entra')->headers->get('Location'));
+    $this->get(ritornoDelCliente($partenza))->assertRedirect(url('/'));
+
+    expect(Sessione::workspace())->toBeNull()
+        ->and(Sessione::ruolo())->toBeNull()
+        ->and(array_keys(session(Sessione::CHIAVE)['gettoni']))->toBe(['accesso'])
+        ->and(fn () => Api::workspace())->toThrow(LogicException::class);
+});
+
+it('lascia() non tocca la sessione del cliente: non c\'è un workspace da lasciare (D1.2)', function () {
+    fintoDelCliente();
+    $partenza = queryDelCliente((string) $this->get('/cliente/entra')->headers->get('Location'));
+    $this->get(ritornoDelCliente($partenza));
+    $id = session()->getId();
+
+    Sessione::lascia();
+
+    expect(session()->getId())->toBe($id)
+        ->and(Sessione::aperta())->toBeTrue()
+        ->and(Sessione::utente()['email'])->toBe('cliente@example.com');
+});
