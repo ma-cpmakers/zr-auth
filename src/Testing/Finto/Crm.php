@@ -1945,6 +1945,7 @@ trait Crm
             'responsabile_id' => $riga['responsabile_id'],
             'base_giuridica' => $riga['base_giuridica'],
             'consenso_marketing' => ['dato' => $riga['consenso_marketing'], 'il' => self::isoCrm($riga['consenso_marketing_il'])],
+            'spazio_cliente' => $riga['spazio_cliente'] ?? true,
             'fonte' => $riga['fonte'],
             'ultima_attivita_il' => self::isoCrm($riga['ultima_attivita_il']),
             'prossima_scadenza' => $riga['prossima_scadenza'],
@@ -2187,7 +2188,7 @@ trait Crm
         $ora = self::adessoCrm();
         $this->crm['persone'][$id] = [
             'id' => $id, 'workspace' => $chi['workspace'], ...$campi,
-            'consenso_marketing_il' => $campi['consenso_marketing'] ? $ora : null,
+            'consenso_marketing_il' => $campi['consenso_marketing'] ? $ora : null, 'spazio_cliente' => true,
             'ultima_attivita_il' => null, 'prossima_scadenza' => null, 'trattative_aperte' => 0, 'valore_aperto' => 0, 'trattative_aperte_senza_valore' => 0,
             'archiviata_il' => null, 'anonimizzata_il' => null, 'creato_il' => $ora, 'aggiornato_il' => $ora, 'creato_da' => $chi['persona'],
         ];
@@ -2223,7 +2224,7 @@ trait Crm
     {
         $chi = $this->conCrm($richiesta);
         $riga = $this->rigaCrm('persone', $chi['workspace'], $id);
-        $campi = $this->modificaCrm($corpo, [...$this->regolePersona($chi['workspace']), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', false, $riga['id'], $corpo['campi'] ?? null), 'archiviato' => ['filled', 'boolean:strict']]);
+        $campi = $this->modificaCrm($corpo, [...$this->regolePersona($chi['workspace']), ...$this->regoleDeiValoriCrm($chi['workspace'], 'persona', false, $riga['id'], $corpo['campi'] ?? null), 'archiviato' => ['filled', 'boolean:strict'], 'spazio_cliente' => ['filled', 'boolean:strict']]);
 
         if ($riga['anonimizzata_il'] !== null) {
             throw new Problema('persona_anonimizzata');
@@ -2253,7 +2254,7 @@ trait Crm
             throw $this->erroreCrm('paga_per_id', 'regole.paga_per_se_stesso', Regola::NON_VALIDA);
         }
 
-        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'paga_per_id', 'stato', 'responsabile_id', 'base_giuridica', 'fonte'] as $campo) {
+        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'paga_per_id', 'stato', 'responsabile_id', 'base_giuridica', 'spazio_cliente', 'fonte'] as $campo) {
             if (! array_key_exists($campo, $campi)) {
                 continue;
             }
@@ -2336,7 +2337,7 @@ trait Crm
         $valori = ['organizzazione_id' => 'organizzazione_id', 'stato' => 'stato', 'responsabile_id' => 'responsabile_id', 'base_giuridica' => 'base_giuridica', 'consenso_marketing' => 'consenso_marketing.dato'];
         $voci = [];
 
-        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'paga_per_id', 'email', 'telefoni', 'stato', 'responsabile_id', 'base_giuridica', 'consenso_marketing'] as $campo) {
+        foreach (['nome', 'cognome', 'ruolo', 'professione', 'organizzazione_id', 'paga_per_id', 'email', 'telefoni', 'stato', 'responsabile_id', 'base_giuridica', 'consenso_marketing', 'spazio_cliente'] as $campo) {
             if (isset($cambi[$campo])) {
                 $voci[] = isset($valori[$campo]) ? ['campo' => $valori[$campo], ...$cambi[$campo]] : ['campo' => $campo];
             }
