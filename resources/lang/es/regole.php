@@ -310,5 +310,6 @@ return [
     'documento_versione_inesistente' => 'Esta versión del modelo no existe: la última publicada es la :corrente. Las versiones las da crm.modelli.mostra.',
     'documento_legame_minorenne' => 'El contacto es menor de edad: firma un padre, una madre o un tutor, así que el vínculo es `genitore` o `tutore`.',
     'nome_di_chi_firma' => 'El campo :attribute solo puede contener letras, espacios, apóstrofos, guiones y puntos, empieza con una letra y tiene como máximo 5 palabras.',
+    'nome_di_chi_firma_alfabeti' => 'El campo :attribute no puede mezclar alfabetos distintos en la misma palabra (por ejemplo letras latinas y cirílicas): cada palabra usa un solo alfabeto.',
     'documento_tratto_immagine' => 'La imagen del trazo requiere un PNG en base64 estricto (sin prefijo `data:` ni saltos de línea), de como máximo :max KB y :lato píxeles por lado.',
 ];

@@ -310,5 +310,6 @@ return [
     'documento_versione_inesistente' => 'This version of the model does not exist: the latest published is :corrente. crm.modelli.mostra gives the versions.',
     'documento_legame_minorenne' => 'The contact is a minor: a parent or a guardian signs, so the relationship is `genitore` or `tutore`.',
     'nome_di_chi_firma' => 'The :attribute field may contain only letters, spaces, apostrophes, hyphens and full stops, starts with a letter and has at most 5 words.',
+    'nome_di_chi_firma_alfabeti' => 'The :attribute field cannot mix different alphabets in the same word (for example Latin and Cyrillic letters): each word uses a single alphabet.',
     'documento_tratto_immagine' => 'The stroke image wants a PNG in strict base64 (no `data:` prefix and no line breaks), at most :max KB and :lato pixels per side.',
 ];

@@ -175,7 +175,7 @@ it('nome di chi firma (#3040): un segno combinante o un riempitivo invisibile al
     [, $gettoni] = studioColCrm();
     $persona = alFinto('POST', '/v1/crm/persone', ['nome' => 'Pia', 'cognome' => 'Verdi'], $gettoni['anna'])->json('data.id');
 
-    foreach (["\u{0301}Verdi", "Ve\u{3164}rdi", '..', "Ve\u{FE0F}rdi", 'A'.str_repeat("\u{0301}", 5).'b'] as $i => $cognome) {
+    foreach (["\u{0301}Verdi", "Ve\u{3164}rdi", '..', "Ve\u{FE0F}rdi", 'b'.str_repeat("\u{0301}", 5).'b'] as $i => $cognome) {
         $r = alFinto('POST', '/v1/crm/documenti', firmaDelFinto($persona, ['firmatario' => ['nome' => 'Mara', 'cognome' => $cognome, 'legame' => 'se_stesso']]), $gettoni['anna'], intestazioni: chiaveDiCreazione("k-nm2-{$i}"));
 
         expect($r->status())->toBe(422)->and($r->json('errors.0.pointer'))->toBe('#/firmatario/cognome');
