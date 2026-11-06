@@ -175,7 +175,7 @@ final class BackofficeFinto
     private const APP_PER_I_CLIENTI = ['bookings'];
 
     /** I soli metodi che il gettone ristretto del cliente apre (MetodiDelCliente::ELENCO, #3304): `*` copre ogni metodo sotto il prefisso. */
-    private const METODI_DEL_CLIENTE = ['io.mostra', 'io.modifica', 'io.prenotazioni.*'];
+    private const METODI_DEL_CLIENTE = ['accessi.corrente.elimina', 'io.mostra', 'io.modifica', 'io.prenotazioni.*'];
 
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
@@ -3987,6 +3987,14 @@ final class BackofficeFinto
     private function eliminaAccessoCorrente(Request $richiesta): array
     {
         $chi = $this->autentica($richiesta);
+        $gettone = (string) self::gettoneDi($richiesta);
+
+        // Il gettone ristretto del cliente (#3304) esce chiudendo solo se stesso: l'accesso è di zr-home e resta aperto.
+        if (($this->gettoni[$gettone]['tipo'] ?? null) === 'cliente') {
+            unset($this->gettoni[$gettone]);
+
+            return [204, null];
+        }
 
         $this->accessi[$chi['accesso']]['chiuso'] = true;
 

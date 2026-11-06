@@ -245,6 +245,10 @@ it("l'ingresso del cliente dà il codice senza workspace e lo scambio un gettone
         ->and(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => sfidaDi($verificatore)], $cliente)->json('codice'))->toBe('permesso_negato')
         // Il codice vale una volta, e il gettone dell'accesso resta quello di prima.
         ->and(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita')
+        ->and(alFinto('GET', '/v1/accessi', gettone: $accesso)->status())->toBe(200)
+        // L'uscita del cliente chiude solo il suo gettone: l'accesso resta aperto.
+        ->and(alFinto('DELETE', '/v1/accessi/corrente', gettone: $cliente)->status())->toBe(204)
+        ->and(alFinto('GET', '/v1/io', gettone: $cliente)->json('codice'))->toBe('gettone_non_valido')
         ->and(alFinto('GET', '/v1/accessi', gettone: $accesso)->status())->toBe(200);
 });
 
