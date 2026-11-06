@@ -173,6 +173,7 @@ return [
     'calendario_voce_non_piu_valida' => "The calendar's item is no longer an active service with a duration: pick another one before activating it.",
     'calendario_pausa_da_attivo' => 'A calendar can only be paused when it is active.',
     'calendario_attivo_senza_fasce' => 'An active calendar has at least one time slot: add it before activating, or pause the calendar.',
+    'calendario_attivo_senza_voce' => 'An active calendar has a service: link one with voce_id before activating it, or leave it as a draft.',
     'calendario_docente_non_trovato' => 'This person is not an active person of this venue: pick one that `bookings.pagine.persone.elenca` shows.',
     'calendario_docente_doppio' => 'This person appears twice in the list.',
     'calendario_docenti_solo_struttura' => 'Teachers belong to a venue: a personal page does not have them.',

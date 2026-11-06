@@ -174,6 +174,7 @@ return [
     'calendario_voce_non_piu_valida' => "La voce del calendario non è più un servizio attivo con una durata: scegline un'altra prima di attivarlo.",
     'calendario_pausa_da_attivo' => 'Un calendario si mette in pausa solo se è attivo.',
     'calendario_attivo_senza_fasce' => 'Un calendario attivo ha almeno una fascia: aggiungila prima di attivarlo, o mettilo in pausa.',
+    'calendario_attivo_senza_voce' => 'Un calendario attivo ha un servizio: collegane uno con voce_id prima di attivarlo, o lascialo in bozza.',
     'calendario_docente_non_trovato' => 'Questa persona non è una persona attiva di questa struttura: scegline una che `bookings.pagine.persone.elenca` mostra.',
     'calendario_docente_doppio' => 'Questa persona compare due volte nella lista.',
     'calendario_docenti_solo_struttura' => 'I docenti sono di una struttura: una pagina persona non li ha.',
