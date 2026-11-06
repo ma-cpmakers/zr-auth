@@ -618,4 +618,16 @@ return [
         'title' => 'Comprobación de Turnstile no disponible',
         'detail' => 'La comprobación de Turnstile no se puede hacer ahora: repítela y vuelve a intentarlo dentro de poco.',
     ],
+    'fatturazione_non_disponibile' => [
+        'title' => 'Facturación no disponible',
+        'detail' => 'La facturación vinculada al CRM no está disponible para este workspace: el programa no existe para su empresa. El método no ha escrito nada.',
+    ],
+    'fatturazione_gia_collegata' => [
+        'title' => 'Facturación ya vinculada',
+        'detail' => 'Este workspace ya tiene un programa de facturación vinculado. Desvincúlalo con crm.integrazioni.fatturazione.collegamento.elimina antes de vincular uno nuevo. El método no ha escrito nada.',
+    ],
+    'programma_non_raggiungibile' => [
+        'title' => 'Programa de facturación no accesible',
+        'detail' => 'El programa de facturación no responde o ha rechazado la solicitud: inténtalo de nuevo en breve. El método no ha escrito nada.',
+    ],
 ];

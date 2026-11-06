@@ -157,6 +157,10 @@ trait Crm
         ['PATCH', '#^/v1/crm/note/([^/]+)$#', 'crm.note.modifica'],
         ['DELETE', '#^/v1/crm/note/([^/]+)$#', 'crm.note.elimina'],
         ['GET', '#^/v1/crm/impostazioni$#', 'crm.impostazioni.mostra'],
+        ['GET', '#^/v1/crm/integrazioni/fatturazione$#', 'crm.integrazioni.fatturazione.mostra'],
+        ['POST', '#^/v1/crm/integrazioni/fatturazione/autorizzazione$#', 'crm.integrazioni.fatturazione.autorizzazione.crea'],
+        ['POST', '#^/v1/crm/integrazioni/fatturazione/collegamento$#', 'crm.integrazioni.fatturazione.collegamento.crea'],
+        ['DELETE', '#^/v1/crm/integrazioni/fatturazione/collegamento$#', 'crm.integrazioni.fatturazione.collegamento.elimina'],
         ['PATCH', '#^/v1/crm/impostazioni$#', 'crm.impostazioni.modifica'],
         ['GET', '#^/v1/crm/utilizzo$#', 'crm.utilizzo.mostra'],
         ['GET', '#^/v1/crm/profili-fatturazione$#', 'crm.profili-fatturazione.elenca'],
@@ -286,7 +290,7 @@ trait Crm
      *
      * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, elenchi: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'elenchi' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'unioni' => [], 'indirizzi' => [], 'profili' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'documenti' => [], 'link_documenti' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'elenchi' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'unioni' => [], 'indirizzi' => [], 'profili' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'documenti' => [], 'link_documenti' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => [], 'fatturazione' => [], 'fatturazione_stati' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -435,6 +439,10 @@ trait Crm
             'crm.note.elenca' => $this->elencaNoteCrm($richiesta),
             'crm.impostazioni.mostra' => [200, ['data' => ['valuta' => $this->valutaCrm($this->conCrm($richiesta)['workspace'])]]],
             'crm.impostazioni.modifica' => $this->modificaImpostazioniCrm($richiesta, $corpo, $amministra),
+            'crm.integrazioni.fatturazione.mostra' => $this->mostraFatturazioneCrm($richiesta, $amministra),
+            'crm.integrazioni.fatturazione.autorizzazione.crea' => $this->autorizzazioneFatturazioneCrm($richiesta, $corpo, $amministra),
+            'crm.integrazioni.fatturazione.collegamento.crea' => $this->collegamentoFatturazioneCrm($richiesta, $corpo, $amministra),
+            'crm.integrazioni.fatturazione.collegamento.elimina' => $this->scollegaFatturazioneCrm($richiesta, $amministra),
             'crm.utilizzo.mostra' => $this->utilizzoCrm($richiesta),
             'crm.profili-fatturazione.elenca' => $this->elencaDelClienteCrm($richiesta, 'profili', $operazione),
             'crm.profili-fatturazione.crea' => $this->creaProfiloFatturazioneCrm($richiesta, $corpo),
@@ -4423,6 +4431,117 @@ trait Crm
         }
 
         $this->crm['note'][$nota['id']]['eliminata'] = true;
+
+        return [204, null];
+    }
+
+    // ———————————————————————————————————————— Fatturazione (IntegrazioniFatturazioneController)
+
+    /** Il programma di fatturazione: l'unico che c'è, e che il paese `ES` dell'azienda del workspace nasconde (Integrazione::disponibile). */
+    private const CRM_PROGRAMMI_FATTURAZIONE = ['fatture_in_cloud'];
+
+    private function fatturazioneDisponibileCrm(string $workspace): bool
+    {
+        return strtoupper((string) ($this->datiAziende[$this->workspace[$workspace]['azienda_id']]['paese'] ?? '')) !== 'ES';
+    }
+
+    /**
+     * La forma del contratto (Forme::integrazioneFatturazione): `non_collegata` col resto a null, o `collegata`.
+     *
+     * @return array<string, mixed>
+     */
+    private function voceFatturazioneCrm(string $workspace): array
+    {
+        $collegamento = $this->crm['fatturazione'][$workspace] ?? null;
+
+        return [
+            'stato' => $collegamento === null ? 'non_collegata' : 'collegata',
+            'programma' => $collegamento['programma'] ?? null,
+            'collegata_il' => $collegamento === null ? null : self::isoCrm($collegamento['collegata_il']),
+            'azienda' => $collegamento['azienda'] ?? null,
+            'disponibile' => $this->fatturazioneDisponibileCrm($workspace),
+        ];
+    }
+
+    /** @return array{int, array<string, mixed>} */
+    private function mostraFatturazioneCrm(Request $richiesta, array $ruoli): array
+    {
+        return [200, ['data' => $this->voceFatturazioneCrm($this->conCrm($richiesta, $ruoli)['workspace'])]];
+    }
+
+    /** Il corpo di partenza e di ritorno: il programma, dall'elenco, e per un'azienda spagnola 409 (Integrazione::richiedeDisponibile). */
+    private function programmaFatturazioneCrm(array $corpo, array $regole, string $workspace): array
+    {
+        $campi = $this->testi->validaCorpo($corpo, ['programma' => ['bail', 'required', 'string', Rule::in(self::CRM_PROGRAMMI_FATTURAZIONE)]] + $regole);
+
+        if (! $this->fatturazioneDisponibileCrm($workspace)) {
+            throw new Problema('fatturazione_non_disponibile');
+        }
+
+        return $campi;
+    }
+
+    /** @return array{int, array<string, mixed>} */
+    private function autorizzazioneFatturazioneCrm(Request $richiesta, array $corpo, array $ruoli): array
+    {
+        $chi = $this->conCrm($richiesta, $ruoli);
+        $this->programmaFatturazioneCrm($corpo, [], $chi['workspace']);
+
+        if (isset($this->crm['fatturazione'][$chi['workspace']])) {
+            throw new Problema('fatturazione_gia_collegata');
+        }
+
+        $stato = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $scade = self::adessoCrm()->addSeconds(600);
+        $this->crm['fatturazione_stati'][$stato] = ['workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'scade' => $scade];
+
+        return [201, ['data' => [
+            'url' => 'https://api-v2.fattureincloud.it/oauth/authorize?'.http_build_query(['response_type' => 'code', 'client_id' => 'finto', 'redirect_uri' => 'https://crm.zeiras.com/integrazioni/fatture-in-cloud/ritorno', 'scope' => 'entity.clients:a issued_documents.invoices:a', 'state' => $stato], '', '&', PHP_QUERY_RFC3986),
+            'stato' => $stato,
+            'scade_il' => self::isoCrm($scade),
+        ]]];
+    }
+
+    /**
+     * Il ritorno: ogni codice non vuoto vale (il programma è finto); lo stato vale una volta, per chi l'ha chiesto, in questo workspace. Uno che non regge è
+     * 422 verifica_non_riuscita, lo stesso corpo. La società è «Società finta».
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function collegamentoFatturazioneCrm(Request $richiesta, array $corpo, array $ruoli): array
+    {
+        $chi = $this->conCrm($richiesta, $ruoli);
+        $campi = $this->programmaFatturazioneCrm($corpo, [
+            'codice' => ['bail', 'required', 'string', 'max:2048'],
+            'stato' => ['bail', 'required', 'string', 'max:256'],
+        ], $chi['workspace']);
+
+        $partenza = $this->crm['fatturazione_stati'][$campi['stato']] ?? null;
+        unset($this->crm['fatturazione_stati'][$campi['stato']]);
+
+        if ($partenza === null || $partenza['scade']->lte(now()) || $partenza['workspace'] !== $chi['workspace'] || $partenza['persona'] !== $chi['persona']) {
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
+
+        if (isset($this->crm['fatturazione'][$chi['workspace']])) {
+            throw new Problema('fatturazione_gia_collegata');
+        }
+
+        $this->crm['fatturazione'][$chi['workspace']] = ['programma' => $campi['programma'], 'azienda' => 'Società finta', 'collegata_il' => self::adessoCrm()];
+
+        return [201, ['data' => $this->voceFatturazioneCrm($chi['workspace'])], ['Location' => '/v1/crm/integrazioni/fatturazione']];
+    }
+
+    /** @return array{int, null} */
+    private function scollegaFatturazioneCrm(Request $richiesta, array $ruoli): array
+    {
+        $workspace = $this->conCrm($richiesta, $ruoli)['workspace'];
+
+        if (! isset($this->crm['fatturazione'][$workspace])) {
+            throw new Problema('non_trovato');
+        }
+
+        unset($this->crm['fatturazione'][$workspace]);
 
         return [204, null];
     }
