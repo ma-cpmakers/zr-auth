@@ -128,14 +128,14 @@ it("un'app attiva dà il codice di un ingresso, con il ritorno che il test ha de
         ->and($ingresso->json('data.codice'))->toMatch('/^[A-Za-z0-9_-]{43}$/')
         ->and(alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore), 'ritorno' => 'https://evil.example/'], $gettone)->json('errors.0.pointer'))->toBe('#/ritorno');
 
-    $scambio = alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore]);
+    $scambio = scambioDelFinto(['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore]);
 
     expect($scambio->status())->toBe(201)
         ->and($scambio->json('data.workspace.id'))->toBe($studio['id'])
         ->and($scambio->json('data.ruolo'))->toBe('proprietario')
         ->and(alFinto('GET', '/v1/io', gettone: $scambio->json('data.gettone'))->json('data.workspace.id'))->toBe($studio['id'])
         // Il codice vale una volta.
-        ->and(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
+        ->and(scambioDelFinto(['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
 });
 
 it("un verificatore sbagliato consuma il codice, e l'ingresso a un'app spenta o senza ritorno non nasce (T1.4, T1.5)", function () {
@@ -144,14 +144,14 @@ it("un verificatore sbagliato consuma il codice, e l'ingresso a un'app spenta o 
     $verificatore = str_repeat('v', 64);
     $codice = alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('data.codice');
 
-    expect(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => str_repeat('w', 64)])->json('codice'))->toBe('verifica_non_riuscita')
-        ->and(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
+    expect(scambioDelFinto(['codice' => $codice, 'verificatore' => str_repeat('w', 64)])->json('codice'))->toBe('verifica_non_riuscita')
+        ->and(scambioDelFinto(['codice' => $codice, 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
 
     // Lo spegnimento dell'app dopo il codice lo rende inutile.
     $codice = alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('data.codice');
     alFinto('PATCH', '/v1/app/pm', ['stato' => 'disponibile'], $gettone);
 
-    expect(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita')
+    expect(scambioDelFinto(['codice' => $codice, 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita')
         ->and(alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('codice'))->toBe('app_non_attiva');
 
     // Attiva, ma senza un indirizzo di ritorno: l'app non riceve ingressi.
@@ -171,7 +171,7 @@ it("lo scambio di una persona che non è più nel workspace è la stessa verific
     $codice = alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('data.codice');
 
     expect(alFinto('DELETE', "/v1/workspace/membri/{$bruno['id']}", gettone: $anna)->status())->toBe(204)
-        ->and(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
+        ->and(scambioDelFinto(['codice' => $codice, 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
 });
 
 it('un codice dell\'ingresso scade dopo 60 secondi (T1.5)', function () {
@@ -184,7 +184,7 @@ it('un codice dell\'ingresso scade dopo 60 secondi (T1.5)', function () {
 
     $this->travel(61)->seconds();
 
-    expect(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
+    expect(scambioDelFinto(['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita');
 });
 
 it("lo scambio di un workspace con l'eliminazione programmata è la stessa verifica_non_riuscita, e dopo il ripristino un codice nuovo scambia (#2682)", function () {
@@ -197,22 +197,22 @@ it("lo scambio di un workspace con l'eliminazione programmata è la stessa verif
     $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
     $verificatore = str_repeat('v', 64);
     $codice = alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('data.codice');
-    $sconosciuto = alFinto('POST', '/v1/ingressi/scambio', ['codice' => str_repeat('c', 43), 'verificatore' => $verificatore]);
+    $sconosciuto = scambioDelFinto(['codice' => str_repeat('c', 43), 'verificatore' => $verificatore]);
 
     expect(alFinto('DELETE', '/v1/workspace', gettone: $gettone)->status())->toBe(202);
 
     // deve fallire se: il finto scambia un ingresso per un workspace in eliminazione, o la risposta differisce da quella di un codice sbagliato
-    $rifiuto = alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore]);
+    $rifiuto = scambioDelFinto(['codice' => $codice, 'verificatore' => $verificatore]);
     expect($rifiuto->status())->toBe(422)
         ->and($rifiuto->json())->toBe($sconosciuto->json());
 
     // Il ripristino riapre il workspace, ma il codice di prima è consumato; uno nuovo scambia.
     expect(alFinto('DELETE', "/v1/io/workspace/{$studio['id']}/eliminazione", gettone: $accesso)->status())->toBe(200);
     $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
-    expect(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $codice, 'verificatore' => $verificatore])->status())->toBe(422);
+    expect(scambioDelFinto(['codice' => $codice, 'verificatore' => $verificatore])->status())->toBe(422);
 
     $nuovo = alFinto('POST', '/v1/ingressi', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $gettone)->json('data.codice');
-    $scambio = alFinto('POST', '/v1/ingressi/scambio', ['codice' => $nuovo, 'verificatore' => $verificatore]);
+    $scambio = scambioDelFinto(['codice' => $nuovo, 'verificatore' => $verificatore]);
 
     expect($scambio->status())->toBe(201)
         ->and($scambio->json('data.workspace.id'))->toBe($studio['id']);
@@ -232,7 +232,7 @@ it("l'ingresso del cliente dà il codice senza workspace e lo scambio un gettone
         ->and(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => sfidaDi($verificatore), 'ritorno' => 'https://evil.example/'], $accesso)->json('errors.0.pointer'))->toBe('#/ritorno')
         ->and(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $accesso)->json('errors.0.pointer'))->toBe('#/app');
 
-    $scambio = alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore]);
+    $scambio = scambioDelFinto(['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore]);
     $cliente = $scambio->json('data.gettone');
 
     expect($scambio->status())->toBe(201)
@@ -244,7 +244,7 @@ it("l'ingresso del cliente dà il codice senza workspace e lo scambio un gettone
         ->and(alFinto('GET', '/v1/accessi', gettone: $cliente)->json('codice'))->toBe('permesso_negato')
         ->and(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => sfidaDi($verificatore)], $cliente)->json('codice'))->toBe('permesso_negato')
         // Il codice vale una volta, e il gettone dell'accesso resta quello di prima.
-        ->and(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita')
+        ->and(scambioDelFinto(['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita')
         ->and(alFinto('GET', '/v1/accessi', gettone: $accesso)->status())->toBe(200)
         // L'uscita del cliente chiude solo il suo gettone: l'accesso resta aperto.
         ->and(alFinto('DELETE', '/v1/accessi/corrente', gettone: $cliente)->status())->toBe(204)

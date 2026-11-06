@@ -13,7 +13,8 @@ use Zeiras\Auth\Testing\BackofficeFinto;
 // codice di `ingressi.clienti.crea` e apre la sessione del cliente: la persona, il gettone ristretto, mai un workspace o un ruolo.
 
 beforeEach(function () {
-    config(['zr-auth.home' => 'https://app.zeiras.com', 'zr-auth.app' => 'bookings']);
+    // Lo scambio lo firma il client del modulo (#3344): qui `bookings`, come in produzione, col segreto che il finto dà a tutti i nomi.
+    config(['zr-auth.home' => 'https://app.zeiras.com', 'zr-auth.app' => 'bookings', 'zr-auth.cliente' => 'bookings', 'zr-auth.segreto' => BackofficeFinto::SEGRETO_DEL_CLIENTE]);
     Route::middleware('web')->get('cliente/entra', fn () => Ingresso::versoCliente())->withoutMiddleware(ConGettone::class);
     Route::middleware(['web', ConGettone::class])->get('cliente/pagina', fn () => response('pagina del cliente'));
 });

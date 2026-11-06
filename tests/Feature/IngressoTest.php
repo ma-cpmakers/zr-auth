@@ -18,7 +18,8 @@ const HOME_DI_PROVA = 'https://app.zeiras.com';
 const RICEVITORE_DI_PROVA = '/ingresso/ritorno';
 
 beforeEach(function () {
-    config(['zr-auth.home' => HOME_DI_PROVA, 'zr-auth.app' => 'pm']);
+    // Lo scambio lo firma il client del modulo (#3344): nei test è `finto`, che vale per ogni app.
+    config(['zr-auth.home' => HOME_DI_PROVA, 'zr-auth.app' => 'pm', 'zr-auth.cliente' => BackofficeFinto::CLIENTE, 'zr-auth.segreto' => BackofficeFinto::SEGRETO_DEL_CLIENTE]);
     // La partenza la chiama una pagina del modulo: qui una rotta pubblica, `parti/{workspace}`.
     Route::middleware('web')->get('parti/{workspace}', fn (string $workspace) => Ingresso::verso($workspace))->withoutMiddleware(ConGettone::class);
 });
