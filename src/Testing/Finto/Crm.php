@@ -73,6 +73,9 @@ trait Crm
         ['POST', '#^/v1/crm/acquisti/([^/]+)/piano$#', 'crm.acquisti.piano.crea'],
         ['GET', '#^/v1/crm/rate$#', 'crm.rate.elenca'],
         ['GET', '#^/v1/crm/rate/riepilogo$#', 'crm.rate.riepilogo.mostra'],
+        ['POST', '#^/v1/crm/fatture$#', 'crm.fatture.crea'],
+        ['GET', '#^/v1/crm/rate/([^/]+)/fattura/pdf$#', 'crm.rate.fattura.pdf.mostra'],
+        ['GET', '#^/v1/crm/acquisti/([^/]+)/fattura/pdf$#', 'crm.acquisti.fattura.pdf.mostra'],
         ['GET', '#^/v1/crm/rate/([^/]+)$#', 'crm.rate.mostra'],
         ['GET', '#^/v1/crm/rate/([^/]+)/pagamenti$#', 'crm.rate.pagamenti.elenca'],
         ['POST', '#^/v1/crm/rate/([^/]+)/pagamenti$#', 'crm.rate.pagamenti.crea'],
@@ -290,7 +293,7 @@ trait Crm
      *
      * @var array{organizzazioni: array<string, array<string, mixed>>, persone: array<string, array<string, mixed>>, trattative: array<string, array<string, mixed>>, pipeline: array<string, array<string, mixed>>, motivi: array<string, array<string, mixed>>, esiti: array<string, array<string, mixed>>, elenchi: array<string, array<string, mixed>>, catalogo: array<string, array<string, mixed>>, acquisti: array<string, array<string, mixed>>, consumi: array<string, array<string, mixed>>, fasi: array<string, array<string, mixed>>, attivita: array<string, array<string, mixed>>, note: array<string, array<string, mixed>>, cambi: list<array<string, mixed>>, valute: array<string, string>, importazioni: array<string, array<string, mixed>>, valori: array<string, array<string, array<string, mixed>>>}
      */
-    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'elenchi' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'unioni' => [], 'indirizzi' => [], 'profili' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'documenti' => [], 'link_documenti' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => [], 'fatturazione' => [], 'fatturazione_stati' => []];
+    private array $crm = ['organizzazioni' => [], 'persone' => [], 'trattative' => [], 'pipeline' => [], 'motivi' => [], 'esiti' => [], 'elenchi' => [], 'catalogo' => [], 'acquisti' => [], 'consumi' => [], 'rate' => [], 'pagamenti' => [], 'preventivi' => [], 'scadenzeTipi' => [], 'scadenze' => [], 'unioni' => [], 'indirizzi' => [], 'profili' => [], 'fasi' => [], 'attivita' => [], 'note' => [], 'documenti' => [], 'link_documenti' => [], 'cambi' => [], 'valute' => [], 'importazioni' => [], 'valori' => [], 'fatturazione' => [], 'fatturazione_stati' => [], 'fatture' => []];
 
     /**
      * Esegue un metodo `crm.*`.
@@ -364,6 +367,9 @@ trait Crm
             'crm.acquisti.piano.crea' => $this->creaPianoCrm($richiesta, $corpo, $parametri[0]),
             'crm.rate.elenca' => $this->elencaRateCrm($richiesta),
             'crm.rate.riepilogo.mostra' => $this->riepilogoRateCrm($richiesta),
+            'crm.fatture.crea' => $this->creaFatturaCrm($richiesta, $corpo),
+            'crm.rate.fattura.pdf.mostra' => $this->pdfDellaFatturaCrm($richiesta, 'rate', $parametri[0]),
+            'crm.acquisti.fattura.pdf.mostra' => $this->pdfDellaFatturaCrm($richiesta, 'acquisti', $parametri[0]),
             'crm.rate.mostra' => $this->mostraCrm($richiesta, 'rate', $parametri[0]),
             'crm.rate.pagamenti.elenca' => $this->elencaPagamentiCrm($richiesta, $parametri[0]),
             'crm.scadenze.tipi.elenca' => $this->elencaScadenzeTipiCrm($richiesta),

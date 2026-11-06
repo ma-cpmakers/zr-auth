@@ -314,4 +314,8 @@ return [
     'nome_di_chi_firma' => 'Il campo :attribute può contenere solo lettere, spazi, apostrofo, trattino e punto, comincia con una lettera e ha al più 5 parole.',
     'nome_di_chi_firma_alfabeti' => 'Il campo :attribute non può mescolare alfabeti diversi nella stessa parola (per esempio lettere latine e cirilliche): ogni parola ne usa uno solo.',
     'documento_tratto_immagine' => "L'immagine del tratto vuole un PNG in base64 stretto (senza prefisso `data:` né a capo), di al più :max KB e :lato pixel per lato.",
+    'fattura_profilo_assente' => 'Chi paga non ha un profilo di fatturazione predefinito: crealo con crm.profili-fatturazione.crea e riprova.',
+    'fattura_profilo_incompleto' => "Il profilo di fatturazione di chi paga non basta per fatturare: l'elenco di ciò che manca è in `mancano`. Completalo con crm.profili-fatturazione.modifica.",
+    'fattura_senza_aliquota' => "La voce di catalogo di questo acquisto non c'è più o non ha un'aliquota IVA: impostala con crm.catalogo.modifica. L'aliquota non si inventa.",
+    'fattura_senza_importo' => 'Questa rata o questo acquisto non ha un importo da fatturare.',
 ];

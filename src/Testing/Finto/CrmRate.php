@@ -440,6 +440,7 @@ trait CrmRate
             'stato' => self::statoRataCrm($riga, self::oggiAcquistoCrm()),
             'pagata_il' => $riga['ultimo_pagamento_il'],
             'ultimo_metodo' => $riga['ultimo_metodo'],
+            'fattura' => $this->voceFatturaCrm('rata_id', $riga['id']),
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
         ];

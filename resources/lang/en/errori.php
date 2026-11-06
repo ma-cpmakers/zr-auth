@@ -630,4 +630,12 @@ return [
         'title' => 'Invoicing program unreachable',
         'detail' => 'The invoicing program is not answering or refused the request: try again shortly. The method wrote nothing.',
     ],
+    'fatturazione_non_collegata' => [
+        'title' => 'Invoicing not linked',
+        'detail' => 'This workspace has no invoicing program linked: link one with crm.integrazioni.fatturazione.autorizzazione.crea and crm.integrazioni.fatturazione.collegamento.crea. The method wrote nothing.',
+    ],
+    'fattura_gia_emessa' => [
+        'title' => 'Invoice already issued',
+        'detail' => "The invoice for this installment or purchase has already been issued, or so has one of the other (a purchase and its installments are not invoiced twice). The number is on the installment or the purchase. The method wrote nothing.",
+    ],
 ];
