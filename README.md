@@ -808,7 +808,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   porta `esito` (`in_preparazione` finché non si chiede; le altre schede `null`), `approvatore` (`{persona_id, titolo}`, letto oggi dal CRM del finto) e
   `decisione` in ogni lettura. Rispondono `board.schede.gate.richiesta.crea` (`in_approvazione`, con `richiesto_il` e `richiesto_da`; `409`
   `scheda_non_gate`, `gate_gia_richiesto`, `gate_deciso`, `gate_senza_approvatore`) e `board.schede.gate.decisione.crea` (`approvato`, `con_prescrizioni`
-  o `respinto` con `motivo` e `prescrizioni`, che nascono come schede della board; `409` `gate_non_richiesto` e `approvatore_non_disponibile`).
+  o `respinto` con `motivo` e `prescrizioni`, che nascono come schede della board; `409` `gate_non_richiesto` e `approvatore_non_disponibile`). `board.schede.gate.annullamento.crea` (#3206, senza corpo) annulla la richiesta aperta e riporta il Gate allo stato di prima, con la decisione di prima, senza registrare un rifiuto: risponde `200` con il solo `esito`; `409` `gate_non_richiesto` se il Gate non è `in_approvazione`.
   Con la richiesta aperta e l'approvatore disponibile, `board.schede.crm.crea` (con `ruolo` `approvatore`) e `board.schede.crm.elimina` (del collegamento dell'approvatore) rispondono 409 `gate_in_approvazione`; se il contatto non c'è più (archiviato o anonimizzato) il collegamento si toglie e si sostituisce. Il cambio di `tipo` della scheda con la richiesta aperta il finto non lo vincola.
   `board.schede.spostamento.crea` risponde con `avvisi: []`: il finto ha una lista sola per board e non salta mai un Gate.
 - **Gli sprint.** `sprint($workspace, $board, $nome, 'pianificato'|'attivo'|'chiuso', $inizio, $durataSettimane, $obiettivo, $velocita, $unita)`

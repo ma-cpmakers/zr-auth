@@ -235,3 +235,32 @@ it('con la richiesta aperta e l\'approvatore disponibile il suo collegamento non
         ->and(alFinto('DELETE', "/v1/board/schede/{$gate['id']}/crm/{$collegamento}", null, $gettone)->status())->toBe(204)
         ->and(alFinto('POST', "/v1/board/schede/{$gate['id']}/crm", ['tipo' => 'crm.persona', 'id' => $altro, 'ruolo' => 'approvatore'], $gettone)->status())->toBe(201);
 });
+
+it('l\'annullamento (#3206): 200 con il solo esito di prima e la decisione di prima; senza richiesta è 409 gate_non_richiesto; poi si rifà la richiesta', function () {
+    [, , $gate, , $gettone] = conUnGate(true);
+    $annulla = fn () => alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/annullamento", null, $gettone);
+
+    expect($annulla()->json('codice'))->toBe('gate_non_richiesto');
+
+    alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone);
+    alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/decisione", ['decisione' => 'respinto', 'motivo' => 'No.'], $gettone);
+    alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone);
+    $risposta = $annulla();
+
+    expect($risposta->status())->toBe(200)
+        ->and($risposta->json())->toBe(['data' => ['esito' => 'respinto']])
+        ->and(alFinto('GET', "/v1/board/schede/{$gate['id']}", null, $gettone)->json('data.decisione.decisione'))->toBe('respinto')
+        ->and($annulla()->json('codice'))->toBe('gate_non_richiesto');
+
+    $nuovo = alFinto('POST', '/v1/board/schede/'.$gate['id'].'/gate/richiesta', null, $gettone);
+    expect($nuovo->status())->toBe(200)
+        ->and($annulla()->json('data.esito'))->toBe('respinto');
+});
+
+it('l\'annullamento di un Gate mai deciso lo riporta in_preparazione', function () {
+    [, , $gate, , $gettone] = conUnGate(true);
+    alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/richiesta", null, $gettone);
+
+    expect(alFinto('POST', "/v1/board/schede/{$gate['id']}/gate/annullamento", null, $gettone)->json('data.esito'))->toBe('in_preparazione')
+        ->and(alFinto('GET', "/v1/board/schede/{$gate['id']}", null, $gettone)->json('data.decisione'))->toBeNull();
+});

@@ -6,8 +6,8 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Il Gate di una scheda nel backoffice finto (#2791, zr-board #2767): `board.schede.gate.richiesta.crea` e `board.schede.gate.decisione.crea`
- * (GateController). Una scheda di tipo `gate` (nata con `scheda(… tipo: 'gate')`) ha `esito`, `approvatore` e `decisione` in ogni lettura: l'approvatore
+ * Il Gate di una scheda nel backoffice finto (#2791, zr-board #2767): `board.schede.gate.richiesta.crea`, `board.schede.gate.decisione.crea` e
+ * `board.schede.gate.annullamento.crea` (#3206) (GateController). Una scheda di tipo `gate` (nata con `scheda(… tipo: 'gate')`) ha `esito`, `approvatore` e `decisione` in ogni lettura: l'approvatore
  * è il contatto del CRM collegato con `ruolo` `approvatore` (board.schede.crm.crea), il cui titolo si legge dal CRM del finto a ogni lettura. La
  * richiesta porta il Gate in `in_approvazione`; la decisione, `approvato`, `con_prescrizioni` o `respinto`, la scrive chi chiama per conto di quel
  * contatto, e le prescrizioni nascono come schede della stessa board, tutto o niente. Il finto non ha liste vere né tetti (la lista è una sola), non emette
@@ -144,13 +144,44 @@ trait Gate
             }
 
             $ora = now()->toImmutable()->startOfMillisecond();
+            $prima = ($mia['esito'] ?? null) === null ? null : array_intersect_key($mia, array_flip(['esito', 'decisione', 'deciso_il', 'deciso_da', 'per_conto_di', 'motivo_decisione']));
             $this->schede[$mia['id']] = array_merge($this->schede[$mia['id']], [
-                'esito' => 'in_approvazione', 'richiesto_il' => $ora, 'richiesto_da' => $chi['persona'],
+                'esito' => 'in_approvazione', 'richiesto_il' => $ora, 'richiesto_da' => $chi['persona'], 'gate_prima' => $prima,
                 'decisione' => null, 'deciso_il' => null, 'deciso_da' => null, 'per_conto_di' => null, 'motivo_decisione' => null,
             ]);
             $this->tocca($mia['id']);
 
             return [200, ['data' => ['esito' => 'in_approvazione', 'richiesto_il' => self::iso($ora), 'richiesto_da' => $this->personaDelGate($chi['persona'])]], []];
+        });
+    }
+
+    /**
+     * board.schede.gate.annullamento.crea (GateController::annullamentoCrea, #3206): annulla la richiesta di approvazione, e il Gate torna allo stato di prima
+     * (`in_preparazione`, `con_prescrizioni` o `respinto`, con la decisione di prima) senza registrare un rifiuto: così si cambia l'approvatore e si rifà la
+     * richiesta. Nell'ordine della richiesta (403, 404, Idempotency-Key, `board_chiusa`, `scheda_archiviata`, `scheda_non_gate`), poi 409 `gate_non_richiesto`
+     * se il Gate non è `in_approvazione`. Senza corpo; 200 con il solo `esito` di prima.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function annullaGate(Request $richiesta, string $scheda): array
+    {
+        $chi = $this->conPm($richiesta);
+        $mia = $this->schedaDelPercorso($chi['workspace'], $scheda);
+
+        return $this->conIdempotenza($richiesta, 'board.schede.gate.annullamento.crea', $chi, ['corpo' => [], 'percorso' => ['scheda' => $scheda]], function () use ($mia) {
+            $this->gateAperto($mia);
+
+            if ($this->esitoDelGate($mia) !== 'in_approvazione') {
+                throw new Problema('gate_non_richiesto');
+            }
+
+            $this->schede[$mia['id']] = array_merge($this->schede[$mia['id']], [
+                'esito' => null, 'richiesto_il' => null, 'richiesto_da' => null, 'gate_prima' => null,
+                'decisione' => null, 'deciso_il' => null, 'deciso_da' => null, 'per_conto_di' => null, 'motivo_decisione' => null,
+            ], $mia['gate_prima'] ?? []);
+            $this->tocca($mia['id']);
+
+            return [200, ['data' => ['esito' => $this->esitoDelGate($this->schede[$mia['id']])]], []];
         });
     }
 
