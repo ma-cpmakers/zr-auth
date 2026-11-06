@@ -195,7 +195,7 @@ it('il finto risponde a ingressi.clienti.crea e allo scambio del cliente (D1.3)'
 
 it('entraCliente rifiuta una forma che non è quella di un cliente e non scrive niente (D1.2)', function (array $modifica) {
     $dati = [
-        'gettone' => 'zr_prova', 'scade_il' => now()->addHour()->toIso8601String(), 'utente' => ['id' => 'u1', 'email' => 'cliente@example.com'],
+        'gettone' => bin2hex(random_bytes(8)), 'scade_il' => now()->addHour()->toIso8601String(), 'utente' => ['id' => 'u1', 'email' => 'cliente@example.com'],
         'workspace' => null, 'ruolo' => null,
     ];
 
