@@ -312,5 +312,6 @@ return [
     'documento_versione_inesistente' => "Questa versione del modello non esiste: l'ultima pubblicata è la :corrente. Le versioni le dà crm.modelli.mostra.",
     'documento_legame_minorenne' => 'Il contatto è minorenne: firma un genitore o un tutore, quindi il legame è `genitore` o `tutore`.',
     'nome_di_chi_firma' => 'Il campo :attribute può contenere solo lettere, spazi, apostrofo, trattino e punto, comincia con una lettera e ha al più 5 parole.',
+    'nome_di_chi_firma_alfabeti' => 'Il campo :attribute non può mescolare alfabeti diversi nella stessa parola (per esempio lettere latine e cirilliche): ogni parola ne usa uno solo.',
     'documento_tratto_immagine' => "L'immagine del tratto vuole un PNG in base64 stretto (senza prefisso `data:` né a capo), di al più :max KB e :lato pixel per lato.",
 ];
