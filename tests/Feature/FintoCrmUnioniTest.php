@@ -214,3 +214,20 @@ it('nessuno resta pagante di sé: chi resta che pagava per l\'unito prende il pa
     expect($unione->status())->toBe(201)
         ->and(alFinto('GET', "/v1/crm/persone/{$resta}", null, $gettoni['anna'])->json('data.paga_per'))->toBeNull();
 });
+
+it('il pagamento reciproco: l\'unione azzera il pagante di chi resta e l\'annullamento lo riporta all\'unito (#3208)', function () {
+    [$gettoni, $resta, $unito] = duePersoneDoppie();
+    alFinto('PATCH', "/v1/crm/persone/{$resta}", ['paga_per_id' => $unito], $gettoni['anna']);
+    alFinto('PATCH', "/v1/crm/persone/{$unito}", ['paga_per_id' => $resta], $gettoni['anna']);
+    $pagante = fn (string $id) => alFinto('GET', "/v1/crm/persone/{$id}", null, $gettoni['anna'])->json('data.paga_per.id');
+
+    $unione = alFinto('POST', '/v1/crm/persone/unioni', corpoDellUnione($gettoni, $resta, $unito, ['scelte' => ['ruolo' => 'unito']]), $gettoni['anna']);
+    $id = $unione->json('data.id');
+
+    expect($unione->status())->toBe(201)->and($pagante($resta))->toBeNull()
+        ->and(alFinto('GET', "/v1/crm/persone/unioni/{$id}", null, $gettoni['anna'])->json('data.dopo.campi'))->toBe([]);
+
+    alFinto('POST', "/v1/crm/persone/unioni/{$id}/annullamento", null, $gettoni['anna']);
+
+    expect($pagante($resta))->toBe($unito)->and($pagante($unito))->toBe($resta);
+});
