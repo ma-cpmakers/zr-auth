@@ -6,7 +6,7 @@ use Illuminate\Http\Client\Request;
 use InvalidArgumentException;
 
 /**
- * Le aziende di cui una persona è cliente, nel backoffice finto (#3321, zr-core #3319): `io.fornitori.nascosti.elenca`, `.crea` e `.elimina`, con le regole,
+ * Le aziende di cui una persona è cliente, nel backoffice finto (#3320, #3321, zr-core #3319): `io.fornitori.elenca`, `io.fornitori.nascosti.elenca`, `.crea` e `.elimina`, con le regole,
  * i pointer e l'ordine di `IoFornitoriNascostiController` del backoffice. Il finto non ha contatti del CRM per questo: la relazione da cliente si dichiara
  * con cliente() (un contatto vivo con l'email principale della persona e lo spazio del cliente acceso, nel backoffice vero). Vale se la persona ha
  * l'email verificata e il workspace non è in eliminazione. Le aziende si ordinano per nome (confronto byte per byte, non per ordine alfabetico del
@@ -46,6 +46,19 @@ trait Fornitori
     }
 
     /**
+     * io.fornitori.elenca (IoFornitoriController::elenca): le aziende di cui la persona del gettone è cliente e che non ha nascosto, per nome e poi id.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaFornitori(Request $richiesta): array
+    {
+        $chi = $this->autentica($richiesta);
+        $voci = array_values(array_filter($this->fornitoriDellaPersona($chi['persona']), fn (array $voce) => ! isset($this->fornitoriNascosti[$chi['persona']][$voce['id']])));
+
+        return $this->elencoDiFornitori($richiesta, 'io.fornitori.elenca', $voci);
+    }
+
+    /**
      * io.fornitori.nascosti.elenca (IoFornitoriNascostiController::elenca): i nascosti della persona del gettone di cui è ancora cliente, per nome e poi id.
      *
      * @return array{int, array<string, mixed>}
@@ -55,9 +68,20 @@ trait Fornitori
         $chi = $this->autentica($richiesta);
         $voci = array_values(array_filter($this->fornitoriDellaPersona($chi['persona']), fn (array $voce) => isset($this->fornitoriNascosti[$chi['persona']][$voce['id']])));
 
+        return $this->elencoDiFornitori($richiesta, 'io.fornitori.nascosti.elenca', $voci);
+    }
+
+    /**
+     * Una pagina di aziende, per nome e poi id.
+     *
+     * @param  list<array{id: string, nome: string, colore: string}>  $voci
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencoDiFornitori(Request $richiesta, string $lista, array $voci): array
+    {
         return $this->pagina(
             $richiesta,
-            'io.fornitori.nascosti.elenca',
+            $lista,
             'id',
             $voci,
             fn (array $voce) => [$voce['nome'], $voce['id']],
