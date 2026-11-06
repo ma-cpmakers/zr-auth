@@ -173,6 +173,7 @@ return [
     'calendario_voce_non_piu_valida' => 'El elemento del calendario ya no es un servicio activo con una duración: elige otro antes de activarlo.',
     'calendario_pausa_da_attivo' => 'Un calendario solo se pone en pausa si está activo.',
     'calendario_attivo_senza_fasce' => 'Un calendario activo tiene al menos una franja: añádela antes de activarlo, o pon el calendario en pausa.',
+    'calendario_attivo_senza_voce' => 'Un calendario activo tiene un servicio: vincula uno con voce_id antes de activarlo, o déjalo en borrador.',
     'calendario_docente_non_trovato' => 'Esta persona no es una persona activa de este local: elige una que `bookings.pagine.persone.elenca` muestre.',
     'calendario_docente_doppio' => 'Esta persona aparece dos veces en la lista.',
     'calendario_docenti_solo_struttura' => 'Los docentes son de un local: una página personal no los tiene.',
