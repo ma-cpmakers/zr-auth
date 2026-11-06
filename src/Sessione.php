@@ -126,8 +126,9 @@ final class Sessione
         self::controllaIlDriver();
         $stato = self::stato() ?? ['accesso' => null, 'gettoni' => []];
 
-        // Il gettone di un ospite vale per la sua prenotazione e basta: non resta accanto a quello di un workspace.
-        if (isset($stato['ospite'])) {
+        // Il gettone di un ospite vale per la sua prenotazione e basta, e quello ristretto di un cliente per i metodi del cliente: non restano
+        // accanto a quello di un workspace, dove `Api::persona()` li manderebbe al posto dell'accesso.
+        if (isset($stato['ospite']) || isset($stato['cliente'])) {
             $stato = ['accesso' => null, 'gettoni' => []];
         }
 
@@ -150,6 +151,42 @@ final class Sessione
     }
 
     /**
+     * Apre la sessione del cliente coi `data` di ingressi.scambio.crea per un codice di `ingressi.clienti.crea` (lo schema Gettone con
+     * `workspace` e `ruolo` null): la persona che non è membro di nessun workspace e entra in un modulo come cliente (Bookings). Il gettone
+     * è quello **ristretto** del cliente e sta al posto di quello dell'accesso (`Api::persona()` lo manda, per i soli metodi del cliente); `utente()` è la
+     * persona, `workspace()` e `ruolo()` sono null, e `Api::workspace()` non c'è. Non c'è l'id dell'accesso (`accesso()` è null): l'uscita
+     * è `accessi.corrente.elimina`, che col gettone ristretto chiude solo quello. L'id della sessione è nuovo e quella di prima è distrutta,
+     * come per `entra()`. Una forma che non è quella (un workspace o un ruolo, un gettone o una scadenza che non sono testi, nessuna persona)
+     * lancia InvalidArgumentException e non scrive niente.
+     *
+     * @param  array<string, mixed>  $gettone
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function entraCliente(array $gettone): void
+    {
+        if (! is_string($gettone['gettone'] ?? null) || $gettone['gettone'] === '' || ! is_string($gettone['scade_il'] ?? null) || $gettone['scade_il'] === ''
+            || ! is_array($gettone['utente'] ?? null) || ($gettone['workspace'] ?? null) !== null || ($gettone['ruolo'] ?? null) !== null) {
+            throw new InvalidArgumentException('Sessione::entraCliente() vuole i data dello scambio di un cliente: il gettone, la scadenza e la persona, senza workspace né ruolo.');
+        }
+
+        self::controllaIlDriver();
+        // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
+        self::segnaLaVecchia();
+
+        session()->regenerate(true);
+        session()->put(self::CHIAVE, [
+            'accesso' => null,
+            'gettoni' => ['accesso' => $gettone['gettone']],
+            'scade_il' => $gettone['scade_il'],
+            'utente' => $gettone['utente'],
+            'workspace' => null,
+            'ruolo' => null,
+            'cliente' => true,
+        ]);
+    }
+
+    /**
      * Lascia il workspace: toglie dalla sessione il workspace, il ruolo e il gettone del workspace, e tiene l'accesso, il suo
      * gettone, la persona e la scadenza, come subito dopo `apri()`. Serve dopo `workspace.uscita.crea` (o quando il workspace è
      * sparito) a chi non ha un altro workspace in cui far entrare la persona: da qui `Api::persona()` chiama col gettone
@@ -161,8 +198,8 @@ final class Sessione
     {
         $stato = self::stato();
 
-        // Un ospite non è in un workspace: non c'è da dove uscire, e la sua sessione resta com'è.
-        if ($stato === null || ! self::aperta() || isset($stato['ospite'])) {
+        // Un ospite e un cliente non sono in un workspace: non c'è da dove uscire, e la loro sessione resta com'è.
+        if ($stato === null || ! self::aperta() || isset($stato['ospite']) || isset($stato['cliente'])) {
             return;
         }
 
@@ -355,7 +392,7 @@ final class Sessione
         return Cache::store(config('session.block_store'))->has(self::chiave($id));
     }
 
-    /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: ?array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string, ospite?: array{prenotazione_id: string}}|null */
+    /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: ?array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string, ospite?: array{prenotazione_id: string}, cliente?: true}|null */
     private static function stato(): ?array
     {
         $stato = session(self::CHIAVE);
