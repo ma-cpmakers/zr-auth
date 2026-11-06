@@ -150,6 +150,41 @@ final class Sessione
     }
 
     /**
+     * Apre la sessione del cliente coi `data` di ingressi.scambio.crea per un codice di `ingressi.clienti.crea` (lo schema Gettone con
+     * `workspace` e `ruolo` null): la persona che non è membro di nessun workspace e entra in un modulo come cliente (Bookings). Il gettone
+     * è quello **ristretto** del cliente e sta al posto di quello dell'accesso (`Api::persona()` lo manda, per i soli metodi del cliente); `utente()` è la
+     * persona, `workspace()` e `ruolo()` sono null, e `Api::workspace()` non c'è. Non c'è l'id dell'accesso (`accesso()` è null): l'uscita
+     * è `accessi.corrente.elimina`, che col gettone ristretto chiude solo quello. L'id della sessione è nuovo e quella di prima è distrutta,
+     * come per `entra()`. Una forma che non è quella (un workspace o un ruolo, un gettone o una scadenza che non sono testi, nessuna persona)
+     * lancia InvalidArgumentException e non scrive niente.
+     *
+     * @param  array<string, mixed>  $gettone
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function entraCliente(array $gettone): void
+    {
+        if (! is_string($gettone['gettone'] ?? null) || $gettone['gettone'] === '' || ! is_string($gettone['scade_il'] ?? null) || $gettone['scade_il'] === ''
+            || ! is_array($gettone['utente'] ?? null) || ($gettone['workspace'] ?? null) !== null || ($gettone['ruolo'] ?? null) !== null) {
+            throw new InvalidArgumentException('Sessione::entraCliente() vuole i data dello scambio di un cliente: il gettone, la scadenza e la persona, senza workspace né ruolo.');
+        }
+
+        self::controllaIlDriver();
+        // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
+        self::segnaLaVecchia();
+
+        session()->regenerate(true);
+        session()->put(self::CHIAVE, [
+            'accesso' => null,
+            'gettoni' => ['accesso' => $gettone['gettone']],
+            'scade_il' => $gettone['scade_il'],
+            'utente' => $gettone['utente'],
+            'workspace' => null,
+            'ruolo' => null,
+        ]);
+    }
+
+    /**
      * Lascia il workspace: toglie dalla sessione il workspace, il ruolo e il gettone del workspace, e tiene l'accesso, il suo
      * gettone, la persona e la scadenza, come subito dopo `apri()`. Serve dopo `workspace.uscita.crea` (o quando il workspace è
      * sparito) a chi non ha un altro workspace in cui far entrare la persona: da qui `Api::persona()` chiama col gettone
