@@ -217,3 +217,49 @@ it("lo scambio di un workspace con l'eliminazione programmata è la stessa verif
     expect($scambio->status())->toBe(201)
         ->and($scambio->json('data.workspace.id'))->toBe($studio['id']);
 });
+
+it("l'ingresso del cliente dà il codice senza workspace e lo scambio un gettone ristretto: solo io.mostra e io.modifica, ogni altro metodo è 403 permesso_negato (#3304)", function () {
+    $finto = BackofficeFinto::attiva()->ritorno('bookings', 'https://bookings.zeiras.com/ingresso/ritorno');
+    $finto->persona('giulia@example.com', PASSWORD);
+    $accesso = entraNelFinto('giulia@example.com')['gettone']['gettone'];
+    $verificatore = str_repeat('c', 64);
+
+    $ingresso = alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => sfidaDi($verificatore)], $accesso);
+
+    expect($ingresso->status())->toBe(201)
+        ->and(array_keys($ingresso->json('data')))->toBe(['codice', 'ritorno', 'scade_il'])
+        ->and($ingresso->json('data.ritorno'))->toBe('https://bookings.zeiras.com/ingresso/ritorno')
+        ->and(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => sfidaDi($verificatore), 'ritorno' => 'https://evil.example/'], $accesso)->json('errors.0.pointer'))->toBe('#/ritorno')
+        ->and(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'pm', 'sfida' => sfidaDi($verificatore)], $accesso)->json('errors.0.pointer'))->toBe('#/app');
+
+    $scambio = alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore]);
+    $cliente = $scambio->json('data.gettone');
+
+    expect($scambio->status())->toBe(201)
+        ->and($scambio->json('data.workspace'))->toBeNull()
+        ->and($scambio->json('data.ruolo'))->toBeNull()
+        ->and(alFinto('GET', '/v1/io', gettone: $cliente)->status())->toBe(200)
+        ->and(alFinto('PATCH', '/v1/io', ['utente' => ['nome' => 'Giulia Rossi']], $cliente)->status())->toBe(200)
+        ->and(alFinto('PATCH', '/v1/io/password', ['password' => PASSWORD_NUOVA, 'password_attuale' => PASSWORD], $cliente)->json('codice'))->toBe('permesso_negato')
+        ->and(alFinto('GET', '/v1/accessi', gettone: $cliente)->json('codice'))->toBe('permesso_negato')
+        ->and(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => sfidaDi($verificatore)], $cliente)->json('codice'))->toBe('permesso_negato')
+        // Il codice vale una volta, e il gettone dell'accesso resta quello di prima.
+        ->and(alFinto('POST', '/v1/ingressi/scambio', ['codice' => $ingresso->json('data.codice'), 'verificatore' => $verificatore])->json('codice'))->toBe('verifica_non_riuscita')
+        ->and(alFinto('GET', '/v1/accessi', gettone: $accesso)->status())->toBe(200);
+});
+
+it("l'ingresso del cliente senza un ritorno https, o col gettone di un workspace, non dà il codice (#3304)", function () {
+    [$finto, $studio] = fintoConPm();
+    $accesso = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    $sfida = sfidaDi(str_repeat('c', 64));
+
+    expect(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => $sfida], $accesso)->json('codice'))->toBe('servizio_non_disponibile');
+
+    $finto->ritorno('bookings', 'https://bookings.zeiras.com/ritorno#x');
+    expect(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => $sfida], $accesso)->json('codice'))->toBe('servizio_non_disponibile');
+
+    $finto->ritorno('bookings', 'https://bookings.zeiras.com/ritorno');
+    $gettone = alFinto('POST', '/v1/gettoni', ['workspace_id' => $studio['id']], $accesso)->json('data.gettone');
+
+    expect(alFinto('POST', '/v1/ingressi/clienti', ['app' => 'bookings', 'sfida' => $sfida], $gettone)->json('codice'))->toBe('gettone_con_workspace');
+});
