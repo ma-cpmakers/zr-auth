@@ -535,7 +535,7 @@ return [
     ],
     'gate_non_richiesto' => [
         'title' => 'Gate no en aprobación',
-        'detail' => 'El Gate no está en aprobación, así que no hay una decisión que registrar. Solicita la aprobación con board.schede.gate.richiesta.crea y luego registra la decisión.',
+        'detail' => 'El Gate no está en aprobación, así que no hay una solicitud que decidir ni que anular. Solicita la aprobación con board.schede.gate.richiesta.crea.',
     ],
     'approvatore_non_disponibile' => [
         'title' => 'Aprobador no disponible',

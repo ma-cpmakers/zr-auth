@@ -535,7 +535,7 @@ return [
     ],
     'gate_non_richiesto' => [
         'title' => 'Gate non in approvazione',
-        'detail' => 'Il Gate non è in approvazione, quindi non c\'è una decisione da registrare. Chiedi l\'approvazione con board.schede.gate.richiesta.crea e poi registra la decisione.',
+        'detail' => 'Il Gate non è in approvazione, quindi non c\'è una richiesta da decidere né da annullare. Chiedi l\'approvazione con board.schede.gate.richiesta.crea.',
     ],
     'approvatore_non_disponibile' => [
         'title' => 'Approvatore non disponibile',

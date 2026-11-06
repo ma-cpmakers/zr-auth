@@ -535,7 +535,7 @@ return [
     ],
     'gate_non_richiesto' => [
         'title' => 'Gate not awaiting approval',
-        'detail' => 'The Gate is not awaiting approval, so there is no decision to record. Request approval with board.schede.gate.richiesta.crea, then record the decision.',
+        'detail' => 'The Gate is not awaiting approval, so there is no request to decide or to cancel. Request approval with board.schede.gate.richiesta.crea.',
     ],
     'approvatore_non_disponibile' => [
         'title' => 'Approver not available',
