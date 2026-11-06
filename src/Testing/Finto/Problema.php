@@ -83,6 +83,10 @@ final class Problema extends RuntimeException
         'rate_con_pagamenti' => 409,
         'pagamento_annullato' => 409,
         'versione_non_corrente' => 409,
+        'fatturazione_non_disponibile' => 409,
+        'fatturazione_gia_collegata' => 409,
+        'fatturazione_non_collegata' => 409,
+        'fattura_gia_emessa' => 409,
         'impronta_non_corrispondente' => 409,
         'documento_non_revocabile' => 409,
         'documento_gia_revocato' => 409,
@@ -135,6 +139,7 @@ final class Problema extends RuntimeException
         'turnstile_non_valido' => 422,
         'cursore_scaduto' => 410,
         'troppe_richieste' => 429,
+        'programma_non_raggiungibile' => 502,
         'servizio_non_disponibile' => 503,
         'turnstile_non_disponibile' => 503,
     ];

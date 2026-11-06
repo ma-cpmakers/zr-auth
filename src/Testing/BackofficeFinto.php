@@ -22,11 +22,13 @@ use stdClass;
 use Zeiras\Auth\Eventi\Firma;
 use Zeiras\Auth\Testing\Finto\BookingsPrenotazioni;
 use Zeiras\Auth\Testing\Finto\Crm;
+use Zeiras\Auth\Testing\Finto\Fornitori;
 use Zeiras\Auth\Testing\Finto\CrmAcquisti;
 use Zeiras\Auth\Testing\Finto\CrmAvanzate;
 use Zeiras\Auth\Testing\Finto\CrmCampi;
 use Zeiras\Auth\Testing\Finto\CrmCatalogo;
 use Zeiras\Auth\Testing\Finto\CrmElenchi;
+use Zeiras\Auth\Testing\Finto\CrmFatture;
 use Zeiras\Auth\Testing\Finto\CrmRate;
 use Zeiras\Auth\Testing\Finto\CrmEsiti;
 use Zeiras\Auth\Testing\Finto\BoardFunzioni;
@@ -87,11 +89,13 @@ final class BackofficeFinto
     use BookingsPrenotazioni;
     use NotifichePreferenze;
     use Crm;
+    use Fornitori;
     use CrmAcquisti;
     use CrmAvanzate;
     use CrmCampi;
     use CrmCatalogo;
     use CrmElenchi;
+    use CrmFatture;
     use CrmRate;
     use CrmEsiti;
     use CrmPersonalizzazione;
@@ -156,7 +160,8 @@ final class BackofficeFinto
     private const ISO_CON_FUSO = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/';
 
     /** L'app di un tipo di evento, dal primo prefisso che il tipo ha (config/catalogo.php del backoffice, `prefissi`). */
-    private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm'];
+    /** I prefissi dei tipi di notifica e l'app, come `catalogo.prefissi` del backoffice (anche quelli di `crm.`, `board.` e `bookings.`, che non sono eventi: #3323). */
+    private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm', 'com.zeiras.crm.' => 'crm', 'com.zeiras.bookings.' => 'bookings', 'crm.' => 'crm', 'board.' => 'pm', 'bookings.' => 'bookings'];
 
     /** I quattro metodi di una board (#2928). */
     public const METODI_DELLA_BOARD = ['kanban', 'scrum', 'scrumban', 'waterfall'];
@@ -364,6 +369,10 @@ final class BackofficeFinto
         ['GET', '#^/v1/moduli/interesse$#', 'moduli.interesse.elenca'],
         ['POST', '#^/v1/moduli/([^/]+)/interesse$#', 'moduli.interesse.crea'],
         ['DELETE', '#^/v1/moduli/([^/]+)/interesse$#', 'moduli.interesse.elimina'],
+        ['GET', '#^/v1/io/fornitori$#', 'io.fornitori.elenca'],
+        ['GET', '#^/v1/io/fornitori/nascosti$#', 'io.fornitori.nascosti.elenca'],
+        ['POST', '#^/v1/io/fornitori/nascosti$#', 'io.fornitori.nascosti.crea'],
+        ['DELETE', '#^/v1/io/fornitori/nascosti/([^/]+)$#', 'io.fornitori.nascosti.elimina'],
         ['PATCH', '#^/v1/io/foto$#', 'io.foto.modifica'],
         ['DELETE', '#^/v1/io/foto$#', 'io.foto.elimina'],
         ['GET', '#^/v1/io/foto/file$#', 'io.foto.file.mostra'],
@@ -475,7 +484,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'io_foto_modifica_per_persona' => 20, 'io_foto_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'documenti_pubblici_letture_per_token' => 30, 'documenti_pubblici_firme_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_fornitori_nascosti_per_persona' => 120, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'io_foto_modifica_per_persona' => 20, 'io_foto_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'documenti_pubblici_letture_per_token' => 30, 'documenti_pubblici_firme_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -1032,7 +1041,7 @@ final class BackofficeFinto
      * @param  array<string, mixed>|null  $autore  la persona che ha fatto, di persona(): `autore` dice il suo nome di oggi finché è membra del workspace, poi `null`; senza, `null` (lo ha fatto il sistema)
      * @param  string|null  $risorsaNome  il nome della cosa a cui si riferisce il soggetto; senza, `risorsa_nome` è `null`
      * @param  array{id: string, nome: string}|null  $board  la board di ciò che sta dentro una board (scheda, lista, etichetta, vista); senza, `null`
-     * @return array{id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, quando: null, ultima_azione_il: string, azioni: int, autore: ?array{nome: string}, risorsa_nome: ?string, board: ?array{id: string, nome: string}, per_me: null}
+     * @return array{id: string, workspace_id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, quando: null, ultima_azione_il: string, azioni: int, autore: ?array{nome: string}, risorsa_nome: ?string, board: ?array{id: string, nome: string}, per_me: null, spazio_cliente: ?bool}
      */
     public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null, ?array $autore = null, ?string $risorsaNome = null, ?array $board = null, int $azioni = 1, ?CarbonInterface $ultimaAzioneIl = null): array
     {
@@ -1636,13 +1645,17 @@ final class BackofficeFinto
                 'preventivi.pubblici.accettazione.crea' => $this->accettaPreventivoPubblico($corpo),
                 'preventivi.pubblici.richieste.crea' => $this->chiediModificaPreventivoPubblico($corpo),
                 'documenti.pubblici.lettura.crea' => $this->leggiDocumentoPubblicoCrm($corpo),
-                'documenti.pubblici.firma.crea' => $this->firmaDocumentoPubblicoCrm($corpo),
+                'documenti.pubblici.firma.crea' => $this->firmaDocumentoPubblicoCrm($corpo, self::header($richiesta, 'Zr-Ip') ?? '127.0.0.1'),
                 'legale.documenti.elenca' => $this->elencaDocumentiLegali($richiesta),
                 'legale.accettazioni.elenca' => $this->elencaAccettazioniLegali($richiesta),
                 'legale.accettazioni.crea' => $this->accettaDocumentoLegale($richiesta, $corpo),
                 'moduli.interesse.elenca' => $this->elencaModuliInteresse($richiesta),
                 'moduli.interesse.crea' => $this->chiediAvvisoModulo($richiesta, $parametri[0]),
                 'moduli.interesse.elimina' => $this->togliAvvisoModulo($richiesta, $parametri[0]),
+                'io.fornitori.elenca' => $this->elencaFornitori($richiesta),
+                'io.fornitori.nascosti.elenca' => $this->elencaFornitoriNascosti($richiesta),
+                'io.fornitori.nascosti.crea' => $this->nascondiFornitore($richiesta, $corpo),
+                'io.fornitori.nascosti.elimina' => $this->rimettiFornitore($richiesta, $parametri[0]),
                 'io.foto.modifica' => $this->caricaFoto($richiesta),
                 'io.foto.elimina' => $this->togliFoto($richiesta),
                 'io.foto.file.mostra' => $this->leggiFoto($richiesta),
@@ -4329,7 +4342,7 @@ final class BackofficeFinto
             'utente' => $this->utente($chi['persona']),
             'workspace' => $workspace === null ? null : $this->workspace[$workspace],
             'ruolo' => $workspace === null ? null : $this->membri[$workspace][$chi['persona']],
-            'notifiche_non_lette' => $workspace === null ? null : count(array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $workspace && $notifica['persona'] === $chi['persona'] && $notifica['letta_il'] === null)),
+            'notifiche_non_lette' => count(array_filter($this->notifiche, fn (array $notifica) => $this->notificaDelGettone($notifica, $chi) && $notifica['letta_il'] === null)),
             'primi_passi_nascosti' => $workspace === null ? null : ($this->primiPassiNascosti[$workspace][$chi['persona']] ?? false),
         ];
     }
@@ -4338,20 +4351,38 @@ final class BackofficeFinto
      * io.notifiche.elenca (IoNotificheController::elenca): le notifiche della persona del gettone in questo workspace, più
      * recenti prima (ultima_azione_il e id decrescenti, backoffice #1862). Il cursore porta l'id, e la posizione si rilegge fra le
      * notifiche del workspace, di chiunque: il finto non accorpa, e le posizioni non si muovono durante lo sfoglio. Il gettone
-     * dell'accesso è 403 gettone_senza_workspace.
+     * dell'accesso, senza workspace, ha le sole notifiche da cliente della persona, in ogni workspace (#3323).
      *
      * @return array{int, array<string, mixed>}
      */
     private function elencaNotifiche(Request $richiesta): array
     {
-        $chi = $this->conWorkspace($richiesta);
-        $voci = array_values(array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $chi['workspace'] && $notifica['persona'] === $chi['persona']));
+        $chi = $this->autentica($richiesta);
+        $voci = array_values(array_filter($this->notifiche, fn (array $notifica) => $this->notificaDelGettone($notifica, $chi)));
         $posizione = fn (array $notifica) => [self::iso($notifica['ultima_azione_il']), $notifica['id']];
 
         return $this->pagina($richiesta, 'io.notifiche.elenca', 'id', array_map($this->voceNotifica(...), $voci),
             fn (array $voce) => [$voce['ultima_azione_il'], $voce['id']],
-            fn (string $id) => isset($this->notifiche[$id]) && $this->notifiche[$id]['workspace'] === $chi['workspace'] ? $posizione($this->notifiche[$id]) : null,
+            fn (string $id) => isset($this->notifiche[$id]) && $this->notificaDelGettone($this->notifiche[$id], $chi, false) ? $posizione($this->notifiche[$id]) : null,
             dalPiuRecente: true);
+    }
+
+    /** I tipi delle notifiche da cliente (Notifica::DA_CLIENTE del backoffice, #3323): per la persona che ha prenotato, non un membro. */
+    private const NOTIFICHE_DA_CLIENTE = ['bookings.cliente.prenotazione.confermata', 'bookings.cliente.prenotazione.spostata', 'bookings.cliente.prenotazione.annullata', 'bookings.cliente.prenotazione.promemoria'];
+
+    /**
+     * La notifica la vede questo gettone? Col gettone di un workspace le sue notifiche di quel workspace, meno quelle da cliente; senza workspace (l'accesso)
+     * le sole da cliente, in ogni workspace (IoNotificheController::dellaPersona). `$dellaPersona` falso: nel cursore non conta di chi è.
+     *
+     * @param  array<string, mixed>  $notifica
+     * @param  array<string, mixed>  $chi
+     */
+    private function notificaDelGettone(array $notifica, array $chi, bool $dellaPersona = true): bool
+    {
+        $daCliente = in_array($notifica['tipo'], self::NOTIFICHE_DA_CLIENTE, true);
+
+        return ($dellaPersona === false || $notifica['persona'] === $chi['persona'])
+            && ($chi['workspace'] === null ? $daCliente : ($notifica['workspace'] === $chi['workspace'] && ! $daCliente));
     }
 
     /**
@@ -4364,10 +4395,10 @@ final class BackofficeFinto
      */
     private function segnaNotifica(Request $richiesta, array $corpo, string $id): array
     {
-        $chi = $this->conWorkspace($richiesta);
+        $chi = $this->autentica($richiesta);
         $notifica = $this->notifiche[$id] ?? null;
 
-        if ($notifica === null || $notifica['workspace'] !== $chi['workspace'] || $notifica['persona'] !== $chi['persona']) {
+        if ($notifica === null || ! $this->notificaDelGettone($notifica, $chi)) {
             throw new Problema('non_trovato');
         }
 
@@ -4388,7 +4419,7 @@ final class BackofficeFinto
      */
     private function segnaNotificheLette(Request $richiesta, array $corpo): array
     {
-        $chi = $this->conWorkspace($richiesta);
+        $chi = $this->autentica($richiesta);
         $campi = $this->testi->validaStretta($corpo, ['fino_a' => ['bail', 'required', 'string', function (string $attributo, mixed $valore, Closure $fail) {
             if (preg_match(self::ISO_CON_FUSO, $valore) !== 1 || self::istanteIso($valore) === null) {
                 $this->testi->dichiara($attributo, 'formato');
@@ -4397,7 +4428,7 @@ final class BackofficeFinto
         }]]);
         $fino = self::istanteIso((string) $campi['fino_a']) ?? throw new LogicException('fino_a già validato.');
         $adesso = now()->toImmutable()->startOfMillisecond();
-        $daSegnare = array_filter($this->notifiche, fn (array $notifica) => $notifica['workspace'] === $chi['workspace'] && $notifica['persona'] === $chi['persona']
+        $daSegnare = array_filter($this->notifiche, fn (array $notifica) => $this->notificaDelGettone($notifica, $chi)
             && $notifica['letta_il'] === null && $notifica['creata_il']->lte($fino));
         uasort($daSegnare, fn (array $una, array $altra) => strcmp($una['id'], $altra['id']));
         $segnate = array_slice($daSegnare, 0, self::NOTIFICHE_PER_CHIAMATA, true);
@@ -4417,8 +4448,11 @@ final class BackofficeFinto
      */
     private function voceNotifica(array $notifica): array
     {
+        $daCliente = in_array($notifica['tipo'], self::NOTIFICHE_DA_CLIENTE, true);
+
         return [
             'id' => $notifica['id'],
+            'workspace_id' => $notifica['workspace'],
             'tipo' => $notifica['tipo'],
             'app' => self::appDelTipo($notifica['tipo']),
             'soggetto' => $notifica['soggetto'],
@@ -4433,6 +4467,8 @@ final class BackofficeFinto
             'risorsa_nome' => $notifica['risorsa_nome'],
             'board' => $notifica['board'],
             'per_me' => null,
+            // Una notifica da cliente dice se la persona ha uno spazio da aprire: cliente del workspace con lo spazio acceso e non nascosto (#3323); le altre null.
+            'spazio_cliente' => $daCliente ? (isset($this->fornitoriDellaPersona($notifica['persona'])[$notifica['workspace']]) && ! isset($this->fornitoriNascosti[$notifica['persona']][$notifica['workspace']])) : null,
         ];
     }
 

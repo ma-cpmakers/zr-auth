@@ -33,7 +33,7 @@ it('il seminatore crea le notifiche della persona, e notifiche_non_lette di io.m
     $uno = $finto->notifica($studio, $anna, 'com.zeiras.board.scheda.creata', 'pm', CarbonImmutable::parse('2026-10-10 09:00:00.123'));
     $finto->notifica($studio, $anna, 'com.zeiras.altro.fatto', null, CarbonImmutable::parse('2026-10-10 10:00:00'), CarbonImmutable::parse('2026-10-10 10:05:00'));
 
-    expect(array_keys($uno))->toBe(['id', 'tipo', 'app', 'soggetto', 'dati', 'letta_il', 'creata_il', 'quando', 'ultima_azione_il', 'azioni', 'autore', 'risorsa_nome', 'board', 'per_me'])
+    expect(array_keys($uno))->toBe(['id', 'workspace_id', 'tipo', 'app', 'soggetto', 'dati', 'letta_il', 'creata_il', 'quando', 'ultima_azione_il', 'azioni', 'autore', 'risorsa_nome', 'board', 'per_me', 'spazio_cliente'])
         ->and($uno['ultima_azione_il'])->toBe('2026-10-10T09:00:00.123Z')
         ->and($uno['azioni'])->toBe(1)
         ->and($uno['board'])->toBeNull()
@@ -129,17 +129,14 @@ it("la notifica di un'altra persona non si legge e non si segna: 404 non_trovato
         ->and(alFinto('POST', '/v1/io/notifiche/letture', ['fino_a' => '2030-01-01T00:00:00Z'], $gettone)->json('data.segnate'))->toBe(0);
 });
 
-it('il gettone dell\'accesso non passa: 403 gettone_senza_workspace sulle tre rotte (T7.1, deve fallire se passa)', function () {
+it('il gettone dell\'accesso vede le sole notifiche da cliente: le altre non le elenca, non le segna e non le conta (T7.1, #3323, deve fallire se le vede)', function () {
     [$finto, $studio, $anna, , , $dellAccesso] = conLeNotifiche();
     $notifica = $finto->notifica($studio, $anna, 'com.zeiras.board.scheda.creata');
 
-    foreach ([['GET', '/v1/io/notifiche', null], ['POST', '/v1/io/notifiche/letture', ['fino_a' => '2030-01-01T00:00:00Z']], ['PATCH', "/v1/io/notifiche/{$notifica['id']}/lettura", ['letta' => true]]] as [$metodo, $percorso, $corpo]) {
-        $risposta = alFinto($metodo, $percorso, $corpo, $dellAccesso);
-
-        expect($risposta->status())->toBe(403)->and($risposta->json('codice'))->toBe('gettone_senza_workspace');
-    }
-
-    expect(alFinto('GET', '/v1/io', null, $dellAccesso)->json('data.notifiche_non_lette'))->toBeNull();
+    expect(alFinto('GET', '/v1/io/notifiche', null, $dellAccesso)->json('data'))->toBe([])
+        ->and(alFinto('POST', '/v1/io/notifiche/letture', ['fino_a' => '2030-01-01T00:00:00Z'], $dellAccesso)->json('data.segnate'))->toBe(0)
+        ->and(alFinto('PATCH', "/v1/io/notifiche/{$notifica['id']}/lettura", ['letta' => true], $dellAccesso)->json('codice'))->toBe('non_trovato')
+        ->and(alFinto('GET', '/v1/io', null, $dellAccesso)->json('data.notifiche_non_lette'))->toBe(0);
 });
 
 it('la lettura in blocco segna le non lette fino all\'istante, dice quante e se ne restano, e ripetuta non cambia niente (T7.1)', function () {

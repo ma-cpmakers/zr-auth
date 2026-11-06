@@ -308,6 +308,13 @@ trait CrmRate
             throw new Problema('rate_con_pagamenti');
         }
 
+        // Un piano con una fattura emessa (#2926) non si sostituisce (Piano::scrivi).
+        $rateDelPiano = array_keys(array_filter($this->crm['rate'], fn (array $rata) => $rata['acquisto_id'] === $acquisto['id']));
+
+        if (array_filter($this->crm['fatture'], fn (array $fattura) => $fattura['acquisto_id'] === $acquisto['id'] || in_array($fattura['rata_id'], $rateDelPiano, true)) !== []) {
+            throw new Problema('fattura_gia_emessa');
+        }
+
         $differenza = array_sum(array_map(fn (array $rata) => (int) $rata['importo']['importo'], $rate)) - (int) $acquisto['prezzo_importo'];
 
         if ($differenza !== 0) {
@@ -440,6 +447,7 @@ trait CrmRate
             'stato' => self::statoRataCrm($riga, self::oggiAcquistoCrm()),
             'pagata_il' => $riga['ultimo_pagamento_il'],
             'ultimo_metodo' => $riga['ultimo_metodo'],
+            'fattura' => $this->voceFatturaCrm('rata_id', $riga['id']),
             'creato_il' => self::iso($riga['creato_il']),
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
         ];

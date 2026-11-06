@@ -117,7 +117,7 @@ it('io.mostra dà la persona del gettone e, col gettone di un workspace, il work
     expect($senzaWorkspace->status())->toBe(200)
         ->and($senzaWorkspace->header('Content-Type'))->toBe('application/json')
         ->and($senzaWorkspace->header('Link'))->toBe(linkDi('io.mostra'))
-        ->and($senzaWorkspace->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => null, 'ruolo' => null, 'notifiche_non_lette' => null, 'primi_passi_nascosti' => null]])
+        ->and($senzaWorkspace->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => null, 'ruolo' => null, 'notifiche_non_lette' => 0, 'primi_passi_nascosti' => null]])
         ->and($prima->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => $studio, 'ruolo' => 'membro', 'notifiche_non_lette' => 0, 'primi_passi_nascosti' => false]])
         ->and($dopo->json())->toBe(['data' => ['utente' => $bruno, 'workspace' => $studio, 'ruolo' => 'amministratore', 'notifiche_non_lette' => 0, 'primi_passi_nascosti' => false]]);
 });

@@ -618,4 +618,24 @@ return [
         'title' => 'Controllo Turnstile non disponibile',
         'detail' => 'Il controllo Turnstile non si può fare adesso: rifallo e riprova fra poco.',
     ],
+    'fatturazione_non_disponibile' => [
+        'title' => 'Fatturazione non disponibile',
+        'detail' => 'La fatturazione collegata al CRM non è disponibile per questo workspace: il programma non esiste per la sua azienda. Il metodo non ha scritto niente.',
+    ],
+    'fatturazione_gia_collegata' => [
+        'title' => 'Fatturazione già collegata',
+        'detail' => 'Questo workspace ha già un programma di fatturazione collegato. Scollegalo con crm.integrazioni.fatturazione.collegamento.elimina prima di collegarne uno nuovo. Il metodo non ha scritto niente.',
+    ],
+    'programma_non_raggiungibile' => [
+        'title' => 'Programma di fatturazione non raggiungibile',
+        'detail' => 'Il programma di fatturazione non risponde o ha rifiutato la richiesta: riprova fra poco. Il metodo non ha scritto niente.',
+    ],
+    'fatturazione_non_collegata' => [
+        'title' => 'Fatturazione non collegata',
+        'detail' => 'Questo workspace non ha un programma di fatturazione collegato: collegalo con crm.integrazioni.fatturazione.autorizzazione.crea e crm.integrazioni.fatturazione.collegamento.crea. Il metodo non ha scritto niente.',
+    ],
+    'fattura_gia_emessa' => [
+        'title' => 'Fattura già emessa',
+        'detail' => "Per questa rata o per questo acquisto la fattura è già stata emessa, o lo è una fattura dell'altro (l'acquisto e le sue rate non si fatturano due volte). Il numero lo dà la rata o l'acquisto. Il metodo non ha scritto niente.",
+    ],
 ];

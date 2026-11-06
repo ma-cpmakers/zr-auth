@@ -32,6 +32,9 @@ trait CrmDocumenti
     /** I legami di chi firma (Documento::LEGAMI), quelli del minorenne, e i due tratti (Documento::TRATTI). */
     private const CRM_DOCUMENTI_LEGAMI = ['se_stesso', 'genitore', 'tutore', 'altro'];
 
+    /** Le famiglie di browser della prova di una firma da link (Documento::BROWSER, #3012). */
+    private const CRM_DOCUMENTI_BROWSER = ['chrome', 'firefox', 'safari', 'edge', 'opera', 'samsung', 'altro'];
+
     private const CRM_DOCUMENTI_LEGAMI_DEL_MINORENNE = ['genitore', 'tutore'];
 
     private const CRM_DOCUMENTI_TRATTI = ['immagine', 'spunta'];
@@ -188,7 +191,7 @@ trait CrmDocumenti
     private function testoDelModelloPerChiFirmaCrm(Request $richiesta, array $corpo, string $id): array
     {
         $chi = $this->conCrm($richiesta);
-        $campi = $this->testi->validaCorpo($corpo, [
+        $campi = $this->testi->validaCorpo($this->conNomiInNfcCrm($corpo), [
             'persona_id' => ['bail', 'required', 'string', 'regex:/^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/D'],
             'lingua' => ['sometimes', 'bail', 'string', Rule::in(self::MODELLI_LINGUE_CRM)],
             'versione' => ['sometimes', 'bail', 'integer:strict', 'min:1'],
@@ -256,6 +259,7 @@ trait CrmDocumenti
             'firmatario' => ['nome' => $riga['firmatario_nome'], 'cognome' => $riga['firmatario_cognome'], 'legame' => $riga['firmatario_legame']],
             'firmato_da' => $riga['firmato_da'],
             'impronta' => $riga['impronta'],
+            'prova' => ($riga['firma_ip_impronta'] ?? null) === null && ($riga['firma_browser'] ?? null) === null ? null : ['ip_impronta' => $riga['firma_ip_impronta'] ?? null, 'browser' => $riga['firma_browser'] ?? null],
         ];
     }
 
@@ -357,14 +361,58 @@ trait CrmDocumenti
         return CarbonImmutable::parse($nascita, self::CRM_ACQUISTI_FUSO)->addYears(self::CRM_DOCUMENTI_MAGGIORE_ETA)->format('Y-m-d') > self::oggiAcquistoCrm();
     }
 
-    /** La regola del nome o del cognome di chi firma (App\Rules\NomeDiChiFirma): lettere, spazi, apostrofo, trattino e punto, e comincia con una lettera (zr-pm-07, 5/11). */
+    /** Il corpo con nome e cognome di chi firma in forma NFC, prima delle regole (Documenti::valida del backoffice, #3115). */
+    private function conNomiInNfcCrm(array $corpo): array
+    {
+        if (is_array($corpo['firmatario'] ?? null)) {
+            foreach (['nome', 'cognome'] as $campo) {
+                if (is_string($corpo['firmatario'][$campo] ?? null)) {
+                    $corpo['firmatario'][$campo] = \Normalizer::normalize($corpo['firmatario'][$campo], \Normalizer::FORM_C) ?: $corpo['firmatario'][$campo];
+                }
+            }
+        }
+
+        return $corpo;
+    }
+
+    /** La regola del nome o del cognome di chi firma (App\Rules\NomeDiChiFirma): lettere, spazi, apostrofo, trattino e punto, comincia con una lettera, e ogni parola ha un alfabeto solo (zr-pm-07, 5/11; #3115). Come nel backoffice, dove è una regola a classe, il codice dell'errore è `non_valida`. */
     private function regolaNomeDiChiFirmaCrm(): Closure
     {
         return function (string $campo, mixed $valore, Closure $fail) {
-            if (is_string($valore) && preg_match("/^(?!.*[\\x{034F}\\x{115F}\\x{1160}\\x{16FE4}\\x{17B4}\\x{17B5}\\x{180B}-\\x{180F}\\x{3164}\\x{FE00}-\\x{FE0F}\\x{FFA0}\\x{E0100}-\\x{E01EF}])\\p{L}\\p{M}{0,4}(?:[\\p{L} '\\x{2019}.\\-]\\p{M}{0,4}|(?<=[\\p{L}\\p{M}])[\\x{200C}\\x{200D}](?=\\p{L}))*$/Du", $valore) !== 1 || count(preg_split('/[ .]+/u', $valore, -1, PREG_SPLIT_NO_EMPTY) ?: []) > 5) {
-                $this->rifiutaCrm($fail, $campo, Regola::FORMATO, 'regole.nome_di_chi_firma');
+            if (! is_string($valore)) {
+                return;
+            }
+
+            if (preg_match("/^(?!.*[\\x{034F}\\x{115F}\\x{1160}\\x{16FE4}\\x{17B4}\\x{17B5}\\x{180B}-\\x{180F}\\x{3164}\\x{FE00}-\\x{FE0F}\\x{FFA0}\\x{E0100}-\\x{E01EF}])\\p{L}\\p{M}{0,4}(?:[\\p{L} '\\x{2019}.\\-]\\p{M}{0,4}|(?<=[\\p{L}\\p{M}])[\\x{200C}\\x{200D}](?=\\p{L}))*$/Du", $valore) !== 1 || count(preg_split('/[ .]+/u', $valore, -1, PREG_SPLIT_NO_EMPTY) ?: []) > 5) {
+                $this->rifiutaCrm($fail, $campo, Regola::NON_VALIDA, 'regole.nome_di_chi_firma');
+            } elseif (! self::unAlfabetoPerParolaCrm($valore)) {
+                $this->rifiutaCrm($fail, $campo, Regola::NON_VALIDA, 'regole.nome_di_chi_firma_alfabeti');
             }
         };
+    }
+
+    /** Ogni parola ha lettere di un alfabeto solo (App\Rules\NomeDiChiFirma::unAlfabetoPerParola): han, hiragana, katakana, bopomofo e hangul contano come uno. */
+    private static function unAlfabetoPerParolaCrm(string $nome): bool
+    {
+        $alfabeti = ['Latin', 'Cyrillic', 'Greek', 'Armenian', 'Hebrew', 'Arabic', 'Syriac', 'Thaana', 'Devanagari', 'Bengali', 'Gurmukhi', 'Gujarati', 'Oriya', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Sinhala', 'Thai', 'Lao', 'Tibetan', 'Myanmar', 'Georgian', 'Ethiopic', 'Cherokee', 'Khmer', 'Mongolian'];
+        $orientale = '\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Bopomofo}\\p{Hangul}';
+
+        foreach (preg_split('/[ .]+/u', $nome, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $parola) {
+            $conta = preg_match('/['.$orientale.']/u', $parola);
+
+            foreach ($alfabeti as $alfabeto) {
+                $conta += preg_match("/\\p{{$alfabeto}}/u", $parola);
+            }
+
+            $altri = preg_replace('/[\\p{Common}\\p{Inherited}'.$orientale.']|\\p{'.implode('}|\\p{', $alfabeti).'}/u', '', $parola);
+            $conta += is_string($altri) && preg_match('/\\p{L}/u', $altri) === 1 ? 1 : 0;
+
+            if ($conta > 1) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -407,6 +455,7 @@ trait CrmDocumenti
             'firmatario_nome' => (string) $campi['firmatario']['nome'], 'firmatario_cognome' => (string) $campi['firmatario']['cognome'], 'firmatario_legame' => (string) $campi['firmatario']['legame'],
             'tratto_tipo' => (string) $campi['tratto']['tipo'], 'tratto_immagine' => $campi['tratto']['immagine'] ?? null,
             'firmato_il' => self::adessoCrm(), 'firmato_da' => $firmatoDa, 'revocato_il' => null, 'revocato_da' => null, 'link_id' => $link,
+            'firma_ip_impronta' => $campi['prova']['ip_impronta'] ?? null, 'firma_browser' => $campi['prova']['browser'] ?? null,
         ];
 
         return $this->crm['documenti'][$id];
@@ -428,7 +477,7 @@ trait CrmDocumenti
         }
 
         return $this->conIdempotenza($richiesta, 'crm.documenti.crea', $chi, $corpo, function () use ($chi, $corpo) {
-            $campi = $this->testi->validaCorpo($corpo, $this->regoleDelDocumentoCrm());
+            $campi = $this->testi->validaCorpo($this->conNomiInNfcCrm($corpo), $this->regoleDelDocumentoCrm());
             $persona = $this->contattoDelDocumentoCrm($chi['workspace'], (string) $campi['persona_id']);
             $documento = $this->firmaDocumentoCrm($persona, $campi, 'presenza', $chi['persona']);
 
@@ -575,7 +624,7 @@ trait CrmDocumenti
      */
     private function leggiDocumentoPubblicoCrm(array $corpo): array
     {
-        $campi = $this->testi->validaStretta($corpo, ['token' => $this->regolaDelTokenDocumentoCrm()] + $this->regoleDelFirmatarioFacoltativoCrm());
+        $campi = $this->testi->validaStretta($this->conNomiInNfcCrm($corpo), ['token' => $this->regolaDelTokenDocumentoCrm()] + $this->regoleDelFirmatarioFacoltativoCrm());
         $this->frena('documenti-pubblici-lettura:'.hash('sha256', $campi['token']), self::FRENI['documenti_pubblici_letture_per_token'], self::MINUTO);
         [$link, $persona] = $this->apriIlLinkDocumentoCrm($campi['token']);
         $modello = self::trovaModelloCrm($link['modello']) ?? throw new Problema('non_trovato');
@@ -603,15 +652,17 @@ trait CrmDocumenti
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
      */
-    private function firmaDocumentoPubblicoCrm(array $corpo): array
+    private function firmaDocumentoPubblicoCrm(array $corpo, string $ip = '127.0.0.1'): array
     {
-        $regole = ['token' => $this->regolaDelTokenDocumentoCrm()] + array_diff_key($this->regoleDelDocumentoCrm(), array_flip(['persona_id', 'modello', 'lingua']));
-        $campi = $this->testi->validaCorpo($corpo, $regole);
+        $regole = ['token' => $this->regolaDelTokenDocumentoCrm(), 'browser' => ['sometimes', 'bail', 'string', Rule::in(self::CRM_DOCUMENTI_BROWSER)]] + array_diff_key($this->regoleDelDocumentoCrm(), array_flip(['persona_id', 'modello', 'lingua']));
+        $campi = $this->testi->validaCorpo($this->conNomiInNfcCrm($corpo), $regole);
         $this->frena('documenti-pubblici-firma:'.hash('sha256', $campi['token']), self::FRENI['documenti_pubblici_firme_per_token'], self::MINUTO);
         [$link, $persona] = $this->apriIlLinkDocumentoCrm($campi['token']);
-        unset($campi['token']);
+        // La prova (#3012): dell'IP firmato resta l'impronta (nel backoffice un HMAC con la chiave dell'app, qui con la tua: lo stesso calcolo), mai l'IP.
+        $prova = ['ip_impronta' => hash_hmac('sha256', "documenti-firma-ip\n{$ip}", (string) config('app.key')), 'browser' => $campi['browser'] ?? null];
+        unset($campi['token'], $campi['browser']);
 
-        $documento = $this->firmaDocumentoCrm($persona, ['modello' => $link['modello'], 'lingua' => $link['lingua']] + $campi, 'link', null, $link['id']);
+        $documento = $this->firmaDocumentoCrm($persona, ['modello' => $link['modello'], 'lingua' => $link['lingua'], 'prova' => $prova] + $campi, 'link', null, $link['id']);
         $this->crm['link_documenti'][$link['id']]['usato_il'] = self::adessoCrm();
 
         return [201, ['data' => ['stato' => $documento['stato'], 'firmato_il' => self::iso($documento['firmato_il'])]]];
@@ -631,7 +682,7 @@ trait CrmDocumenti
     {
         foreach ($this->crm['documenti'] as $id => $riga) {
             if ($riga['persona_id'] === $persona) {
-                $this->crm['documenti'][$id] = [...$riga, 'testo' => '', 'firmatario_nome' => '', 'firmatario_cognome' => '', 'tratto_immagine' => null, 'impronta' => null];
+                $this->crm['documenti'][$id] = [...$riga, 'testo' => '', 'firmatario_nome' => '', 'firmatario_cognome' => '', 'tratto_immagine' => null, 'impronta' => null, 'firma_ip_impronta' => null, 'firma_browser' => null];
             }
         }
     }

@@ -618,4 +618,24 @@ return [
         'title' => 'Turnstile check unavailable',
         'detail' => 'The Turnstile check cannot be done right now: do it again and retry shortly.',
     ],
+    'fatturazione_non_disponibile' => [
+        'title' => 'Invoicing not available',
+        'detail' => 'The invoicing linked to the CRM is not available for this workspace: the program does not exist for its company. The method wrote nothing.',
+    ],
+    'fatturazione_gia_collegata' => [
+        'title' => 'Invoicing already linked',
+        'detail' => 'This workspace already has an invoicing program linked. Unlink it with crm.integrazioni.fatturazione.collegamento.elimina before linking a new one. The method wrote nothing.',
+    ],
+    'programma_non_raggiungibile' => [
+        'title' => 'Invoicing program unreachable',
+        'detail' => 'The invoicing program is not answering or refused the request: try again shortly. The method wrote nothing.',
+    ],
+    'fatturazione_non_collegata' => [
+        'title' => 'Invoicing not linked',
+        'detail' => 'This workspace has no invoicing program linked: link one with crm.integrazioni.fatturazione.autorizzazione.crea and crm.integrazioni.fatturazione.collegamento.crea. The method wrote nothing.',
+    ],
+    'fattura_gia_emessa' => [
+        'title' => 'Invoice already issued',
+        'detail' => 'The invoice for this installment or purchase has already been issued, or so has one of the other (a purchase and its installments are not invoiced twice). The number is on the installment or the purchase. The method wrote nothing.',
+    ],
 ];

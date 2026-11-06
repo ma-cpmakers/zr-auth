@@ -320,6 +320,7 @@ trait CrmAcquisti
             'pagato' => ['importo' => $riga['pagato_importo'], 'valuta' => $valuta],
             'metodo_pagamento' => $riga['metodo_pagamento'],
             'documento' => $riga['documento'],
+            'fattura' => $this->voceFatturaCrm('acquisto_id', $riga['id']),
             'valido_fino_al' => $riga['valido_fino_al'],
             'rinnovo_il' => $riga['rinnovo_il'],
             'crediti' => self::creditiAcquistoCrm($riga),

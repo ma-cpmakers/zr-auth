@@ -618,4 +618,24 @@ return [
         'title' => 'Comprobación de Turnstile no disponible',
         'detail' => 'La comprobación de Turnstile no se puede hacer ahora: repítela y vuelve a intentarlo dentro de poco.',
     ],
+    'fatturazione_non_disponibile' => [
+        'title' => 'Facturación no disponible',
+        'detail' => 'La facturación vinculada al CRM no está disponible para este workspace: el programa no existe para su empresa. El método no ha escrito nada.',
+    ],
+    'fatturazione_gia_collegata' => [
+        'title' => 'Facturación ya vinculada',
+        'detail' => 'Este workspace ya tiene un programa de facturación vinculado. Desvincúlalo con crm.integrazioni.fatturazione.collegamento.elimina antes de vincular uno nuevo. El método no ha escrito nada.',
+    ],
+    'programma_non_raggiungibile' => [
+        'title' => 'Programa de facturación no accesible',
+        'detail' => 'El programa de facturación no responde o ha rechazado la solicitud: inténtalo de nuevo en breve. El método no ha escrito nada.',
+    ],
+    'fatturazione_non_collegata' => [
+        'title' => 'Facturación no vinculada',
+        'detail' => 'Este workspace no tiene un programa de facturación vinculado: vincúlalo con crm.integrazioni.fatturazione.autorizzazione.crea y crm.integrazioni.fatturazione.collegamento.crea. El método no ha escrito nada.',
+    ],
+    'fattura_gia_emessa' => [
+        'title' => 'Factura ya emitida',
+        'detail' => 'La factura de esta cuota o de esta compra ya se ha emitido, o se ha emitido la del otro (una compra y sus cuotas no se facturan dos veces). El número está en la cuota o en la compra. El método no ha escrito nada.',
+    ],
 ];

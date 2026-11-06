@@ -154,7 +154,7 @@ it('io.modifica col gettone dell\'accesso cambia la persona, con workspace e ruo
         ->and($risposta->json('data.utente.lingua'))->toBe('en')
         ->and($risposta->json('data.workspace'))->toBeNull()
         ->and($risposta->json('data.ruolo'))->toBeNull()
-        ->and($risposta->json('data.notifiche_non_lette'))->toBeNull()
+        ->and($risposta->json('data.notifiche_non_lette'))->toBe(0)
         ->and(alFinto('GET', '/v1/io', gettone: $accesso)->json('data.utente.nome'))->toBe('Nuovo');
 
     foreach ([['utente' => []], ['utente' => ['lingua' => 'de']], []] as $corpo) {

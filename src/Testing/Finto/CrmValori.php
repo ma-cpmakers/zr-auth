@@ -31,6 +31,9 @@ trait CrmValori
 
     private const CRM_VALORE_IMPORTO = 1000000000000;
 
+    /** I tipi dei campi standard con `in_campi` che `campi` scrive senza una riga «tua» (ValoriDeiCampi::STANDARD_IN_CAMPI, #3064). */
+    private const CRM_STANDARD_IN_CAMPI = ['testo', 'data', 'url'];
+
     /** I tipi i cui valori la cronologia dice anche di prima e di dopo (ValoriDeiCampi::CON_VALORI). */
     private const CRM_VALORI_NELLA_CRONOLOGIA = ['numero', 'valuta', 'percentuale', 'data', 'data_ora', 'si_no', 'elenco', 'scelta_multipla', 'membro'];
 
@@ -50,15 +53,25 @@ trait CrmValori
             && ($ancheSensibili || $this->vedeISensibiliCrm || ! ($campo['sensibile'] ?? false)));
         uasort($campi, fn (array $a, array $b) => $a['ord'] <=> $b['ord']);
 
-        // `data_nascita` è l'unico standard il cui valore sta in `campi` e che non ha una riga «tua» (ValoriDeiCampi::campiDi, zr-crm #2692, M8).
-        if ($oggetto === 'persona' && ! isset($campi['data_nascita'])) {
-            $campi['data_nascita'] = [
-                'id' => 'persona.data_nascita', 'oggetto' => 'persona', 'codice' => 'data_nascita', 'origine' => 'tuo', 'tipo' => 'data', 'sistema' => null,
-                'opzioni' => null, 'elenco_id' => null, 'obbligatorio' => false, 'aiuto' => null, 'predefinito' => null, 'limiti' => null,
-                'in_elenco' => false, 'nel_crea' => false, 'sensibile' => false, 'genera_scadenza' => null, 'avvisa' => false,
-                'catalogo' => ['nome' => []], 'scritti' => [], 'visibilita' => 'visibile', 'sezione_id' => 'persona.dati_personali', 'ord' => PHP_INT_MAX,
-                'indispensabile' => false, 'in_campi' => true, 'creato_il' => null, 'aggiornato_il' => null,
-            ];
+        // I campi standard con `in_campi` il cui valore sta in `campi` e che non hanno una riga «tua», nemmeno eliminata (ValoriDeiCampi::campiDi: zr-crm #2692,
+        // M8 per `data_nascita`; #3064 per gli altri). Gli elenchi (genere, lingua_preferita, canale_preferito) vengono con `crm.elenchi.*`.
+        if ($oggetto === 'persona') {
+            foreach (self::CRM_CAMPI_STANDARD['persona'] as $standard) {
+                $chiave = $standard['codice'];
+                $conUnaRiga = ($this->campiCrm[$workspace]['persona']['campi'][$chiave]['origine'] ?? null) === 'tuo';
+
+                if (! $standard['in_campi'] || ! in_array($standard['tipo'], self::CRM_STANDARD_IN_CAMPI, true) || isset($campi[$chiave]) || $conUnaRiga) {
+                    continue;
+                }
+
+                $campi[$chiave] = [
+                    'id' => "persona.{$chiave}", 'oggetto' => 'persona', 'codice' => $chiave, 'origine' => 'tuo', 'tipo' => $standard['tipo'], 'sistema' => null,
+                    'opzioni' => null, 'elenco_id' => null, 'obbligatorio' => false, 'aiuto' => null, 'predefinito' => null, 'limiti' => null,
+                    'in_elenco' => false, 'nel_crea' => false, 'sensibile' => false, 'genera_scadenza' => null, 'avvisa' => false,
+                    'catalogo' => ['nome' => []], 'scritti' => [], 'visibilita' => 'visibile', 'sezione_id' => "persona.{$standard['sezione']}", 'ord' => PHP_INT_MAX,
+                    'indispensabile' => false, 'in_campi' => true, 'creato_il' => null, 'aggiornato_il' => null,
+                ];
+            }
         }
 
         return array_map(fn (array $campo) => $this->conOpzioniDelloElencoCrm($campo), $campi);
