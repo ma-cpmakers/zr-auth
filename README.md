@@ -600,9 +600,9 @@ expect(Rotte::senzaGuardia(['GET ingresso/ritorno']))->toBe([]);
 
 **Il codice di un «Accedi come» (#3386).** Non viaggia mai in un indirizzo: la pagina di zr-superadmin lo consegna con un **POST** auto-inviato (corpo form `codice`) allo
 stesso percorso del ricevitore (`zr-auth.ricevitore.assistenza`). Lo scambio vuole una richiesta del browser dello stesso sito: `Sec-Fetch-Site: same-site` e `Origin` quello di
-zr-superadmin (`ZR_ADMIN_URL`, default `https://admin.zeiras.com`) o `null` (il browser lo manda se la pagina ha `Referrer-Policy: no-referrer`); un curl, un altro sito o una
-navigazione diretta non aprono niente e il codice si brucia. Senza CSRF (arriva da un altro sito per costruzione). La risposta è un `303` a un indirizzo pulito, con `no-store` e
-`no-referrer`. Un GET col codice e senza `state` non scambia niente. Il modulo non fa niente: la rotta la registra zr-auth con il ricevitore (con `'ricevitore' => null` non c'è), e
+zr-superadmin (`ZR_ADMIN_URL`, default `https://admin.zeiras.com`) o `null` (il browser lo manda se la pagina ha `Referrer-Policy: no-referrer`); un altro sito o una
+navigazione diretta non aprono niente e il codice si brucia (un client fuori dal browser le intestazioni le scrive come vuole: contro un codice trapelato valgono «mai in un indirizzo», i 60 secondi e il monouso). Senza CSRF (arriva da un altro sito per costruzione). La risposta è un `303` a un indirizzo pulito, con `no-store` e
+`no-referrer`. Un GET col codice e senza `state` non scambia niente e brucia il codice. Il modulo non fa niente: la rotta la registra zr-auth con il ricevitore (con `'ricevitore' => null` non c'è), e
 `Rotte::senzaGuardia()` non la elenca, quindi il test del frontend non cambia. L'ingresso parte sempre da una sessione vuota (#3394): il gettone vero della stessa persona non resta accanto a quello di assistenza.
 
 Un frontend che l'ingresso lo fa altrove (zr-home, che lo *dà* ai moduli e non lo riceve) mette `'ricevitore' => null` nella

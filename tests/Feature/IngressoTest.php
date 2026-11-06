@@ -421,15 +421,12 @@ it('il codice di un «Accedi come» arriva con un POST, apre la sessione del wor
     expect($fascia['utente']['email'])->toBe('anna@example.com')->and($fascia['sola_lettura'])->toBeFalse();
 });
 
-it('un GET con il codice e senza state non scambia niente e non consuma il codice: la pagina d\'errore, e il POST di prima vale ancora (#3386 T1.1)', function () {
+it('un GET con il codice e senza state non apre la sessione e brucia il codice, già finito in un indirizzo: la pagina d\'errore (#3386 T1.1)', function () {
     [$codice] = codiceDiAssistenza();
 
     $this->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]))->assertRedirect(INGRESSO);
 
-    expect(Sessione::aperta())->toBeFalse()->and(scambiPartiti())->toBe(0);
-
-    consegnaAssistenza($this, $codice)->assertRedirect(FRONTEND);
-    expect(Sessione::aperta())->toBeTrue();
+    expect(Sessione::aperta())->toBeFalse()->and(scambiPartiti())->toBe(1);
 });
 
 it('il codice si scambia solo da una richiesta del browser dello stesso sito di zr-superadmin: curl, un altro sito, un Origin diverso o assente non aprono niente (#3386 T1.2)', function (array $header) {
@@ -510,9 +507,12 @@ it('l\'ingresso in assistenza parte da una sessione vuota: il gettone vero della
     // Anna ha già una sessione vera in questo browser: l'accesso e il suo gettone pieno.
     Sessione::apri(entraNelFinto('anna@example.com'));
     expect(Sessione::accesso())->not->toBeNull();
+    // E le chiavi di un modulo o di una pagina a metà non passano all'assistenza (deve fallire se entraInAssistenza() rigenera l'id e basta).
+    session()->put(['url.intended' => FRONTEND.'/dati-di-anna', 'preferenze_modulo' => ['anna']]);
 
     consegnaAssistenza($this, $codice)->assertRedirect(FRONTEND);
 
+    expect(session()->has('url.intended'))->toBeFalse()->and(session()->has('preferenze_modulo'))->toBeFalse();
     expect(Sessione::workspace()['id'])->toBe($studio['id'])
         ->and(Sessione::accesso())->toBeNull()
         ->and(array_keys(session(Sessione::CHIAVE)['gettoni']))->toBe(['workspace']);

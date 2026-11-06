@@ -199,7 +199,9 @@ final class Sessione
         // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
         self::segnaLaVecchia();
 
-        session()->regenerate(true);
+        // Sessione vuota davvero, come `chiudi()`: oltre ai gettoni escono la pagina ricordata, la partenza di un ingresso a metà e le chiavi del modulo della persona di prima.
+        session()->invalidate();
+        session()->regenerateToken();
         session()->put(self::CHIAVE, [
             'accesso' => null,
             'gettoni' => ['workspace' => $gettone['gettone']],
