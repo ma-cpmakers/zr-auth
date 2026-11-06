@@ -57,7 +57,16 @@ final class RicevitoreController
             return self::errore();
         }
 
-        Sessione::entra(self::gettone($risposta));
+        // Il gettone che torna dev'essere quello della partenza: un cliente (Ingresso::versoCliente) non ha workspace, e una partenza in un
+        // workspace non si chiude con un gettone senza. L'altro caso non apre niente.
+        $cliente = ($partenza['cliente'] ?? false) === true;
+        $gettone = self::gettone($risposta, $cliente);
+
+        if ($gettone === null) {
+            return self::errore();
+        }
+
+        $cliente ? Sessione::entraCliente($gettone) : Sessione::entra($gettone);
 
         return redirect()->away(Sessione::ritorno(url((string) config('zr-auth.dopo'))))->withHeaders(Ingresso::INTESTAZIONI);
     }
@@ -98,21 +107,25 @@ final class RicevitoreController
     }
 
     /**
-     * I `data` di ingressi.scambio.crea (lo schema Gettone), se hanno la forma: mai una sessione a metà.
+     * I `data` di ingressi.scambio.crea (lo schema Gettone), se hanno la forma: mai una sessione a metà. Il gettone di un cliente ha
+     * `workspace` e `ruolo` null, quello di un workspace li ha tutti e due: se la partenza era dell'altro tipo, null.
      *
      * @param  array<mixed>  $risposta
-     * @return array<string, mixed>
+     * @return array<string, mixed>|null
      */
-    private static function gettone(array $risposta): array
+    private static function gettone(array $risposta, bool $cliente): ?array
     {
         $data = $risposta['data'] ?? null;
+        $senzaWorkspace = is_array($data) && array_key_exists('workspace', $data) && $data['workspace'] === null
+            && array_key_exists('ruolo', $data) && $data['ruolo'] === null;
+        $inUnWorkspace = is_array($data) && is_array($data['workspace'] ?? null) && is_string($data['ruolo'] ?? null);
 
         if (! is_array($data) || ! is_string($data['gettone'] ?? null) || ! is_string($data['scade_il'] ?? null)
-            || ! is_array($data['utente'] ?? null) || ! is_array($data['workspace'] ?? null) || ! is_string($data['ruolo'] ?? null)) {
+            || ! is_array($data['utente'] ?? null) || ! ($senzaWorkspace || $inUnWorkspace)) {
             throw new BackofficeNonRisponde('La risposta di ingressi.scambio.crea non ha la forma di un gettone.');
         }
 
-        return $data;
+        return $senzaWorkspace === $cliente ? $data : null;
     }
 
     /** La pagina d'errore del modulo: la stessa per ogni motivo, che a chi arriva da fuori non si dice quale. */

@@ -30,6 +30,35 @@ final class Ingresso
      */
     public static function verso(string $workspace): RedirectResponse
     {
+        if ($workspace === '' || strlen($workspace) > 200) {
+            throw new InvalidArgumentException('Il workspace dell\'ingresso è lo slug, non vuoto.');
+        }
+
+        return self::parti('/ingresso', ['workspace' => $workspace], false);
+    }
+
+    /**
+     * Manda la persona a `ZR_HOME_URL/ingresso/cliente` per entrare nel modulo come cliente, senza workspace: chi prenota su Bookings
+     * non è membro di nessun workspace. Un 302 con `app`, `state` e `sfida` nella query, e niente altro: il verificatore no, mai, né
+     * nell'indirizzo né in un header, e la scelta che il modulo ha davanti (la sala, la pagina) non passa di qui. Il ritorno è lo stesso
+     * ricevitore dell'ingresso nel workspace: scambia il codice di `ingressi.clienti.crea` e apre la sessione del cliente
+     * (`Sessione::entraCliente()`), con la persona e il gettone ristretto, senza workspace né ruolo. Una partenza nuova prende il posto della precedente.
+     *
+     *     Route::get('prenota/entra', fn () => Ingresso::versoCliente())->withoutMiddleware(ConGettone::class);
+     */
+    public static function versoCliente(): RedirectResponse
+    {
+        return self::parti('/ingresso/cliente', [], true);
+    }
+
+    /**
+     * La partenza di entrambi gli ingressi: `state` e verificatore nella sessione (col segno del cliente, che il ricevitore vuole uguale
+     * al gettone che torna), la sfida nell'indirizzo.
+     *
+     * @param  array<string, string>  $campi  i campi in più della query, dopo `app`
+     */
+    private static function parti(string $percorso, array $campi, bool $cliente): RedirectResponse
+    {
         $app = config('zr-auth.app');
         $home = rtrim((string) config('zr-auth.home'), '/');
 
@@ -41,24 +70,20 @@ final class Ingresso
             throw new IndirizzoNonSicuro($home);
         }
 
-        if ($workspace === '' || strlen($workspace) > 200) {
-            throw new InvalidArgumentException('Il workspace dell\'ingresso è lo slug, non vuoto.');
-        }
-
         Sessione::controllaIlDriver();
 
         $state = self::base64url(random_bytes(32));
         $verificatore = self::base64url(random_bytes(48));
-        session()->put(self::CHIAVE, ['state' => $state, 'verificatore' => $verificatore]);
+        session()->put(self::CHIAVE, ['state' => $state, 'verificatore' => $verificatore] + ($cliente ? ['cliente' => true] : []));
 
         $query = http_build_query([
             'app' => $app,
-            'workspace' => $workspace,
+            ...$campi,
             'state' => $state,
             'sfida' => self::base64url(hash('sha256', $verificatore, true)),
         ], '', '&', PHP_QUERY_RFC3986);
 
-        return redirect()->away("{$home}/ingresso?{$query}")->withHeaders(self::INTESTAZIONI);
+        return redirect()->away("{$home}{$percorso}?{$query}")->withHeaders(self::INTESTAZIONI);
     }
 
     private static function base64url(string $binario): string

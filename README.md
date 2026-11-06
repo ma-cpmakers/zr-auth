@@ -91,7 +91,7 @@ nel finto l'accesso con un provider (`accessi.provider.elenca`, `accessi.provide
 | `ZR_API_URL` | `https://api.zeiras.com` | le API del backoffice; solo `https://` (sulla porta 80 il server risponde 301, e un 301 trasforma un POST in GET) |
 | `ZR_AUTH_INGRESSO` | `https://app.zeiras.com/accedi` | la pagina d'accesso, dove la guardia rimanda chi non ha una sessione |
 | `ZR_HOME_URL` | `https://app.zeiras.com` | zr-home, a cui il modulo manda la persona (`/ingresso`); solo `https://` |
-| `ZR_APP` | — | il codice dell'app del modulo nel catalogo (`pm`, …): obbligatorio per `Ingresso::verso()` |
+| `ZR_APP` | — | il codice dell'app del modulo nel catalogo (`pm`, …): obbligatorio per `Ingresso::verso()` e `Ingresso::versoCliente()` |
 | `ZR_AUTH_ERRORE` | la pagina d'accesso | la pagina per ogni ritorno che non vale (config `zr-auth.errore`) |
 
 Nella config pubblicata (`zr-auth-config`) altre due chiavi: `ricevitore` (`/ingresso/ritorno`) e `dopo` (`/`, dove si va
@@ -565,6 +565,32 @@ Riceve `codice` (43 caratteri `[A-Za-z0-9_-]`) e `state` (al più 512, `[A-Za-z0
   **stessa** pagina d'errore (`ZR_AUTH_ERRORE`, senza: la pagina d'accesso), che a chi arriva da fuori non dice il perché;
 - un guasto del backoffice (5xx, trasporto che cade, risposta senza la forma di un gettone) è `BackofficeNonRisponde`:
   mai una sessione a metà.
+
+### Il cliente che non è in nessun workspace: `Ingresso::versoCliente()` (da #3324)
+
+Chi prenota su Bookings non è membro di nessun workspace: entra con l'accesso standard di Zeiras e torna al modulo con una
+sessione sua. La partenza non ha argomenti, e il modulo non scrive né PKCE né scambio:
+
+```php
+Route::get('entra', fn () => Ingresso::versoCliente())->withoutMiddleware(ConGettone::class);
+```
+
+`Ingresso::versoCliente()` risponde 302 a `ZR_HOME_URL/ingresso/cliente?app=<ZR_APP>&state=<state>&sfida=<sfida>`: gli stessi
+`state`, verificatore e `sfida` di `verso()`, con le stesse intestazioni, e niente altro nell'indirizzo. La scelta che il
+modulo ha davanti (la sala, la pagina) non passa di qui. zr-home chiama `ingressi.clienti.crea` e rimanda al ricevitore di
+sopra, lo stesso `GET /ingresso/ritorno`: il ricevitore scambia il codice e apre la sessione con `Sessione::entraCliente()`.
+
+- `Sessione::utente()` è la persona; `Sessione::workspace()` e `Sessione::ruolo()` sono `null`, `Sessione::accesso()` anche.
+- Il gettone è quello **ristretto** del cliente e sta dove sta quello dell'accesso: `Api::persona()` lo manda, e il backoffice
+  lo accetta solo sui metodi del cliente (`io.*` della persona, le sue prenotazioni, l'uscita). `Api::workspace()` non c'è.
+  L'uscita (`accessi.corrente.elimina`) chiude solo quel gettone, non l'accesso di zr-home.
+- Il gettone che torna dev'essere quello della partenza: una partenza del cliente con il codice di un workspace, o una
+  partenza in un workspace con il codice di un cliente, non apre niente e va alla pagina d'errore.
+- `ConGettone` lascia passare la sessione del cliente: non la rimanda a un workspace.
+
+Nei test: `BackofficeFinto::attiva()->ritorno('bookings', 'https://<modulo>/ingresso/ritorno')`, una persona,
+`Ingresso::versoCliente()`, poi `ingressi.clienti.crea` del finto con la `sfida` della partenza e un GET al `ritorno` che dà.
+Un esempio per intero: `tests/Feature/IngressoClienteTest.php`.
 
 Il ricevitore non ha la guardia, e il test del frontend lo nomina fra le rotte pubbliche:
 
