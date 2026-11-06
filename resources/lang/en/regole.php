@@ -314,7 +314,7 @@ return [
     'nome_di_chi_firma_alfabeti' => 'The :attribute field cannot mix different alphabets in the same word (for example Latin and Cyrillic letters): each word uses a single alphabet.',
     'documento_tratto_immagine' => 'The stroke image wants a PNG in strict base64 (no `data:` prefix and no line breaks), at most :max KB and :lato pixels per side.',
     'fattura_profilo_assente' => 'Whoever pays has no default billing profile: create one with crm.profili-fatturazione.crea and try again.',
-    'fattura_profilo_incompleto' => "The billing profile of whoever pays is not enough to invoice: what is missing is listed in `mancano`. Complete it with crm.profili-fatturazione.modifica.",
+    'fattura_profilo_incompleto' => 'The billing profile of whoever pays is not enough to invoice: what is missing is listed in `mancano`. Complete it with crm.profili-fatturazione.modifica.',
     'fattura_senza_aliquota' => "This purchase's catalog item no longer exists or has no VAT rate: set it with crm.catalogo.modifica. The rate is never made up.",
     'fattura_senza_importo' => 'This installment or purchase has no amount to invoice.',
 ];

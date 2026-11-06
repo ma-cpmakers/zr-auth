@@ -636,6 +636,6 @@ return [
     ],
     'fattura_gia_emessa' => [
         'title' => 'Invoice already issued',
-        'detail' => "The invoice for this installment or purchase has already been issued, or so has one of the other (a purchase and its installments are not invoiced twice). The number is on the installment or the purchase. The method wrote nothing.",
+        'detail' => 'The invoice for this installment or purchase has already been issued, or so has one of the other (a purchase and its installments are not invoiced twice). The number is on the installment or the purchase. The method wrote nothing.',
     ],
 ];
