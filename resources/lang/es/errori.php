@@ -618,4 +618,12 @@ return [
         'title' => 'Programa de facturación no accesible',
         'detail' => 'El programa de facturación no responde o ha rechazado la solicitud: inténtalo de nuevo en breve. El método no ha escrito nada.',
     ],
+    'fatturazione_non_collegata' => [
+        'title' => 'Facturación no vinculada',
+        'detail' => 'Este workspace no tiene un programa de facturación vinculado: vincúlalo con crm.integrazioni.fatturazione.autorizzazione.crea y crm.integrazioni.fatturazione.collegamento.crea. El método no ha escrito nada.',
+    ],
+    'fattura_gia_emessa' => [
+        'title' => 'Factura ya emitida',
+        'detail' => 'La factura de esta cuota o de esta compra ya se ha emitido, o se ha emitido la del otro (una compra y sus cuotas no se facturan dos veces). El número está en la cuota o en la compra. El método no ha escrito nada.',
+    ],
 ];

@@ -85,6 +85,8 @@ final class Problema extends RuntimeException
         'versione_non_corrente' => 409,
         'fatturazione_non_disponibile' => 409,
         'fatturazione_gia_collegata' => 409,
+        'fatturazione_non_collegata' => 409,
+        'fattura_gia_emessa' => 409,
         'impronta_non_corrispondente' => 409,
         'documento_non_revocabile' => 409,
         'documento_gia_revocato' => 409,
