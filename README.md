@@ -743,7 +743,7 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   posta: l'ultimo codice partito per quell'email, `null` se nessuno; un codice nuovo è sempre diverso da quello prima.
 - Fa `utenti.crea`, `accessi.crea`, `accessi.corrente.elimina`, `accessi.altri.elimina`, `accessi.conferma.crea`, `accessi.elenca`, `io.email.cambio.crea`, `io.email.cambio.verifica.crea`, `io.esportazioni.crea`, `io.esportazioni.mostra`, `io.esportazioni.archivio.mostra`, `accessi.elimina`, `accessi.provider.elenca`,
   `accessi.provider.autorizzazioni.crea`, `accessi.provider.crea`, `gettoni.crea`, `io.email.codice.crea`, `io.email.verifica.crea`,
-  `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.scambio.crea`, `app.modifica`,
+  `io.notifiche.lettura.modifica`, `io.notifiche.letture.crea`, `password.recupero.crea`, `password.reimpostazione.crea`, `ingressi.crea`, `ingressi.clienti.crea`, `ingressi.scambio.crea`, `app.modifica`,
   `io.modifica`, `io.elimina`, `io.password.modifica`, `workspace.modifica`, `workspace.membri.modifica`, `workspace.membri.elimina`, `workspace.uscita.crea`,
   `workspace.inviti.crea`, `workspace.inviti.elimina`, `workspace.inviti.reinvio.crea` e `inviti.accettazione.crea`, e le letture: `io.mostra`,
   `io.workspace.elenca`, `io.aziende.elenca`, `io.notifiche.elenca`, `lingue.elenca`, `app.elenca`, `workspace.membri.elenca`, `workspace.inviti.elenca` e `workspace.contenuti.mostra`. Fa anche
@@ -964,6 +964,10 @@ $this->post('/accedi', ['email' => 'anna@example.com', 'password' => $password])
   (`{"codice", "verificatore"}`, senza gettone) dà il gettone del workspace: il codice vale una volta e 60 secondi, la
   `sfida` è `base64url(SHA-256(verificatore))`, un verificatore sbagliato consuma il codice, ogni fallimento è la stessa
   `422` `verifica_non_riuscita`, e il freno è di 5 richieste al minuto per codice.
+  `ingressi.clienti.crea` (`{"app", "sfida"}`, #3304) è l'ingresso di un cliente senza workspace, col gettone dell'accesso (`403` `gettone_con_workspace` a quello
+  di un workspace): `app` dev'essere un'app con uno spazio per i clienti (oggi `bookings`, altrimenti `422` sul campo), il ritorno è quello detto da `ritorno()` (https e
+  senza `#`, altrimenti `503` `servizio_non_disponibile`), e lo scambio dà un gettone RISTRETTO, senza workspace (`workspace` e `ruolo` `null`): apre solo i metodi del cliente
+  (`io.mostra`, `io.modifica`), ogni altro è `403` `permesso_negato`.
 - **Le consegne.** `consegna($tipo, $subject, $data = [], $timestamp = null)` fa la consegna di un evento a un modulo, come
   la fa il backoffice: `['intestazioni' => [...], 'corpo' => '...']`, con i tre header di Standard Webhooks e il corpo nella
   forma di un evento del backoffice. L'`id` è un ULID nuovo a ogni chiamata, `sequence` cresce di uno a 12 cifre, e la firma

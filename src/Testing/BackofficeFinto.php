@@ -171,6 +171,12 @@ final class BackofficeFinto
     /** I soli metodi che il gettone nato da un link di Bookings apre (AmbitoDelGettone::AMMESSI): l'uscita. */
     private const AMMESSI_DEL_LINK = ['accessi.corrente.elimina'];
 
+    /** Le app che hanno uno spazio per il cliente (config `catalogo.clienti` del backoffice, #3304): ingressi.clienti.crea le accetta. */
+    private const APP_PER_I_CLIENTI = ['bookings'];
+
+    /** I soli metodi che il gettone ristretto del cliente apre (MetodiDelCliente::ELENCO, #3304): `*` copre ogni metodo sotto il prefisso. */
+    private const METODI_DEL_CLIENTE = ['accessi.corrente.elimina', 'io.mostra', 'io.modifica', 'io.prenotazioni.*'];
+
     /** I metodi che il finto fa: verbo, percorso, operationId. */
     private const METODI = [
         ['POST', '#^/v1/staff/accessi$#', 'staff.accessi.crea'],
@@ -293,6 +299,7 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/app/([^/]+)$#', 'app.modifica'],
         ['POST', '#^/v1/gettoni$#', 'gettoni.crea'],
         ['POST', '#^/v1/ingressi$#', 'ingressi.crea'],
+        ['POST', '#^/v1/ingressi/clienti$#', 'ingressi.clienti.crea'],
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
         ['POST', '#^/v1/inviti/verifica$#', 'inviti.verifica.crea'],
@@ -573,7 +580,7 @@ final class BackofficeFinto
     /** @var array<string, array{utente: string, creato_il: CarbonImmutable, chiuso: bool, via?: string}> per id */
     private array $accessi = [];
 
-    /** @var array<string, array{accesso: string, workspace: ?string}> per gettone, in chiaro: il finto vive nella memoria del test */
+    /** @var array<string, array{accesso: string, workspace: ?string, tipo?: string}> per gettone, in chiaro: il finto vive nella memoria del test; `tipo` è `cliente` per il gettone ristretto (#3304) */
     private array $gettoni = [];
 
     /** @var array<string, array{id: string, nome: string, slug: string, azienda_id: string, settore: ?string, lingua_contenuti: ?string}> per id */
@@ -675,7 +682,7 @@ final class BackofficeFinto
     /** @var array<string, string> dove un'app riceve il codice di un ingresso (ZR_RITORNO_<CODICE>), per codice dell'app */
     private array $ritorni = [];
 
-    /** @var array<string, array{accesso: string, workspace: string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice */
+    /** @var array<string, array{accesso: string, workspace: ?string, app: string, sfida: string, scade: int}> gli ingressi che valgono, per codice; `workspace` è null per il codice di un cliente (#3304) */
     private array $ingressi = [];
 
     /** @var array<string, array{id: string, workspace: string, persona: string, tipo: string, soggetto: string, dati: array<string, mixed>, autore: ?string, risorsa_nome: ?string, board: ?array{id: string, nome: string}, letta_il: ?CarbonImmutable, creata_il: CarbonImmutable, ultima_azione_il: CarbonImmutable, azioni: int}> le notifiche (notifica()), per id */
@@ -1595,6 +1602,7 @@ final class BackofficeFinto
                 'app.modifica' => $this->modificaApp($richiesta, $corpo, $parametri[0]),
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
                 'ingressi.crea' => $this->creaIngresso($richiesta, $corpo),
+                'ingressi.clienti.crea' => $this->creaIngressoCliente($richiesta, $corpo),
                 'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
                 'link.accettazione.crea' => $this->accettaLink($richiesta, $corpo),
@@ -3979,6 +3987,14 @@ final class BackofficeFinto
     private function eliminaAccessoCorrente(Request $richiesta): array
     {
         $chi = $this->autentica($richiesta);
+        $gettone = (string) self::gettoneDi($richiesta);
+
+        // Il gettone ristretto del cliente (#3304) esce chiudendo solo se stesso: l'accesso è di zr-home e resta aperto.
+        if (($this->gettoni[$gettone]['tipo'] ?? null) === 'cliente') {
+            unset($this->gettoni[$gettone]);
+
+            return [204, null];
+        }
 
         $this->accessi[$chi['accesso']]['chiuso'] = true;
 
@@ -5534,6 +5550,40 @@ final class BackofficeFinto
     }
 
     /**
+     * ingressi.clienti.crea (IngressiController::clientiCrea, #3304): il codice monouso per un cliente senza workspace, per la persona del gettone dell'accesso (il
+     * gettone di un workspace è 403 gettone_con_workspace, prima del corpo). `app` dev'essere un'app con uno spazio per i clienti (422 sul campo), il ritorno è quello
+     * dell'app (ritorno()), https e senza `#` (altrimenti 503), mai della richiesta: un campo `ritorno` nel corpo è 422 come ogni altro.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaIngressoCliente(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+
+        if ($chi['workspace'] !== null) {
+            throw new Problema('gettone_con_workspace');
+        }
+
+        $campi = $this->testi->validaStretta($corpo, [
+            'app' => ['required', 'string', 'regex:/^[a-z][a-z0-9_]*$/', Rule::in(self::APP_PER_I_CLIENTI)],
+            'sfida' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
+        ]);
+        $app = (string) $campi['app'];
+        $ritorno = $this->ritorni[$app] ?? '';
+
+        if (! str_starts_with($ritorno, 'https://') || str_contains($ritorno, '#')) {
+            throw new Problema('servizio_non_disponibile');
+        }
+
+        $codice = self::base64url(random_bytes(32));
+        $scade = now()->getTimestamp() + self::SECONDI_DELL_INGRESSO;
+        $this->ingressi[$codice] = ['accesso' => $chi['accesso'], 'workspace' => null, 'app' => $app, 'sfida' => (string) $campi['sfida'], 'scade' => $scade];
+
+        return [201, ['data' => ['codice' => $codice, 'ritorno' => $ritorno, 'scade_il' => self::iso(CarbonImmutable::createFromTimestampUTC($scade))]]];
+    }
+
+    /**
      * ingressi.scambio.crea (IngressiController::scambio), senza gettone: il codice vale una volta e per 60 secondi, e il
      * verificatore deve avere la sfida data (SHA-256, base64url). Il freno è per codice, mai per IP. Ogni scambio che non
      * riesce è la stessa 422 verifica_non_riuscita: un verificatore sbagliato consuma il codice, come uno scaduto.
@@ -5559,6 +5609,15 @@ final class BackofficeFinto
         }
 
         $accesso = $this->accessi[$ingresso['accesso']] ?? null;
+
+        // Il codice di un cliente (#3304) non ha workspace: dà il gettone ristretto della persona, se l'app ha ancora uno spazio per i clienti.
+        if ($ingresso['workspace'] === null) {
+            if ($accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now()) || ! in_array($ingresso['app'], self::APP_PER_I_CLIENTI, true)) {
+                throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
+            }
+
+            return [201, ['data' => $this->emetti($ingresso['accesso'], null, null, 'cliente')]];
+        }
 
         if ($accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now())
             || ! isset($this->membri[$ingresso['workspace']][$accesso['utente']]) || ! $this->appAttiva($ingresso['workspace'], $ingresso['app'])
@@ -6664,6 +6723,11 @@ final class BackofficeFinto
             throw new Problema('permesso_negato');
         }
 
+        // Il gettone ristretto del cliente (AmbitoDelGettone, #3304): solo i metodi di METODI_DEL_CLIENTE, ogni altro è 403 permesso_negato.
+        if (($riga['tipo'] ?? null) === 'cliente' && ! Str::is(self::METODI_DEL_CLIENTE, (string) $this->operazioneInCorso)) {
+            throw new Problema('permesso_negato');
+        }
+
         // L'accettazione obbligatoria (middleware Accettazione, #1699): dopo il freno del gettone e prima del workspace e dei modelli.
         // Un ospite senza account non ha una persona che accetti: del suo gettone passa solo l'uscita, già decisa sopra.
         if ($accesso['utente'] !== null) {
@@ -6927,14 +6991,15 @@ final class BackofficeFinto
     }
 
     /**
-     * Un gettone nuovo di un accesso, del workspace se c'è: lo schema Gettone. Scade 12 ore dopo la nascita dell'accesso.
+     * Un gettone nuovo di un accesso, del workspace se c'è: lo schema Gettone. Scade 12 ore dopo la nascita dell'accesso. `$tipo` è `cliente` per il
+     * gettone ristretto di ingressi.scambio.crea (#3304).
      *
      * @return array<string, mixed>
      */
-    private function emetti(string $accesso, ?string $workspace, ?string $prenotazione = null): array
+    private function emetti(string $accesso, ?string $workspace, ?string $prenotazione = null, ?string $tipo = null): array
     {
         $gettone = 'zr_'.Str::random(48);
-        $this->gettoni[$gettone] = ['accesso' => $accesso, 'workspace' => $workspace, 'prenotazione' => $prenotazione];
+        $this->gettoni[$gettone] = ['accesso' => $accesso, 'workspace' => $workspace, 'prenotazione' => $prenotazione] + ($tipo === null ? [] : ['tipo' => $tipo]);
         $persona = $this->accessi[$accesso]['utente'];
 
         return [
