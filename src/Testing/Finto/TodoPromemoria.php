@@ -120,6 +120,19 @@ trait TodoPromemoria
         return count($this->promemoriaDelTodo($elemento));
     }
 
+    /**
+     * Gli anticipi dei promemoria vivi del to-do, in minuti e in ordine crescente (`promemoria_anticipi` nelle righe dell'elenco, #3336).
+     *
+     * @return list<int>
+     */
+    private function anticipiPromemoriaTodo(string $elemento): array
+    {
+        $anticipi = array_map(fn (array $promemoria) => (int) $promemoria['anticipo'], $this->promemoriaDelTodo($elemento));
+        sort($anticipi);
+
+        return $anticipi;
+    }
+
     /** Come ogni scrittura di un promemoria nel backoffice, cambia `aggiornato_il` del to-do (e il suo ETag). */
     private function toccaIlTodoPromemoria(string $elemento): void
     {
