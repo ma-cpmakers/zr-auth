@@ -150,7 +150,52 @@ trait CrmPersonalizzazione
             'funzioni_attive' => $accese,
             'barra' => array_keys(array_filter($pack['barra'], fn (?string $funzione) => $funzione === null || in_array($funzione, $accese, true))),
             'primi_passi' => array_keys(array_filter($pack['passi'], fn (array $passo) => in_array($passo['funzione'], $accese, true))),
+            'pipeline_dettaglio' => $this->dettaglioDellePipelineCrm($pack, $lingua),
+            'catalogo_dettaglio' => array_map(fn (array $voce) => ['nome' => $voce['nome'][$lingua], 'sottotitolo' => $this->sottotitoloCrm($voce, $lingua)], $pack['catalogo'] ?? []),
         ]]]];
+    }
+
+    /** I tipi di una voce del catalogo e l'unità della durata, nella lingua della persona (Personalizzazione::TIPI_DELLA_VOCE del backoffice, #3387). */
+    private const CRM_TIPI_DELLA_VOCE = [
+        'servizio' => ['it' => 'Servizio', 'en' => 'Service', 'es' => 'Servicio'],
+        'prodotto' => ['it' => 'Prodotto', 'en' => 'Product', 'es' => 'Producto'],
+        'abbonamento' => ['it' => 'Abbonamento', 'en' => 'Membership', 'es' => 'Abono'],
+        'pacchetto' => ['it' => 'Pacchetto', 'en' => 'Package', 'es' => 'Paquete'],
+    ];
+
+    private const CRM_MINUTI = ['it' => 'minuti', 'en' => 'minutes', 'es' => 'minutos'];
+
+    /**
+     * Una riga per fase di tutte le pipeline del pack, nell'ordine del pack, con la carta d'esempio derivata (#3387).
+     *
+     * @param  array<string, mixed>  $pack
+     * @return list<array{pipeline: string, nome: string, probabilita: int, esempio: array{titolo: string, riga: string}}>
+     */
+    private function dettaglioDellePipelineCrm(array $pack, string $lingua): array
+    {
+        $righe = [];
+
+        foreach ($pack['pipeline'] ?? [] as $pipeline) {
+            foreach ($pipeline['fasi'] as $fase) {
+                $nome = $fase['nome'][$lingua];
+                $righe[] = ['pipeline' => $pipeline['nome'][$lingua], 'nome' => $nome, 'probabilita' => (int) $fase['probabilita'], 'esempio' => ['titolo' => $nome, 'riga' => $fase['probabilita'].'%']];
+            }
+        }
+
+        return $righe;
+    }
+
+    /**
+     * «<tipo> · <durata>», solo il tipo se la voce non ha una durata (#3387).
+     *
+     * @param  array<string, mixed>  $voce
+     */
+    private function sottotitoloCrm(array $voce, string $lingua): string
+    {
+        $tipo = self::CRM_TIPI_DELLA_VOCE[$voce['tipo']][$lingua] ?? (string) $voce['tipo'];
+        $minuti = $voce['durata_minuti'] ?? null;
+
+        return is_int($minuti) && $minuti > 0 ? "{$tipo} · {$minuti} ".self::CRM_MINUTI[$lingua] : $tipo;
     }
 
     /**
