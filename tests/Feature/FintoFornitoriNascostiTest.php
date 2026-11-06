@@ -96,3 +96,27 @@ it('io.fornitori.nascosti: 120 scritture in un\'ora per persona, poi 429 con Ret
         ->and($oltre->hasHeader('Retry-After'))->toBeTrue();
     alFinto('POST', '/v1/io/fornitori/nascosti', ['workspace_id' => $verdi['id']], $gettoneDario)->assertCreated();
 });
+
+it('io.fornitori.elenca: le aziende di cui la persona è cliente meno i nascosti, per nome, a pagine; la relazione di un\'altra persona non si vede (#3320, F1, F3)', function () {
+    [$finto, $cora, $verdi, $rossi] = fintoDiCora();
+    $dario = $finto->persona('dario@example.com', PASSWORD, nome: 'Dario');
+    $gettoneDario = entraNelFinto('dario@example.com')['gettone']['gettone'];
+
+    $tutte = alFinto('GET', '/v1/io/fornitori', gettone: $cora)->assertOk();
+    expect($tutte->json('data'))->toBe([
+        ['id' => $rossi['id'], 'nome' => 'Studio Rossi', 'colore' => 'neutral'],
+        ['id' => $verdi['id'], 'nome' => 'Studio Verdi', 'colore' => 'neutral'],
+    ])->and($tutte->json('successivo'))->toBeNull()
+        ->and(alFinto('GET', '/v1/io/fornitori', gettone: $gettoneDario)->json('data'))->toBe([]);
+
+    $prima = alFinto('GET', '/v1/io/fornitori?limite=1', gettone: $cora)->assertOk();
+    $seconda = alFinto('GET', '/v1/io/fornitori?limite=1&cursore='.urlencode($prima->json('successivo')), gettone: $cora)->assertOk();
+    expect(array_column($seconda->json('data'), 'nome'))->toBe(['Studio Verdi'])->and($seconda->json('successivo'))->toBeNull();
+
+    alFinto('POST', '/v1/io/fornitori/nascosti', ['workspace_id' => $rossi['id']], $cora)->assertCreated();
+    expect(array_column(alFinto('GET', '/v1/io/fornitori', gettone: $cora)->json('data'), 'nome'))->toBe(['Studio Verdi']);
+    alFinto('DELETE', '/v1/io/fornitori/nascosti/'.$rossi['id'], gettone: $cora)->assertNoContent();
+    expect(array_column(alFinto('GET', '/v1/io/fornitori', gettone: $cora)->json('data'), 'nome'))->toBe(['Studio Rossi', 'Studio Verdi'])
+        ->and(esito(alFinto('GET', '/v1/io/fornitori?limite=0', gettone: $cora)))->toBe([422, 'dati_non_validi'])
+        ->and(esito(alFinto('GET', '/v1/io/fornitori')))->toBe([401, 'gettone_assente']);
+});
