@@ -123,6 +123,15 @@ final class BackofficeFinto
 
     public const SEGRETO_DEL_CLIENTE = 'segreto-del-client-finto-0123456789abcdef';
 
+    /**
+     * Chi scambia il codice di un'app (config `catalogo.client_dell_app` e `catalogo.client_di_sistema` del backoffice, #3344): per ogni app, i client firmati che possono
+     * scambiare un codice nato per lei; i client di sistema (il monitoraggio e la UAT) scambiano quello di qualunque app. `finto` è il client di prova del finto, e
+     * vale per ogni app: un modulo che nei suoi test firma come `finto` non cambia. Il finto firma con lo stesso segreto per tutti i nomi: quale nome firma lo decide il test.
+     */
+    private const CLIENT_DELL_APP = ['bookings' => ['bookings'], 'crm' => ['crm'], 'pm' => ['board']];
+
+    private const CLIENT_DI_SISTEMA = ['monitor', 'uat'];
+
     /** La password che il finto dà per trapelata, al posto di Have I Been Pwned: utenti.crea la rifiuta. */
     public const PASSWORD_TRAPELATA = 'una password trapelata';
 
@@ -747,6 +756,9 @@ final class BackofficeFinto
 
     /** L'IP firmato della richiesta in corso; null se è anonima. */
     private ?string $ipFirmato = null;
+
+    /** Il nome del client che ha firmato la richiesta in corso, null se è anonima (Cliente::nome del backoffice). */
+    private ?string $clienteFirmato = null;
 
     /** L'operationId del metodo in corso: la guardia del gettone lo confronta con quelli che l'accettazione obbligatoria lascia aperti (#1699). */
     private ?string $operazioneInCorso = null;
@@ -1399,7 +1411,7 @@ final class BackofficeFinto
         $percorso = (string) parse_url($richiesta->url(), PHP_URL_PATH);
         $attesa = hash_hmac('sha256', "zr1\n{$cliente}\n{$istante}\n".strtoupper($richiesta->method())."\n{$percorso}\n{$ip}", self::SEGRETO_DEL_CLIENTE);
 
-        if ($cliente !== self::CLIENTE
+        if (! in_array($cliente, [self::CLIENTE, 'home', 'board', 'crm', 'bookings', ...self::CLIENT_DI_SISTEMA], true)
             || $ip === null || filter_var($ip, FILTER_VALIDATE_IP) === false
             || $istante === null || preg_match('/^\d{1,12}$/', $istante) !== 1 || abs(now()->timestamp - (int) $istante) > 30
             || $firma === null || ! hash_equals($attesa, $firma)) {
@@ -1407,6 +1419,7 @@ final class BackofficeFinto
         }
 
         $this->ipFirmato = strtolower($ip);
+        $this->clienteFirmato = $cliente;
         $this->ipVisti[] = ['operazione' => $operazione, 'cliente' => $cliente, 'ip' => $this->ipFirmato];
     }
 
@@ -1474,6 +1487,7 @@ final class BackofficeFinto
         $corpo = is_array($corpo) ? $corpo : [];
 
         $this->ipFirmato = null;
+        $this->clienteFirmato = null;
         $this->operazioneInCorso = $operazione;
 
         try {
@@ -5603,8 +5617,10 @@ final class BackofficeFinto
         $ingresso = $this->ingressi[$codice] ?? null;
         unset($this->ingressi[$codice]);
 
+        // Solo il client firmato dell'app del codice, o uno di sistema (#3344): senza firma o con quella di un altro client è la stessa 422, e il codice è già consumato.
         if ($ingresso === null || $ingresso['scade'] <= now()->getTimestamp()
-            || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))) {
+            || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))
+            || ! in_array($this->clienteFirmato, [self::CLIENTE, ...(self::CLIENT_DELL_APP[$ingresso['app']] ?? []), ...self::CLIENT_DI_SISTEMA], true)) {
             throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
         }
 

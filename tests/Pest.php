@@ -121,6 +121,25 @@ function alFinto(string $metodo, string $percorso, ?array $corpo = null, ?string
     return $richiesta->send($metodo, $percorso, $corpo === null ? [] : ['json' => $corpo]);
 }
 
+/** Le quattro intestazioni con cui un client firma una richiesta al finto (Cliente::firma del backoffice), col segreto del finto per ogni nome. @return array<string, string> */
+function firmaDelClient(string $cliente, string $metodo, string $percorso, string $ip = '203.0.113.5'): array
+{
+    $istante = now()->timestamp;
+
+    return [
+        'Zr-Cliente' => $cliente,
+        'Zr-Ip' => $ip,
+        'Zr-Istante' => (string) $istante,
+        'Zr-Firma' => hash_hmac('sha256', "zr1\n{$cliente}\n{$istante}\n{$metodo}\n{$percorso}\n{$ip}", \Zeiras\Auth\Testing\BackofficeFinto::SEGRETO_DEL_CLIENTE),
+    ];
+}
+
+/** ingressi.scambio.crea al finto, firmato dal client (`finto` di prova, di default: vale per ogni app) o, con `null`, senza firma (#3344). */
+function scambioDelFinto(array $corpo, ?string $cliente = \Zeiras\Auth\Testing\BackofficeFinto::CLIENTE): Response
+{
+    return alFinto('POST', '/v1/ingressi/scambio', $corpo, intestazioni: $cliente === null ? [] : firmaDelClient($cliente, 'POST', '/v1/ingressi/scambio'));
+}
+
 /** Entra nel finto con accessi.crea, e ne dà i `data` (lo schema Accesso). */
 function entraNelFinto(string $email, string $password = PASSWORD): array
 {
