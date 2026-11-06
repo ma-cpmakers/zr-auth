@@ -41,6 +41,9 @@ return [
     'home' => env('ZR_HOME_URL', 'https://app.zeiras.com'),
     'app' => env('ZR_APP'),
     'ricevitore' => '/ingresso/ritorno',
+
+    // La casa di zr-superadmin (admin.zeiras.com): l'`Origin` del POST che consegna il codice di un «Accedi come» al ricevitore (#3386).
+    'admin' => env('ZR_ADMIN_URL', 'https://admin.zeiras.com'),
     'dopo' => '/',
     'errore' => env('ZR_AUTH_ERRORE'),
 

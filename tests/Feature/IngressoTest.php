@@ -124,9 +124,15 @@ it('ogni partenza ha il suo state e il suo verificatore, e la nuova prende il po
 
 // T2.2
 
-it('il ricevitore è un GET e basta (T2.2)', function (string $metodo) {
+it('il ricevitore è un GET, e un POST solo per il codice di un «Accedi come» (T2.2, #3386)', function (string $metodo) {
     $this->call($metodo, RICEVITORE_DI_PROVA)->assertStatus(405);
-})->with(['POST', 'PUT', 'PATCH', 'DELETE']);
+})->with(['PUT', 'PATCH', 'DELETE']);
+
+it('un POST senza il codice e senza gli header del browser della staff è la pagina d\'errore, mai un 419 né una sessione (#3386)', function () {
+    $this->call('POST', RICEVITORE_DI_PROVA)->assertRedirect(INGRESSO);
+
+    expect(Sessione::aperta())->toBeFalse();
+});
 
 it('un ritorno da un altro sito non apre la sessione e va alla pagina d\'errore, e non tocca la partenza della persona (T2.2; #1359, T4.1)', function (array $header) {
     [, $studio] = fintoDelModulo();
@@ -362,7 +368,7 @@ it('partenza, ingressi.crea del finto, ricevitore: la sessione si apre col works
 it('la rotta del ricevitore è pubblica, e il test del frontend la nomina (T2.5)', function () {
     $scoperte = Zeiras\Auth\Testing\Rotte::senzaGuardia();
 
-    expect($scoperte)->toContain('GET ingresso/ritorno')
+    expect($scoperte)->toContain('GET ingresso/ritorno')->not->toContain('POST ingresso/ritorno')
         ->and(Zeiras\Auth\Testing\Rotte::senzaGuardia(['GET ingresso/ritorno']))->not->toContain('GET ingresso/ritorno');
 });
 
@@ -385,13 +391,25 @@ function codiceDiAssistenza(): array
     return [$assistenza['codice'], $finto, $studio];
 }
 
-it('il codice di un «Accedi come» senza state si scambia senza verificatore, apre la sessione del workspace e torna a un indirizzo pulito (F4.1)', function () {
+/** La pagina di zr-superadmin che consegna il codice: un modulo POST dello stesso sito, con Origin di admin (#3386). */
+const ADMIN_DI_PROVA = 'https://admin.zeiras.com';
+
+const DA_ADMIN = ['Sec-Fetch-Site' => 'same-site', 'Origin' => ADMIN_DI_PROVA];
+
+/** Il browser che consegna il codice di assistenza al ricevitore del modulo, come fa il modulo POST auto-inviato. */
+function consegnaAssistenza(object $t, ?string $codice, array $header = DA_ADMIN): Illuminate\Testing\TestResponse
+{
+    return $t->withHeaders($header)->post(FRONTEND.RICEVITORE_DI_PROVA, ['codice' => $codice]);
+}
+
+it('il codice di un «Accedi come» arriva con un POST, apre la sessione del workspace e torna con un 303 a un indirizzo pulito, no-store e no-referrer (#3386 T1.1, T1.3)', function () {
     [$codice, , $studio] = codiceDiAssistenza();
 
-    $risposta = $this->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]));
+    $risposta = consegnaAssistenza($this, $codice);
 
-    $risposta->assertStatus(302)->assertHeader('Referrer-Policy', 'no-referrer');
-    expect($risposta->headers->get('Location'))->toBe(FRONTEND)
+    $risposta->assertStatus(303)->assertHeader('Referrer-Policy', 'no-referrer');
+    expect($risposta->headers->get('Cache-Control'))->toContain('no-store')
+        ->and($risposta->headers->get('Location'))->toBe(FRONTEND)->and($risposta->headers->get('Location'))->not->toContain($codice)
         ->and(Sessione::aperta())->toBeTrue()
         ->and(Sessione::workspace()['id'])->toBe($studio['id'])
         ->and(Sessione::utente()['email'])->toBe('anna@example.com')
@@ -403,25 +421,72 @@ it('il codice di un «Accedi come» senza state si scambia senza verificatore, a
     expect($fascia['utente']['email'])->toBe('anna@example.com')->and($fascia['sola_lettura'])->toBeFalse();
 });
 
-it('il codice di assistenza vale una volta: il secondo ritorno è la pagina d\'errore e non apre niente (F4.1)', function () {
+it('un GET con il codice e senza state non apre la sessione e brucia il codice, già finito in un indirizzo: la pagina d\'errore (#3386 T1.1)', function () {
     [$codice] = codiceDiAssistenza();
-    $indirizzo = FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]);
 
-    $this->get($indirizzo)->assertRedirect(FRONTEND);
-    session()->flush();
-    $this->get($indirizzo)->assertRedirect(INGRESSO);
+    $this->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]))->assertRedirect(INGRESSO);
+
+    expect(Sessione::aperta())->toBeFalse()->and(scambiPartiti())->toBe(1);
+});
+
+it('il codice si scambia solo da una richiesta del browser dello stesso sito di zr-superadmin: curl, un altro sito, un Origin diverso o assente non aprono niente (#3386 T1.2)', function (array $header) {
+    [$codice] = codiceDiAssistenza();
+
+    consegnaAssistenza($this, $codice, $header)->assertRedirect(INGRESSO);
+
+    expect(Sessione::aperta())->toBeFalse();
+})->with([
+    'curl senza intestazioni' => [[]],
+    'Sec-Fetch-Site none' => [['Sec-Fetch-Site' => 'none', 'Origin' => ADMIN_DI_PROVA]],
+    'Sec-Fetch-Site cross-site' => [['Sec-Fetch-Site' => 'cross-site', 'Origin' => ADMIN_DI_PROVA]],
+    'Sec-Fetch-Site same-origin' => [['Sec-Fetch-Site' => 'same-origin', 'Origin' => ADMIN_DI_PROVA]],
+    'Origin assente' => [['Sec-Fetch-Site' => 'same-site']],
+    'Origin di un altro sito' => [['Sec-Fetch-Site' => 'same-site', 'Origin' => 'https://board.zeiras.com']],
+    'Sec-Fetch-Site assente' => [['Origin' => ADMIN_DI_PROVA]],
+]);
+
+it('con Referrer-Policy no-referrer il browser manda Origin: null; con same-site vale lo stesso (#3386 T1.2)', function () {
+    [$codice] = codiceDiAssistenza();
+
+    consegnaAssistenza($this, $codice, ['Sec-Fetch-Site' => 'same-site', 'Origin' => 'null'])->assertRedirect(FRONTEND);
+
+    expect(Sessione::aperta())->toBeTrue();
+});
+
+it('un codice rifiutato dal sito brucia: il secondo tentativo giusto non vale più (#3386 T1.2)', function () {
+    [$codice] = codiceDiAssistenza();
+
+    consegnaAssistenza($this, $codice, ['Sec-Fetch-Site' => 'cross-site', 'Origin' => ADMIN_DI_PROVA])->assertRedirect(INGRESSO);
+    consegnaAssistenza($this, $codice)->assertRedirect(INGRESSO);
 
     expect(Sessione::aperta())->toBeFalse();
 });
 
-it('un codice ordinario senza state non apre la sessione ed è consumato: il backoffice rifiuta lo scambio senza verificatore (F4.1)', function () {
+it('il codice di assistenza vale una volta: il secondo POST è la pagina d\'errore e non apre niente (F4.1)', function () {
+    [$codice] = codiceDiAssistenza();
+
+    consegnaAssistenza($this, $codice)->assertRedirect(FRONTEND);
+    session()->flush();
+    consegnaAssistenza($this, $codice)->assertRedirect(INGRESSO);
+
+    expect(Sessione::aperta())->toBeFalse();
+});
+
+it('un codice senza la forma, vuoto o mancante è la pagina d\'errore, senza uno scambio (#3386)', function (?string $codice) {
+    codiceDiAssistenza();
+
+    consegnaAssistenza($this, $codice)->assertRedirect(INGRESSO);
+
+    expect(Sessione::aperta())->toBeFalse()->and(scambiPartiti())->toBe(0);
+})->with([[null], [''], ['troppo-corto'], [str_repeat('é', 43)]]);
+
+it('un codice ordinario non apre la sessione ed è consumato: il backoffice rifiuta lo scambio senza verificatore (F4.1)', function () {
     [, $studio] = fintoDelModulo();
     $partenza = queryDi((string) $this->get('/parti/'.$studio['slug'])->headers->get('Location'));
     $indirizzo = ritornoDiHome($studio, $partenza);
     $verificatore = session(Ingresso::CHIAVE)['verificatore'];
-    $senzaState = str_replace('&state='.urlencode($partenza['state']), '', $indirizzo);
 
-    $this->get($senzaState)->assertRedirect(INGRESSO);
+    consegnaAssistenza($this, queryDi($indirizzo)['codice'])->assertRedirect(INGRESSO);
 
     expect(Sessione::aperta())->toBeFalse();
 
@@ -429,21 +494,39 @@ it('un codice ordinario senza state non apre la sessione ed è consumato: il bac
     expect($scambio->status())->toBe(422)->and($scambio->json('codice'))->toBe('verifica_non_riuscita');
 });
 
-it('un codice di assistenza con uno state che non è di una partenza, o da un altro sito, non apre la sessione e si consuma (F4.1)', function (array $query, array $header) {
-    [$codice] = codiceDiAssistenza();
-
-    $this->withHeaders($header)->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice] + $query))->assertRedirect(INGRESSO);
-
-    expect(Sessione::aperta())->toBeFalse()
-        ->and($this->withHeaders([])->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]))->headers->get('Location'))->toBe(INGRESSO);
-})->with([
-    'con uno state' => [['state' => 'uno-state-qualsiasi'], []],
-    'da un altro sito' => [[], ['Sec-Fetch-Site' => 'cross-site']],
-]);
-
 it('un guasto del backoffice nello scambio di assistenza è BackofficeNonRisponde, mai una sessione a metà (F4.1)', function () {
     [$codice] = codiceDiAssistenza();
     ilBackofficeRisponde(Http::response(['title' => 'Errore interno', 'status' => 500, 'codice' => 'errore_interno'], 500));
 
-    $this->withoutExceptionHandling()->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]));
+    $this->withoutExceptionHandling();
+    consegnaAssistenza($this, $codice);
 })->throws(BackofficeNonRisponde::class);
+
+it('l\'ingresso in assistenza parte da una sessione vuota: il gettone vero della stessa persona, già nel browser, non resta accanto a quello di assistenza (#3394)', function () {
+    [$codice, , $studio] = codiceDiAssistenza();
+    // Anna ha già una sessione vera in questo browser: l'accesso e il suo gettone pieno.
+    Sessione::apri(entraNelFinto('anna@example.com'));
+    expect(Sessione::accesso())->not->toBeNull();
+    // E le chiavi di un modulo o di una pagina a metà non passano all'assistenza (deve fallire se entraInAssistenza() rigenera l'id e basta).
+    session()->put(['url.intended' => FRONTEND.'/dati-di-anna', 'preferenze_modulo' => ['anna']]);
+
+    consegnaAssistenza($this, $codice)->assertRedirect(FRONTEND);
+
+    expect(session()->has('url.intended'))->toBeFalse()->and(session()->has('preferenze_modulo'))->toBeFalse();
+    expect(Sessione::workspace()['id'])->toBe($studio['id'])
+        ->and(Sessione::accesso())->toBeNull()
+        ->and(array_keys(session(Sessione::CHIAVE)['gettoni']))->toBe(['workspace']);
+
+    // Api::persona() chiama col gettone di assistenza: la fascia c'è, non `null` come per il gettone pieno.
+    expect(Zeiras\Auth\Api::persona()->get('/v1/accessi/corrente')['data']['impersonificazione'])->not->toBeNull();
+});
+
+it('un ingresso ordinario della stessa persona tiene l\'accesso come prima (#3394)', function () {
+    fintoDelModulo();
+    $accesso = entraNelFinto('anna@example.com');
+    Sessione::apri($accesso);
+
+    Sessione::entra([...gettoneDelWorkspace(), 'utente' => $accesso['gettone']['utente']]);
+
+    expect(Sessione::accesso())->toBe($accesso['id']);
+});

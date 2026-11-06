@@ -13,7 +13,7 @@ use Zeiras\Auth\Sessione;
 
 /**
  * Il ricevitore del codice (`GET zr-auth.ricevitore`, di norma `/ingresso/ritorno`): dove zr-home rimanda la persona dopo
- * l'ingresso, con `codice` e `state`. Solo da un GET e dallo stesso sito; lo `state` deve essere quello della partenza e
+ * l'ingresso, con `codice` e `state`. Solo da un GET e dallo stesso sito (il codice di un «Accedi come», invece, da un POST: assistenza()); lo `state` deve essere quello della partenza e
  * vale una volta; il codice si scambia col verificatore (ingressi.scambio.crea) e dà la sessione del workspace. Senza `state` è il codice di un «Accedi come» dello
  * staff, che si scambia senza verificatore (entraInAssistenza). Si torna
  * a un indirizzo pulito: mai il codice nell'indirizzo dove la persona resta, e mai un indirizzo che viene dalla richiesta.
@@ -37,11 +37,13 @@ final class RicevitoreController
         $partenza = $richiesta->session()->pull(Ingresso::CHIAVE);
         $state = $richiesta->query('state');
 
-        // Senza `state` non è il ritorno di una partenza: è il codice di un «Accedi come» (staff.utenti.impersonificazioni.crea), che nasce dallo staff e non ha un
-        // verificatore da cui partire (#2914, F4.1). Si scambia senza; la legatura è al client firmato di questo modulo, e un codice ordinario senza verificatore il
-        // backoffice lo rifiuta e lo consuma, come lo scambio a vuoto di brucia().
+        // Senza `state` non è il ritorno di una partenza. Il codice di un «Accedi come» (staff.utenti.impersonificazioni.crea) non viaggia più in un indirizzo (#3386): arriva con un POST
+        // dal browser della persona, e lo riceve assistenza(). Un GET col codice e senza `state` non scambia niente: la pagina d'errore. Il codice però è già in un indirizzo
+        // (log di un proxy, cronologia), quindi si brucia come ogni altro ritorno rifiutato.
         if ($state === null) {
-            return self::entraInAssistenza($codice);
+            self::brucia($codice);
+
+            return self::errore();
         }
 
         if (! is_array($partenza) || ! is_string($partenza['state'] ?? null) || ! is_string($partenza['verificatore'] ?? null)
@@ -80,6 +82,28 @@ final class RicevitoreController
     }
 
     /**
+     * Il codice di un «Accedi come» (staff.utenti.impersonificazioni.crea, #2914 F4.1) arriva con un POST auto-inviato dalla pagina di zr-superadmin, nel corpo e mai in un indirizzo (#3386):
+     * non finisce nella cronologia del browser né nel log di un proxy, nemmeno per i 60 secondi in cui vale. Lo scambio vuole una richiesta del browser dello stesso sito: `Sec-Fetch-Site: same-site`
+     * (un altro sito manda `cross-site`, una navigazione diretta `none`; un client fuori dal browser le intestazioni le può scrivere come vuole: contro un codice trapelato proteggono
+     * solo «mai in un indirizzo», i 60 secondi e il monouso) e `Origin` quello di zr-superadmin (`zr-auth.admin`), o `null`, che il browser manda quando la
+     * pagina che consegna il codice ha `Referrer-Policy: no-referrer`. Il resto della legatura non cambia: il codice è del client firmato di questo modulo, vale una volta e 60 secondi.
+     * Senza CSRF: arriva da un altro sito per costruzione, e il controllo del sito prende il suo posto. Si risponde con un 303 a un indirizzo pulito.
+     */
+    public function assistenza(Request $richiesta): RedirectResponse
+    {
+        $codice = $richiesta->request->get('codice');
+        $codice = is_string($codice) && preg_match('/^[A-Za-z0-9_-]{43}$/', $codice) === 1 ? $codice : null;
+
+        if (! self::dalPaginaDellaStaff($richiesta)) {
+            self::brucia($codice);
+
+            return self::errore();
+        }
+
+        return self::entraInAssistenza($codice);
+    }
+
+    /**
      * L'ingresso di un «Accedi come»: il codice si scambia senza verificatore e dà la sessione del workspace dell'assistenza. Il gettone è di assistenza: la fascia
      * «stai assistendo…» la legge il modulo con `accessi.corrente.mostra`, e il «Termina» è `accessi.corrente.elimina`. Un codice che non ha la forma, o uno scambio
      * che non riesce (un altro client, scaduto, già usato, un codice ordinario), è la stessa pagina d'errore di ogni ritorno rifiutato.
@@ -106,9 +130,9 @@ final class RicevitoreController
             return self::errore();
         }
 
-        Sessione::entra($gettone);
+        Sessione::entraInAssistenza($gettone);
 
-        return redirect()->away(Sessione::ritorno(url((string) config('zr-auth.dopo'))))->withHeaders(Ingresso::INTESTAZIONI);
+        return redirect()->away(Sessione::ritorno(url((string) config('zr-auth.dopo'))), 303)->withHeaders(Ingresso::INTESTAZIONI);
     }
 
     /**
@@ -129,6 +153,18 @@ final class RicevitoreController
         } catch (ErroreApi|BackofficeNonRisponde|GettoneRifiutato) {
             // Il codice è bruciato o non c'è più da bruciare: la persona vede la stessa pagina in ogni caso.
         }
+    }
+
+    /** Il POST del codice di assistenza viene dal browser della persona, dalla pagina di zr-superadmin: Sec-Fetch-Site e Origin ci sono, e lo dicono. */
+    private static function dalPaginaDellaStaff(Request $richiesta): bool
+    {
+        if (strtolower((string) $richiesta->headers->get('Sec-Fetch-Site')) !== 'same-site') {
+            return false;
+        }
+
+        $origine = $richiesta->headers->get('Origin');
+
+        return $origine !== null && ($origine === 'null' || rtrim($origine, '/') === rtrim((string) config('zr-auth.admin'), '/'));
     }
 
     /** Il ritorno viene dal browser della persona, da zr-home: Sec-Fetch-Site e Origin, quando ci sono, lo dicono. */
