@@ -1628,7 +1628,7 @@ final class BackofficeFinto
                 'preventivi.pubblici.accettazione.crea' => $this->accettaPreventivoPubblico($corpo),
                 'preventivi.pubblici.richieste.crea' => $this->chiediModificaPreventivoPubblico($corpo),
                 'documenti.pubblici.lettura.crea' => $this->leggiDocumentoPubblicoCrm($corpo),
-                'documenti.pubblici.firma.crea' => $this->firmaDocumentoPubblicoCrm($corpo),
+                'documenti.pubblici.firma.crea' => $this->firmaDocumentoPubblicoCrm($corpo, self::header($richiesta, 'Zr-Ip') ?? '127.0.0.1'),
                 'legale.documenti.elenca' => $this->elencaDocumentiLegali($richiesta),
                 'legale.accettazioni.elenca' => $this->elencaAccettazioniLegali($richiesta),
                 'legale.accettazioni.crea' => $this->accettaDocumentoLegale($richiesta, $corpo),

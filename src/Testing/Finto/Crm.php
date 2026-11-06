@@ -3497,6 +3497,14 @@ trait Crm
 
     // ———————————————————————————————————————— Trattative
 
+    /** `fase_giorni_massimi` di una trattativa (Forme::trattativa, #3026): la soglia della fase in cui sta ora, `null` senza soglia o con la fase tolta. */
+    private function soglieDelleFasiCrm(string $faseId): ?int
+    {
+        $fase = $this->crm['fasi'][$faseId] ?? null;
+
+        return $fase === null || ($fase['eliminata'] ?? false) ? null : $fase['giorni_massimi'];
+    }
+
     /**
      * Lo schema Trattativa (Forme::trattativa). La scheda intera (`mostra`, `crea`, `modifica`) porta anche `campi`, i valori dei campi
      * «tuoi» (#2127); l'elenco, la ricerca e lo spostamento hanno la forma breve, senza.
@@ -3514,6 +3522,7 @@ trait Crm
             'valore' => $riga['importo'] === null ? null : ['importo' => $riga['importo'], 'valuta' => $this->valutaCrm($riga['workspace'])],
             'pipeline_id' => $riga['pipeline_id'],
             'fase_id' => $riga['fase_id'],
+            'fase_giorni_massimi' => $this->soglieDelleFasiCrm($riga['fase_id']),
             'persona' => $persona === null ? null : [
                 'id' => $persona['id'], 'nome' => $persona['nome'], 'cognome' => $persona['cognome'],
                 'archiviato_il' => self::isoCrm($persona['archiviata_il']), 'anonimizzata_il' => self::isoCrm($persona['anonimizzata_il']),
