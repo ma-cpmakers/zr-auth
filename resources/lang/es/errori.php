@@ -401,6 +401,14 @@ return [
         'title' => 'Ya suspendida',
         'detail' => 'Esta persona ya está suspendida, y la solicitud no cambió nada.',
     ],
+    'utente_mai_acceduto' => [
+        'title' => 'Persona que nunca ha entrado',
+        'detail' => 'Esta persona nunca ha entrado en Zeiras, así que no hay una sesión sobre la que el equipo pueda trabajar. El método no escribió nada.',
+    ],
+    'impersonificazione_non_consentita' => [
+        'title' => 'Asistencia no permitida',
+        'detail' => 'No se puede entrar como esta persona: está suspendida o en eliminación, es otra persona del equipo, o es quien llama. El método no escribió nada.',
+    ],
     'esportazione_non_disponibile' => [
         'title' => 'Exportación no disponible',
         'detail' => 'La exportación no se puede descargar ahora: sigue en curso, ha caducado o ha fallado. El método no escribió nada.',

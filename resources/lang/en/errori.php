@@ -401,6 +401,14 @@ return [
         'title' => 'Already suspended',
         'detail' => 'This person is already suspended, and the request changed nothing.',
     ],
+    'utente_mai_acceduto' => [
+        'title' => 'Person never signed in',
+        'detail' => 'This person has never signed in to Zeiras, so there is no session for staff to work on. The method wrote nothing.',
+    ],
+    'impersonificazione_non_consentita' => [
+        'title' => 'Assistance not allowed',
+        'detail' => 'You cannot sign in as this person: they are suspended or being deleted, they are another staff member, or they are the caller. The method wrote nothing.',
+    ],
     'esportazione_non_disponibile' => [
         'title' => 'Export not available',
         'detail' => 'The export cannot be downloaded now: it is still running, it has expired or it failed. The method wrote nothing.',

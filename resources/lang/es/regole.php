@@ -293,6 +293,7 @@ return [
     'foto_peso' => 'La foto pesa demasiado: 2 MB como máximo.',
     'foto_formato' => 'La foto debe ser un archivo JPEG, PNG o WebP que se pueda leer (un WebP animado o un archivo roto no vale).',
     'foto_lato' => 'La foto tiene un lado de más de :lato píxeles.',
+    'assistenza_workspace_obbligatorio' => 'Esta persona está en más de un workspace: indica en cuál entrar con `workspace_id`.',
     'staff_persona_non_trovata' => 'No hay una persona de Zeiras con este email verificado: la cuenta debe existir y estar verificada antes de entrar en el staff.',
     'board_diversa' => 'El tablero de destino es el de origen: para cambiar de lugar dentro del mismo tablero está el movimiento (board.schede.spostamento.crea, board.liste.spostamento.crea).',
     'tipo_nella_board_d_arrivo' => 'El tipo de una tarjeta que se lleva no es uno de los del método del tablero de destino (:tipi): board.board.mostra da los tipos admitidos en su campo `tipi`.',

@@ -401,6 +401,14 @@ return [
         'title' => 'Già sospeso',
         'detail' => 'Questa persona è già sospesa, e la richiesta non ha cambiato niente.',
     ],
+    'utente_mai_acceduto' => [
+        'title' => 'Persona mai entrata',
+        'detail' => 'Questa persona non è mai entrata in Zeiras: non ha un accesso su cui lo staff possa lavorare. Il metodo non ha scritto niente.',
+    ],
+    'impersonificazione_non_consentita' => [
+        'title' => 'Assistenza non consentita',
+        'detail' => 'Non si può entrare come questa persona: è sospesa o in eliminazione, è un\'altra persona dello staff, o è chi chiama. Il metodo non ha scritto niente.',
+    ],
     'esportazione_non_disponibile' => [
         'title' => 'Esportazione non disponibile',
         'detail' => 'L\'esportazione non si può scaricare adesso: è ancora in corso, è scaduta o è fallita. Il metodo non ha scritto niente.',

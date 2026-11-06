@@ -5609,7 +5609,7 @@ final class BackofficeFinto
     {
         $campi = $this->testi->validaStretta($corpo, [
             'codice' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
-            'verificatore' => ['required', 'string', 'min:43', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
+            'verificatore' => ['sometimes', 'nullable', 'string', 'min:43', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
         ]);
         $codice = (string) $campi['codice'];
         $this->frena('ingresso:'.$codice, self::SCAMBI, self::MINUTO);
@@ -5619,7 +5619,7 @@ final class BackofficeFinto
 
         // Solo il client firmato dell'app del codice, o uno di sistema (#3344): senza firma o con quella di un altro client è la stessa 422, e il codice è già consumato.
         if ($ingresso === null || $ingresso['scade'] <= now()->getTimestamp()
-            || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))
+            || ! isset($campi['verificatore']) || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))
             || ! in_array($this->clienteFirmato, [self::CLIENTE, ...(self::CLIENT_DELL_APP[$ingresso['app']] ?? []), ...self::CLIENT_DI_SISTEMA], true)) {
             throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
         }
