@@ -1138,7 +1138,7 @@ trait Crm
         $ultima = $pagina === [] ? null : $pagina[count($pagina) - 1];
         $voce = match ($tipo) {
             'organizzazioni' => fn (array $riga) => $this->voceOrganizzazione($riga, false, $conCampi),
-            'persone' => fn (array $riga) => $this->vocePersona($riga, false, $conCampi),
+            'persone' => fn (array $riga) => $this->vocePersona($riga, false, $conCampi, true),
             'trattative' => fn (array $riga) => $this->voceTrattativa($riga, false, $conCampi),
             default => fn (array $riga) => $this->voceAttivita($riga),
         };
@@ -1905,11 +1905,12 @@ trait Crm
 
     /**
      * Lo schema Persona (Forme::persona). La scheda intera (`mostra`, `crea`, `modifica`) porta anche `campi`, i valori dei campi
-     * «tuoi»; l'elenco, la ricerca e l'esportazione hanno la forma breve, senza.
+     * «tuoi»; l'elenco, la ricerca e l'esportazione hanno la forma breve, senza. Le righe di `elenca` e di `ricerca.crea` (`$inRiga`) portano
+     * anche `abbonamento` (#3316).
      *
      * @return array<string, mixed>
      */
-    private function vocePersona(array $riga, bool $intera = false, bool $inElenco = false): array
+    private function vocePersona(array $riga, bool $intera = false, bool $inElenco = false, bool $inRiga = false): array
     {
         $azienda = $riga['organizzazione_id'] === null ? null : ($this->crm['organizzazioni'][$riga['organizzazione_id']] ?? null);
 
@@ -1942,6 +1943,32 @@ trait Crm
             'aggiornato_il' => self::iso($riga['aggiornato_il']),
             'creato_da' => $riga['creato_da'],
             ...($intera ? ['campi' => $this->valoriDiCrm($riga['workspace'], 'persona', $riga['id']), 'avvisi' => $this->avvisiDiCrm($riga['workspace'], $riga['id'])] : ($inElenco ? ['campi' => $this->valoriInElencoCrm($riga['workspace'], 'persona', $riga['id']), 'avvisi' => $this->avvisiDiCrm($riga['workspace'], $riga['id'])] : [])),
+            ...($inRiga ? ['abbonamento' => $this->abbonamentoDelContattoCrm($riga)] : []),
+        ];
+    }
+
+    /**
+     * L'`abbonamento` di una riga di contatto (Acquisti::abbonamentiDi): l'acquisto attivo più recente (per `acquistato_il`, poi per nascita),
+     * `{nome, stato, crediti_rimasti}`, o `null` se non ne ha o se l'app `crm` non è attiva nel workspace. `crediti_rimasti` è il conto di un
+     * pacchetto e `null` per il resto.
+     *
+     * @return array{nome: string, stato: string, crediti_rimasti: int|null}|null
+     */
+    private function abbonamentoDelContattoCrm(array $riga): ?array
+    {
+        if (! $this->appAttiva($riga['workspace'], 'crm')) {
+            return null;
+        }
+
+        $oggi = self::oggiAcquistoCrm();
+        $attivi = array_filter($this->crm['acquisti'], fn (array $acquisto) => $acquisto['persona_id'] === $riga['id'] && self::statoAcquistoCrm($acquisto, $oggi) === 'attivo');
+        usort($attivi, fn (array $uno, array $altro) => [$altro['acquistato_il'], $altro['creato_il'], $altro['id']] <=> [$uno['acquistato_il'], $uno['creato_il'], $uno['id']]);
+        $acquisto = $attivi[0] ?? null;
+
+        return $acquisto === null ? null : [
+            'nome' => $acquisto['voce_nome'],
+            'stato' => 'attivo',
+            'crediti_rimasti' => $acquisto['voce_tipo'] === 'pacchetto' ? self::disponibiliAcquistoCrm($acquisto) : null,
         ];
     }
 
