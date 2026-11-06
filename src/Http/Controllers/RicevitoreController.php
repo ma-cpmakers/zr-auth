@@ -14,7 +14,8 @@ use Zeiras\Auth\Sessione;
 /**
  * Il ricevitore del codice (`GET zr-auth.ricevitore`, di norma `/ingresso/ritorno`): dove zr-home rimanda la persona dopo
  * l'ingresso, con `codice` e `state`. Solo da un GET e dallo stesso sito; lo `state` deve essere quello della partenza e
- * vale una volta; il codice si scambia col verificatore (ingressi.scambio.crea) e dà la sessione del workspace. Si torna
+ * vale una volta; il codice si scambia col verificatore (ingressi.scambio.crea) e dà la sessione del workspace. Senza `state` è il codice di un «Accedi come» dello
+ * staff, che si scambia senza verificatore (entraInAssistenza). Si torna
  * a un indirizzo pulito: mai il codice nell'indirizzo dove la persona resta, e mai un indirizzo che viene dalla richiesta.
  */
 final class RicevitoreController
@@ -35,6 +36,13 @@ final class RicevitoreController
         // Lo state e il verificatore escono dalla sessione in ogni caso: valgono per un ritorno solo.
         $partenza = $richiesta->session()->pull(Ingresso::CHIAVE);
         $state = $richiesta->query('state');
+
+        // Senza `state` non è il ritorno di una partenza: è il codice di un «Accedi come» (staff.utenti.impersonificazioni.crea), che nasce dallo staff e non ha un
+        // verificatore da cui partire (#2914, F4.1). Si scambia senza; la legatura è al client firmato di questo modulo, e un codice ordinario senza verificatore il
+        // backoffice lo rifiuta e lo consuma, come lo scambio a vuoto di brucia().
+        if ($state === null) {
+            return self::entraInAssistenza($codice);
+        }
 
         if (! is_array($partenza) || ! is_string($partenza['state'] ?? null) || ! is_string($partenza['verificatore'] ?? null)
             || $codice === null
@@ -67,6 +75,38 @@ final class RicevitoreController
         }
 
         $cliente ? Sessione::entraCliente($gettone) : Sessione::entra($gettone);
+
+        return redirect()->away(Sessione::ritorno(url((string) config('zr-auth.dopo'))))->withHeaders(Ingresso::INTESTAZIONI);
+    }
+
+    /**
+     * L'ingresso di un «Accedi come»: il codice si scambia senza verificatore e dà la sessione del workspace dell'assistenza. Il gettone è di assistenza: la fascia
+     * «stai assistendo…» la legge il modulo con `accessi.corrente.mostra`, e il «Termina» è `accessi.corrente.elimina`. Un codice che non ha la forma, o uno scambio
+     * che non riesce (un altro client, scaduto, già usato, un codice ordinario), è la stessa pagina d'errore di ogni ritorno rifiutato.
+     */
+    private static function entraInAssistenza(?string $codice): RedirectResponse
+    {
+        if ($codice === null) {
+            return self::errore();
+        }
+
+        try {
+            $risposta = Api::senzaGettone()->post('/v1/ingressi/scambio', ['codice' => $codice]);
+        } catch (ErroreApi $errore) {
+            if ($errore->stato >= 500) {
+                throw new BackofficeNonRisponde('Il backoffice non ha scambiato il codice.', previous: $errore);
+            }
+
+            return self::errore();
+        }
+
+        $gettone = self::gettone($risposta, false);
+
+        if ($gettone === null) {
+            return self::errore();
+        }
+
+        Sessione::entra($gettone);
 
         return redirect()->away(Sessione::ritorno(url((string) config('zr-auth.dopo'))))->withHeaders(Ingresso::INTESTAZIONI);
     }
