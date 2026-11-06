@@ -289,7 +289,6 @@ it('uno state che non ha la forma attesa, con un codice che l\'ha, brucia il cod
 
     expect(scambiPartiti())->toBe(1)->and(Sessione::aperta())->toBeFalse();
 })->with(fn () => [
-    'senza state' => [['codice' => str_repeat('a', 43)]],
     'uno state di 513 caratteri' => [['codice' => str_repeat('a', 43), 'state' => str_repeat('s', 513)]],
     'uno state con un carattere fuori dall\'alfabeto' => [['codice' => str_repeat('a', 43), 'state' => 'uno state con spazi']],
 ]);
@@ -366,3 +365,85 @@ it('la rotta del ricevitore è pubblica, e il test del frontend la nomina (T2.5)
     expect($scoperte)->toContain('GET ingresso/ritorno')
         ->and(Zeiras\Auth\Testing\Rotte::senzaGuardia(['GET ingresso/ritorno']))->not->toContain('GET ingresso/ritorno');
 });
+
+// #2914 (F4.1): il codice di un «Accedi come» arriva senza state e si scambia senza verificatore.
+
+/** Un codice di assistenza per Anna, creato da un superadmin dello staff: [codice, finto, workspace]. */
+function codiceDiAssistenza(): array
+{
+    [$finto, $studio] = fintoDelModulo();
+    $id = entraNelFinto('anna@example.com')['gettone']['utente']['id'];
+    $sara = $finto->persona('sara@lucianocastro.com', PASSWORD, nome: 'Sara');
+    $staff = $finto->staffDi($sara, 'superadmin', true);
+    $sfida = Zeiras\Auth\Api::staff()->post('/v1/staff/accessi', ['email' => $staff['email'], 'password' => PASSWORD])['data']['sfida']['id'];
+    $gettone = Zeiras\Auth\Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+    $assistenza = Zeiras\Auth\Api::staff($gettone)->post("/v1/staff/utenti/{$id}/impersonificazioni", ['app' => 'pm'])['data'];
+
+    // Il codice lo scambia solo il client dell'app (CLIENT_DELL_APP): il modulo della board, non il `finto` che vale per ogni app negli altri test.
+    config(['zr-auth.cliente' => 'board']);
+
+    return [$assistenza['codice'], $finto, $studio];
+}
+
+it('il codice di un «Accedi come» senza state si scambia senza verificatore, apre la sessione del workspace e torna a un indirizzo pulito (F4.1)', function () {
+    [$codice, , $studio] = codiceDiAssistenza();
+
+    $risposta = $this->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]));
+
+    $risposta->assertStatus(302)->assertHeader('Referrer-Policy', 'no-referrer');
+    expect($risposta->headers->get('Location'))->toBe(FRONTEND)
+        ->and(Sessione::aperta())->toBeTrue()
+        ->and(Sessione::workspace()['id'])->toBe($studio['id'])
+        ->and(Sessione::utente()['email'])->toBe('anna@example.com')
+        ->and(scambiPartiti())->toBe(1)
+        ->and(Http::recorded(fn (Request $richiesta) => str_ends_with($richiesta->url(), '/v1/ingressi/scambio'))->first()[0]->data())->toBe(['codice' => $codice]);
+
+    // Il gettone è di assistenza: la fascia lo legge con accessi.corrente.mostra.
+    $fascia = Zeiras\Auth\Api::persona()->get('/v1/accessi/corrente')['data']['impersonificazione'];
+    expect($fascia['utente']['email'])->toBe('anna@example.com')->and($fascia['sola_lettura'])->toBeFalse();
+});
+
+it('il codice di assistenza vale una volta: il secondo ritorno è la pagina d\'errore e non apre niente (F4.1)', function () {
+    [$codice] = codiceDiAssistenza();
+    $indirizzo = FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]);
+
+    $this->get($indirizzo)->assertRedirect(FRONTEND);
+    session()->flush();
+    $this->get($indirizzo)->assertRedirect(INGRESSO);
+
+    expect(Sessione::aperta())->toBeFalse();
+});
+
+it('un codice ordinario senza state non apre la sessione ed è consumato: il backoffice rifiuta lo scambio senza verificatore (F4.1)', function () {
+    [, $studio] = fintoDelModulo();
+    $partenza = queryDi((string) $this->get('/parti/'.$studio['slug'])->headers->get('Location'));
+    $indirizzo = ritornoDiHome($studio, $partenza);
+    $verificatore = session(Ingresso::CHIAVE)['verificatore'];
+    $senzaState = str_replace('&state='.urlencode($partenza['state']), '', $indirizzo);
+
+    $this->get($senzaState)->assertRedirect(INGRESSO);
+
+    expect(Sessione::aperta())->toBeFalse();
+
+    $scambio = alFinto('POST', '/v1/ingressi/scambio', ['codice' => queryDi($indirizzo)['codice'], 'verificatore' => $verificatore]);
+    expect($scambio->status())->toBe(422)->and($scambio->json('codice'))->toBe('verifica_non_riuscita');
+});
+
+it('un codice di assistenza con uno state che non è di una partenza, o da un altro sito, non apre la sessione e si consuma (F4.1)', function (array $query, array $header) {
+    [$codice] = codiceDiAssistenza();
+
+    $this->withHeaders($header)->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice] + $query))->assertRedirect(INGRESSO);
+
+    expect(Sessione::aperta())->toBeFalse()
+        ->and($this->withHeaders([])->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]))->headers->get('Location'))->toBe(INGRESSO);
+})->with([
+    'con uno state' => [['state' => 'uno-state-qualsiasi'], []],
+    'da un altro sito' => [[], ['Sec-Fetch-Site' => 'cross-site']],
+]);
+
+it('un guasto del backoffice nello scambio di assistenza è BackofficeNonRisponde, mai una sessione a metà (F4.1)', function () {
+    [$codice] = codiceDiAssistenza();
+    ilBackofficeRisponde(Http::response(['title' => 'Errore interno', 'status' => 500, 'codice' => 'errore_interno'], 500));
+
+    $this->withoutExceptionHandling()->get(FRONTEND.RICEVITORE_DI_PROVA.'?'.http_build_query(['codice' => $codice]));
+})->throws(BackofficeNonRisponde::class);

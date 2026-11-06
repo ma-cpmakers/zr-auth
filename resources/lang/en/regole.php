@@ -293,6 +293,7 @@ return [
     'foto_peso' => 'The photo is too heavy: 2 MB at most.',
     'foto_formato' => 'The photo must be a readable JPEG, PNG or WebP file (an animated WebP or a broken file is not valid).',
     'foto_lato' => 'The photo has a side over :lato pixels.',
+    'assistenza_workspace_obbligatorio' => 'This person is in more than one workspace: say which one to enter with `workspace_id`.',
     'staff_persona_non_trovata' => 'There is no Zeiras person with this verified email: the account must exist and be verified before joining the staff.',
     'board_diversa' => 'The destination board is the source board: to change place inside the same board use the move (board.schede.spostamento.crea, board.liste.spostamento.crea).',
     'tipo_nella_board_d_arrivo' => "The type of a card to move is not one of the types of the destination board's method (:tipi): board.board.mostra gives the allowed types in its `tipi` field.",

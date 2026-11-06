@@ -955,7 +955,7 @@ trait Staff
      * @param  array<string, mixed>  $chi
      * @param  list<string>|null  $campi
      */
-    private function scriviNelRegistroDelloStaff(array $chi, string $azione, string $bersaglioTipo, ?string $bersaglioId, ?array $campi = null, ?string $motivo = null): void
+    private function scriviNelRegistroDelloStaff(array $chi, string $azione, string $bersaglioTipo, ?string $bersaglioId, ?array $campi = null, ?string $motivo = null, ?string $impersonificazione = null): void
     {
         $posizione = count($this->registroStaff) + 1;
         $this->registroStaff[] = [
@@ -969,7 +969,7 @@ trait Staff
             'campi' => $campi,
             'motivo' => $motivo,
             'ip' => $this->ipFirmato ?? '0.0.0.0',
-            'impersonificazione_id' => null,
+            'impersonificazione_id' => $impersonificazione,
             'quando' => now()->toImmutable()->startOfMillisecond(),
         ];
     }
