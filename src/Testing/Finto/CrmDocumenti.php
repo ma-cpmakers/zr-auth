@@ -32,6 +32,9 @@ trait CrmDocumenti
     /** I legami di chi firma (Documento::LEGAMI), quelli del minorenne, e i due tratti (Documento::TRATTI). */
     private const CRM_DOCUMENTI_LEGAMI = ['se_stesso', 'genitore', 'tutore', 'altro'];
 
+    /** Le famiglie di browser della prova di una firma da link (Documento::BROWSER, #3012). */
+    private const CRM_DOCUMENTI_BROWSER = ['chrome', 'firefox', 'safari', 'edge', 'opera', 'samsung', 'altro'];
+
     private const CRM_DOCUMENTI_LEGAMI_DEL_MINORENNE = ['genitore', 'tutore'];
 
     private const CRM_DOCUMENTI_TRATTI = ['immagine', 'spunta'];
@@ -256,6 +259,7 @@ trait CrmDocumenti
             'firmatario' => ['nome' => $riga['firmatario_nome'], 'cognome' => $riga['firmatario_cognome'], 'legame' => $riga['firmatario_legame']],
             'firmato_da' => $riga['firmato_da'],
             'impronta' => $riga['impronta'],
+            'prova' => ($riga['firma_ip_impronta'] ?? null) === null && ($riga['firma_browser'] ?? null) === null ? null : ['ip_impronta' => $riga['firma_ip_impronta'] ?? null, 'browser' => $riga['firma_browser'] ?? null],
         ];
     }
 
@@ -451,6 +455,7 @@ trait CrmDocumenti
             'firmatario_nome' => (string) $campi['firmatario']['nome'], 'firmatario_cognome' => (string) $campi['firmatario']['cognome'], 'firmatario_legame' => (string) $campi['firmatario']['legame'],
             'tratto_tipo' => (string) $campi['tratto']['tipo'], 'tratto_immagine' => $campi['tratto']['immagine'] ?? null,
             'firmato_il' => self::adessoCrm(), 'firmato_da' => $firmatoDa, 'revocato_il' => null, 'revocato_da' => null, 'link_id' => $link,
+            'firma_ip_impronta' => $campi['prova']['ip_impronta'] ?? null, 'firma_browser' => $campi['prova']['browser'] ?? null,
         ];
 
         return $this->crm['documenti'][$id];
@@ -647,15 +652,17 @@ trait CrmDocumenti
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
      */
-    private function firmaDocumentoPubblicoCrm(array $corpo): array
+    private function firmaDocumentoPubblicoCrm(array $corpo, string $ip = '127.0.0.1'): array
     {
-        $regole = ['token' => $this->regolaDelTokenDocumentoCrm()] + array_diff_key($this->regoleDelDocumentoCrm(), array_flip(['persona_id', 'modello', 'lingua']));
+        $regole = ['token' => $this->regolaDelTokenDocumentoCrm(), 'browser' => ['sometimes', 'bail', 'string', Rule::in(self::CRM_DOCUMENTI_BROWSER)]] + array_diff_key($this->regoleDelDocumentoCrm(), array_flip(['persona_id', 'modello', 'lingua']));
         $campi = $this->testi->validaCorpo($this->conNomiInNfcCrm($corpo), $regole);
         $this->frena('documenti-pubblici-firma:'.hash('sha256', $campi['token']), self::FRENI['documenti_pubblici_firme_per_token'], self::MINUTO);
         [$link, $persona] = $this->apriIlLinkDocumentoCrm($campi['token']);
-        unset($campi['token']);
+        // La prova (#3012): dell'IP firmato resta l'impronta (nel backoffice un HMAC con la chiave dell'app, qui con la tua: lo stesso calcolo), mai l'IP.
+        $prova = ['ip_impronta' => hash_hmac('sha256', "documenti-firma-ip\n{$ip}", (string) config('app.key')), 'browser' => $campi['browser'] ?? null];
+        unset($campi['token'], $campi['browser']);
 
-        $documento = $this->firmaDocumentoCrm($persona, ['modello' => $link['modello'], 'lingua' => $link['lingua']] + $campi, 'link', null, $link['id']);
+        $documento = $this->firmaDocumentoCrm($persona, ['modello' => $link['modello'], 'lingua' => $link['lingua'], 'prova' => $prova] + $campi, 'link', null, $link['id']);
         $this->crm['link_documenti'][$link['id']]['usato_il'] = self::adessoCrm();
 
         return [201, ['data' => ['stato' => $documento['stato'], 'firmato_il' => self::iso($documento['firmato_il'])]]];
@@ -675,7 +682,7 @@ trait CrmDocumenti
     {
         foreach ($this->crm['documenti'] as $id => $riga) {
             if ($riga['persona_id'] === $persona) {
-                $this->crm['documenti'][$id] = [...$riga, 'testo' => '', 'firmatario_nome' => '', 'firmatario_cognome' => '', 'tratto_immagine' => null, 'impronta' => null];
+                $this->crm['documenti'][$id] = [...$riga, 'testo' => '', 'firmatario_nome' => '', 'firmatario_cognome' => '', 'tratto_immagine' => null, 'impronta' => null, 'firma_ip_impronta' => null, 'firma_browser' => null];
             }
         }
     }
