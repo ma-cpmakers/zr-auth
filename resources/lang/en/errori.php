@@ -409,6 +409,10 @@ return [
         'title' => 'Assistance not allowed',
         'detail' => 'You cannot sign in as this person: they are suspended or being deleted, they are another staff member, or they are the caller. The method wrote nothing.',
     ],
+    'azione_non_consentita_in_assistenza' => [
+        'title' => 'Action not allowed during assistance',
+        'detail' => 'Someone who signs in as another person for assistance cannot do this: the method is not one that assistance opens, or the assistance is read-only. The method wrote nothing.',
+    ],
     'esportazione_non_disponibile' => [
         'title' => 'Export not available',
         'detail' => 'The export cannot be downloaded now: it is still running, it has expired or it failed. The method wrote nothing.',

@@ -409,6 +409,10 @@ return [
         'title' => 'Asistencia no permitida',
         'detail' => 'No se puede entrar como esta persona: está suspendida o en eliminación, es otra persona del equipo, o es quien llama. El método no escribió nada.',
     ],
+    'azione_non_consentita_in_assistenza' => [
+        'title' => 'Acción no permitida en la asistencia',
+        'detail' => 'Quien entra como otra persona para asistirla no puede hacer esto: el método no es de los que abre la asistencia, o la asistencia es de solo lectura. El método no ha escrito nada.',
+    ],
     'esportazione_non_disponibile' => [
         'title' => 'Exportación no disponible',
         'detail' => 'La exportación no se puede descargar ahora: sigue en curso, ha caducado o ha fallado. El método no escribió nada.',
