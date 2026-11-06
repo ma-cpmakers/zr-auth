@@ -599,7 +599,10 @@ trait CrmUnioni
                 continue;
             }
 
-            if (self::taleCrm($resta[$campo]) === self::taleCrm($unito[$campo])) {
+            // Il pagante dell'unito che era chi resta non conta (come in `campiDaUnireCrm`): nessuno paga per sé, e il campo di chi resta è `null`.
+            $dellUnito = $campo === 'paga_per_id' && $unito[$campo] === $resta['id'] ? null : $unito[$campo];
+
+            if (self::taleCrm($resta[$campo]) === self::taleCrm($dellUnito)) {
                 $daRimettere[$campo] = $prima[$campo];
                 $rimessi[] = $campo;
             } else {
