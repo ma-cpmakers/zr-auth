@@ -42,6 +42,10 @@ final class Rotte
             if (in_array(ConGettone::class, $eseguiti, true)) {
                 continue;
             }
+            // Il POST del codice di un «Accedi come» (#3386) è una rotta di zr-auth, pubblica per costruzione come il ricevitore: un modulo non deve nominarla per tenere verde il suo test.
+            if ($rotta->getName() === 'zr-auth.ricevitore.assistenza') {
+                continue;
+            }
             foreach (array_diff($rotta->methods(), ['HEAD']) as $metodo) {
                 $voce = $metodo.' '.$rotta->uri();
                 if (! in_array($voce, $eccezioni, true)) {

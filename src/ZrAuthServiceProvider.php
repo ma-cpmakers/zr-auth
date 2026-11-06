@@ -20,6 +20,9 @@ use Illuminate\Support\ServiceProvider;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 use Zeiras\Auth\Http\Controllers\EventiController;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Zeiras\Auth\Http\Controllers\RicevitoreController;
 use Zeiras\Auth\Http\Middleware\AvviaLaSessioneSenzaQuery;
 use Zeiras\Auth\Http\Middleware\ConGettone;
@@ -59,6 +62,12 @@ final class ZrAuthServiceProvider extends ServiceProvider
                 ->name('zr-auth.ricevitore')
                 ->bloccaSessione()
                 ->withoutMiddleware(ConGettone::class);
+
+            // Il codice di un «Accedi come» (#3386): un POST dalla pagina di zr-superadmin, senza CSRF (arriva da un altro sito per costruzione) e senza la guardia: il controllo del sito è nel ricevitore.
+            Route::middleware('web')->post(config('zr-auth.ricevitore'), [RicevitoreController::class, 'assistenza'])
+                ->name('zr-auth.ricevitore.assistenza')
+                ->bloccaSessione()
+                ->withoutMiddleware([ConGettone::class, PreventRequestForgery::class, ValidateCsrfToken::class, VerifyCsrfToken::class]);
         }
 
         // Gli eventi del backoffice, solo se il modulo ha scelto un percorso: una consegna firmata da un server, nel gruppo
