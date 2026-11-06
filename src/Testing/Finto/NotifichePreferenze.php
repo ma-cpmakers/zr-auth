@@ -34,6 +34,8 @@ trait NotifichePreferenze
         'com.zeiras.board.scheda.creata' => 'board',
         'com.zeiras.board.scheda.modificata' => 'board',
         'com.zeiras.board.scheda.eliminata' => 'board',
+        'com.zeiras.board.sprint.creato' => 'board',
+        'com.zeiras.board.sprint.modificato' => 'board',
         'com.zeiras.board.etichetta.creata' => 'board',
         'com.zeiras.board.etichetta.modificata' => 'board',
         'com.zeiras.board.etichetta.eliminata' => 'board',
