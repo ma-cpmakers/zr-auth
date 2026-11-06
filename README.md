@@ -607,6 +607,23 @@ Nei test del modulo il giro intero si fa col finto, senza un `Http::fake` per lo
 `Ingresso::verso()`, poi `ingressi.crea` del finto con la `sfida` della partenza (è ciò che fa zr-home) e un GET al `ritorno`
 che dà, con `codice` e `state`. Un esempio per intero: `tests/Feature/IngressoTest.php` di questo repo.
 
+## «Accedi come»: l'ingresso di assistenza (da #2914, F4)
+
+Lo staff entra nell'app di una persona per assisterla: `staff.utenti.impersonificazioni.crea` (lo chiama il modulo dello staff con `Api::staff($gettone)`) dà un codice monouso
+di 60 secondi e il `ritorno` dell'app; il browser dello staff va a `ritorno?codice=…`. Il ricevitore di questo modulo lo riconosce da una cosa sola: **non c'è `state`**. Lo
+scambia con `ingressi.scambio.crea` **senza `verificatore`** (il codice nasce dallo staff e il modulo non ha un verificatore da cui partire: la legatura è al client firmato
+dell'app) e apre la sessione del workspace dell'assistenza, come un ingresso qualunque. Il gettone è di assistenza: vale al più quattro ore, si ferma dopo trenta minuti senza
+chiamate (401 `gettone_non_valido`, che il modulo gestisce come ogni gettone che non vale) e apre meno di quel che aprirebbe la persona: ogni metodo che non marca `x-assistenza`
+è 403 `azione_non_consentita_in_assistenza` (il supporto è di sola lettura). Un codice ordinario senza `state` non apre niente e si consuma; uno con uno state sbagliato, o da
+un altro sito, anche.
+
+Il modulo che mostra la fascia «stai assistendo…» la legge con `Api::persona()->get('/v1/accessi/corrente')`: `impersonificazione` è `null` per ogni altro gettone, e per
+l'assistenza `{id, scade_il, sola_lettura, utente: {nome, cognome, email}}` (la persona assistita, mai chi la assiste). Il «Termina» è `Api::persona()->delete('/v1/accessi/corrente')`
+(204): chiude l'assistenza e il suo accesso, e la sessione del modulo si chiude come dopo ogni uscita. Il finto ha i tre metodi (`staff.utenti.impersonificazioni.crea`,
+`staff.impersonificazioni.elimina`, `accessi.corrente.mostra`), lo scambio senza verificatore per il solo client dell'app, i metodi che l'assistenza apre, i trenta minuti e la
+riga nel registro dello staff a ogni chiamata ammessa (`registroDelloStaff()`, con `impersonificazione_id`); la persona assistita non vede l'assistenza in `accessi.elenca`.
+Non ha il comando che chiude le assistenze ferme: un gettone fermo da trenta minuti è 401 e basta.
+
 ## La guardia, e il suo test
 
 `ConGettone` entra da sé nei gruppi `web` e `api`: senza una sessione col gettone, una pagina rimanda all'ingresso; una

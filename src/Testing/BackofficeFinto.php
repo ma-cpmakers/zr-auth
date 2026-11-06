@@ -48,6 +48,7 @@ use Zeiras\Auth\Testing\Finto\Regola;
 use Zeiras\Auth\Testing\Finto\RichiestaSconosciuta;
 use Zeiras\Auth\Testing\Finto\Retrospettiva;
 use Zeiras\Auth\Testing\Finto\Staff;
+use Zeiras\Auth\Testing\Finto\StaffAssistenza;
 use Zeiras\Auth\Testing\Finto\StaffUtenti;
 use Zeiras\Auth\Testing\Finto\StaffWorkspace;
 use Zeiras\Auth\Testing\Finto\SchedeCrm;
@@ -101,6 +102,7 @@ final class BackofficeFinto
     use SchedeCrm;
     use Retrospettiva;
     use Staff;
+    use StaffAssistenza;
     use StaffUtenti;
     use StaffWorkspace;
     use Scrumban;
@@ -192,6 +194,8 @@ final class BackofficeFinto
         ['POST', '#^/v1/staff/accessi/verifica$#', 'staff.accessi.verifica.crea'],
         ['DELETE', '#^/v1/staff/accessi/corrente$#', 'staff.accessi.corrente.elimina'],
         ['GET', '#^/v1/staff/corrente$#', 'staff.corrente.mostra'],
+        ['DELETE', '#^/v1/staff/impersonificazioni/([^/]+)$#', 'staff.impersonificazioni.elimina'],
+        ['POST', '#^/v1/staff/utenti/([^/]+)/impersonificazioni$#', 'staff.utenti.impersonificazioni.crea'],
         ['POST', '#^/v1/staff/inviti/accettazione$#', 'staff.inviti.accettazione.crea'],
         ['POST', '#^/v1/staff/totp$#', 'staff.totp.crea'],
         ['POST', '#^/v1/staff/totp/conferma$#', 'staff.totp.conferma.crea'],
@@ -225,6 +229,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/accessi/codici/verifica$#', 'accessi.codici.verifica.crea'],
         ['POST', '#^/v1/accessi/link$#', 'accessi.link.crea'],
         ['GET', '#^/v1/accessi$#', 'accessi.elenca'],
+        ['GET', '#^/v1/accessi/corrente$#', 'accessi.corrente.mostra'],
         ['DELETE', '#^/v1/accessi/corrente$#', 'accessi.corrente.elimina'],
         ['DELETE', '#^/v1/accessi/altri$#', 'accessi.altri.elimina'],
         ['POST', '#^/v1/accessi/conferma$#', 'accessi.conferma.crea'],
@@ -1534,7 +1539,10 @@ final class BackofficeFinto
                 'accessi.codici.verifica.crea' => $this->verificaCodiceDiAccesso($richiesta, $corpo),
                 'accessi.link.crea' => $this->creaAccessoDalLink($corpo),
                 'accessi.elenca' => $this->elencaAccessi($richiesta),
+                'accessi.corrente.mostra' => $this->mostraLAccessoCorrente($richiesta),
                 'accessi.corrente.elimina' => $this->eliminaAccessoCorrente($richiesta),
+                'staff.impersonificazioni.elimina' => $this->chiudiUnaAssistenzaDelloStaff($richiesta, $parametri[0]),
+                'staff.utenti.impersonificazioni.crea' => $this->creaUnaAssistenza($richiesta, $corpo, $parametri[0]),
                 'accessi.altri.elimina' => $this->eliminaAltriAccessi($richiesta),
                 'accessi.conferma.crea' => $this->confermaAccesso($richiesta, $corpo),
                 'io.email.cambio.crea' => $this->chiediCambioEmail($richiesta, $corpo),
@@ -4005,6 +4013,17 @@ final class BackofficeFinto
         $chi = $this->autentica($richiesta);
         $gettone = (string) self::gettoneDi($richiesta);
 
+        // Il «Termina» dell'assistenza (#2914): chiude l'assistenza e il suo accesso, gli altri accessi della persona restano.
+        if (($this->gettoni[$gettone]['tipo'] ?? null) === 'assistenza') {
+            $assistenza = $this->assistenzaDelLAccesso($chi['accesso']);
+
+            if ($assistenza !== null) {
+                $this->chiudiLAssistenza($assistenza['id']);
+            }
+
+            return [204, null];
+        }
+
         // Il gettone ristretto del cliente (#3304) esce chiudendo solo se stesso: l'accesso è di zr-home e resta aperto.
         if (($this->gettoni[$gettone]['tipo'] ?? null) === 'cliente') {
             unset($this->gettoni[$gettone]);
@@ -4030,7 +4049,8 @@ final class BackofficeFinto
         $voci = [];
 
         foreach ($this->accessi as $id => $riga) {
-            if ($riga['utente'] === $chi['persona'] && ! $riga['chiuso'] && $this->scadenza($riga)->gt(now()->startOfMillisecond())) {
+            // L'accesso di un «Accedi come» (#2914) non è della persona: non lo vede.
+            if ($riga['utente'] === $chi['persona'] && ($riga['via'] ?? null) !== 'assistenza' && ! $riga['chiuso'] && $this->scadenza($riga)->gt(now()->startOfMillisecond())) {
                 $voci[] = [
                     'id' => $id,
                     'creato_il' => self::iso($riga['creato_il']),
@@ -5611,7 +5631,7 @@ final class BackofficeFinto
     {
         $campi = $this->testi->validaStretta($corpo, [
             'codice' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
-            'verificatore' => ['required', 'string', 'min:43', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
+            'verificatore' => ['sometimes', 'nullable', 'string', 'min:43', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
         ]);
         $codice = (string) $campi['codice'];
         $this->frena('ingresso:'.$codice, self::SCAMBI, self::MINUTO);
@@ -5619,9 +5639,14 @@ final class BackofficeFinto
         $ingresso = $this->ingressi[$codice] ?? null;
         unset($this->ingressi[$codice]);
 
+        // Il codice di un «Accedi come» (#2914) non ha verificatore: la legatura è al client dell'app.
+        if ($ingresso !== null && isset($ingresso['assistenza'])) {
+            return $this->apriLAssistenza($ingresso, $campi);
+        }
+
         // Solo il client firmato dell'app del codice, o uno di sistema (#3344): senza firma o con quella di un altro client è la stessa 422, e il codice è già consumato.
         if ($ingresso === null || $ingresso['scade'] <= now()->getTimestamp()
-            || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))
+            || ! isset($campi['verificatore']) || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))
             || ! in_array($this->clienteFirmato, [self::CLIENTE, ...(self::CLIENT_DELL_APP[$ingresso['app']] ?? []), ...self::CLIENT_DI_SISTEMA], true)) {
             throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
         }
@@ -6741,6 +6766,11 @@ final class BackofficeFinto
             throw new Problema('permesso_negato');
         }
 
+        // Il gettone di assistenza (AmbitoDelGettone, #2914): solo i metodi che l'assistenza apre, e fermo da trenta minuti non vale.
+        if (($riga['tipo'] ?? null) === 'assistenza') {
+            $this->ambitoDellAssistenza($riga['accesso']);
+        }
+
         // Il gettone ristretto del cliente (AmbitoDelGettone, #3304): solo i metodi di METODI_DEL_CLIENTE, ogni altro è 403 permesso_negato.
         if (($riga['tipo'] ?? null) === 'cliente' && ! Str::is(self::METODI_DEL_CLIENTE, (string) $this->operazioneInCorso)) {
             throw new Problema('permesso_negato');
@@ -7128,7 +7158,7 @@ final class BackofficeFinto
     /** @param  array{utente: string, creato_il: CarbonImmutable, chiuso: bool}  $accesso */
     private function scadenza(array $accesso): CarbonImmutable
     {
-        return $accesso['creato_il']->addHours(($accesso['ospite'] ?? false) ? 2 : self::ORE);
+        return $accesso['scade'] ?? $accesso['creato_il']->addHours(($accesso['ospite'] ?? false) ? 2 : self::ORE);
     }
 
     /** @return array<string, mixed> le regole di email e password dei metodi senza gettone */

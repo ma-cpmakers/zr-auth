@@ -447,7 +447,7 @@ trait StaffUtenti
             'cognome' => $persona['cognome'],
             'email' => $persona['email'],
             'stato' => $this->statoDellUtente($id),
-            'mai_acceduto' => $accessi === [],
+            'mai_acceduto' => array_filter($accessi, fn (array $accesso) => ($accesso['via'] ?? null) !== 'assistenza') === [],
             'workspace_n' => count(array_filter($this->membri, fn (array $membri, string $workspace) => isset($membri[$id]) && ! isset($this->eliminazioni[$workspace]), ARRAY_FILTER_USE_BOTH)),
             'ultimo_accesso' => $ultimo === null ? null : self::iso($ultimo),
             'creato_il' => self::iso($this->creataIlDellaPersona($id)),
