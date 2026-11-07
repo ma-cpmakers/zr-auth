@@ -208,9 +208,17 @@ final class Sessione
         // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
         self::segnaLaVecchia();
 
+        // La pagina che la guardia ha ricordato (chi scade su /staff e rientra torna lì) sopravvive alla sessione svuotata: il ricevitore la consuma con ritorno().
+        $ricordata = session()->get('url.intended');
+
         // Sessione vuota davvero, come `entraInAssistenza()`: nessun gettone di persona resta accanto a quello dello staff.
         session()->invalidate();
         session()->regenerateToken();
+
+        if (is_string($ricordata) && $ricordata !== '') {
+            session()->put('url.intended', $ricordata);
+        }
+
         session()->put(self::CHIAVE, [
             'accesso' => null,
             'gettoni' => ['staff' => $accesso['gettone']],

@@ -206,3 +206,28 @@ it('il finto: i metodi del vecchio ingresso valgono solo per le persone di prova
         ->and($esito(fn () => Api::staff()->post('/v1/staff/inviti/accettazione', ['segreto' => str_repeat('a', 20), 'password' => PASSWORD])))->toBe([401, 'invito_non_valido'])
         ->and($esito(fn () => Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => str_repeat('a', 64), 'codice' => '000000'])))->toBe([401, 'secondo_fattore_non_valido']);
 });
+
+it('entraStaff tiene la pagina ricordata dalla guardia: chi scade su /staff e rientra torna a /staff (#3445)', function () {
+    $finto = fintoDelloStaffSso();
+    session()->put('url.intended', request()->getSchemeAndHttpHost().'/staff');
+    $staff = $finto->ingressoDelloStaff($finto->staffDi($finto->persona('luca@lucianocastro.com', PASSWORD, nome: 'Luca'), 'supporto', false));
+    $id = session()->getId();
+
+    Sessione::entraStaff(['gettone' => $staff, 'scade_il' => '2026-11-07T18:00:00.000Z', 'inattivita_scade_il' => '2026-11-07T10:30:00.000Z', 'id' => '01k6r3a7c2e6g0j4m8p2s6v0x4', 'ruolo' => 'supporto']);
+
+    expect(session()->getId())->not->toBe($id)
+        ->and(Sessione::ritorno('/'))->toBe(request()->getSchemeAndHttpHost().'/staff');
+});
+
+it('su admin il ricevitore c\'è solo in GET: il POST di «Accedi come» non è registrato; negli altri frontend sì (#3445)', function () {
+    $registra = function (string $app): array {
+        config(['zr-auth.app' => $app]);
+        app('router')->setRoutes(new Illuminate\Routing\RouteCollection);
+        (new Zeiras\Auth\ZrAuthServiceProvider(app()))->boot();
+
+        return collect(app('router')->getRoutes()->getRoutes())->map(fn ($r) => (string) $r->getName())->all();
+    };
+
+    expect($registra('admin'))->toContain('zr-auth.ricevitore')->not->toContain('zr-auth.ricevitore.assistenza')
+        ->and($registra('bookings'))->toContain('zr-auth.ricevitore', 'zr-auth.ricevitore.assistenza');
+});
