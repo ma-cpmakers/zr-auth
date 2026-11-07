@@ -257,6 +257,10 @@ return [
         'title' => 'Serve un acquisto',
         'detail' => "Questo calendario è riservato a chi ha comprato: il contatto non ha un acquisto valido di una delle voci che lo aprono. Il metodo non ha scritto niente. Registra l'acquisto nel CRM (crm.acquisti.crea) e riprova.",
     ],
+    'solo_su_invito' => [
+        'title' => 'Solo su invito',
+        'detail' => "Questo calendario si prenota solo da un link personale che lo apre: il link manca, è scaduto o l'invito da cui viene non comprende questo calendario. Il metodo non ha scritto niente. Chiedi al professionista un invito nuovo (bookings.inviti.crea).",
+    ],
     'rata_pagata' => [
         'title' => 'Rata già pagata',
         'detail' => 'Questa rata è già pagata per intero e non ha niente da incassare. Il metodo non ha scritto niente: rileggila con crm.rate.mostra.',

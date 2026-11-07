@@ -257,6 +257,10 @@ return [
         'title' => 'Purchase needed',
         'detail' => 'This calendar is reserved for people who have bought: the contact has no valid purchase of any of the items that open it. The method wrote nothing. Record the purchase in the CRM (crm.acquisti.crea) and try again.',
     ],
+    'solo_su_invito' => [
+        'title' => 'By invitation only',
+        'detail' => 'This calendar can only be booked from a personal link that opens it: the link is missing, has expired, or the invitation it came from does not include this calendar. The method wrote nothing. Ask the professional for a new invitation (bookings.inviti.crea).',
+    ],
     'rata_pagata' => [
         'title' => 'Installment already paid',
         'detail' => 'This installment is already paid in full and has nothing left to collect. Nothing was written: read it again with crm.rate.mostra.',

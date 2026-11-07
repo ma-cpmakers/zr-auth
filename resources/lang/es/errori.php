@@ -257,6 +257,10 @@ return [
         'title' => 'Hace falta una compra',
         'detail' => 'Este calendario está reservado a quien ha comprado: el contacto no tiene una compra válida de ninguno de los artículos que lo abren. El método no ha escrito nada. Registra la compra en el CRM (crm.acquisti.crea) y vuelve a intentarlo.',
     ],
+    'solo_su_invito' => [
+        'title' => 'Solo por invitación',
+        'detail' => 'Este calendario solo se reserva desde un enlace personal que lo abre: falta el enlace, ha caducado o la invitación de la que viene no incluye este calendario. El método no ha escrito nada. Pide al profesional una invitación nueva (bookings.inviti.crea).',
+    ],
     'rata_pagata' => [
         'title' => 'Cuota ya pagada',
         'detail' => 'Esta cuota ya está pagada por completo y no tiene nada que cobrar. No se escribió nada: léela de nuevo con crm.rate.mostra.',
