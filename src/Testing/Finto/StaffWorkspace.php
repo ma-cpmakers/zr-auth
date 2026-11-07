@@ -20,6 +20,9 @@ trait StaffWorkspace
     /** @var array<string, \Carbon\CarbonImmutable> quando è nato ogni workspace, per workspace */
     private array $workspaceCreatoIl = [];
 
+    /** @var array<string, string> il workspace che ha lasciato ogni indirizzo (#3257), per indirizzo: non si riassegna a nessun altro */
+    private array $indirizziRiservati = [];
+
     // ── I workspace ────────────────────────────────────────────────────────────────────
 
     /** @return array{int, array<string, mixed>} */
@@ -82,11 +85,78 @@ trait StaffWorkspace
         }
 
         $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.mostra', 'workspace', $id);
+
+        return [200, ['data' => $this->schedaDelWorkspace($id)]];
+    }
+
+    /**
+     * staff.workspace.modifica (#3257, StaffWorkspaceController::modifica): il `nome` e/o l'`indirizzo` (lo slug) di un workspace, come JSON Merge Patch. Solo il superadmin. Nell'ordine del backoffice: il
+     * ruolo, il workspace (404; fuori dal perimetro di chi è solo_uat è lo stesso 404), il corpo (422: almeno un campo, un estraneo, un valore vuoto o `null`), l'indirizzo di un altro workspace o lasciato da un
+     * altro (409 `indirizzo_gia_preso`). Un valore uguale a quello di prima risponde 200 e non scrive niente; un cambio vero lascia una riga nel registro dello staff (nei campi i nomi cambiati) e riserva
+     * l'indirizzo lasciato: chi lo ha lasciato lo può riprendere, nessun altro. Risponde con la scheda. Nessun avviso a nessuno.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaUnWorkspaceDelloStaff(Request $richiesta, array $corpo, string $workspace): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $regole = [
+            'nome' => ['filled', 'string', 'max:255', new NomeScritto],
+            'indirizzo' => ['filled', 'string', 'min:3', 'max:47', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/D'],
+        ];
+        $campi = $this->testi->validaStretta($corpo, $regole);
+
+        if ($campi === []) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => implode(', ', array_keys($regole))]), 'regola' => 'obbligatorio', 'pointer' => '#']]);
+        }
+
+        $cambiati = [];
+
+        if (isset($campi['nome']) && $campi['nome'] !== $this->workspace[$id]['nome']) {
+            $cambiati[] = 'nome';
+        }
+
+        if (isset($campi['indirizzo']) && $campi['indirizzo'] !== $this->workspace[$id]['slug']) {
+            $preso = array_filter($this->workspace, fn (array $altro, string $altroId) => $altroId !== $id && $altro['slug'] === $campi['indirizzo'], ARRAY_FILTER_USE_BOTH) !== []
+                || (isset($this->indirizziRiservati[$campi['indirizzo']]) && $this->indirizziRiservati[$campi['indirizzo']] !== $id);
+
+            if ($preso) {
+                throw new Problema('indirizzo_gia_preso');
+            }
+
+            $cambiati[] = 'indirizzo';
+        }
+
+        if ($cambiati !== []) {
+            if (in_array('nome', $cambiati, true)) {
+                $this->workspace[$id]['nome'] = $campi['nome'];
+            }
+
+            if (in_array('indirizzo', $cambiati, true)) {
+                $this->indirizziRiservati[$this->workspace[$id]['slug']] ??= $id;
+                $this->workspace[$id]['slug'] = $campi['indirizzo'];
+            }
+
+            $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.modifica', 'workspace', $id, $cambiati);
+        }
+
+        return [200, ['data' => $this->schedaDelWorkspace($id)]];
+    }
+
+    /**
+     * La scheda di un workspace: la riga dell'elenco più i consumi, l'eliminazione e la fatturazione dell'azienda.
+     *
+     * @return array<string, mixed>
+     */
+    private function schedaDelWorkspace(string $id): array
+    {
         $riga = $this->rigaDelWorkspace($id);
         $azienda = $this->workspace[$id]['azienda_id'] ?? null;
         $dati = $azienda === null ? [] : ($this->datiAziende[$azienda] ?? []);
 
-        return [200, ['data' => $riga + [
+        return $riga + [
             'consumi' => [
                 'membri_n' => $riga['membri_n'],
                 'board_n' => count(array_filter($this->boards, fn (array $board) => $board['workspace'] === $id)),
@@ -96,7 +166,7 @@ trait StaffWorkspace
             ],
             'eliminazione' => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture() ? ['prevista_il' => self::iso($this->eliminazioni[$id])] : null,
             'fatturazione' => $azienda === null || ! isset($this->aziende[$azienda]) ? null : ['partita_iva' => $dati['partita_iva'] ?? null, 'paese' => $dati['paese'] ?? null, 'valuta' => $dati['valuta'] ?? null],
-        ]]];
+        ];
     }
 
     /**

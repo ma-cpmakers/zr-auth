@@ -218,6 +218,7 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/staff/workspace/([^/]+)/membri/([^/]+)$#', 'staff.workspace.membri.modifica'],
         ['DELETE', '#^/v1/staff/workspace/([^/]+)/membri/([^/]+)$#', 'staff.workspace.membri.elimina'],
         ['GET', '#^/v1/staff/workspace/([^/]+)$#', 'staff.workspace.mostra'],
+        ['PATCH', '#^/v1/staff/workspace/([^/]+)$#', 'staff.workspace.modifica'],
         ['GET', '#^/v1/staff/utenti$#', 'staff.utenti.elenca'],
         ['POST', '#^/v1/staff/utenti/ricerca$#', 'staff.utenti.ricerca.crea'],
         ['POST', '#^/v1/staff/utenti/ricerca/esportazioni$#', 'staff.utenti.ricerca.esportazioni.crea'],
@@ -1552,6 +1553,7 @@ final class BackofficeFinto
                 'staff.workspace.membri.elimina' => $this->eliminaUnMembroDelloStaff($richiesta, $parametri[0], $parametri[1]),
                 'staff.workspace.app.modifica' => $this->modificaLeAppDelWorkspaceDelloStaff($richiesta, $corpo, $parametri[0], $parametri[1]),
                 'staff.workspace.mostra' => $this->mostraUnWorkspaceDelloStaff($richiesta, $parametri[0]),
+                'staff.workspace.modifica' => $this->modificaUnWorkspaceDelloStaff($richiesta, $corpo, $parametri[0]),
                 'staff.utenti.elenca' => $this->elencaGliUtentiDelloStaff($richiesta),
                 'staff.utenti.ricerca.crea' => $this->cercaGliUtentiDelloStaff($richiesta, $corpo),
                 'staff.utenti.ricerca.esportazioni.crea' => $this->esportaGliUtentiDelloStaff($richiesta, $corpo),
@@ -6790,7 +6792,7 @@ final class BackofficeFinto
     {
         $dalNome = rtrim(substr(Str::slug($nome), 0, self::SLUG_DAL_NOME), '-');
         $dalNome = $dalNome === '' ? 'workspace' : $dalNome;
-        $presi = array_column($this->workspace, 'slug');
+        $presi = [...array_column($this->workspace, 'slug'), ...array_keys($this->indirizziRiservati)];
 
         do {
             $slug = $dalNome.'-'.$this->caso->getBytesFromString(self::ALFABETO, self::SLUG_CASUALI);

@@ -305,6 +305,10 @@ return [
         'title' => 'Address already in use',
         'detail' => 'The address is already in use: a Bookings page address is unique across all of Zeiras, a calendar address is unique within its page. The problem carries `proposta` next to the code, a free address; pick another and repeat the request. Nothing was written.',
     ],
+    'indirizzo_gia_preso' => [
+        'title' => 'Address already taken',
+        'detail' => 'The address belongs to another workspace, or used to and is never reassigned to anyone else. Pick another and repeat the request. Nothing was written.',
+    ],
     'pagina_presente' => [
         'title' => 'Page already exists',
         'detail' => 'You already have a booking page in this workspace: each member has only one. Read it with `bookings.pagine.elenca` (`mie=true`) and change it with `bookings.pagine.modifica`. Nothing was written.',
