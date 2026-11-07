@@ -660,6 +660,9 @@ trait Crm
         return ['bail', 'filled', 'string', function (string $campo, mixed $id, Closure $fail) use ($workspace) {
             if (! isset($this->membri[$workspace][strtolower((string) $id)])) {
                 $this->rifiutaCrm($fail, $campo, Regola::NON_TROVATO, 'regole.responsabile_del_workspace');
+            } elseif ($this->membri[$workspace][strtolower((string) $id)] === 'ospite') {
+                // Un ospite (#3366) è in sola visualizzazione: non è mai responsabile.
+                $this->rifiutaCrm($fail, $campo, Regola::VALORE_NON_AMMESSO, 'regole.ospite_non_assegnabile');
             }
         }];
     }

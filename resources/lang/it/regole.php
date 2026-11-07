@@ -62,6 +62,7 @@ return [
     'conferma_password' => 'La password non è giusta: per confermare che sei tu serve quella con cui entri in Zeiras.',
     'contatto_vuoto' => 'Un contatto vuole almeno uno fra nome, cognome ed email.',
     'responsabile_del_workspace' => 'Questa persona non è un membro del workspace: gli id dei membri li dà workspace.membri.elenca.',
+    'ospite_non_assegnabile' => "Un ospite è in sola visualizzazione: non può essere responsabile né assegnatario. Scegli un membro, un amministratore o il proprietario: gli id li dà workspace.membri.elenca.",
     'azienda_o_azienda_nuova' => "Un contatto ha un'azienda che c'è (organizzazione_id) o una che nasce con lui (organizzazione_nuova), non tutte e due.",
     'organizzazione_non_esiste' => "L'azienda del contatto non esiste in questo workspace.",
     'paga_per_non_esiste' => "Chi paga per il contatto non esiste in questo workspace: dev'essere l'id di un contatto o di un'azienda.",
