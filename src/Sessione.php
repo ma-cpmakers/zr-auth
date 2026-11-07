@@ -383,7 +383,7 @@ final class Sessione
         return self::aperta() ? self::stato()['workspace'] : null;
     }
 
-    /** Il ruolo della persona nel workspace in cui è entrata: proprietario, amministratore o membro. */
+    /** Il ruolo della persona nel workspace in cui è entrata: proprietario, amministratore, membro od ospite (solo visualizzazione). */
     public static function ruolo(): ?string
     {
         return self::aperta() ? self::stato()['ruolo'] : null;

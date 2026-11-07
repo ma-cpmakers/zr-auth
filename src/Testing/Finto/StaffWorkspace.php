@@ -4,6 +4,7 @@ namespace Zeiras\Auth\Testing\Finto;
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * I workspace dei clienti nel backoffice finto (#3255, F3.1, F3.8): `staff.workspace.elenca` e `staff.workspace.ricerca.crea`, per il frontend dello staff (zr-superadmin). Le regole sono
@@ -161,6 +162,122 @@ trait StaffWorkspace
         }
 
         return [200, ['data' => ['codice' => $app, 'attiva' => $attiva]]];
+    }
+
+    /**
+     * staff.workspace.membri.elenca (#3258, StaffWorkspaceMembriController::elenca): i membri del workspace dal primo entrato, ognuno con la persona (`utente`: id, nome, cognome, email), il
+     * `ruolo` e `creato_il`. Superadmin e supporto. Nell'ordine del backoffice: il ruolo, la query (422), il workspace (404; fuori dal perimetro di chi è solo_uat è lo stesso 404). Aprire l'elenco
+     * è un'azione registrata, come la scheda: una riga nel registro dello staff, e un 404 non ne lascia.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaIMembriDelWorkspaceDelloStaff(Request $richiesta, string $workspace): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        $lista = 'staff.workspace.membri.elenca:'.strtolower($workspace);
+        $query = $this->testi->validaQuery(self::query($richiesta), [
+            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO_DELLO_STAFF],
+            'cursore' => ['sometimes', 'string', function (string $attributo, mixed $valore, \Closure $fail) use ($lista) {
+                if ($this->leggiPosizione($lista, ['id'], $valore) === null) {
+                    $this->testi->dichiara($attributo, 'formato');
+                    $fail('regole.cursore')->translate();
+                }
+            }],
+        ]);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.membri.elenca', 'workspace', $id);
+        $voci = [];
+
+        foreach ($this->membri[$id] ?? [] as $persona => $ruolo) {
+            $voci[] = ['id' => $persona] + $this->voceDelMembroPerLoStaff($id, $persona);
+        }
+
+        $query['limite'] ??= self::LIMITE_DELLO_STAFF;
+        [$stato, $corpo] = $this->impagina(
+            $query, $lista, 'id', $voci,
+            fn (array $voce) => [$voce['creato_il'], $voce['id']],
+            fn (string $persona) => isset($this->membri[$id][$persona]) ? [self::iso($this->entrati[$id][$persona]), $persona] : null,
+        );
+        $corpo['data'] = array_map(fn (array $voce) => array_diff_key($voce, ['id' => 1]), $corpo['data']);
+
+        return [$stato, $corpo];
+    }
+
+    /**
+     * staff.workspace.membri.modifica (#3258, StaffWorkspaceMembriController::modifica): il ruolo di un membro, `amministratore` o `membro`. Solo il superadmin. Nell'ordine del backoffice: il ruolo, il
+     * workspace (404), il membro (404), il corpo (422: `proprietario` non è ammesso, nessuno lo diventa da qui), il proprietario (409 `proprieta_da_trasferire`). Lo stesso ruolo di prima risponde 200 e
+     * non scrive niente; un cambio vero lascia una riga nel registro dello staff (nei campi `ruolo`). Nessun avviso a nessuno.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaIlRuoloDiUnMembroDelloStaff(Request $richiesta, array $corpo, string $workspace, string $utente): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $persona = $this->membroDelloStaff($id, $utente);
+        $ruolo = (string) $this->testi->validaStretta($corpo, ['ruolo' => ['required', 'string', Rule::in(['amministratore', 'membro'])]])['ruolo'];
+
+        if ($this->membri[$id][$persona] === 'proprietario') {
+            throw new Problema('proprieta_da_trasferire');
+        }
+
+        if ($this->membri[$id][$persona] !== $ruolo) {
+            $this->membri[$id][$persona] = $ruolo;
+            $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.membri.modifica', 'workspace', $id, ['ruolo']);
+        }
+
+        return [200, ['data' => $this->voceDelMembroPerLoStaff($id, $persona)]];
+    }
+
+    /**
+     * staff.workspace.membri.elimina (#3258, StaffWorkspaceMembriController::elimina): toglie un membro (204). Solo il superadmin. Il workspace (404), il membro (404, anche la seconda volta), il
+     * proprietario (409 `proprieta_da_trasferire`). Una riga nel registro dello staff; nessun avviso a nessuno.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaUnMembroDelloStaff(Request $richiesta, string $workspace, string $utente): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $persona = $this->membroDelloStaff($id, $utente);
+
+        if ($this->membri[$id][$persona] === 'proprietario') {
+            throw new Problema('proprieta_da_trasferire');
+        }
+
+        $this->togliIlMembro($id, $persona);
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.membri.elimina', 'workspace', $id);
+
+        return [204, null];
+    }
+
+    /** L'id di una persona che è membro di quel workspace, o 404: di un altro workspace, tolta o inventata è lo stesso 404. */
+    private function membroDelloStaff(string $workspace, string $utente): string
+    {
+        $utente = strtolower($utente);
+
+        if (! isset($this->membri[$workspace][$utente])) {
+            throw new Problema('non_trovato');
+        }
+
+        return $utente;
+    }
+
+    /**
+     * La riga di un membro per lo staff: `utente` (id, nome, cognome, email), `ruolo` e `creato_il`. Mai altro.
+     *
+     * @return array{utente: array<string, string|null>, ruolo: string, creato_il: string}
+     */
+    private function voceDelMembroPerLoStaff(string $workspace, string $persona): array
+    {
+        $dati = $this->persone[$persona] ?? [];
+
+        return [
+            'utente' => ['id' => $persona, 'nome' => $dati['nome'] ?? null, 'cognome' => $dati['cognome'] ?? null, 'email' => $dati['email'] ?? null],
+            'ruolo' => $this->membri[$workspace][$persona],
+            'creato_il' => self::iso($this->entrati[$workspace][$persona]),
+        ];
     }
 
     /** L'id di un workspace che c'è e che chi chiama vede (solo_uat: il suo perimetro); se no 404. */

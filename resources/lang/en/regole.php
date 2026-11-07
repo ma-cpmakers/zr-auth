@@ -61,6 +61,7 @@ return [
     'conferma_password' => 'The password is wrong: to confirm it is you, give the one you sign in to Zeiras with.',
     'contatto_vuoto' => 'A contact needs at least one of nome, cognome and email.',
     'responsabile_del_workspace' => 'This person is not a member of the workspace: member ids come from workspace.membri.elenca.',
+    'ospite_non_assegnabile' => 'A guest is view-only: they cannot be a lead or an assignee. Choose a member, an administrator or the owner: ids come from workspace.membri.elenca.',
     'azienda_o_azienda_nuova' => 'A contact has an existing company (organizzazione_id) or one created with it (organizzazione_nuova), not both.',
     'organizzazione_non_esiste' => "The contact's company does not exist in this workspace.",
     'paga_per_non_esiste' => 'The payer of the contact does not exist in this workspace: it must be the id of a contact or of a company.',

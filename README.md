@@ -128,7 +128,7 @@ Sessione::apriOspite($data);   // utente(), accesso(), workspace() e ruolo() son
 Sessione::lascia();     // dopo workspace.uscita.crea, se non c'è un altro workspace: toglie workspace, ruolo e gettone del workspace e tiene l'accesso; senza sessione non fa niente
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
 Sessione::workspace();  // {id, nome, slug}; null prima di entra()
-Sessione::ruolo();      // proprietario, amministratore o membro
+Sessione::ruolo();      // proprietario, amministratore, membro od ospite (solo visualizzazione)
 Sessione::aggiorna($io);  // $io = i `data` di io.mostra che la pagina ha già letto (non una chiamata in più); lingua, nome ed email (con `email_verificata_il` se la sessione lo tiene), se diversi (true se ha cambiato); il resto resta
 
 // L'uscita: accessi.corrente.elimina chiude l'accesso da cui discende il gettone della sessione, e ogni gettone che ne
