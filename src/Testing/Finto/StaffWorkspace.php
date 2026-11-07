@@ -99,6 +99,83 @@ trait StaffWorkspace
     }
 
     /**
+     * staff.workspace.app.elenca (#3259, StaffWorkspaceAppController::elenca): le app che il workspace può avere (quelle `disponibili` del catalogo), in ordine di codice, ognuna con `codice` e
+     * `attiva`. Superadmin e supporto; un workspace che non c'è o fuori dal perimetro di chi è solo_uat è 404. Una lettura: conta nel tetto e non scrive nel registro dello staff.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaLeAppDelWorkspaceDelloStaff(Request $richiesta, string $workspace): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $this->contaLaLettura($chi);
+        $lista = 'staff.workspace.app.elenca';
+        $query = $this->testi->validaQuery(self::query($richiesta), [
+            'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO_DELLO_STAFF],
+            'cursore' => ['sometimes', 'string', function (string $attributo, mixed $valore, \Closure $fail) use ($lista) {
+                if ($this->leggiPosizione($lista, ['codice'], $valore) === null) {
+                    $this->testi->dichiara($attributo, 'formato');
+                    $fail('regole.cursore')->translate();
+                }
+            }],
+        ]);
+        $voci = [];
+
+        foreach (self::CATALOGO as $codice => $stato) {
+            if ($stato === 'disponibile') {
+                $voci[] = ['codice' => $codice, 'attiva' => $this->appAttiva($id, $codice)];
+            }
+        }
+
+        $query['limite'] ??= self::LIMITE_DELLO_STAFF;
+
+        return $this->impagina($query, $lista, 'codice', $voci, fn (array $voce) => [$voce['codice']], fn (string $codice) => [$codice]);
+    }
+
+    /**
+     * staff.workspace.app.modifica (#3259, StaffWorkspaceAppController::modifica): accende o spegne un'app (`attiva`, un booleano vero). Solo il superadmin. Nell'ordine del backoffice: il ruolo, il
+     * workspace (404), l'app del catalogo (404), il corpo (422), un'app in arrivo (409 `app_in_arrivo`). Lo stato che ha già risponde 200 e non scrive niente; un cambio vero lascia una riga nel
+     * registro dello staff (bersaglio `workspace`, nei campi il codice dell'app). Nessun avviso a nessuno.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaLeAppDelWorkspaceDelloStaff(Request $richiesta, array $corpo, string $workspace, string $app): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+
+        if (! isset(self::CATALOGO[$app])) {
+            throw new Problema('non_trovato');
+        }
+
+        $attiva = (bool) $this->testi->validaStretta($corpo, ['attiva' => ['required', 'boolean:strict']])['attiva'];
+
+        if (self::CATALOGO[$app] !== 'disponibile') {
+            throw new Problema('app_in_arrivo');
+        }
+
+        if ($attiva !== isset($this->attive[$id][$app])) {
+            $attiva ? $this->attive[$id][$app] = true : $this->attive[$id] = array_diff_key($this->attive[$id] ?? [], [$app => 1]);
+            $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.app.modifica', 'workspace', $id, [$app]);
+        }
+
+        return [200, ['data' => ['codice' => $app, 'attiva' => $attiva]]];
+    }
+
+    /** L'id di un workspace che c'è e che chi chiama vede (solo_uat: il suo perimetro); se no 404. */
+    private function workspaceDelloStaff(array $chi, string $id): string
+    {
+        $id = strtolower($id);
+
+        if (! isset($this->workspace[$id]) || ($chi['solo_uat'] && ! $this->proprietarioDiProva($id))) {
+            throw new Problema('non_trovato');
+        }
+
+        return $id;
+    }
+
+    /**
      * @param  array<string, mixed>  $query  `limite` e `cursore`, già validati
      * @param  list<array<string, mixed>>  $righe
      * @return array{int, array<string, mixed>}
