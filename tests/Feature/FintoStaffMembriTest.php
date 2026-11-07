@@ -33,10 +33,8 @@ function esitoMembri(Closure $chiamata): array
 function gettoneMembri(BackofficeFinto $finto, string $email, string $ruolo = 'superadmin'): string
 {
     $persona = $finto->persona($email, PASSWORD, nome: ucfirst(strstr($email, '@', true)));
-    $staff = $finto->staffDi($persona, $ruolo, true, false);
-    $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => $staff['email'], 'password' => PASSWORD])['data']['sfida']['id'];
-
-    return Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+    // Dal login normale di Zeiras (#3445) lo staff non entra più con la password e il codice.
+    return $finto->ingressoDelloStaff($finto->staffDi($persona, $ruolo, false, false));
 }
 
 /** @return array{0: array<string, mixed>, 1: array<string, mixed>, 2: array<string, mixed>, 3: array<string, mixed>} il workspace, Anna proprietaria, Bea amministratrice e Carlo membro */
