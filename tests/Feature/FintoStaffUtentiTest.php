@@ -36,6 +36,11 @@ function gettoneDelloStaffDi(BackofficeFinto $finto, string $email, string $ruol
 {
     $persona = $finto->persona($email, PASSWORD, nome: ucfirst(strstr($email, '@', true)));
     $staff = $finto->staffDi($persona, $ruolo, true, $soloUat);
+    // Una persona di prova (`solo_uat`) entra con la password e il codice; le altre con il login normale di Zeiras (#3445).
+    if (! $soloUat) {
+        return $finto->ingressoDelloStaff($staff);
+    }
+
     $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => $staff['email'], 'password' => PASSWORD])['data']['sfida']['id'];
 
     return Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
@@ -44,9 +49,7 @@ function gettoneDelloStaffDi(BackofficeFinto $finto, string $email, string $ruol
 /** Una persona dello staff già esistente rientra: un gettone nuovo (il codice TOTP vale un passo alla volta, il tempo del test deve essere avanzato). */
 function rientraComeStaff(string $email): string
 {
-    $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => $email, 'password' => PASSWORD])['data']['sfida']['id'];
-
-    return Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+    return test()->finto->ingressoDelloStaff($email);
 }
 
 /** Le azioni di F2 nel registro dello staff, nell'ordine: gli ingressi dello staff non contano. */
@@ -153,8 +156,7 @@ it('uno dello staff, la persona stessa e un utente che non c\'è: 403 o 404, ovu
     $this->finto->staffDi($sara, 'superadmin');
     $collega = $this->finto->persona('paola@lucianocastro.com', PASSWORD, nome: 'Paola');
     $this->finto->staffDi($collega, 'supporto');
-    $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => 'sara@lucianocastro.com', 'password' => PASSWORD])['data']['sfida']['id'];
-    $gettone = Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+    $gettone = $this->finto->ingressoDelloStaff('sara@lucianocastro.com');
 
     foreach ([$sara['id'], $collega['id']] as $id) {
         expect(esitoUtentiStaff(fn () => Api::staff($gettone)->get("/v1/staff/utenti/{$id}")))->toBe([403, 'permesso_negato'])
@@ -358,14 +360,12 @@ it('i due tetti: 30 azioni sensibili all\'ora senza riga oltre, 300 pagine di le
         ->and(esitoUtentiStaff(fn () => Api::staff($sara)->get('/v1/staff/utenti')))->toBe(['ok', null]);
 
     Carbon::setTestNow('2026-11-05 10:01:00');
-    $nuovo = Api::staff()->post('/v1/staff/accessi', ['email' => 'paola@lucianocastro.com', 'password' => PASSWORD])['data']['sfida']['id'];
-    $gettoneNuovo = Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $nuovo, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+    $gettoneNuovo = $this->finto->ingressoDelloStaff('paola@lucianocastro.com');
 
     expect(esitoUtentiStaff(fn () => Api::staff($gettoneNuovo)->get('/v1/staff/utenti')))->toBe([429, 'troppe_richieste']);
 
     Carbon::setTestNow('2026-11-05 11:00:01');
-    $dopo = Api::staff()->post('/v1/staff/accessi', ['email' => 'paola@lucianocastro.com', 'password' => PASSWORD])['data']['sfida']['id'];
-    $gettoneDopo = Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $dopo, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+    $gettoneDopo = $this->finto->ingressoDelloStaff('paola@lucianocastro.com');
 
     expect(esitoUtentiStaff(fn () => Api::staff($gettoneDopo)->get('/v1/staff/utenti')))->toBe(['ok', null]);
 });

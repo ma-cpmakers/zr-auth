@@ -70,6 +70,20 @@ final class RicevitoreController
         // Il gettone che torna dev'essere quello della partenza: un cliente (Ingresso::versoCliente) non ha workspace, e una partenza in un
         // workspace non si chiude con un gettone senza. L'altro caso non apre niente.
         $cliente = ($partenza['cliente'] ?? false) === true;
+
+        // Lo staff (#3445) torna con la forma StaffAccesso, non con quella di un gettone di persona: un'altra forma è un backoffice che sbaglia, mai una sessione a metà.
+        if (($partenza['staff'] ?? false) === true) {
+            $accesso = self::staff($risposta);
+
+            if ($accesso === null) {
+                return self::errore();
+            }
+
+            Sessione::entraStaff($accesso);
+
+            return redirect()->away(Sessione::ritorno(url((string) config('zr-auth.dopo'))))->withHeaders(Ingresso::INTESTAZIONI);
+        }
+
         $gettone = self::gettone($risposta, $cliente);
 
         if ($gettone === null) {
@@ -202,6 +216,29 @@ final class RicevitoreController
         }
 
         return $senzaWorkspace === $cliente ? $data : null;
+    }
+
+    /**
+     * I `data` di ingressi.scambio.crea per un codice dello staff (lo schema StaffAccesso, #3445), se hanno la forma: il gettone e le due scadenze, l'id e il ruolo. Il gettone di una
+     * persona (c'è l'`utente`) per una partenza dello staff non apre niente: null. Un'altra forma è un backoffice che sbaglia.
+     *
+     * @param  array<mixed>  $risposta
+     * @return array<string, mixed>|null
+     */
+    private static function staff(array $risposta): ?array
+    {
+        $data = $risposta['data'] ?? null;
+
+        if (is_array($data) && array_key_exists('utente', $data)) {
+            return null;
+        }
+
+        if (! is_array($data) || ! is_string($data['gettone'] ?? null) || $data['gettone'] === '' || ! is_string($data['scade_il'] ?? null)
+            || ! is_string($data['inattivita_scade_il'] ?? null) || ! is_string($data['id'] ?? null) || ! is_string($data['ruolo'] ?? null)) {
+            throw new BackofficeNonRisponde('La risposta di ingressi.scambio.crea non ha la forma di un accesso dello staff.');
+        }
+
+        return $data;
     }
 
     /** La pagina d'errore del modulo: la stessa per ogni motivo, che a chi arriva da fuori non si dice quale. */

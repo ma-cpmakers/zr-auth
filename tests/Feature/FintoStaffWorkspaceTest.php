@@ -35,6 +35,11 @@ function gettoneWorkspaceStaff(BackofficeFinto $finto, string $email, string $ru
 {
     $persona = $finto->persona($email, PASSWORD, nome: ucfirst(strstr($email, '@', true)));
     $staff = $finto->staffDi($persona, $ruolo, true, $soloUat);
+    // Una persona di prova (`solo_uat`) entra con la password e il codice; le altre con il login normale di Zeiras (#3445).
+    if (! $soloUat) {
+        return $finto->ingressoDelloStaff($staff);
+    }
+
     $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => $staff['email'], 'password' => PASSWORD])['data']['sfida']['id'];
 
     return Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];

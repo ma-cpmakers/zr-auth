@@ -138,6 +138,9 @@ final class BackofficeFinto
 
     private const CLIENT_DI_SISTEMA = ['monitor', 'uat'];
 
+    /** Il solo client che scambia il codice di `ingressi.staff.crea` (#3445): nemmeno un client di sistema. */
+    private const CLIENT_DELLO_STAFF = 'superadmin';
+
     /** La password che il finto dà per trapelata, al posto di Have I Been Pwned: utenti.crea la rifiuta. */
     public const PASSWORD_TRAPELATA = 'una password trapelata';
 
@@ -323,6 +326,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/gettoni$#', 'gettoni.crea'],
         ['POST', '#^/v1/ingressi$#', 'ingressi.crea'],
         ['POST', '#^/v1/ingressi/clienti$#', 'ingressi.clienti.crea'],
+        ['POST', '#^/v1/ingressi/staff$#', 'ingressi.staff.crea'],
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
         ['POST', '#^/v1/inviti/verifica$#', 'inviti.verifica.crea'],
@@ -1296,8 +1300,9 @@ final class BackofficeFinto
      */
     public function ritorno(string $app, string $indirizzo): self
     {
-        if (! isset(self::CATALOGO[$app])) {
-            throw new InvalidArgumentException("L'app «{$app}» non c'è nel catalogo: ".implode(', ', array_keys(self::CATALOGO)).'.');
+        // `admin` non è un'app del catalogo dei workspace ma ha il suo ritorno (`catalogo.ritorno.admin`, #3445): ingressi.staff.crea lo dà.
+        if (! isset(self::CATALOGO[$app]) && $app !== 'admin') {
+            throw new InvalidArgumentException("L'app «{$app}» non c'è nel catalogo: ".implode(', ', [...array_keys(self::CATALOGO), 'admin']).'.');
         }
 
         $this->ritorni[$app] = $indirizzo;
@@ -1429,7 +1434,7 @@ final class BackofficeFinto
         $percorso = (string) parse_url($richiesta->url(), PHP_URL_PATH);
         $attesa = hash_hmac('sha256', "zr1\n{$cliente}\n{$istante}\n".strtoupper($richiesta->method())."\n{$percorso}\n{$ip}", self::SEGRETO_DEL_CLIENTE);
 
-        if (! in_array($cliente, [self::CLIENTE, 'home', 'board', 'crm', 'bookings', ...self::CLIENT_DI_SISTEMA], true)
+        if (! in_array($cliente, [self::CLIENTE, 'home', 'board', 'crm', 'bookings', self::CLIENT_DELLO_STAFF, ...self::CLIENT_DI_SISTEMA], true)
             || $ip === null || filter_var($ip, FILTER_VALIDATE_IP) === false
             || $istante === null || preg_match('/^\d{1,12}$/', $istante) !== 1 || abs(now()->timestamp - (int) $istante) > 30
             || $firma === null || ! hash_equals($attesa, $firma)) {
@@ -1642,6 +1647,7 @@ final class BackofficeFinto
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
                 'ingressi.crea' => $this->creaIngresso($richiesta, $corpo),
                 'ingressi.clienti.crea' => $this->creaIngressoCliente($richiesta, $corpo),
+                'ingressi.staff.crea' => $this->creaIngressoStaff($richiesta, $corpo),
                 'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
                 'link.accettazione.crea' => $this->accettaLink($richiesta, $corpo),
@@ -5684,6 +5690,11 @@ final class BackofficeFinto
         // Il codice di un «Accedi come» (#2914) non ha verificatore: la legatura è al client dell'app.
         if ($ingresso !== null && isset($ingresso['assistenza'])) {
             return $this->apriLAssistenza($ingresso, $campi);
+        }
+
+        // Il codice dello staff (#3445): PKCE e il solo client `superadmin` (o il generico `finto` dei test), mai uno di sistema. Dà il gettone dello staff, senza secondo fattore.
+        if ($ingresso !== null && isset($ingresso['staff'])) {
+            return $this->apriLoStaff($ingresso, $campi);
         }
 
         // Solo il client firmato dell'app del codice, o uno di sistema (#3344): senza firma o con quella di un altro client è la stessa 422, e il codice è già consumato.
