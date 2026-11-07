@@ -133,6 +133,10 @@ return [
         'title' => 'Sprint no cerrado',
         'detail' => 'Esta petición trata de un sprint cerrado (la retrospectiva, las tarjetas sin terminar): este sigue planificado o activo. Ciérralo con `board.sprint.chiusura.crea` y repite la petición.',
     ],
+    'eccezione_esistente' => [
+        'title' => 'Excepción ya presente',
+        'detail' => 'Esta ocurrencia del bloqueo ya tiene su excepción, una sola: quítala con `bookings.blocchi.eccezioni.elimina` y repite con la nueva. No repitas la misma petición.',
+    ],
     'retrospettiva_esistente' => [
         'title' => 'Retrospectiva ya abierta',
         'detail' => 'Este sprint ya tiene su retrospectiva, una sola: el tablero está en `retrospettiva_board_id` del sprint. No repitas la petición.',
