@@ -738,6 +738,7 @@ trait Todo
             'indirizzo' => $e['indirizzo'] ?? null,
             'crm' => $this->crmDelTodo($e['id'], $e['workspace'], $intero),
             'promemoria_n' => $this->quantiPromemoriaTodo($e['id']),
+            ...($intero ? [] : ['promemoria_anticipi' => $this->anticipiPromemoriaTodo($e['id'])]),
             'posizione' => $e['posizione'],
             'creato_il' => self::iso($e['creato_il']), 'aggiornato_il' => self::iso($e['aggiornato_il']),
             'etag' => self::etagCrm($this->versioneTodo($e, 'aggiornato_il')),
