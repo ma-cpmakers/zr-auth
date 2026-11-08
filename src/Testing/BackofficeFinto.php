@@ -134,7 +134,7 @@ final class BackofficeFinto
      * scambiare un codice nato per lei; i client di sistema (il monitoraggio e la UAT) scambiano quello di qualunque app. `finto` è il client di prova del finto, e
      * vale per ogni app: un modulo che nei suoi test firma come `finto` non cambia. Il finto firma con lo stesso segreto per tutti i nomi: quale nome firma lo decide il test.
      */
-    private const CLIENT_DELL_APP = ['bookings' => ['bookings'], 'crm' => ['crm'], 'pm' => ['board']];
+    private const CLIENT_DELL_APP = ['bookings' => ['bookings'], 'crm' => ['crm'], 'flow' => ['flow'], 'pm' => ['board']];
 
     private const CLIENT_DI_SISTEMA = ['monitor', 'uat'];
 
@@ -164,7 +164,7 @@ final class BackofficeFinto
 
     /** L'app di un tipo di evento, dal primo prefisso che il tipo ha (config/catalogo.php del backoffice, `prefissi`). */
     /** I prefissi dei tipi di notifica e l'app, come `catalogo.prefissi` del backoffice (anche quelli di `crm.`, `board.` e `bookings.`, che non sono eventi: #3323). */
-    private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm', 'com.zeiras.crm.' => 'crm', 'com.zeiras.bookings.' => 'bookings', 'crm.' => 'crm', 'board.' => 'pm', 'bookings.' => 'bookings'];
+    private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm', 'com.zeiras.crm.' => 'crm', 'com.zeiras.bookings.' => 'bookings', 'com.zeiras.flow.' => 'flow', 'crm.' => 'crm', 'board.' => 'pm', 'bookings.' => 'bookings'];
 
     /** I quattro metodi di una board (#2928). */
     public const METODI_DELLA_BOARD = ['kanban', 'scrum', 'scrumban', 'waterfall'];
@@ -412,6 +412,7 @@ final class BackofficeFinto
         'bookings' => 'in_arrivo',
         'content' => 'in_arrivo',
         'crm' => 'disponibile',
+        'flow' => 'in_arrivo',
         'pm' => 'disponibile',
         'reports' => 'in_arrivo',
     ];
@@ -425,6 +426,7 @@ final class BackofficeFinto
         'bookings' => ['it' => 'Bookings', 'en' => 'Bookings', 'es' => 'Bookings'],
         'content' => ['it' => 'Content', 'en' => 'Content', 'es' => 'Content'],
         'crm' => ['it' => 'CRM', 'en' => 'CRM', 'es' => 'CRM'],
+        'flow' => ['it' => 'Finanze', 'en' => 'Finanze', 'es' => 'Finanze'],
         'pm' => ['it' => 'Project Management', 'en' => 'Project Management', 'es' => 'Project Management'],
         'reports' => ['it' => 'Reports', 'en' => 'Reports', 'es' => 'Reports'],
     ];
