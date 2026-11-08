@@ -9,8 +9,8 @@ use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 
 /**
- * Finanze (app `flow`, tappa 1, gruppo 1, #3455-#3472) nel backoffice finto: `flow.conti.*`, `flow.conti.importazioni.*`, `flow.categorie.elenca`, `flow.movimenti.*` e `flow.regole.*`, con le
- * regole, i pointer e l'ordine di `ContiController`, `ImportazioniController`, `MovimentiController` e `RegoleController` del backoffice. Metodi dell'app `flow`: 403 `app_non_attiva` se spenta, prima di
+ * Finanze (app `flow`, tappa 1, gruppo 1, #3455-#3472) nel backoffice finto: `flow.conti.*`, `flow.conti.importazioni.*`, `flow.categorie.elenca`, `flow.movimenti.*`, `flow.regole.*` e `flow.fisse.*` (#3475-#3477), con le
+ * regole, i pointer e l'ordine di `ContiController`, `ImportazioniController`, `MovimentiController`, `RegoleController` e `FisseController` del backoffice. Metodi dell'app `flow`: 403 `app_non_attiva` se spenta, prima di
  * cercare la risorsa; tutti e tre i ruoli, filtrati dalla visibilità del conto. Un conto `comune` lo vede ogni membro, uno `personale` solo il suo titolare, e per ogni altro è 404 `non_trovato`; lo
  * cambia e lo elimina solo il titolare (403 `permesso_negato` per un conto comune di un altro). Un movimento è visibile quanto il suo conto. Una regola `comune` la vede ogni membro, una `personale` solo
  * chi l'ha scritta. Gli importi sono interi in centesimi col segno, la valuta è sempre EUR. Eliminare archivia (il conto con i suoi movimenti e caricamenti): da lì 404. Il gettone di assistenza non
@@ -28,6 +28,12 @@ trait Flow
 
     private const FLOW_REGOLE_TETTO = 500;
 
+    private const FLOW_FISSE_TETTO = 100;
+
+    private const FLOW_FISSA_NOME = 80;
+
+    private const FLOW_FISSE_FREQUENZE = [1, 3, 12];
+
     private const FLOW_REGOLA_TESTO = 100;
 
     private const FLOW_REGOLA_MINIMO = 2;
@@ -42,8 +48,8 @@ trait Flow
 
     private const FLOW_DESCRIZIONE = 500;
 
-    /** @var array{conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>} */
-    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => []];
+    /** @var array{conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>} */
+    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => []];
 
     /**
      * Apre Finanze nel workspace, come l'anteprima del backoffice (`ZR_FLOW_ANTEPRIMA`) e app.modifica: il catalogo del finto la dà «in_arrivo» (app.modifica la rifiuta e apps.elenca la mostra così), ma i metodi
@@ -1050,6 +1056,127 @@ trait Flow
             'visibilita' => $regola['visibilita'],
             'creata_da' => ['id' => $regola['creata_da'], 'nome' => $this->nomeFlow($regola['workspace'], $regola['creata_da'])],
             'creata_il' => self::iso($regola['creata_il']),
+        ];
+    }
+
+    // ———————————————————————————————————————— Spese fisse
+
+    /**
+     * flow.fisse.elenca (FisseController::elenca): le spese fisse della vista chiesta (`visibilita`, obbligatoria: le comuni del workspace o le proprie personali), dalla più recente, a cursore. Il
+     * cursore è legato alla vista; ogni altro parametro è 422 `campo_estraneo`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaFisseFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $grezzi = self::query($richiesta);
+        $vista = is_string($grezzi['visibilita'] ?? null) ? $grezzi['visibilita'] : '';
+
+        return $this->pagina(
+            $richiesta,
+            'flow.fisse.elenca:'.$vista,
+            'id',
+            fn () => array_map(
+                fn (array $fissa) => $this->voceFissaFlow($fissa),
+                array_values(array_filter($this->flow['fisse'], fn (array $fissa) => ! $fissa['archiviato'] && $this->fissaDellaVistaFlow($fissa, $chi, $vista))),
+            ),
+            fn (array $voce) => [$voce['creata_il'], $voce['id']],
+            fn (string $id) => isset($this->flow['fisse'][$id]) && $this->fissaDellaVistaFlow($this->flow['fisse'][$id], $chi, $vista) ? [self::iso($this->flow['fisse'][$id]['creata_il']), $id] : null,
+            true,
+            self::LIMITE_MASSIMO,
+            null,
+            ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow($grezzi, ['limite', 'cursore', 'visibilita']),
+        );
+    }
+
+    /**
+     * flow.fisse.crea (FisseController::crea): una spesa fissa di chi chiama (dal gettone). 201 con la spesa, senza `Location`. `prima_data` è obbligatoria se la frequenza è 3 o 12; il tetto di 100 per
+     * vista (409 `limite_raggiunto`) si conta dopo il corpo. Il freno si conta prima del corpo. Accetta Idempotency-Key.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaFissaFlow(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conFlow($richiesta);
+
+        return $this->conIdempotenza($richiesta, 'flow.fisse.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $this->frena('freni:flow.fisse.crea:'.$chi['persona'], self::FRENI['flow_fisse_persona'], self::ORA);
+            $campi = $this->testi->validaCorpo($corpo, [
+                'visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)],
+                'nome' => ['bail', 'required', 'string', 'max:'.self::FLOW_FISSA_NOME],
+                'importo' => ['bail', 'required', 'integer:strict', 'between:1,'.self::FLOW_IMPORTO],
+                'frequenza_mesi' => ['bail', 'required', 'integer:strict', Rule::in(self::FLOW_FISSE_FREQUENZE)],
+                'prima_data' => ['bail', 'nullable', Rule::requiredIf(fn () => in_array($corpo['frequenza_mesi'] ?? null, [3, 12], true)), 'string', 'date_format:Y-m-d'],
+            ]);
+
+            if (count(array_filter($this->flow['fisse'], fn (array $fissa) => ! $fissa['archiviato'] && $this->fissaDellaVistaFlow($fissa, $chi, $campi['visibilita']))) >= self::FLOW_FISSE_TETTO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_FISSE_TETTO]);
+            }
+
+            $id = self::id();
+            $this->flow['fisse'][$id] = [
+                'id' => $id, 'workspace' => $chi['workspace'], 'creata_da' => $chi['persona'], 'nome' => $campi['nome'], 'importo' => $campi['importo'], 'frequenza_mesi' => $campi['frequenza_mesi'],
+                'prima_data' => $campi['prima_data'] ?? null, 'visibilita' => $campi['visibilita'], 'creata_il' => self::istanteFlow(), 'archiviato' => false,
+            ];
+
+            return [201, ['data' => $this->voceFissaFlow($this->flow['fisse'][$id])], []];
+        });
+    }
+
+    /**
+     * flow.fisse.elimina (FisseController::elimina): toglie una spesa fissa archiviandola (204). La toglie chi l'ha scritta; una comune anche il proprietario e l'amministratore (per ogni altro membro
+     * 403 `permesso_negato`); una personale di un altro è 404.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaFissaFlow(Request $richiesta, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $fissa = $this->flow['fisse'][strtolower($id)] ?? null;
+
+        if ($fissa === null || $fissa['archiviato'] || $fissa['workspace'] !== $chi['workspace'] || ($fissa['visibilita'] === 'personale' && $fissa['creata_da'] !== $chi['persona'])) {
+            throw new Problema('non_trovato');
+        }
+
+        if ($fissa['creata_da'] !== $chi['persona'] && ! in_array($this->membri[$chi['workspace']][$chi['persona']], ['proprietario', 'amministratore'], true)) {
+            throw new Problema('permesso_negato');
+        }
+
+        $this->flow['fisse'][$fissa['id']]['archiviato'] = true;
+
+        return [204, null];
+    }
+
+    /**
+     * Una spesa è della vista che la persona guarda: le comuni del workspace, o le personali che ha scritto lei (Fisse::dellaVista).
+     *
+     * @param  array<string, mixed>  $fissa
+     * @param  array{persona: string, workspace: string}  $chi
+     */
+    private function fissaDellaVistaFlow(array $fissa, array $chi, string $vista): bool
+    {
+        return $fissa['workspace'] === $chi['workspace'] && $fissa['visibilita'] === $vista && ($vista === 'comune' || $fissa['creata_da'] === $chi['persona']);
+    }
+
+    /**
+     * Lo schema SpesaFissa (Fisse::forma).
+     *
+     * @param  array<string, mixed>  $fissa
+     * @return array<string, mixed>
+     */
+    private function voceFissaFlow(array $fissa): array
+    {
+        return [
+            'id' => $fissa['id'],
+            'visibilita' => $fissa['visibilita'],
+            'nome' => $fissa['nome'],
+            'importo' => $fissa['importo'],
+            'frequenza_mesi' => $fissa['frequenza_mesi'],
+            'prima_data' => $fissa['prima_data'],
+            'creata_da' => ['id' => $fissa['creata_da'], 'nome' => $this->nomeFlow($fissa['workspace'], $fissa['creata_da'])],
+            'creata_il' => self::iso($fissa['creata_il']),
         ];
     }
 }

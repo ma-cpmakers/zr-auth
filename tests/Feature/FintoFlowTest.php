@@ -3,7 +3,7 @@
 use Illuminate\Support\Str;
 use Zeiras\Auth\Testing\BackofficeFinto;
 
-// #3455-#3472 (Finanze, tappa 1, gruppo 1): conti, caricamenti, categorie, movimenti e regole nel finto. Qui ciò che un frontend vede dal suo lato; che le risposte e gli errori siano quelli del backoffice lo prova
+// #3455-#3477 (Finanze, tappa 1, gruppi 1 e D): conti, caricamenti, categorie, movimenti, regole e spese fisse nel finto. Qui ciò che un frontend vede dal suo lato; che le risposte e gli errori siano quelli del backoffice lo prova
 // il suo FintoTest.
 
 /**
@@ -44,7 +44,7 @@ function contoDelFinto(string $gettone, string $visibilita = 'comune', string $n
 it('l\'app spenta chiude ogni metodo flow.* con 403 app_non_attiva, e un ospite non entra (FL.0)', function () {
     [, $gettoni] = studioConFinanze(false);
 
-    foreach ([['GET', '/v1/flow/conti'], ['GET', '/v1/flow/categorie'], ['GET', '/v1/flow/regole'], ['GET', '/v1/flow/movimenti?visibilita=comune']] as [$metodo, $percorso]) {
+    foreach ([['GET', '/v1/flow/conti'], ['GET', '/v1/flow/categorie'], ['GET', '/v1/flow/regole'], ['GET', '/v1/flow/fisse?visibilita=comune'], ['GET', '/v1/flow/movimenti?visibilita=comune']] as [$metodo, $percorso]) {
         $risposta = alFinto($metodo, $percorso, null, $gettoni['anna']);
         expect($risposta->status())->toBe(403, $percorso)->and($risposta->json('codice'))->toBe('app_non_attiva');
     }
@@ -388,4 +388,44 @@ it('Idempotency-Key ripete la risposta di conti, movimenti e regole, ma non la p
     $veraUno = alFinto('POST', "/v1/flow/conti/{$uno->json('data.id')}/importazioni", ['prova' => false] + $prova, $gettoni['anna'], null, ['Idempotency-Key' => 'p']);
 
     expect($primaProva->status())->toBe(200)->and($veraUno->status())->toBe(201);
+});
+
+it('le spese fisse: la vista è obbligatoria, la personale altrui non si vede né si toglie, prima_data serve se non è mensile, il tetto è 100 (FL.18)', function () {
+    [, $gettoni] = studioConFinanze();
+    $fissa = fn (array $campi = []) => $campi + ['visibilita' => 'comune', 'nome' => 'Lezioni di nuoto', 'importo' => 6000, 'frequenza_mesi' => 1];
+
+    $comune = alFinto('POST', '/v1/flow/fisse', $fissa(['frequenza_mesi' => 12, 'prima_data' => '2027-03-12']), $gettoni['bruno']);
+    $privata = alFinto('POST', '/v1/flow/fisse', $fissa(['nome' => 'Palestra', 'visibilita' => 'personale']), $gettoni['carla']);
+
+    expect($comune->status())->toBe(201, $comune->body())
+        ->and(array_keys($comune->json('data')))->toBe(['id', 'visibilita', 'nome', 'importo', 'frequenza_mesi', 'prima_data', 'creata_da', 'creata_il'])
+        ->and($comune->json('data.creata_da'))->toBe(['id' => $comune->json('data.creata_da.id'), 'nome' => 'Bruno'])
+        ->and($privata->json('data.prima_data'))->toBeNull()
+        ->and(alFinto('GET', '/v1/flow/fisse', null, $gettoni['anna'])->json('errors.0'))->toMatchArray(['parameter' => 'visibilita', 'regola' => 'obbligatorio'])
+        ->and(alFinto('GET', '/v1/flow/fisse?visibilita=comune&q=x', null, $gettoni['anna'])->json('errors.0.regola'))->toBe('campo_estraneo')
+        ->and(array_column(alFinto('GET', '/v1/flow/fisse?visibilita=comune', null, $gettoni['anna'])->json('data'), 'nome'))->toBe(['Lezioni di nuoto'])
+        ->and(alFinto('GET', '/v1/flow/fisse?visibilita=personale', null, $gettoni['anna'])->json('data'))->toBe([])
+        ->and(array_column(alFinto('GET', '/v1/flow/fisse?visibilita=personale', null, $gettoni['carla'])->json('data'), 'nome'))->toBe(['Palestra'])
+        ->and(alFinto('GET', '/v1/flow/fisse?visibilita=personale&cursore='.urlencode((string) alFinto('GET', '/v1/flow/fisse?visibilita=comune&limite=1', null, $gettoni['anna'])->json('successivo')), null, $gettoni['carla'])->status())->toBe(422);
+
+    $senzaData = alFinto('POST', '/v1/flow/fisse', $fissa(['frequenza_mesi' => 3]), $gettoni['anna']);
+    $sbagliata = alFinto('POST', '/v1/flow/fisse', $fissa(['frequenza_mesi' => 6]), $gettoni['anna']);
+    expect($senzaData->json('errors'))->toHaveCount(1)->and($senzaData->json('errors.0'))->toMatchArray(['pointer' => '#/prima_data', 'regola' => 'obbligatorio'])
+        ->and($sbagliata->json('errors'))->toHaveCount(1)->and($sbagliata->json('errors.0'))->toMatchArray(['pointer' => '#/frequenza_mesi', 'regola' => 'valore_non_ammesso'])
+        ->and(alFinto('POST', '/v1/flow/fisse', $fissa(['importo' => 0]), $gettoni['anna'])->json('errors.0'))->toMatchArray(['pointer' => '#/importo', 'regola' => 'fuori_intervallo'])
+        ->and(alFinto('POST', '/v1/flow/fisse', $fissa(['creata_da' => 'x']), $gettoni['anna'])->json('errors.0'))->toMatchArray(['pointer' => '#/creata_da', 'regola' => 'campo_estraneo']);
+
+    expect(alFinto('DELETE', "/v1/flow/fisse/{$privata->json('data.id')}", null, $gettoni['anna'])->status())->toBe(404)
+        ->and(alFinto('DELETE', "/v1/flow/fisse/{$comune->json('data.id')}", null, $gettoni['carla'])->json('codice'))->toBe('permesso_negato')
+        ->and(alFinto('DELETE', "/v1/flow/fisse/{$comune->json('data.id')}", null, $gettoni['anna'])->status())->toBe(204)
+        ->and(alFinto('DELETE', "/v1/flow/fisse/{$comune->json('data.id')}", null, $gettoni['anna'])->status())->toBe(404)
+        ->and(alFinto('DELETE', "/v1/flow/fisse/{$privata->json('data.id')}", null, $gettoni['carla'])->status())->toBe(204);
+
+    // Il tetto è della vista, non della persona: il freno è di sessanta all'ora per persona, quindi cinquanta e cinquanta.
+    foreach (range(1, 100) as $n) {
+        expect(alFinto('POST', '/v1/flow/fisse', $fissa(['nome' => "spesa {$n}"]), $gettoni[$n <= 50 ? 'anna' : 'bruno'])->status())->toBe(201);
+    }
+
+    $oltre = alFinto('POST', '/v1/flow/fisse', $fissa(['nome' => 'una di troppo']), $gettoni['anna']);
+    expect($oltre->status())->toBe(409)->and($oltre->json('codice'))->toBe('limite_raggiunto')->and($oltre->json('limite'))->toBe(100);
 });
