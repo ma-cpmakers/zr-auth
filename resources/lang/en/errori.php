@@ -133,6 +133,10 @@ return [
         'title' => 'Sprint not closed',
         'detail' => 'This request is about a closed sprint (the retrospective, the cards left unfinished): this one is still planned or active. Close it with `board.sprint.chiusura.crea`, then repeat the request.',
     ],
+    'eccezione_esistente' => [
+        'title' => 'Exception already present',
+        'detail' => 'This occurrence of the block already has its exception, only one: remove it with `bookings.blocchi.eccezioni.elimina` and repeat with the new one. Do not repeat the same request.',
+    ],
     'retrospettiva_esistente' => [
         'title' => 'Retrospective already open',
         'detail' => 'This sprint already has its retrospective, only one: the board is in the sprint\'s `retrospettiva_board_id`. Do not repeat the request.',
@@ -252,6 +256,10 @@ return [
     'acquisto_necessario' => [
         'title' => 'Purchase needed',
         'detail' => 'This calendar is reserved for people who have bought: the contact has no valid purchase of any of the items that open it. The method wrote nothing. Record the purchase in the CRM (crm.acquisti.crea) and try again.',
+    ],
+    'solo_su_invito' => [
+        'title' => 'By invitation only',
+        'detail' => 'This calendar can only be booked from a personal link that opens it: the link is missing, has expired, or the invitation it came from does not include this calendar. The method wrote nothing. Ask the professional for a new invitation (bookings.inviti.crea).',
     ],
     'rata_pagata' => [
         'title' => 'Installment already paid',

@@ -133,6 +133,10 @@ return [
         'title' => 'Sprint non chiuso',
         'detail' => 'Questa richiesta riguarda uno sprint chiuso (la retrospettiva, le schede non completate): questo è ancora pianificato o attivo. Chiudilo con `board.sprint.chiusura.crea` e poi ripeti la richiesta.',
     ],
+    'eccezione_esistente' => [
+        'title' => 'Eccezione già presente',
+        'detail' => 'Questa occorrenza del blocco ha già la sua eccezione, una sola: toglila con `bookings.blocchi.eccezioni.elimina` e ripeti con la nuova. Non ripetere la richiesta uguale.',
+    ],
     'retrospettiva_esistente' => [
         'title' => 'Retrospettiva già aperta',
         'detail' => 'Questo sprint ha già la sua retrospettiva, una sola: la board è in `retrospettiva_board_id` dello sprint. Non ripetere la richiesta.',
@@ -252,6 +256,10 @@ return [
     'acquisto_necessario' => [
         'title' => 'Serve un acquisto',
         'detail' => "Questo calendario è riservato a chi ha comprato: il contatto non ha un acquisto valido di una delle voci che lo aprono. Il metodo non ha scritto niente. Registra l'acquisto nel CRM (crm.acquisti.crea) e riprova.",
+    ],
+    'solo_su_invito' => [
+        'title' => 'Solo su invito',
+        'detail' => "Questo calendario si prenota solo da un link personale che lo apre: il link manca, è scaduto o l'invito da cui viene non comprende questo calendario. Il metodo non ha scritto niente. Chiedi al professionista un invito nuovo (bookings.inviti.crea).",
     ],
     'rata_pagata' => [
         'title' => 'Rata già pagata',
