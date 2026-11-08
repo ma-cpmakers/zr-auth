@@ -233,6 +233,8 @@ return [
     'ripetizione_fino_al_fuori' => '`fino_al` è un giorno dal giorno di `inizio` fino a :anni anni dopo (compresi), nel fuso orario della pagina.',
     'ripetizione_volte_oltre_il_limite' => 'Con questa frequenza la serie non arriva a `volte` occorrenze entro :anni anni dal giorno di `inizio` (un mese senza il giorno non conta): riduci `volte` o scegli una frequenza più fitta.',
     'festivita_aperta_doppia' => 'Questa data compare due volte nella lista.',
+    'rimando_nel_passato' => 'Un rimando finisce nel futuro: scegli un momento che non è ancora passato.',
+    'rimando_oltre_finestra' => 'Un rimando dura al più :giorni giorni da adesso.',
     'apertura_inizio_passato' => "Un'apertura comincia nel futuro: scegli un momento che non è ancora passato.",
     'apertura_oltre_finestra' => "Un'apertura sta dentro la finestra del calendario: al più :giorni giorni da adesso.",
     'apertura_inizio_coperto' => 'Questo momento è coperto da un blocco della pagina: toglilo prima con `bookings.blocchi.elimina` o scegli un altro momento.',

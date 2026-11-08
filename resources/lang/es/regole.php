@@ -232,6 +232,8 @@ return [
     'ripetizione_fino_al_fuori' => '`fino_al` es un día desde el día de `inizio` hasta :anni años después (incluidos), en la zona horaria de la página.',
     'ripetizione_volte_oltre_il_limite' => 'Con esta frecuencia la serie no llega a `volte` repeticiones dentro de :anni años desde el día de `inizio` (un mes sin ese día no cuenta): reduce `volte` o elige una frecuencia más frecuente.',
     'festivita_aperta_doppia' => 'Esta fecha aparece dos veces en la lista.',
+    'rimando_nel_passato' => 'Un aplazamiento termina en el futuro: elige un momento que aún no haya pasado.',
+    'rimando_oltre_finestra' => 'Un aplazamiento dura como máximo :giorni días desde ahora.',
     'apertura_inizio_passato' => 'Una apertura empieza en el futuro: elige un momento que aún no haya pasado.',
     'apertura_oltre_finestra' => 'Una apertura cae dentro de la ventana del calendario: como máximo :giorni días desde ahora.',
     'apertura_inizio_coperto' => 'Este momento está cubierto por un bloqueo de la página: quítalo antes con `bookings.blocchi.elimina` o elige otro momento.',

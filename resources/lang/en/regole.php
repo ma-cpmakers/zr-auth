@@ -232,6 +232,8 @@ return [
     'ripetizione_fino_al_fuori' => "`fino_al` is a day from the day of `inizio` up to :anni years later (included), in the page's time zone.",
     'ripetizione_volte_oltre_il_limite' => 'With this frequency the series does not reach `volte` occurrences within :anni years of the day of `inizio` (a month without the day does not count): lower `volte` or choose a denser frequency.',
     'festivita_aperta_doppia' => 'This date appears twice in the list.',
+    'rimando_nel_passato' => 'A snooze ends in the future: pick a moment that has not passed yet.',
+    'rimando_oltre_finestra' => 'A snooze lasts at most :giorni days from now.',
     'apertura_inizio_passato' => 'An opening starts in the future: pick a moment that has not passed yet.',
     'apertura_oltre_finestra' => "An opening falls inside the calendar's window: at most :giorni days from now.",
     'apertura_inizio_coperto' => 'This moment is covered by a block of the page: remove it first with `bookings.blocchi.elimina` or pick another moment.',
