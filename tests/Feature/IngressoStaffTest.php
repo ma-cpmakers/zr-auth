@@ -182,7 +182,9 @@ it('il codice dello staff lo scambia solo il client superadmin: un altro client 
 });
 
 it('Sessione::entraStaff vuole la forma dello staff e non scrive niente se manca un campo (A1.7)', function () {
-    expect(fn () => Sessione::entraStaff(['gettone' => 'zr_x', 'scade_il' => '2026-11-04T18:00:00.000Z', 'id' => 'a', 'ruolo' => 'superadmin']))->toThrow(InvalidArgumentException::class)
+    $incompleto = ['scade_il' => '2026-11-04T18:00:00.000Z', 'inattivita_scade_il' => '2026-11-04T10:00:00.000Z', 'id' => 'a', 'ruolo' => 'superadmin'];
+
+    expect(fn () => Sessione::entraStaff($incompleto))->toThrow(InvalidArgumentException::class)
         ->and(Sessione::staff())->toBeNull();
 });
 
