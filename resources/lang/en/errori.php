@@ -654,4 +654,24 @@ return [
         'title' => 'Invoice already issued',
         'detail' => 'The invoice for this installment or purchase has already been issued, or so has one of the other (a purchase and its installments are not invoiced twice). The number is on the installment or the purchase. The method wrote nothing.',
     ],
+    'slot_non_pieno' => [
+        'title' => 'The slot is not full',
+        'detail' => 'This slot still has free places: the waiting list is not needed, book directly with io.prenotazioni.crea. The method wrote nothing.',
+    ],
+    'lista_chiusa' => [
+        'title' => 'Waiting list closed',
+        'detail' => 'The waiting list for this slot is closed: it closes 2 hours before the start. The method wrote nothing.',
+    ],
+    'gia_in_lista' => [
+        'title' => 'Already on the waiting list',
+        'detail' => 'The person is already on the waiting list for this slot. The method wrote nothing: read the entry again with io.attese.mostra.',
+    ],
+    'offerta_scaduta' => [
+        'title' => 'Offer expired',
+        'detail' => 'The offer for the place has expired, or the place is no longer offered to this entry: it can no longer be confirmed. The method wrote nothing. If the list is still open, the entry keeps waiting for the next free place.',
+    ],
+    'nessun_destinatario' => [
+        'title' => 'No recipients',
+        'detail' => 'This slot has no confirmed booking: there is nobody to write to. The method wrote nothing and the send does not count towards the daily limit.',
+    ],
 ];

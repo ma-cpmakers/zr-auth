@@ -654,4 +654,24 @@ return [
         'title' => 'Factura ya emitida',
         'detail' => 'La factura de esta cuota o de esta compra ya se ha emitido, o se ha emitido la del otro (una compra y sus cuotas no se facturan dos veces). El número está en la cuota o en la compra. El método no ha escrito nada.',
     ],
+    'slot_non_pieno' => [
+        'title' => 'El horario no está completo',
+        'detail' => 'Este horario todavía tiene plazas libres: no hace falta la lista de espera, se reserva directamente con io.prenotazioni.crea. El método no ha escrito nada.',
+    ],
+    'lista_chiusa' => [
+        'title' => 'Lista de espera cerrada',
+        'detail' => 'La lista de espera de este horario está cerrada: se cierra 2 horas antes del inicio. El método no ha escrito nada.',
+    ],
+    'gia_in_lista' => [
+        'title' => 'Ya está en la lista de espera',
+        'detail' => 'La persona ya está en la lista de espera de este horario. El método no ha escrito nada: vuelve a leer la entrada con io.attese.mostra.',
+    ],
+    'offerta_scaduta' => [
+        'title' => 'Oferta caducada',
+        'detail' => 'La oferta de la plaza ha caducado, o la plaza ya no se ofrece a esta entrada: ya no se puede confirmar. El método no ha escrito nada. Si la lista sigue abierta, la entrada espera la próxima plaza libre.',
+    ],
+    'nessun_destinatario' => [
+        'title' => 'Sin destinatarios',
+        'detail' => 'Este horario no tiene ninguna reserva confirmada: no hay a quién escribir. El método no ha escrito nada y el envío no cuenta en el límite diario.',
+    ],
 ];
