@@ -66,3 +66,19 @@ it('elenca nell\'ordine di nascita, elimina toglie (204, poi 404) e lo stesso an
         ->and(alFinto('GET', "/v1/board/todo/elementi/{$todo}", null, $gettone)->json('data.promemoria_n'))->toBe(1)
         ->and(alFinto('POST', $percorso, ['anticipo' => 10], $gettone)->status())->toBe(201);
 });
+
+it('promemoria_anticipi (#3336): nelle righe dell\'elenco gli anticipi vivi in ordine crescente, [] senza promemoria, e il to-do intero non lo porta', function () {
+    [$gettone, $todo] = todoDaRicordareNelFinto();
+    $percorso = "/v1/board/todo/elementi/{$todo}/promemoria";
+    expect(alFinto('GET', '/v1/board/todo/elementi?vista=tutti', null, $gettone)->json('data.0.promemoria_anticipi'))->toBe([]);
+
+    alFinto('POST', $percorso, ['anticipo' => 1440], $gettone);
+    $dieci = alFinto('POST', $percorso, ['anticipo' => 10], $gettone)->json('data.id');
+    alFinto('POST', $percorso, ['anticipo' => 0], $gettone);
+
+    expect(alFinto('GET', '/v1/board/todo/elementi?vista=tutti', null, $gettone)->json('data.0.promemoria_anticipi'))->toBe([0, 10, 1440])
+        ->and(alFinto('GET', "/v1/board/todo/elementi/{$todo}", null, $gettone)->json('data'))->not->toHaveKey('promemoria_anticipi');
+
+    alFinto('DELETE', "{$percorso}/{$dieci}", null, $gettone);
+    expect(alFinto('GET', '/v1/board/todo/elementi?vista=tutti', null, $gettone)->json('data.0.promemoria_anticipi'))->toBe([0, 1440]);
+});

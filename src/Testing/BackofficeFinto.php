@@ -1044,7 +1044,7 @@ final class BackofficeFinto
      * @param  array<string, mixed>|null  $autore  la persona che ha fatto, di persona(): `autore` dice il suo nome di oggi finché è membra del workspace, poi `null`; senza, `null` (lo ha fatto il sistema)
      * @param  string|null  $risorsaNome  il nome della cosa a cui si riferisce il soggetto; senza, `risorsa_nome` è `null`
      * @param  array{id: string, nome: string}|null  $board  la board di ciò che sta dentro una board (scheda, lista, etichetta, vista); senza, `null`
-     * @return array{id: string, workspace_id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, quando: null, ultima_azione_il: string, azioni: int, autore: ?array{nome: string}, risorsa_nome: ?string, board: ?array{id: string, nome: string}, per_me: null, spazio_cliente: ?bool}
+     * @return array{id: string, workspace_id: string, tipo: string, app: ?string, soggetto: string, dati: array<string, mixed>, letta_il: ?string, creata_il: string, quando: null, ultima_azione_il: string, azioni: int, autore: ?array{nome: string}, risorsa_nome: ?string, workspace_nome: ?string, board: ?array{id: string, nome: string}, per_me: null, spazio_cliente: ?bool}
      */
     public function notifica(array $workspace, array $persona, string $tipo, ?string $app = null, ?CarbonInterface $creataIl = null, ?CarbonInterface $lettaIl = null, array $dati = [], ?string $soggetto = null, ?array $autore = null, ?string $risorsaNome = null, ?array $board = null, int $azioni = 1, ?CarbonInterface $ultimaAzioneIl = null): array
     {
@@ -4471,6 +4471,8 @@ final class BackofficeFinto
             'azioni' => $notifica['azioni'],
             'autore' => $notifica['autore'] !== null && isset($this->membri[$notifica['workspace']][$notifica['autore']]) ? ['nome' => $this->persone[$notifica['autore']]['nome']] : null,
             'risorsa_nome' => $notifica['risorsa_nome'],
+            // Il nome di oggi dell'azienda che scrive alla persona, solo per una notifica da cliente (#3399); le altre null.
+            'workspace_nome' => $daCliente ? ($this->workspace[$notifica['workspace']]['nome'] ?? null) : null,
             'board' => $notifica['board'],
             'per_me' => null,
             // Una notifica da cliente dice se la persona ha uno spazio da aprire: cliente del workspace con lo spazio acceso e non nascosto (#3323); le altre null.
