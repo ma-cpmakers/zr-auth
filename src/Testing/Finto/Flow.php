@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 
 /**
- * Finanze (app `flow`, tappa 1, gruppo 1, #3455-#3472) nel backoffice finto: `flow.conti.*`, `flow.conti.importazioni.*`, `flow.categorie.elenca`, `flow.movimenti.*`, `flow.regole.*` e `flow.fisse.*` (#3475-#3477), con le
+ * Finanze (app `flow`, tappa 1, gruppo 1, #3455-#3472) nel backoffice finto: `flow.conti.*`, `flow.conti.importazioni.*`, `flow.categorie.elenca`, `flow.movimenti.*`, `flow.regole.*`, `flow.fisse.*` (#3475-#3477) e `flow.bilancio.*` (#3478-#3479), con le
  * regole, i pointer e l'ordine di `ContiController`, `ImportazioniController`, `MovimentiController`, `RegoleController` e `FisseController` del backoffice. Metodi dell'app `flow`: 403 `app_non_attiva` se spenta, prima di
  * cercare la risorsa; tutti e tre i ruoli, filtrati dalla visibilità del conto. Un conto `comune` lo vede ogni membro, uno `personale` solo il suo titolare, e per ogni altro è 404 `non_trovato`; lo
  * cambia e lo elimina solo il titolare (403 `permesso_negato` per un conto comune di un altro). Un movimento è visibile quanto il suo conto. Una regola `comune` la vede ogni membro, una `personale` solo
@@ -48,8 +48,8 @@ trait Flow
 
     private const FLOW_DESCRIZIONE = 500;
 
-    /** @var array{conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>} */
-    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => []];
+    /** @var array{conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>, correzioni: array<string, int|null>} */
+    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => []];
 
     /**
      * Apre Finanze nel workspace, come l'anteprima del backoffice (`ZR_FLOW_ANTEPRIMA`) e app.modifica: il catalogo del finto la dà «in_arrivo» (app.modifica la rifiuta e apps.elenca la mostra così), ma i metodi
@@ -1178,5 +1178,188 @@ trait Flow
             'creata_da' => ['id' => $fissa['creata_da'], 'nome' => $this->nomeFlow($fissa['workspace'], $fissa['creata_da'])],
             'creata_il' => self::iso($fissa['creata_il']),
         ];
+    }
+
+    // ———————————————————————————————————————— Il conto del mese
+
+    /**
+     * flow.bilancio.mostra (BilancioController::mostra, App\Flow\Bilancio): il conto del mese della vista (`visibilita`, obbligatoria; ogni altro parametro è 422 `campo_estraneo`). La comune usa i soli conti e le
+     * sole spese fisse comuni, la personale i soli personali di chi chiama. Il mese in corso è quello di Roma. Le medie vogliono tre mesi interi di storico (null con meno); esclusi e trasferimenti non contano mai.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraBilancioFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $this->testi->validaQuery(self::query($richiesta), ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow(self::query($richiesta), ['visibilita']));
+        $vista = (string) self::query($richiesta)['visibilita'];
+        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+
+        $date = array_column($this->movimentiBilancioFlow($chi, $vista), 'data');
+        $mesi = $date === [] ? 0 : max(0, ($oggi->year * 12 + $oggi->month) - ((int) substr(min($date), 0, 4) * 12 + (int) substr(min($date), 5, 2)));
+        $medie = $mesi >= 3 ? $this->medieBilancioFlow($chi, $vista, $oggi) : null;
+        $entrate = $this->entrateAlMeseFlow($chi, $vista, $mesi, $medie['entrate'] ?? null);
+
+        $fisse = array_values(array_filter($this->flow['fisse'], fn (array $fissa) => ! $fissa['archiviato'] && $this->fissaDellaVistaFlow($fissa, $chi, $vista)));
+        $mensili = array_sum(array_column(array_filter($fisse, fn (array $fissa) => $fissa['frequenza_mesi'] === 1), 'importo'));
+        $daConti = $medie === null ? null : array_sum($medie['uscite']);
+        $totale = $daConti === null ? null : $daConti + $mensili;
+        $daParte = $this->mettiDaParteFlow($fisse, $oggi);
+        $conti = array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista));
+
+        return [200, ['data' => [
+            'visibilita' => $vista,
+            'movimenti_fino_al' => $date === [] ? null : max($date),
+            'mesi_di_storico' => $mesi,
+            'nel_conto' => [
+                'importo' => (int) array_sum(array_filter(array_column($conti, 'saldo'), fn (mixed $saldo) => $saldo !== null)),
+                'conti_senza_saldo' => count(array_filter($conti, fn (array $conto) => $conto['saldo'] === null)),
+            ],
+            'entrate_al_mese' => $entrate,
+            'spese_ogni_mese' => ['da_conti' => $daConti, 'altre_spese_fisse' => $mensili, 'totale' => $totale, 'mesi' => min(3, $mesi)],
+            'metti_da_parte' => $daParte,
+            'ti_restano' => $entrate['importo'] === null || $totale === null ? null : $entrate['importo'] - $totale - $daParte['importo'],
+        ]]];
+    }
+
+    /**
+     * flow.bilancio.entrate.modifica (BilancioController::entrateModifica): la correzione di «Entri al mese» della vista, o `null` per tornare alle rilevate. Una per workspace nella comune, una per persona nella
+     * personale. 200 con `entrate_al_mese`. Il freno si conta prima del corpo.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function correggiEntrateFlow(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $this->frena('freni:flow.bilancio.entrate.modifica:'.$chi['persona'], self::FRENI['flow_bilancio_persona'], self::ORA);
+        $campi = $this->testi->validaCorpo($corpo, [
+            'visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)],
+            'importo' => ['bail', 'present', 'nullable', 'integer:strict', 'between:0,'.self::FLOW_IMPORTO],
+        ]);
+
+        $this->flow['correzioni'][$this->chiaveCorrezioneFlow($chi, $campi['visibilita'])] = $campi['importo'] === null ? null : (int) $campi['importo'];
+        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+        $date = array_column($this->movimentiBilancioFlow($chi, $campi['visibilita']), 'data');
+        $mesi = $date === [] ? 0 : max(0, ($oggi->year * 12 + $oggi->month) - ((int) substr(min($date), 0, 4) * 12 + (int) substr(min($date), 5, 2)));
+
+        return [200, ['data' => $this->entrateAlMeseFlow($chi, $campi['visibilita'], $mesi, $mesi >= 3 ? $this->medieBilancioFlow($chi, $campi['visibilita'], $oggi)['entrate'] : null)]];
+    }
+
+    /**
+     * La correzione della vista è una per workspace nella comune e una per persona nella personale.
+     *
+     * @param  array{persona: string, workspace: string}  $chi
+     */
+    private function chiaveCorrezioneFlow(array $chi, string $vista): string
+    {
+        return $chi['workspace'].'|'.$vista.'|'.($vista === 'personale' ? $chi['persona'] : '');
+    }
+
+    /**
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return array{importo: int|null, origine: string, mesi: int}
+     */
+    private function entrateAlMeseFlow(array $chi, string $vista, int $mesiDiStorico, ?int $rilevate): array
+    {
+        $corretta = $this->flow['correzioni'][$this->chiaveCorrezioneFlow($chi, $vista)] ?? null;
+        $mesi = min(3, $mesiDiStorico);
+
+        return $corretta !== null ? ['importo' => $corretta, 'origine' => 'corrette', 'mesi' => $mesi] : ['importo' => $rilevate, 'origine' => 'rilevate', 'mesi' => $mesi];
+    }
+
+    /**
+     * @param  array<string, mixed>  $conto
+     * @param  array{persona: string, workspace: string}  $chi
+     */
+    private function contoDellaVistaFlow(array $conto, array $chi, string $vista): bool
+    {
+        return $conto['workspace'] === $chi['workspace'] && ! $conto['archiviato'] && $conto['visibilita'] === $vista && ($vista === 'comune' || $conto['titolare'] === $chi['persona']);
+    }
+
+    /**
+     * I movimenti non archiviati dei conti della vista (Storico::movimenti).
+     *
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return list<array<string, mixed>>
+     */
+    private function movimentiBilancioFlow(array $chi, string $vista): array
+    {
+        $conti = array_keys(array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista)));
+
+        return array_values(array_filter($this->flow['movimenti'], fn (array $movimento) => ! $movimento['archiviato'] && in_array($movimento['conto'], $conti, true)));
+    }
+
+    /**
+     * La media mensile dei tre mesi interi che precedono il mese in corso (Storico::medie): le entrate in tutto e le uscite per categoria. Esclusi e trasferimenti fuori; il segno divide entrate e uscite; la media
+     * è arrotondata al centesimo più vicino, mezzo per eccesso.
+     *
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return array{entrate: int, uscite: array<string, int>}
+     */
+    private function medieBilancioFlow(array $chi, string $vista, CarbonImmutable $oggi): array
+    {
+        $fine = $oggi->startOfMonth()->format('Y-m-d');
+        $inizio = $oggi->startOfMonth()->subMonthsNoOverflow(3)->format('Y-m-d');
+        $trasferimenti = array_column(array_filter(FlowCategorie::TUTTE, fn (array $categoria) => $categoria['tipo'] === 'trasferimento'), 'id');
+        $entrate = 0;
+        $uscite = [];
+
+        foreach ($this->movimentiBilancioFlow($chi, $vista) as $movimento) {
+            if ($movimento['escluso'] || $movimento['data'] < $inizio || $movimento['data'] >= $fine || in_array($movimento['categoria_id'], $trasferimenti, true)) {
+                continue;
+            }
+
+            if ($movimento['importo'] > 0) {
+                $entrate += $movimento['importo'];
+            } elseif ($movimento['importo'] < 0) {
+                $uscite[(string) $movimento['categoria_id']] = ($uscite[(string) $movimento['categoria_id']] ?? 0) - $movimento['importo'];
+            }
+        }
+
+        $media = fn (int $totale) => intdiv(2 * $totale + 3, 6);
+
+        return ['entrate' => $media($entrate), 'uscite' => array_filter(array_map($media, $uscite), fn (int $importo) => $importo > 0)];
+    }
+
+    /**
+     * Quanto mettere da parte (Bilancio::mettiDaParte): il massimo, sulle scadenze dei prossimi dodici mesi (da oggi compreso a fra dodici mesi escluso) delle spese non mensili in ordine di data, del cumulato diviso i
+     * mesi di calendario fino alla scadenza (almeno 1), per eccesso a 5 €. Una `prima_data` passata si porta avanti di `frequenza_mesi`.
+     *
+     * @param  list<array<string, mixed>>  $fisse
+     * @return array{importo: int, scadenze: list<array<string, mixed>>, totale_scadenze: int}
+     */
+    private function mettiDaParteFlow(array $fisse, CarbonImmutable $oggi): array
+    {
+        $fine = $oggi->addMonthsNoOverflow(12);
+        $scadenze = [];
+
+        foreach ($fisse as $fissa) {
+            if ($fissa['frequenza_mesi'] === 1 || $fissa['prima_data'] === null) {
+                continue;
+            }
+
+            $prima = CarbonImmutable::parse($fissa['prima_data'], 'Europe/Rome')->startOfDay();
+
+            for ($passo = 0; ($data = $prima->addMonthsNoOverflow($passo * $fissa['frequenza_mesi'])) < $fine; $passo++) {
+                if ($data >= $oggi) {
+                    $scadenze[] = ['fissa' => $fissa, 'data' => $data];
+                }
+            }
+        }
+
+        usort($scadenze, fn (array $a, array $b) => [$a['data'], $a['fissa']['nome'], $a['fissa']['id']] <=> [$b['data'], $b['fissa']['nome'], $b['fissa']['id']]);
+        $cumulato = 0;
+        $massimo = 0;
+        $elenco = [];
+
+        foreach ($scadenze as ['fissa' => $fissa, 'data' => $data]) {
+            $mesi = max(1, ($data->year * 12 + $data->month) - ($oggi->year * 12 + $oggi->month));
+            $cumulato += $fissa['importo'];
+            $massimo = max($massimo, intdiv($cumulato + $mesi - 1, $mesi));
+            $elenco[] = ['fissa_id' => $fissa['id'], 'nome' => $fissa['nome'], 'data' => $data->format('Y-m-d'), 'importo' => $fissa['importo'], 'mesi' => $mesi];
+        }
+
+        return ['importo' => intdiv($massimo + 499, 500) * 500, 'scadenze' => $elenco, 'totale_scadenze' => $cumulato];
     }
 }

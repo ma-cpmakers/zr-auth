@@ -3,7 +3,7 @@
 use Illuminate\Support\Str;
 use Zeiras\Auth\Testing\BackofficeFinto;
 
-// #3455-#3477 (Finanze, tappa 1, gruppi 1 e D): conti, caricamenti, categorie, movimenti, regole e spese fisse nel finto. Qui ciò che un frontend vede dal suo lato; che le risposte e gli errori siano quelli del backoffice lo prova
+// #3455-#3479 (Finanze, tappa 1, gruppi 1 e D): conti, caricamenti, categorie, movimenti, regole, spese fisse e conto del mese nel finto. Qui ciò che un frontend vede dal suo lato; che le risposte e gli errori siano quelli del backoffice lo prova
 // il suo FintoTest.
 
 /**
@@ -44,12 +44,13 @@ function contoDelFinto(string $gettone, string $visibilita = 'comune', string $n
 it('l\'app spenta chiude ogni metodo flow.* con 403 app_non_attiva, e un ospite non entra (FL.0)', function () {
     [, $gettoni] = studioConFinanze(false);
 
-    foreach ([['GET', '/v1/flow/conti'], ['GET', '/v1/flow/categorie'], ['GET', '/v1/flow/regole'], ['GET', '/v1/flow/fisse?visibilita=comune'], ['GET', '/v1/flow/movimenti?visibilita=comune']] as [$metodo, $percorso]) {
+    foreach ([['GET', '/v1/flow/conti'], ['GET', '/v1/flow/categorie'], ['GET', '/v1/flow/regole'], ['GET', '/v1/flow/fisse?visibilita=comune'], ['GET', '/v1/flow/bilancio?visibilita=comune'], ['GET', '/v1/flow/movimenti?visibilita=comune']] as [$metodo, $percorso]) {
         $risposta = alFinto($metodo, $percorso, null, $gettoni['anna']);
         expect($risposta->status())->toBe(403, $percorso)->and($risposta->json('codice'))->toBe('app_non_attiva');
     }
 
-    expect(alFinto('GET', '/v1/flow/conti')->status())->toBe(401);
+    expect(alFinto('PATCH', '/v1/flow/bilancio/entrate', ['visibilita' => 'comune', 'importo' => 1], $gettoni['anna'])->json('codice'))->toBe('app_non_attiva')
+        ->and(alFinto('GET', '/v1/flow/conti')->status())->toBe(401);
 });
 
 it('un conto nasce 201 con Location ed ETag, ne è titolare chi chiama, e non si crea oltre il tetto (FL.1)', function () {
@@ -428,4 +429,70 @@ it('le spese fisse: la vista è obbligatoria, la personale altrui non si vede n�
 
     $oltre = alFinto('POST', '/v1/flow/fisse', $fissa(['nome' => 'una di troppo']), $gettoni['anna']);
     expect($oltre->status())->toBe(409)->and($oltre->json('codice'))->toBe('limite_raggiunto')->and($oltre->json('limite'))->toBe(100);
+});
+
+it('il conto del mese: le medie dei tre mesi interi, le fisse mensili, quanto mettere da parte, e la correzione delle entrate è una per vista (FL.19)', function () {
+    [, $gettoni] = studioConFinanze();
+    $oggi = Carbon\CarbonImmutable::now('Europe/Rome')->startOfDay();
+    $conto = alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Uno', 'nome' => 'Casa', 'tipo' => 'corrente', 'visibilita' => 'comune', 'saldo' => 100000], $gettoni['anna'])->json('data');
+    $luce = Zeiras\Auth\Testing\Finto\FlowCategorie::id()[array_search('casa.luce', array_column(Zeiras\Auth\Testing\Finto\FlowCategorie::TUTTE, 'chiave'), true)];
+
+    foreach ([3, 2, 1] as $indietro) {
+        $giorno = $oggi->startOfMonth()->subMonthsNoOverflow($indietro)->addDays(4)->format('Y-m-d');
+        expect(alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => $giorno, 'importo' => 300000, 'descrizione' => 'Stipendio'], $gettoni['anna'])->status())->toBe(201)
+            ->and(alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => $giorno, 'importo' => -10000, 'descrizione' => 'Luce', 'categoria_id' => $luce], $gettoni['anna'])->status())->toBe(201);
+    }
+
+    alFinto('POST', '/v1/flow/fisse', ['visibilita' => 'comune', 'nome' => 'Nuoto', 'importo' => 6000, 'frequenza_mesi' => 1], $gettoni['anna']);
+    alFinto('POST', '/v1/flow/fisse', ['visibilita' => 'comune', 'nome' => 'Assicurazione', 'importo' => 48000, 'frequenza_mesi' => 12, 'prima_data' => $oggi->addMonthsNoOverflow(4)->startOfMonth()->addDays(10)->format('Y-m-d')], $gettoni['bruno']);
+    alFinto('POST', '/v1/flow/fisse', ['visibilita' => 'personale', 'nome' => 'Palestra', 'importo' => 999900, 'frequenza_mesi' => 1], $gettoni['carla']);
+
+    $comune = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['bruno']);
+    $dati = $comune->json('data');
+
+    expect($comune->status())->toBe(200, $comune->body())
+        ->and(array_keys($dati))->toBe(['visibilita', 'movimenti_fino_al', 'mesi_di_storico', 'nel_conto', 'entrate_al_mese', 'spese_ogni_mese', 'metti_da_parte', 'ti_restano'])
+        ->and($dati['mesi_di_storico'])->toBe(3)
+        ->and($dati['nel_conto'])->toBe(['importo' => 100000, 'conti_senza_saldo' => 0])
+        ->and($dati['entrate_al_mese'])->toBe(['importo' => 300000, 'origine' => 'rilevate', 'mesi' => 3])
+        ->and($dati['spese_ogni_mese'])->toBe(['da_conti' => 10000, 'altre_spese_fisse' => 6000, 'totale' => 16000, 'mesi' => 3])
+        ->and($dati['metti_da_parte']['importo'])->toBe(12000)->and($dati['metti_da_parte']['totale_scadenze'])->toBe(48000)
+        ->and($dati['metti_da_parte']['scadenze'][0])->toMatchArray(['nome' => 'Assicurazione', 'importo' => 48000, 'mesi' => 4])
+        ->and($dati['ti_restano'])->toBe(300000 - 16000 - 12000);
+
+    // La personale di Carla non è quella di Anna, e la sua vista non vede i conti comuni.
+    $sua = alFinto('GET', '/v1/flow/bilancio?visibilita=personale', null, $gettoni['carla'])->json('data');
+    $dellAltra = alFinto('GET', '/v1/flow/bilancio?visibilita=personale', null, $gettoni['anna'])->json('data');
+    expect($sua['spese_ogni_mese']['altre_spese_fisse'])->toBe(999900)->and($sua['mesi_di_storico'])->toBe(0)->and($sua['ti_restano'])->toBeNull()
+        ->and($dellAltra['spese_ogni_mese']['altre_spese_fisse'])->toBe(0);
+
+    // La correzione: la comune vale per tutti, la personale è di chi la scrive; null torna alle rilevate; zero è una correzione vera.
+    $corretta = alFinto('PATCH', '/v1/flow/bilancio/entrate', ['visibilita' => 'comune', 'importo' => 250000], $gettoni['carla']);
+    alFinto('PATCH', '/v1/flow/bilancio/entrate', ['visibilita' => 'personale', 'importo' => 0], $gettoni['carla']);
+
+    expect($corretta->status())->toBe(200)->and($corretta->json('data'))->toBe(['importo' => 250000, 'origine' => 'corrette', 'mesi' => 3])
+        ->and(alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.entrate_al_mese.importo'))->toBe(250000)
+        ->and(alFinto('GET', '/v1/flow/bilancio?visibilita=personale', null, $gettoni['carla'])->json('data.entrate_al_mese'))->toBe(['importo' => 0, 'origine' => 'corrette', 'mesi' => 0])
+        ->and(alFinto('GET', '/v1/flow/bilancio?visibilita=personale', null, $gettoni['anna'])->json('data.entrate_al_mese.origine'))->toBe('rilevate')
+        ->and(alFinto('PATCH', '/v1/flow/bilancio/entrate', ['visibilita' => 'comune', 'importo' => null], $gettoni['anna'])->json('data'))->toBe(['importo' => 300000, 'origine' => 'rilevate', 'mesi' => 3]);
+
+    // Gli errori: ogni valore sbagliato sul suo pointer.
+    $errore = fn (array $corpo) => alFinto('PATCH', '/v1/flow/bilancio/entrate', $corpo, $gettoni['anna'])->json('errors.0.pointer');
+    expect(alFinto('GET', '/v1/flow/bilancio', null, $gettoni['anna'])->json('errors.0'))->toMatchArray(['parameter' => 'visibilita', 'regola' => 'obbligatorio'])
+        ->and(alFinto('GET', '/v1/flow/bilancio?visibilita=comune&mese=2026-10', null, $gettoni['anna'])->json('errors.0.regola'))->toBe('campo_estraneo')
+        ->and($errore(['importo' => 1]))->toBe('#/visibilita')->and($errore(['visibilita' => 'comune']))->toBe('#/importo')
+        ->and($errore(['visibilita' => 'comune', 'importo' => -1]))->toBe('#/importo')->and($errore(['visibilita' => 'comune', 'importo' => '100']))->toBe('#/importo')
+        ->and($errore(['visibilita' => 'comune', 'importo' => 1, 'origine' => 'corrette']))->toBe('#/origine');
+});
+
+it('il conto del mese con meno di tre mesi di storico non ha medie (FL.19)', function () {
+    [, $gettoni] = studioConFinanze();
+    $oggi = Carbon\CarbonImmutable::now('Europe/Rome')->startOfDay();
+    $conto = alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Uno', 'nome' => 'Casa', 'tipo' => 'corrente', 'visibilita' => 'comune'], $gettoni['anna'])->json('data');
+    alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => $oggi->startOfMonth()->subMonthsNoOverflow(2)->addDays(4)->format('Y-m-d'), 'importo' => 100000, 'descrizione' => 'Stipendio'], $gettoni['anna']);
+
+    $dati = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data');
+    expect($dati['mesi_di_storico'])->toBe(2)->and($dati['entrate_al_mese'])->toBe(['importo' => null, 'origine' => 'rilevate', 'mesi' => 2])
+        ->and($dati['spese_ogni_mese'])->toBe(['da_conti' => null, 'altre_spese_fisse' => 0, 'totale' => null, 'mesi' => 2])
+        ->and($dati['nel_conto'])->toBe(['importo' => 0, 'conti_senza_saldo' => 1])->and($dati['ti_restano'])->toBeNull();
 });
