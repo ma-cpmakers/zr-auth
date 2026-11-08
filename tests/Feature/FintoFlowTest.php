@@ -378,6 +378,8 @@ it('Idempotency-Key ripete la risposta di conti, movimenti e regole, ma non la p
     expect($uno->status())->toBe(201)
         ->and($due->json('data.id'))->toBe($uno->json('data.id'))
         ->and($due->header('Location'))->toBe($uno->header('Location'))
+        ->and($uno->header('ETag'))->toStartWith('"')
+        ->and($due->header('ETag'))->toBe('')
         ->and($altro->json('codice'))->toBe('chiave_idempotenza_riusata')
         ->and(alFinto('GET', '/v1/flow/conti', null, $gettoni['anna'])->json('data'))->toHaveCount(1);
 

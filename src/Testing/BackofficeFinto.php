@@ -6685,7 +6685,8 @@ final class BackofficeFinto
                 throw new Problema('chiave_idempotenza_riusata');
             }
 
-            return [$ricordata['stato'], $ricordata['dati'], $ricordata['header']];
+            // Il backoffice ripete di una creazione di Finanze il corpo e la Location, non l'ETag (Idempotenza::ricordata): chi lo vuole rilegge la risorsa.
+            return [$ricordata['stato'], $ricordata['dati'], str_starts_with($operazione, 'flow.') ? array_diff_key($ricordata['header'], ['ETag' => true]) : $ricordata['header']];
         }
 
         $esito = $esegue();
