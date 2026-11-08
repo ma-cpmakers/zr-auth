@@ -117,6 +117,7 @@ final class Problema extends RuntimeException
         'ultimo_workspace' => 409,
         'workspace_in_eliminazione' => 409,
         'proprieta_da_trasferire' => 409,
+        'indirizzo_gia_preso' => 409,
         'unico_amministratore' => 409,
         'staff_gia_presente' => 409,
         'ultimo_superadmin' => 409,

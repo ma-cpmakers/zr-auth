@@ -1145,6 +1145,11 @@ trait Todo
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => Regola::NON_TROVATO, 'pointer' => "#/{$campo}"]]);
         }
 
+        // Un ospite (#3366) è in sola visualizzazione: non è mai assegnatario.
+        if ($this->membri[$chi['workspace']][$id] === 'ospite') {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.ospite_non_assegnabile'), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => "#/{$campo}"]]);
+        }
+
         return $id;
     }
 

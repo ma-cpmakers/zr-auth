@@ -138,6 +138,9 @@ final class BackofficeFinto
 
     private const CLIENT_DI_SISTEMA = ['monitor', 'uat'];
 
+    /** Il solo client che scambia il codice di `ingressi.staff.crea` (#3445): nemmeno un client di sistema. */
+    private const CLIENT_DELLO_STAFF = 'superadmin';
+
     /** La password che il finto dà per trapelata, al posto di Have I Been Pwned: utenti.crea la rifiuta. */
     public const PASSWORD_TRAPELATA = 'una password trapelata';
 
@@ -211,7 +214,11 @@ final class BackofficeFinto
         ['POST', '#^/v1/staff/workspace/ricerca$#', 'staff.workspace.ricerca.crea'],
         ['GET', '#^/v1/staff/workspace/([^/]+)/app$#', 'staff.workspace.app.elenca'],
         ['PATCH', '#^/v1/staff/workspace/([^/]+)/app/([^/]+)$#', 'staff.workspace.app.modifica'],
+        ['GET', '#^/v1/staff/workspace/([^/]+)/membri$#', 'staff.workspace.membri.elenca'],
+        ['PATCH', '#^/v1/staff/workspace/([^/]+)/membri/([^/]+)$#', 'staff.workspace.membri.modifica'],
+        ['DELETE', '#^/v1/staff/workspace/([^/]+)/membri/([^/]+)$#', 'staff.workspace.membri.elimina'],
         ['GET', '#^/v1/staff/workspace/([^/]+)$#', 'staff.workspace.mostra'],
+        ['PATCH', '#^/v1/staff/workspace/([^/]+)$#', 'staff.workspace.modifica'],
         ['GET', '#^/v1/staff/utenti$#', 'staff.utenti.elenca'],
         ['POST', '#^/v1/staff/utenti/ricerca$#', 'staff.utenti.ricerca.crea'],
         ['POST', '#^/v1/staff/utenti/ricerca/esportazioni$#', 'staff.utenti.ricerca.esportazioni.crea'],
@@ -323,6 +330,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/gettoni$#', 'gettoni.crea'],
         ['POST', '#^/v1/ingressi$#', 'ingressi.crea'],
         ['POST', '#^/v1/ingressi/clienti$#', 'ingressi.clienti.crea'],
+        ['POST', '#^/v1/ingressi/staff$#', 'ingressi.staff.crea'],
         ['POST', '#^/v1/ingressi/scambio$#', 'ingressi.scambio.crea'],
         ['POST', '#^/v1/inviti/accettazione$#', 'inviti.accettazione.crea'],
         ['POST', '#^/v1/inviti/verifica$#', 'inviti.verifica.crea'],
@@ -567,7 +575,14 @@ final class BackofficeFinto
 
     private const ERRORI_AL_GIORNO = 10;
 
-    private const RUOLI = ['proprietario', 'amministratore', 'membro'];
+    /** I ruoli dal più alto al più basso: l'`ospite` (#3366) è solo visualizzazione. */
+    private const RUOLI = ['proprietario', 'amministratore', 'membro', 'ospite'];
+
+    /** I ruoli che un amministratore dà e tocca: mai un amministratore né il proprietario. */
+    private const DELL_AMMINISTRATORE = ['membro', 'ospite'];
+
+    /** I moduli che l'ospite legge, come `zeiras.ospite_legge` del backoffice: il primo segmento del nome del metodo. Solo in GET, nei metodi senza ruoli scritti. */
+    private const OSPITE_LEGGE = ['board'];
 
     /** Quanti giorni vale un invito (Invito::GIORNI). */
     private const GIORNI_DELL_INVITO = 7;
@@ -1170,7 +1185,7 @@ final class BackofficeFinto
     }
 
     /**
-     * Mette una persona in un workspace, col ruolo: proprietario, amministratore o membro.
+     * Mette una persona in un workspace, col ruolo: proprietario, amministratore, membro od ospite.
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      * @param  array<string, mixed>  $persona  una persona di persona()
@@ -1296,8 +1311,9 @@ final class BackofficeFinto
      */
     public function ritorno(string $app, string $indirizzo): self
     {
-        if (! isset(self::CATALOGO[$app])) {
-            throw new InvalidArgumentException("L'app «{$app}» non c'è nel catalogo: ".implode(', ', array_keys(self::CATALOGO)).'.');
+        // `admin` non è un'app del catalogo dei workspace ma ha il suo ritorno (`catalogo.ritorno.admin`, #3445): ingressi.staff.crea lo dà.
+        if (! isset(self::CATALOGO[$app]) && $app !== 'admin') {
+            throw new InvalidArgumentException("L'app «{$app}» non c'è nel catalogo: ".implode(', ', [...array_keys(self::CATALOGO), 'admin']).'.');
         }
 
         $this->ritorni[$app] = $indirizzo;
@@ -1429,7 +1445,7 @@ final class BackofficeFinto
         $percorso = (string) parse_url($richiesta->url(), PHP_URL_PATH);
         $attesa = hash_hmac('sha256', "zr1\n{$cliente}\n{$istante}\n".strtoupper($richiesta->method())."\n{$percorso}\n{$ip}", self::SEGRETO_DEL_CLIENTE);
 
-        if (! in_array($cliente, [self::CLIENTE, 'home', 'board', 'crm', 'bookings', ...self::CLIENT_DI_SISTEMA], true)
+        if (! in_array($cliente, [self::CLIENTE, 'home', 'board', 'crm', 'bookings', self::CLIENT_DELLO_STAFF, ...self::CLIENT_DI_SISTEMA], true)
             || $ip === null || filter_var($ip, FILTER_VALIDATE_IP) === false
             || $istante === null || preg_match('/^\d{1,12}$/', $istante) !== 1 || abs(now()->timestamp - (int) $istante) > 30
             || $firma === null || ! hash_equals($attesa, $firma)) {
@@ -1532,8 +1548,12 @@ final class BackofficeFinto
                 'staff.workspace.elenca' => $this->elencaIWorkspaceDelloStaff($richiesta),
                 'staff.workspace.ricerca.crea' => $this->cercaIWorkspaceDelloStaff($richiesta, $corpo),
                 'staff.workspace.app.elenca' => $this->elencaLeAppDelWorkspaceDelloStaff($richiesta, $parametri[0]),
+                'staff.workspace.membri.elenca' => $this->elencaIMembriDelWorkspaceDelloStaff($richiesta, $parametri[0]),
+                'staff.workspace.membri.modifica' => $this->modificaIlRuoloDiUnMembroDelloStaff($richiesta, $corpo, $parametri[0], $parametri[1]),
+                'staff.workspace.membri.elimina' => $this->eliminaUnMembroDelloStaff($richiesta, $parametri[0], $parametri[1]),
                 'staff.workspace.app.modifica' => $this->modificaLeAppDelWorkspaceDelloStaff($richiesta, $corpo, $parametri[0], $parametri[1]),
                 'staff.workspace.mostra' => $this->mostraUnWorkspaceDelloStaff($richiesta, $parametri[0]),
+                'staff.workspace.modifica' => $this->modificaUnWorkspaceDelloStaff($richiesta, $corpo, $parametri[0]),
                 'staff.utenti.elenca' => $this->elencaGliUtentiDelloStaff($richiesta),
                 'staff.utenti.ricerca.crea' => $this->cercaGliUtentiDelloStaff($richiesta, $corpo),
                 'staff.utenti.ricerca.esportazioni.crea' => $this->esportaGliUtentiDelloStaff($richiesta, $corpo),
@@ -1642,6 +1662,7 @@ final class BackofficeFinto
                 'gettoni.crea' => $this->creaGettone($richiesta, $corpo),
                 'ingressi.crea' => $this->creaIngresso($richiesta, $corpo),
                 'ingressi.clienti.crea' => $this->creaIngressoCliente($richiesta, $corpo),
+                'ingressi.staff.crea' => $this->creaIngressoStaff($richiesta, $corpo),
                 'ingressi.scambio.crea' => $this->scambiaIngresso($corpo),
                 'inviti.accettazione.crea' => $this->accettaInvito($richiesta, $corpo),
                 'link.accettazione.crea' => $this->accettaLink($richiesta, $corpo),
@@ -5202,7 +5223,7 @@ final class BackofficeFinto
     private function mostraAzienda(Request $richiesta, string $azienda): array
     {
         $ruoli = $this->ruoliNellAzienda($this->autentica($richiesta)['persona'], $azienda);
-        $piuAlto = collect(['proprietario', 'amministratore', 'membro'])->first(fn (string $ruolo) => in_array($ruolo, $ruoli, true));
+        $piuAlto = collect(self::RUOLI)->first(fn (string $ruolo) => in_array($ruolo, $ruoli, true));
 
         return [200, ['data' => [...$this->voceAzienda($azienda), 'ruolo' => $piuAlto, 'accordo_trattamento_dati_da_accettare' => $this->accordoDaAccettare($azienda)]]];
     }
@@ -5224,7 +5245,7 @@ final class BackofficeFinto
         $ruoli = $this->ruoliNellAzienda($persona, $azienda);
         $piuAlto = collect(self::RUOLI)->first(fn (string $ruolo) => in_array($ruolo, $ruoli, true));
 
-        if ($piuAlto === 'membro') {
+        if (! in_array($piuAlto, ['proprietario', 'amministratore'], true)) {
             throw new Problema('permesso_negato');
         }
 
@@ -5388,7 +5409,7 @@ final class BackofficeFinto
                 'membri' => ['sometimes', 'nullable', 'bail', 'array', 'list', 'max:'.self::MEMBRI_INIZIALI],
                 'membri.*' => ['bail', 'array'],
                 'membri.*.persona' => ['bail', 'required', 'string', 'max:26', 'distinct'],
-                'membri.*.ruolo' => ['bail', 'required', 'string', Rule::in(['amministratore', 'membro'])],
+                'membri.*.ruolo' => ['bail', 'required', 'string', Rule::in(['amministratore', 'membro', 'ospite'])],
                 'azienda' => ['sometimes', 'nullable', 'array', 'prohibits:azienda_id'],
                 'accordo_trattamento_dati_accettato' => ['sometimes', 'nullable', 'boolean:strict'],
                 'azienda.partita_iva' => ['sometimes', 'nullable', 'bail', 'string', 'max:40', 'regex:/^(?=[A-Za-z0-9 .]*$)(?:[ .]*[A-Za-z0-9]){8,14}[ .]*$/'],
@@ -5688,6 +5709,11 @@ final class BackofficeFinto
             return $this->apriLAssistenza($ingresso, $campi);
         }
 
+        // Il codice dello staff (#3445): PKCE e il solo client `superadmin` (o il generico `finto` dei test), mai uno di sistema. Dà il gettone dello staff, senza secondo fattore.
+        if ($ingresso !== null && isset($ingresso['staff'])) {
+            return $this->apriLoStaff($ingresso, $campi);
+        }
+
         // Solo il client firmato dell'app del codice, o uno di sistema (#3344): senza firma o con quella di un altro client è la stessa 422, e il codice è già consumato.
         if ($ingresso === null || $ingresso['scade'] <= now()->getTimestamp()
             || ! isset($campi['verificatore']) || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))
@@ -5853,8 +5879,14 @@ final class BackofficeFinto
         $chi = $this->autentica($richiesta);
         $workspace = $chi['workspace'] ?? throw new Problema('gettone_senza_workspace');
 
-        if ($ruoli !== [] && ! in_array($this->membri[$workspace][$chi['persona']], $ruoli, true)) {
+        $ruolo = $this->membri[$workspace][$chi['persona']];
+
+        if ($ruoli !== [] && ! in_array($ruolo, $ruoli, true)) {
             throw new Problema('permesso_negato');
+        }
+
+        if ($ruoli === []) {
+            $this->rifiutaLOspite($richiesta, $ruolo);
         }
 
         return ['persona' => $chi['persona'], 'accesso' => $chi['accesso'], 'workspace' => $workspace];
@@ -6072,11 +6104,11 @@ final class BackofficeFinto
         $chi = $this->conWorkspace($richiesta, ['proprietario', 'amministratore']);
         $workspace = $chi['workspace'];
         $this->membroDi($workspace, $persona);
-        $ruolo = (string) $this->testi->validaStretta($corpo, ['ruolo' => ['required', 'string', Rule::in(['amministratore', 'membro'])]])['ruolo'];
+        $ruolo = (string) $this->testi->validaStretta($corpo, ['ruolo' => ['required', 'string', Rule::in(['amministratore', 'membro', 'ospite'])]])['ruolo'];
 
         $this->controllaIlBersaglio($this->membri[$workspace][$chi['persona']], $this->membri[$workspace][$persona]);
 
-        if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && $ruolo !== 'membro') {
+        if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && ! in_array($ruolo, self::DELL_AMMINISTRATORE, true)) {
             throw new Problema('permesso_negato');
         }
 
@@ -6289,7 +6321,7 @@ final class BackofficeFinto
             throw new Problema('proprietario_intoccabile');
         }
 
-        if ($ruoloDiChiChiama === 'amministratore' && $ruoloDelBersaglio !== 'membro') {
+        if ($ruoloDiChiChiama === 'amministratore' && ! in_array($ruoloDelBersaglio, self::DELL_AMMINISTRATORE, true)) {
             throw new Problema('permesso_negato');
         }
     }
@@ -6334,10 +6366,10 @@ final class BackofficeFinto
         return $this->conIdempotenza($richiesta, 'workspace.inviti.crea', $chi, $corpo, function () use ($chi, $workspace, $corpo) {
             $campi = $this->testi->validaStretta($corpo, [
                 'email' => self::REGOLE_EMAIL,
-                'ruolo' => ['required', 'string', Rule::in(['amministratore', 'membro'])],
+                'ruolo' => ['required', 'string', Rule::in(['amministratore', 'membro', 'ospite'])],
             ]);
 
-            if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && $campi['ruolo'] !== 'membro') {
+            if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && ! in_array($campi['ruolo'], self::DELL_AMMINISTRATORE, true)) {
                 throw new Problema('permesso_negato');
             }
 
@@ -6409,7 +6441,7 @@ final class BackofficeFinto
             throw new Problema('non_trovato');
         }
 
-        if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && $this->inviti[$invito]['ruolo'] !== 'membro') {
+        if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && ! in_array($this->inviti[$invito]['ruolo'], self::DELL_AMMINISTRATORE, true)) {
             throw new Problema('permesso_negato');
         }
 
@@ -6445,7 +6477,7 @@ final class BackofficeFinto
 
             $this->testi->validaStretta($corpo, []);
 
-            if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && $this->inviti[$invito]['ruolo'] !== 'membro') {
+            if ($this->membri[$workspace][$chi['persona']] === 'amministratore' && ! in_array($this->inviti[$invito]['ruolo'], self::DELL_AMMINISTRATORE, true)) {
                 throw new Problema('permesso_negato');
             }
 
@@ -6628,7 +6660,22 @@ final class BackofficeFinto
      */
     private function delWorkspace(Request $richiesta): string
     {
-        return $this->autentica($richiesta)['workspace'] ?? throw new Problema('gettone_senza_workspace');
+        $chi = $this->autentica($richiesta);
+        $workspace = $chi['workspace'] ?? throw new Problema('gettone_senza_workspace');
+        $this->rifiutaLOspite($richiesta, $this->membri[$workspace][$chi['persona']]);
+
+        return $workspace;
+    }
+
+    /**
+     * Un metodo di un workspace senza ruoli scritti (il middleware `workspace` senza parametri) lo chiama l'ospite (#3366) solo in lettura, nei moduli
+     * di OSPITE_LEGGE (il primo segmento del nome del metodo): ogni altro verbo, e ogni altro modulo, è 403 permesso_negato.
+     */
+    private function rifiutaLOspite(Request $richiesta, string $ruolo): void
+    {
+        if ($ruolo === 'ospite' && (! in_array($richiesta->method(), ['GET', 'HEAD'], true) || ! in_array(explode('.', (string) $this->operazioneInCorso, 2)[0], self::OSPITE_LEGGE, true))) {
+            throw new Problema('permesso_negato');
+        }
     }
 
     /**
@@ -6747,7 +6794,7 @@ final class BackofficeFinto
     {
         $dalNome = rtrim(substr(Str::slug($nome), 0, self::SLUG_DAL_NOME), '-');
         $dalNome = $dalNome === '' ? 'workspace' : $dalNome;
-        $presi = array_column($this->workspace, 'slug');
+        $presi = [...array_column($this->workspace, 'slug'), ...array_keys($this->indirizziRiservati)];
 
         do {
             $slug = $dalNome.'-'.$this->caso->getBytesFromString(self::ALFABETO, self::SLUG_CASUALI);

@@ -61,6 +61,7 @@ return [
     'conferma_password' => 'La contraseña no es correcta: para confirmar que eres tú hace falta la que usas para entrar en Zeiras.',
     'contatto_vuoto' => 'Un contacto necesita al menos uno de nome, cognome y email.',
     'responsabile_del_workspace' => 'Esta persona no es miembro del workspace: los ids de los miembros los da workspace.membri.elenca.',
+    'ospite_non_assegnabile' => 'Un invitado es de solo lectura: no puede ser responsable ni asignado. Elige un miembro, un administrador o el propietario: los ids los da workspace.membri.elenca.',
     'azienda_o_azienda_nuova' => 'Un contacto tiene una empresa que ya existe (organizzazione_id) o una que nace con él (organizzazione_nuova), no las dos.',
     'organizzazione_non_esiste' => 'La empresa del contacto no existe en este espacio de trabajo.',
     'paga_per_non_esiste' => 'Quien paga por el contacto no existe en este espacio de trabajo: debe ser el id de un contacto o de una empresa.',

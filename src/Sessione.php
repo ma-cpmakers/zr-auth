@@ -128,7 +128,7 @@ final class Sessione
 
         // Il gettone di un ospite vale per la sua prenotazione e basta, e quello ristretto di un cliente per i metodi del cliente: non restano
         // accanto a quello di un workspace, dove `Api::persona()` li manderebbe al posto dell'accesso.
-        if (isset($stato['ospite']) || isset($stato['cliente'])) {
+        if (isset($stato['ospite']) || isset($stato['cliente']) || isset($stato['staff'])) {
             $stato = ['accesso' => null, 'gettoni' => []];
         }
 
@@ -187,6 +187,67 @@ final class Sessione
     }
 
     /**
+     * Apre la sessione dello staff coi `data` di ingressi.scambio.crea per un codice di `ingressi.staff.crea` (lo schema StaffAccesso, #3445): il frontend dello staff (`admin`,
+     * zr-superadmin) in cui la persona è entrata con il login normale di Zeiras. Il gettone è quello **dello staff** e sta nella sessione lato server, sotto `staff`: non è mai quello
+     * dell'accesso né di un workspace, quindi `Api::persona()` e `Api::workspace()` non lo mandano (GettoneRifiutato), e `Api::staff(Sessione::staff()['gettone'])` sì. `utente()`,
+     * `workspace()` e `ruolo()` sono null. Ogni sessione di prima esce (l'id è nuovo, come per `entra()`). Una forma che non è quella lancia InvalidArgumentException e non scrive niente.
+     *
+     * @param  array<string, mixed>  $accesso
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function entraStaff(array $accesso): void
+    {
+        foreach (['gettone', 'scade_il', 'inattivita_scade_il', 'id', 'ruolo'] as $campo) {
+            if (! is_string($accesso[$campo] ?? null) || $accesso[$campo] === '') {
+                throw new InvalidArgumentException('Sessione::entraStaff() vuole i data dello scambio di un codice dello staff: il gettone, le due scadenze, l\'id e il ruolo.');
+            }
+        }
+
+        self::controllaIlDriver();
+        // Il segno prima del cambio: se la cache non risponde, l'ingresso fallisce e la sessione resta com'era.
+        self::segnaLaVecchia();
+
+        // La pagina che la guardia ha ricordato (chi scade su /staff e rientra torna lì) sopravvive alla sessione svuotata: il ricevitore la consuma con ritorno().
+        $ricordata = session()->get('url.intended');
+
+        // Sessione vuota davvero, come `entraInAssistenza()`: nessun gettone di persona resta accanto a quello dello staff.
+        session()->invalidate();
+        session()->regenerateToken();
+
+        if (is_string($ricordata) && $ricordata !== '') {
+            session()->put('url.intended', $ricordata);
+        }
+
+        session()->put(self::CHIAVE, [
+            'accesso' => null,
+            'gettoni' => ['staff' => $accesso['gettone']],
+            'scade_il' => $accesso['scade_il'],
+            'utente' => null,
+            'workspace' => null,
+            'ruolo' => null,
+            'staff' => array_diff_key($accesso, ['gettone' => true]),
+        ]);
+    }
+
+    /**
+     * Lo staff della sessione, se c'è e il gettone non è scaduto: il gettone (per `Api::staff()`), le due scadenze, l'id, il nome (se c'è) e il ruolo dello schema StaffAccesso.
+     * Null per ogni altra sessione, anche aperta.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function staff(): ?array
+    {
+        $stato = self::stato();
+
+        if (! self::aperta() || ! is_array($stato['staff'] ?? null) || ! is_string($stato['gettoni']['staff'] ?? null)) {
+            return null;
+        }
+
+        return ['gettone' => $stato['gettoni']['staff']] + $stato['staff'];
+    }
+
+    /**
      * L'ingresso di un «Accedi come» (#3394): come `entra()`, ma sempre da una sessione vuota. Se nel browser la stessa persona aveva già una sessione vera, `entra()` ne terrebbe l'accesso e il
      * gettone pieno accanto a quello di assistenza (lo azzera solo se cambia l'utente): `Api::persona()` chiamerebbe col gettone pieno e `accessi.corrente.mostra` direbbe
      * `impersonificazione: null`. Qui ogni gettone di prima esce dalla sessione, e resta il solo gettone di assistenza, quello del workspace. L'id della sessione è nuovo, come per `entra()`.
@@ -225,7 +286,7 @@ final class Sessione
         $stato = self::stato();
 
         // Un ospite e un cliente non sono in un workspace: non c'è da dove uscire, e la loro sessione resta com'è.
-        if ($stato === null || ! self::aperta() || isset($stato['ospite']) || isset($stato['cliente'])) {
+        if ($stato === null || ! self::aperta() || isset($stato['ospite']) || isset($stato['cliente']) || isset($stato['staff'])) {
             return;
         }
 
@@ -322,7 +383,7 @@ final class Sessione
         return self::aperta() ? self::stato()['workspace'] : null;
     }
 
-    /** Il ruolo della persona nel workspace in cui è entrata: proprietario, amministratore o membro. */
+    /** Il ruolo della persona nel workspace in cui è entrata: proprietario, amministratore, membro od ospite (solo visualizzazione). */
     public static function ruolo(): ?string
     {
         return self::aperta() ? self::stato()['ruolo'] : null;

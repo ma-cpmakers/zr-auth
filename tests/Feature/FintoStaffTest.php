@@ -31,9 +31,13 @@ function esitoDelloStaff(Closure $chiamata): array
     return ['ok', null];
 }
 
-/** Una persona dello staff già entrata (secondo fattore confermato): il gettone dello staff. */
-function entraComeStaff(array $staff): string
+/** Una persona dello staff già entrata: il gettone dello staff. Col login normale di Zeiras (#3445); le persone di prova (`$soloUat`) con la password e il secondo fattore. */
+function entraComeStaff(array $staff, bool $soloUat = false): string
 {
+    if (! $soloUat) {
+        return test()->finto->ingressoDelloStaff($staff);
+    }
+
     $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => $staff['email'], 'password' => PASSWORD])['data']['sfida']['id'];
 
     return Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
@@ -47,8 +51,8 @@ function personaDelloStaff(BackofficeFinto $finto, string $email, string $ruolo 
 }
 
 it('Api::staff() firma sempre, anche col gettone; senza client riconosciuto è 401 cliente_non_riconosciuto (F1.5, F1.7)', function () {
-    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com');
-    $gettone = entraComeStaff($sara);
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com', soloUat: true);
+    $gettone = entraComeStaff($sara, true);
 
     Api::staff($gettone)->get('/v1/staff/corrente');
 
@@ -63,7 +67,7 @@ it('Api::staff() firma sempre, anche col gettone; senza client riconosciuto è 4
 });
 
 it('enrolment: invito, gettone di 15 minuti che apre solo staff.totp.*, codice 000000, dieci codici di recupero una volta sola (F1.3, F1.10)', function () {
-    $nuova = personaDelloStaff($this->finto, 'nuova@lucianocastro.com', 'supporto', conTotp: false);
+    $nuova = personaDelloStaff($this->finto, 'nuova@lucianocastro.com', 'supporto', conTotp: false, soloUat: true);
     $segreto = $this->finto->ultimoInvitoDelloStaff('nuova@lucianocastro.com');
 
     expect($segreto)->toBeString()
@@ -90,7 +94,7 @@ it('enrolment: invito, gettone di 15 minuti che apre solo staff.totp.*, codice 0
 });
 
 it('un enrolment scaduto dopo 15 minuti è 401 gettone_non_valido; il quinto codice sbagliato chiude il gettone (F1.10)', function () {
-    personaDelloStaff($this->finto, 'nuova@lucianocastro.com', 'supporto', conTotp: false);
+    personaDelloStaff($this->finto, 'nuova@lucianocastro.com', 'supporto', conTotp: false, soloUat: true);
     $segreto = $this->finto->ultimoInvitoDelloStaff('nuova@lucianocastro.com');
     $gettone = Api::staff()->post('/v1/staff/inviti/accettazione', ['segreto' => $segreto, 'password' => PASSWORD])['data']['gettone'];
     Api::staff($gettone)->post('/v1/staff/totp');
@@ -107,8 +111,9 @@ it('un enrolment scaduto dopo 15 minuti è 401 gettone_non_valido; il quinto cod
     expect(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/totp')))->toBe([401, 'gettone_non_valido']);
 });
 
-it('ingresso: il primo passo risponde allo stesso modo per chiunque (R16); il secondo ha un solo errore (F1.2)', function () {
-    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com');
+it('ingresso di prova: il primo passo risponde allo stesso modo per chiunque (R16), e la persona dello staff vera ha una sfida inventata; il secondo ha un solo errore (F1.2, #3445)', function () {
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com', soloUat: true);
+    personaDelloStaff($this->finto, 'vera@lucianocastro.com');
     $this->finto->persona('semplice@lucianocastro.com', PASSWORD);
     $this->finto->persona('fuori@example.com', PASSWORD);
     $forma = fn (array $risposta) => [array_keys($risposta['data']), array_keys($risposta['data']['sfida']), strlen($risposta['data']['sfida']['id'])];
@@ -118,6 +123,7 @@ it('ingresso: il primo passo risponde allo stesso modo per chiunque (R16); il se
         'password sbagliata' => ['sara@lucianocastro.com', PASSWORD_SBAGLIATA],
         'sconosciuta' => ['nessuna@lucianocastro.com', PASSWORD],
         'non staff' => ['semplice@lucianocastro.com', PASSWORD],
+        'staff vera, non di prova' => ['vera@lucianocastro.com', PASSWORD],
         'fuori dominio' => ['fuori@example.com', PASSWORD],
     ];
     $sfide = [];
@@ -141,7 +147,7 @@ it('ingresso: il primo passo risponde allo stesso modo per chiunque (R16); il se
 });
 
 it('il codice del TOTP vale per un passo solo; un codice di recupero una volta sola; il quinto sbagliato uccide la sfida (F1.2)', function () {
-    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com');
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com', soloUat: true);
     $sfida = fn () => Api::staff()->post('/v1/staff/accessi', ['email' => 'sara@lucianocastro.com', 'password' => PASSWORD])['data']['sfida']['id'];
     $verifica = fn (string $sfida, string $codice) => esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => $codice]));
 
@@ -214,7 +220,7 @@ it('i ruoli: solo il superadmin gestisce lo staff; supporto e fatturazione leggo
 
     // Il supporto legge l'elenco (#3020, sola lettura) con la stessa forma del superadmin; tutto il resto dello staff è del superadmin.
     $elenco = Api::staff($gettone)->get('/v1/staff')['data'];
-    expect(array_column($elenco, 'id'))->toContain($supporto['id'])->and(array_keys($elenco[0]))->toBe(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'totp_confermato', 'totp_confermato_il', 'creato_il', 'creato_da', 'ultimo_ingresso']);
+    expect(array_column($elenco, 'id'))->toContain($supporto['id'])->and(array_keys($elenco[0]))->toBe(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'creato_il', 'creato_da', 'ultimo_ingresso']);
 
     $chiamate = [['get', '/v1/staff/'.$supporto['id']], ['post', '/v1/staff', ['email' => 'x@lucianocastro.com', 'ruolo' => 'supporto']],
         ['patch', '/v1/staff/'.$supporto['id'], ['ruolo' => 'supporto']], ['delete', '/v1/staff/'.$supporto['id']],
@@ -247,16 +253,16 @@ it('staff.crea, modifica, elimina e reimpostazione: dominio, ruoli, nessuno su s
     expect($crea('fuori@example.com'))->toBe([422, 'dominio_non_ammesso'])
         ->and($crea('plus+x@lucianocastro.com'))->toBe([422, 'dominio_non_ammesso'])
         ->and($crea('uat@castroandpartners.com'))->toBe([422, 'dominio_non_ammesso'])
-        ->and($crea('nessuno@lucianocastro.com'))->toBe([422, 'dati_non_validi'])
-        ->and($crea('nonverificata@lucianocastro.com'))->toBe([422, 'dati_non_validi'])
+        ->and($crea('nessuno@lucianocastro.com'))->toBe([404, 'non_trovato'])
+        ->and($crea('nonverificata@lucianocastro.com'))->toBe([404, 'non_trovato'])
         ->and(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff', ['email' => 'bruno@castroandpartners.com', 'ruolo' => 'capo'])))->toBe([422, 'dati_non_validi']);
 
     $bruno = Api::staff($gettone)->post('/v1/staff', ['email' => 'bruno@castroandpartners.com', 'ruolo' => 'supporto'])['data'];
 
-    expect($bruno)->toHaveKeys(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'totp_confermato', 'totp_confermato_il', 'creato_il', 'creato_da', 'ultimo_ingresso'])
-        ->and($bruno['totp_confermato'])->toBeFalse()->and($bruno['creato_da'])->toBe(['nome' => 'Sara', 'cognome' => null])->and($bruno['ultimo_ingresso'])->toBeNull()
+    expect(array_keys($bruno))->toBe(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'creato_il', 'creato_da', 'ultimo_ingresso'])
+        ->and($bruno['creato_da'])->toBe(['nome' => 'Sara', 'cognome' => null])->and($bruno['ultimo_ingresso'])->toBeNull()
         ->and($crea('bruno@castroandpartners.com'))->toBe([409, 'staff_gia_presente'])
-        ->and($this->finto->ultimoInvitoDelloStaff('bruno@castroandpartners.com'))->toBeString();
+        ->and($this->finto->ultimoInvitoDelloStaff('bruno@castroandpartners.com'))->toBeNull();
 
     $elenco = Api::staff($gettone)->get('/v1/staff');
     expect(array_column($elenco['data'], 'id'))->toBe([$sara['id'], $bruno['id']])->and($elenco['successivo'])->toBeNull();
@@ -279,15 +285,18 @@ it('staff.crea, modifica, elimina e reimpostazione: dominio, ruoli, nessuno su s
         ->and(esitoDelloStaff(fn () => Api::staff($gettone)->get('/v1/staff/'.$elia['id'])))->toBe([404, 'non_trovato']);
 
     // Reimpostazione: il motivo è obbligatorio, il secondo fattore va, i gettoni si chiudono, parte un invito nuovo.
-    $alba = personaDelloStaff($this->finto, 'alba@lucianocastro.com', 'supporto');
-    $gettoneAlba = entraComeStaff($alba);
+    $alba = personaDelloStaff($this->finto, 'alba@lucianocastro.com', 'supporto', soloUat: true);
+    $gettoneAlba = entraComeStaff($alba, true);
+
+    // Per una persona che non è di prova (#3445) il secondo fattore non c'è più: 404.
+    expect(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/'.$bruno['id'].'/totp/reimpostazione', ['motivo' => 'assistenza'])))->toBe([404, 'non_trovato']);
 
     expect(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/'.$alba['id'].'/totp/reimpostazione', [])))->toBe([422, 'dati_non_validi'])
         ->and(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/'.$alba['id'].'/totp/reimpostazione', ['motivo' => 'perche'])))->toBe([422, 'dati_non_validi']);
 
     $dopo = Api::staff($gettone)->post('/v1/staff/'.$alba['id'].'/totp/reimpostazione', ['motivo' => 'problema_tecnico'])['data'];
 
-    expect($dopo['totp_confermato'])->toBeFalse()->and($this->finto->ultimoInvitoDelloStaff('alba@lucianocastro.com'))->toBeString()
+    expect(array_key_exists('totp_confermato', $dopo))->toBeFalse()->and($this->finto->ultimoInvitoDelloStaff('alba@lucianocastro.com'))->toBeString()
         ->and($this->finto->codiciDiRecuperoDelloStaff($alba))->toBe([])
         ->and(esitoDelloStaff(fn () => Api::staff($gettoneAlba)->get('/v1/staff/corrente')))->toBe([401, 'gettone_non_valido']);
 });
@@ -316,7 +325,7 @@ it('il perimetro solo_uat: vede e crea solo uat+…@castroandpartners.com, fuori
     $vera = personaDelloStaff($this->finto, 'vera@lucianocastro.com');
     $prova = personaDelloStaff($this->finto, 'uat+zr-superadmin-uno@castroandpartners.com', 'superadmin', soloUat: true);
     $altra = personaDelloStaff($this->finto, 'uat+zr-supporto-1@castroandpartners.com', 'supporto', soloUat: true);
-    $gettone = entraComeStaff($prova);
+    $gettone = entraComeStaff($prova, true);
     $gettoneVera = entraComeStaff($vera);
 
     expect(array_column(Api::staff($gettone)->get('/v1/staff')['data'], 'id'))->toBe(array_values(array_filter([$prova['id'], $altra['id']], fn () => true)))
@@ -331,7 +340,7 @@ it('il perimetro solo_uat: vede e crea solo uat+…@castroandpartners.com, fuori
 
     // Il + vale per chi ha il segno, non per chi viene invitato: dentro il perimetro il dominio lo boccia, fuori «non c'è».
     expect(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff', ['email' => 'uat+nuovo@castroandpartners.com', 'ruolo' => 'supporto'])))->toBe([422, 'dominio_non_ammesso'])
-        ->and(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff', ['email' => 'fuori@lucianocastro.com', 'ruolo' => 'supporto'])))->toBe([422, 'dati_non_validi']);
+        ->and(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff', ['email' => 'fuori@lucianocastro.com', 'ruolo' => 'supporto'])))->toBe([404, 'non_trovato']);
 
     $registro = Api::staff($gettone)->get('/v1/staff/registro')['data'];
 
@@ -341,7 +350,7 @@ it('il perimetro solo_uat: vede e crea solo uat+…@castroandpartners.com, fuori
 it('il registro: righe dal più recente a cursore, filtri, nomi risolti alla lettura; l\'esportazione è un CSV e si scrive nel registro (F1.8)', function () {
     $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com');
     $gettone = entraComeStaff($sara);
-    $dora = personaDelloStaff($this->finto, 'dora@lucianocastro.com', 'supporto');
+    $dora = personaDelloStaff($this->finto, 'dora@lucianocastro.com', 'supporto', soloUat: true);
     Api::staff($gettone)->patch('/v1/staff/'.$dora['id'], ['ruolo' => 'fatturazione']);
     Api::staff($gettone)->post('/v1/staff/'.$dora['id'].'/totp/reimpostazione', ['motivo' => 'sicurezza']);
 
@@ -354,7 +363,7 @@ it('il registro: righe dal più recente a cursore, filtri, nomi risolti alla let
 
     $seconda = Api::staff($gettone)->get('/v1/staff/registro', ['limite' => 2, 'cursore' => $prima['successivo']]);
 
-    expect(array_column($seconda['data'], 'azione'))->toBe(['staff.accessi.verifica.crea'])->and($seconda['successivo'])->toBeNull()
+    expect(array_column($seconda['data'], 'azione'))->toBe(['ingressi.scambio.crea'])->and($seconda['successivo'])->toBeNull()
         ->and(array_column(Api::staff($gettone)->get('/v1/staff/registro', ['azione' => 'staff.modifica'])['data'], 'azione'))->toBe(['staff.modifica'])
         ->and(esitoDelloStaff(fn () => Api::staff($gettone)->get('/v1/staff/registro', ['bersaglio_tipo' => 'altro'])))->toBe([422, 'dati_non_validi']);
 
@@ -370,7 +379,7 @@ it('il registro: righe dal più recente a cursore, filtri, nomi risolti alla let
     $tutto = implode('', iterator_to_array(Api::staff($gettone)->scaricaConPost('/v1/staff/registro/esportazioni')->blocchi(), false));
     $azioni = array_map(fn (string $riga) => str_getcsv($riga, escape: '')[4] ?? null, array_slice(explode("\r\n", trim($tutto)), 1));
 
-    expect($azioni[0])->toBe('staff.accessi.verifica.crea')->and(end($azioni))->toBe('staff.registro.esportazioni.crea');
+    expect($azioni[0])->toBe('ingressi.scambio.crea')->and(end($azioni))->toBe('staff.registro.esportazioni.crea');
 });
 
 it('il tipo del gettone: lo staff non apre staff.totp.*, l\'enrolment non apre il resto, un gettone di persona non apre niente: tutti 403 (F1.1, F1.10)', function () {
@@ -386,7 +395,7 @@ it('il tipo del gettone: lo staff non apre staff.totp.*, l\'enrolment non apre i
 });
 
 it('i codici di recupero hanno il formato del backoffice e si accettano come li scrive una persona: maiuscoli o minuscoli, con o senza trattino (F1.2)', function () {
-    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com');
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com', soloUat: true);
     [$primo, $secondo] = $this->finto->codiciDiRecuperoDelloStaff($sara);
     $verifica = function (string $codice) {
         $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => 'sara@lucianocastro.com', 'password' => PASSWORD])['data']['sfida']['id'];
@@ -401,7 +410,7 @@ it('i codici di recupero hanno il formato del backoffice e si accettano come li 
 });
 
 it('invitoDelloStaff() dà un invito nuovo per la persona dello staff e annulla il precedente; una persona che non c\'è è un errore', function () {
-    $nuova = personaDelloStaff($this->finto, 'nuova@lucianocastro.com', 'supporto', conTotp: false);
+    $nuova = personaDelloStaff($this->finto, 'nuova@lucianocastro.com', 'supporto', conTotp: false, soloUat: true);
     $primo = $this->finto->ultimoInvitoDelloStaff('nuova@lucianocastro.com');
     $secondo = $this->finto->invitoDelloStaff($nuova);
 
@@ -440,7 +449,7 @@ it('staff.utenti.conteggi.mostra e staff.workspace.conteggi.mostra: solo numeri,
     expect(alFinto('DELETE', '/v1/workspace', gettone: $gettoneVera)->status())->toBe(202);
 
     $conta = fn (string $gettone, string $percorso) => Api::staff($gettone)->get($percorso);
-    [$gettoneSara, $gettoneSupporto, $gettoneProva, $gettoneFatturazione] = [entraComeStaff($sara), entraComeStaff($supporto), entraComeStaff($prova), entraComeStaff($fatturazione)];
+    [$gettoneSara, $gettoneSupporto, $gettoneProva, $gettoneFatturazione] = [entraComeStaff($sara), entraComeStaff($supporto), entraComeStaff($prova, true), entraComeStaff($fatturazione)];
 
     // Tutti: le quattro persone dello staff, `uat+uno` e Vera; Vera non ha chiesto di eliminare l'account, ha programmato l'eliminazione di un workspace.
     expect($conta($gettoneSara, '/v1/staff/utenti/conteggi'))->toBe(['data' => ['tutti' => 6, 'attivo' => 6, 'sospeso' => 0, 'in_eliminazione' => 0]])

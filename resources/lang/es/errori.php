@@ -313,6 +313,10 @@ return [
         'title' => 'Dirección ya en uso',
         'detail' => 'La dirección ya está en uso: la de una página de Bookings es única en todo Zeiras, la de un calendario es única dentro de su página. El problema lleva `proposta` junto al código, una dirección libre; elige otra y repite la petición. No se escribió nada.',
     ],
+    'indirizzo_gia_preso' => [
+        'title' => 'Dirección ya tomada',
+        'detail' => 'La dirección es de otro workspace, o lo fue y no se reasigna nunca a nadie más. Elige otra y repite la petición. No se escribió nada.',
+    ],
     'pagina_presente' => [
         'title' => 'Página ya existente',
         'detail' => 'Ya tienes una página de reservas en este espacio de trabajo: cada miembro tiene solo una. Léela con `bookings.pagine.elenca` (`mie=true`) y cámbiala con `bookings.pagine.modifica`. No se escribió nada.',

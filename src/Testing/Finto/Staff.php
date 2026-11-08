@@ -4,6 +4,7 @@ namespace Zeiras\Auth\Testing\Finto;
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 use LogicException;
 
@@ -31,6 +32,11 @@ trait Staff
     private const FINESTRA_DELLO_STAFF = 900;
 
     private const GIORNO_DELLO_STAFF = 86400;
+
+    /** @var list<string> i domini da cui chi ha l'email verificata entra nello staff alla prima volta (`ZR_STAFF_DOMINI_AMMESSI` del backoffice, #3445): vuoto = nessuno */
+    private array $dominiDelloStaff = [];
+
+    private string $ruoloDelDominioDelloStaff = 'supporto';
 
     /** @var array<string, array<string, mixed>> le persone dello staff per id */
     private array $righeStaff = [];
@@ -96,6 +102,52 @@ trait Staff
         }
 
         return $this->voceDelloStaff($id);
+    }
+
+    /**
+     * Il gettone dello staff di una persona dello staff, come lo dà l'ingresso con il login normale di Zeiras (#3445: ingressi.staff.crea e ingressi.scambio.crea), senza fare il giro: per i test del
+     * frontend dello staff che partono già da dentro. La riga di registro è quella dello scambio. Le persone di prova (`solo_uat`) non entrano così, ma con la password e il codice
+     * (staff.accessi.crea e .verifica.crea).
+     *
+     * @param  array<string, mixed>|string  $staff  una persona dello staff di staffDi(), o la sua email
+     */
+    public function ingressoDelloStaff(array|string $staff): string
+    {
+        if (is_string($staff)) {
+            $persona = $this->conEmail(self::normalizza($staff));
+            $riga = $persona === null ? null : $this->rigaDellaPersona($persona);
+        } else {
+            $riga = $this->righeStaff[$staff['id'] ?? ''] ?? null;
+        }
+
+        $riga ?? throw new InvalidArgumentException('Nel finto non c\'è questa persona dello staff.');
+
+        if ($riga['solo_uat']) {
+            throw new LogicException('Una persona di prova entra con la password e il codice, non con il login normale: staff.accessi.crea e .verifica.crea.');
+        }
+
+        $gettone = $this->emettiIlGettoneDelloStaff($riga['id'], 'staff');
+        $this->scriviNelRegistroDelloStaff($riga, 'ingressi.scambio.crea', 'staff', $riga['id']);
+
+        return $gettone;
+    }
+
+    /**
+     * Chi ha l'email verificata su uno di questi domini entra nello staff alla prima volta di `ingressi.staff.crea`, con `$ruolo` (la config `zeiras.staff.domini_ammessi` e `ruolo_dominio` del
+     * backoffice, #3445). Per default nessun dominio: entra solo chi ha già la sua riga (staffDi()). I domini valgono solo se sono anche tra quelli dello staff.
+     *
+     * @param  list<string>  $domini
+     */
+    public function staffDaiDomini(array $domini, string $ruolo = 'supporto'): self
+    {
+        if (! in_array($ruolo, self::RUOLI_DELLO_STAFF, true)) {
+            throw new InvalidArgumentException("Il ruolo dello staff è ".implode(', ', self::RUOLI_DELLO_STAFF)." e non «{$ruolo}».");
+        }
+
+        $this->dominiDelloStaff = array_map('strtolower', $domini);
+        $this->ruoloDelDominioDelloStaff = $ruolo;
+
+        return $this;
     }
 
     /**
@@ -187,7 +239,8 @@ trait Staff
 
         $persona = $this->conCredenziali($email, $dati['password']);
         $staff = $persona === null ? null : $this->rigaDellaPersona($persona);
-        $staff = $staff !== null && $this->emailAmmessaDalloStaff($email, $staff['solo_uat']) ? $staff : null;
+        // Dal login normale di Zeiras (#3445) il primo passo è vero solo per le persone di prova: per le altre è una sfida inventata, come ogni caso negativo.
+        $staff = $staff !== null && $staff['solo_uat'] && $this->emailAmmessaDalloStaff($email, true) ? $staff : null;
         $id = bin2hex(random_bytes(32));
         $scade = now()->toImmutable()->addMinutes(5)->startOfMillisecond();
 
@@ -270,6 +323,11 @@ trait Staff
         $invito = $this->invitiStaff[$dati['segreto']] ?? null;
         $staff = $invito === null ? null : ($this->righeStaff[$invito['staff']] ?? null);
 
+        // Dal login normale di Zeiras (#3445) l'invito vale solo per le persone di prova: per ogni altra riga è 404, come il metodo che non c'è più.
+        if ($staff !== null && ! $staff['solo_uat']) {
+            throw new Problema('non_trovato');
+        }
+
         if ($invito === null || $staff === null || $staff['archiviato_il'] !== null || $invito['consumato'] || ! $invito['scade_il']->gt(now())
             || $this->conCredenziali($this->persone[$staff['utente_id']]['email'], $dati['password']) !== $staff['utente_id']) {
             throw new Problema('invito_non_valido');
@@ -285,6 +343,113 @@ trait Staff
         $this->scriviNelRegistroDelloStaff($staff, 'staff.inviti.accettazione.crea', 'staff', $staff['id']);
 
         return [201, ['data' => ['gettone' => $gettone, 'scade_il' => self::iso($this->gettoniStaff[$gettone]['creato_il']->addMinutes(15))]]];
+    }
+
+    /**
+     * ingressi.staff.crea (IngressiController::staffCrea, #3445): il codice monouso per entrare in `admin` con il login normale di Zeiras, per la persona del gettone dell'accesso
+     * (il gettone di un workspace è 403 gettone_con_workspace, prima del corpo). Entra chi ha una riga viva (non archiviata, non di prova, con l'email ancora ammessa); chi non ce l'ha
+     * ma ha l'email verificata su un dominio di staffDaiDomini() riceve la riga alla prima volta. Ogni altro caso è la stessa 403 permesso_negato (R16). Il ritorno è quello dell'app
+     * `admin` (ritorno()), https e senza `#`, altrimenti 503. Dieci codici al minuto per persona.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaIngressoStaff(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->autentica($richiesta);
+
+        if ($chi['workspace'] !== null) {
+            throw new Problema('gettone_con_workspace');
+        }
+
+        $campi = $this->testi->validaStretta($corpo, [
+            'app' => ['required', 'string', Rule::in(['admin'])],
+            'sfida' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
+        ]);
+        $this->frena('ingressi-staff:'.$chi['persona'], 10, self::MINUTO);
+
+        $persona = (string) $chi['persona'];
+        $riga = $this->rigaDellaPersona($persona);
+        $email = $this->persone[$persona]['email'];
+
+        if ($riga !== null) {
+            if ($riga['solo_uat'] || ! $this->emailAmmessaDalloStaff($email, false)) {
+                throw new Problema('permesso_negato');
+            }
+        } elseif (! $this->dalDominioDelloStaff($persona)) {
+            throw new Problema('permesso_negato');
+        }
+
+        $ritorno = $this->ritorni['admin'] ?? '';
+
+        if (! str_starts_with($ritorno, 'https://') || str_contains($ritorno, '#')) {
+            throw new Problema('servizio_non_disponibile');
+        }
+
+        // La riga nasce alla prima volta, con la sua riga nel registro (nella transazione del backoffice).
+        if ($riga === null) {
+            $id = self::id();
+            $this->righeStaff[$id] = [
+                'id' => $id, 'utente_id' => $persona, 'ruolo' => $this->ruoloDelDominioDelloStaff, 'solo_uat' => false, 'totp' => null, 'totp_confermato_il' => null, 'ultimo_passo' => null,
+                'creato_il' => now()->toImmutable(), 'creato_da' => null, 'archiviato_il' => null, 'recupero' => [],
+            ];
+            $this->scriviNelRegistroDelloStaff($this->righeStaff[$id], 'ingressi.staff.crea', 'staff', $id, ['ruolo']);
+        }
+
+        $codice = self::base64url(random_bytes(32));
+        $scade = now()->getTimestamp() + self::SECONDI_DELL_INGRESSO;
+        $this->ingressi[$codice] = ['accesso' => $chi['accesso'], 'workspace' => null, 'app' => 'admin', 'sfida' => (string) $campi['sfida'], 'scade' => $scade, 'staff' => true];
+
+        return [201, ['data' => ['codice' => $codice, 'ritorno' => $ritorno, 'scade_il' => self::iso(\Carbon\CarbonImmutable::createFromTimestampUTC($scade))]]];
+    }
+
+    /**
+     * Lo scambio del codice dello staff (IngressoSso::scambia, #3445), dentro ingressi.scambio.crea: il verificatore dà la sfida e il client è `superadmin` (o il generico dei test), mai uno
+     * di sistema; la riga dev'essere ancora viva. Dà il gettone dello staff nella forma di staff.accessi.verifica.crea. Ogni altro caso è la solita 422 verifica_non_riuscita.
+     *
+     * @param  array<string, mixed>  $ingresso
+     * @param  array<string, mixed>  $campi
+     * @return array{int, array<string, mixed>}
+     */
+    private function apriLoStaff(array $ingresso, array $campi): array
+    {
+        $accesso = $this->accessi[$ingresso['accesso']] ?? null;
+        $staff = $accesso === null || $accesso['utente'] === null ? null : $this->rigaDellaPersona($accesso['utente']);
+
+        if ($ingresso['scade'] <= now()->getTimestamp()
+            || ! isset($campi['verificatore']) || ! hash_equals($ingresso['sfida'], self::base64url(hash('sha256', (string) $campi['verificatore'], true)))
+            || ! in_array($this->clienteFirmato, [self::CLIENTE, self::CLIENT_DELLO_STAFF], true)
+            || $accesso === null || $accesso['chiuso'] || ! $this->scadenza($accesso)->gt(now())
+            || $staff === null || $staff['solo_uat'] || ! $this->emailAmmessaDalloStaff($this->persone[$staff['utente_id']]['email'], false)) {
+            throw new Problema('verifica_non_riuscita', verifica: 'ingresso');
+        }
+
+        $gettone = $this->emettiIlGettoneDelloStaff($staff['id'], 'staff');
+        $this->scriviNelRegistroDelloStaff($staff, 'ingressi.scambio.crea', 'staff', $staff['id']);
+
+        return [201, ['data' => $this->gettoneDelloStaff($gettone) + ['id' => $staff['id']] + $this->nomeDelloStaff($staff) + ['ruolo' => $staff['ruolo']]]];
+    }
+
+    /** L'email verificata della persona sta su un dominio dell'ingresso dal dominio (e su uno dello staff, non la casella `uat@`, senza `+`). */
+    private function dalDominioDelloStaff(string $persona): bool
+    {
+        $dati = $this->persone[$persona];
+        $email = self::normalizza($dati['email']);
+        $dominio = substr($email, (int) strrpos($email, '@') + 1);
+
+        return $this->dominiDelloStaff !== [] && $dati['email_verificata_il'] !== null && in_array($dominio, $this->dominiDelloStaff, true) && $this->emailAmmessaDalloStaff($email, false);
+    }
+
+    /**
+     * Dal login normale di Zeiras (#3445) il secondo fattore, l'invito e l'enrolment valgono solo per le persone di prova: per ogni altra riga è 404 non_trovato.
+     *
+     * @param  array<string, mixed>  $riga
+     */
+    private function soloPerLeProve(array $riga): void
+    {
+        if (! $riga['solo_uat']) {
+            throw new Problema('non_trovato');
+        }
     }
 
     /**
@@ -321,6 +486,7 @@ trait Staff
     private function avviaIlTotpDelloStaff(Request $richiesta): array
     {
         [, $staff] = $this->autenticaLoStaff($richiesta, self::RUOLI_DELLO_STAFF, true);
+        $this->soloPerLeProve($staff);
 
         if ($staff['totp_confermato_il'] !== null) {
             throw new Problema('permesso_negato');
@@ -349,6 +515,7 @@ trait Staff
     private function confermaIlTotpDelloStaff(Request $richiesta, array $corpo): array
     {
         [$gettone, $staff] = $this->autenticaLoStaff($richiesta, self::RUOLI_DELLO_STAFF, true);
+        $this->soloPerLeProve($staff);
         $dati = $this->testi->valida($corpo, ['codice' => ['bail', 'required', 'string', 'max:32']]);
         $errori = ++$this->gettoniStaff[$gettone]['errori'];
 
@@ -401,7 +568,7 @@ trait Staff
     }
 
     /**
-     * staff.crea: una persona che ha già un account verificato entra nello staff, e le parte un invito (ultimoInvitoDelloStaff()). Il dominio si controlla prima di guardare
+     * staff.crea: una persona che ha già un account verificato entra nello staff, senza invito né posta (#3445): entra con ingressi.staff.crea. Il dominio si controlla prima di guardare
      * se l'account c'è, così l'esito non dice se un'email fuori dominio ha un account; fuori dal perimetro di chi chiama la persona «non c'è».
      *
      * @param  array<mixed>  $corpo
@@ -420,8 +587,9 @@ trait Staff
 
         $persona = $dentro ? $this->conEmail($email) : null;
 
+        // Il metodo non crea mai una persona (#3445): un account che non c'è o non ha l'email verificata è 404.
         if ($persona === null || $this->persone[$persona]['email_verificata_il'] === null) {
-            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.staff_persona_non_trovata', ['attribute' => 'email']), 'regola' => 'non_trovato', 'pointer' => '#/email']]);
+            throw new Problema('non_trovato');
         }
 
         if ($this->rigaDellaPersona($persona) !== null) {
@@ -433,7 +601,6 @@ trait Staff
             'id' => $id, 'utente_id' => $persona, 'ruolo' => $dati['ruolo'], 'solo_uat' => false, 'totp' => null, 'totp_confermato_il' => null, 'ultimo_passo' => null,
             'creato_il' => now()->toImmutable(), 'creato_da' => $chi['id'], 'archiviato_il' => null, 'recupero' => [],
         ];
-        $this->nuovoInvitoDelloStaff($id);
         $this->scriviNelRegistroDelloStaff($chi, 'staff.crea', 'staff', $id, ['ruolo']);
 
         return [201, ['data' => $this->voceDelloStaff($id)]];
@@ -492,6 +659,7 @@ trait Staff
         $dati = $this->testi->validaStretta($corpo, ['motivo' => ['bail', 'required', 'string', 'in:'.implode(',', self::MOTIVI_DELLO_STAFF)]]);
         $this->nonSeStessi($chi, $id);
         $bersaglio = $this->bersaglioDelloStaff($chi, $id);
+        $this->soloPerLeProve($bersaglio);
         $this->righeStaff[$bersaglio['id']]['totp'] = null;
         $this->righeStaff[$bersaglio['id']]['totp_confermato_il'] = null;
         $this->righeStaff[$bersaglio['id']]['ultimo_passo'] = null;
@@ -941,8 +1109,6 @@ trait Staff
             'cognome' => $persona['cognome'],
             'email' => $persona['email'],
             'ruolo' => $staff['ruolo'],
-            'totp_confermato' => $staff['totp_confermato_il'] !== null,
-            'totp_confermato_il' => $staff['totp_confermato_il'] === null ? null : self::iso($staff['totp_confermato_il']),
             'creato_il' => self::iso($staff['creato_il']),
             'creato_da' => $creatoDa,
             'ultimo_ingresso' => isset($staff['ultimo_ingresso']) ? self::iso($staff['ultimo_ingresso']) : null,

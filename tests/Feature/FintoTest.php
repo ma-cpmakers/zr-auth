@@ -748,7 +748,7 @@ it('persona() rifiuta un\'email che il finto ha già e una lingua che Zeiras non
 
     expect(fn () => $finto->persona(' Anna@Example.com', 'altra'))->toThrow(LogicException::class, 'anna@example.com')
         ->and(fn () => $finto->persona('bruno@example.com', PASSWORD, lingua: 'de'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->membro($studio, $anna, 'ospite'))->toThrow(InvalidArgumentException::class);
+        ->and(fn () => $finto->membro($studio, $anna, 'visitatore'))->toThrow(InvalidArgumentException::class);
 });
 
 // I freni dei metodi col gettone, e la scadenza al millesimo, come il backoffice.
