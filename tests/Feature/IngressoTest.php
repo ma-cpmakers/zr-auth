@@ -381,8 +381,7 @@ function codiceDiAssistenza(): array
     $id = entraNelFinto('anna@example.com')['gettone']['utente']['id'];
     $sara = $finto->persona('sara@lucianocastro.com', PASSWORD, nome: 'Sara');
     $staff = $finto->staffDi($sara, 'superadmin', true);
-    $sfida = Zeiras\Auth\Api::staff()->post('/v1/staff/accessi', ['email' => $staff['email'], 'password' => PASSWORD])['data']['sfida']['id'];
-    $gettone = Zeiras\Auth\Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+    $gettone = $finto->ingressoDelloStaff($staff);
     $assistenza = Zeiras\Auth\Api::staff($gettone)->post("/v1/staff/utenti/{$id}/impersonificazioni", ['app' => 'pm'])['data'];
 
     // Il codice lo scambia solo il client dell'app (CLIENT_DELL_APP): il modulo della board, non il `finto` che vale per ogni app negli altri test.

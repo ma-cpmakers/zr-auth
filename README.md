@@ -128,7 +128,7 @@ Sessione::apriOspite($data);   // utente(), accesso(), workspace() e ruolo() son
 Sessione::lascia();     // dopo workspace.uscita.crea, se non c'è un altro workspace: toglie workspace, ruolo e gettone del workspace e tiene l'accesso; senza sessione non fa niente
 Sessione::utente();     // la persona (lo schema Utente), mai il gettone
 Sessione::workspace();  // {id, nome, slug}; null prima di entra()
-Sessione::ruolo();      // proprietario, amministratore o membro
+Sessione::ruolo();      // proprietario, amministratore, membro od ospite (solo visualizzazione)
 Sessione::aggiorna($io);  // $io = i `data` di io.mostra che la pagina ha già letto (non una chiamata in più); lingua, nome ed email (con `email_verificata_il` se la sessione lo tiene), se diversi (true se ha cambiato); il resto resta
 
 // L'uscita: accessi.corrente.elimina chiude l'accesso da cui discende il gettone della sessione, e ogni gettone che ne
@@ -524,6 +524,21 @@ chiamata: la firma dei quattro header (`Zr-Cliente`, `Zr-Ip`, `Zr-Istante`, `Zr-
   (`ZR_AUTH_CLIENTE`) da qualunque IP, mentre il backoffice vero vuole `superadmin` e uno `Zr-Ip` della VPN: un modulo configurato male lo scopre in produzione.
   Il gettone che il backoffice rifiuta con 401 (`gettone_assente`, `gettone_non_valido`) è `GettoneRifiutato`: **il modulo dello staff lo cattura lui**, perché il rendering di
   default chiude la sessione della persona e rimanda al suo ingresso; un gettone del tipo sbagliato è invece un 403 `permesso_negato` (`ErroreApi`).
+
+### Lo staff entra con il login normale di Zeiras (da #3445)
+
+Admin (zr-superadmin) non ha più password né codice a due fattori propri: la persona entra da zr-home come per ogni modulo, e la lista è chiusa e la tiene il backoffice.
+
+- **La partenza**: `Ingresso::versoStaff()` (302 a `ZR_HOME_URL/ingresso/staff` con `app=admin`, `state` e `sfida`; `ZR_APP` dev'essere `admin`, altrimenti `LogicException`). Il ritorno è lo
+  stesso ricevitore degli altri ingressi (`/ingresso/ritorno`): scambia il codice di `ingressi.staff.crea` col verificatore e apre la sessione dello staff. Lo scambio lo firma il client
+  `superadmin` e nessun altro (`ZR_AUTH_CLIENTE=superadmin`): un altro client, un verificatore sbagliato o una riga tolta fra il codice e lo scambio sono la stessa pagina d'errore.
+- **La sessione**: `Sessione::entraStaff()` la apre da una sessione vuota; `Sessione::staff()` dà `gettone`, `scade_il`, `inattivita_scade_il`, `id`, `nome`, `cognome`, `email` e `ruolo`
+  (lo schema `StaffAccesso`), o `null` per ogni altra sessione. Il gettone è **dello staff**: `Api::persona()` e `Api::workspace()` non lo mandano mai, `Api::staff(Sessione::staff()['gettone'])` sì.
+  `Sessione::utente()`, `workspace()` e `ruolo()` sono `null`.
+- **Il finto**: `ritorno('admin', $indirizzo)` per il ritorno di admin (senza, `ingressi.staff.crea` è 503); `staffDaiDomini(['lucianocastro.com'], 'supporto')` per chi entra la prima volta dal
+  dominio (per default nessuno); `ingressoDelloStaff($staff|$email)` dà il gettone di una persona dello staff senza fare il giro. Il vecchio ingresso (`staff.accessi.crea` e `.verifica.crea`,
+  `staff.inviti.accettazione.crea`, `staff.totp.*`) vale solo per le persone di prova (`staffDi(..., soloUat: true)`): per ogni altra riga il secondo fattore, l'invito e l'enrolment sono 404
+  e il primo passo dà una sfida inventata. `staff.crea` non manda l'invito (un account che non c'è è 404), e le persone dello staff non portano più `totp_confermato` né `totp_confermato_il`.
 
 ## L'ingresso da zr-home: la partenza e il ricevitore
 

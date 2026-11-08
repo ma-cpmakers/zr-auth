@@ -49,6 +49,8 @@ trait BoardRuoliEpiche
         foreach ($campi as $campo => $id) {
             if ($id !== null && $id !== $ruoli[$campo] && ! isset($this->membri[$chi['workspace']][$id])) {
                 $errori[] = ['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => Regola::NON_TROVATO, 'pointer' => '#/'.$campo];
+            } elseif ($id !== null && $id !== $ruoli[$campo] && $this->membri[$chi['workspace']][$id] === 'ospite') {
+                $errori[] = ['detail' => $this->testi->testo('regole.ospite_non_assegnabile'), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => '#/'.$campo];
             }
         }
 

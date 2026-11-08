@@ -63,9 +63,7 @@ function gettoneDelloStaffPerAssistenza(BackofficeFinto $finto, string $email, s
 function gettoneDellaPersonaDelloStaff(BackofficeFinto $finto, array $persona, string $ruolo = 'superadmin'): string
 {
     $staff = $finto->staffDi($persona, $ruolo, true);
-    $sfida = Api::staff()->post('/v1/staff/accessi', ['email' => $staff['email'], 'password' => PASSWORD])['data']['sfida']['id'];
-
-    return Api::staff()->post('/v1/staff/accessi/verifica', ['sfida' => $sfida, 'codice' => BackofficeFinto::CODICE_TOTP_DELLO_STAFF])['data']['gettone'];
+    return $finto->ingressoDelloStaff($staff);
 }
 
 it('il codice: la forma della risposta, 60 secondi, e lo scambio senza verificatore dà il gettone del workspace (F4.1)', function () {

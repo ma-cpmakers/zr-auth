@@ -305,6 +305,10 @@ return [
         'title' => 'Indirizzo già in uso',
         'detail' => 'L\'indirizzo è già in uso: quello di una pagina di Bookings è unico in tutta Zeiras, quello di un calendario è unico nella sua pagina. Il problema porta accanto al codice `proposta`, un indirizzo libero; scegline un altro e ripeti la richiesta. Il metodo non ha scritto niente.',
     ],
+    'indirizzo_gia_preso' => [
+        'title' => 'Indirizzo già preso',
+        'detail' => "L'indirizzo è già di un altro workspace, o è stato di uno e non si riassegna mai a nessun altro. Scegline un altro e ripeti la richiesta. Il metodo non ha scritto niente.",
+    ],
     'pagina_presente' => [
         'title' => 'Pagina già presente',
         'detail' => 'Hai già una pagina delle prenotazioni in questo workspace: ogni membro ne ha una sola. Rileggila con `bookings.pagine.elenca` (`mie=true`) e cambiala con `bookings.pagine.modifica`. Il metodo non ha scritto niente.',

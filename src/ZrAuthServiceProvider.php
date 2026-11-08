@@ -64,10 +64,13 @@ final class ZrAuthServiceProvider extends ServiceProvider
                 ->withoutMiddleware(ConGettone::class);
 
             // Il codice di un «Accedi come» (#3386): un POST dalla pagina di zr-superadmin, senza CSRF (arriva da un altro sito per costruzione) e senza la guardia: il controllo del sito è nel ricevitore.
-            Route::middleware('web')->post(config('zr-auth.ricevitore'), [RicevitoreController::class, 'assistenza'])
-                ->name('zr-auth.ricevitore.assistenza')
-                ->bloccaSessione()
-                ->withoutMiddleware([ConGettone::class, PreventRequestForgery::class, ValidateCsrfToken::class, VerifyCsrfToken::class]);
+            // Non su `admin` (#3445): il frontend dello staff non riceve «Accedi come», quindi la rotta non c'è.
+            if (config('zr-auth.app') !== 'admin') {
+                Route::middleware('web')->post(config('zr-auth.ricevitore'), [RicevitoreController::class, 'assistenza'])
+                    ->name('zr-auth.ricevitore.assistenza')
+                    ->bloccaSessione()
+                    ->withoutMiddleware([ConGettone::class, PreventRequestForgery::class, ValidateCsrfToken::class, VerifyCsrfToken::class]);
+            }
         }
 
         // Gli eventi del backoffice, solo se il modulo ha scelto un percorso: una consegna firmata da un server, nel gruppo

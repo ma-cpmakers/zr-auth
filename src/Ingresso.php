@@ -34,7 +34,7 @@ final class Ingresso
             throw new InvalidArgumentException('Il workspace dell\'ingresso è lo slug, non vuoto.');
         }
 
-        return self::parti('/ingresso', ['workspace' => $workspace], false);
+        return self::parti('/ingresso', ['workspace' => $workspace], null);
     }
 
     /**
@@ -48,16 +48,34 @@ final class Ingresso
      */
     public static function versoCliente(): RedirectResponse
     {
-        return self::parti('/ingresso/cliente', [], true);
+        return self::parti('/ingresso/cliente', [], 'cliente');
     }
 
     /**
-     * La partenza di entrambi gli ingressi: `state` e verificatore nella sessione (col segno del cliente, che il ricevitore vuole uguale
+     * Manda la persona a `ZR_HOME_URL/ingresso/staff` per entrare nel frontend dello staff (`admin`, zr-superadmin) con il login normale di Zeiras (#3445): niente password né
+     * secondo fattore propri, la lista è chiusa e la tiene il backoffice. Un 302 con `app` (sempre `admin`: `zr-auth.app` dev'essere quello), `state` e `sfida` nella query, e niente altro.
+     * Il ritorno è lo stesso ricevitore degli altri ingressi: scambia il codice di `ingressi.staff.crea` col verificatore e apre la sessione dello staff
+     * (`Sessione::entraStaff()`), col gettone dello staff e senza persona né workspace. Una partenza nuova prende il posto della precedente.
+     *
+     *     Route::get('entra', fn () => Ingresso::versoStaff())->withoutMiddleware(ConGettone::class);
+     */
+    public static function versoStaff(): RedirectResponse
+    {
+        if (config('zr-auth.app') !== 'admin') {
+            throw new LogicException('L\'ingresso dello staff è del frontend `admin`: ZR_APP (zr-auth.app) dev\'essere admin.');
+        }
+
+        return self::parti('/ingresso/staff', [], 'staff');
+    }
+
+    /**
+     * La partenza di ogni ingresso: `state` e verificatore nella sessione (col segno del tipo, `cliente` o `staff`, che il ricevitore vuole uguale
      * al gettone che torna), la sfida nell'indirizzo.
      *
      * @param  array<string, string>  $campi  i campi in più della query, dopo `app`
+     * @param  'cliente'|'staff'|null  $tipo  null per l'ingresso in un workspace
      */
-    private static function parti(string $percorso, array $campi, bool $cliente): RedirectResponse
+    private static function parti(string $percorso, array $campi, ?string $tipo): RedirectResponse
     {
         $app = config('zr-auth.app');
         $home = rtrim((string) config('zr-auth.home'), '/');
@@ -74,7 +92,7 @@ final class Ingresso
 
         $state = self::base64url(random_bytes(32));
         $verificatore = self::base64url(random_bytes(48));
-        session()->put(self::CHIAVE, ['state' => $state, 'verificatore' => $verificatore] + ($cliente ? ['cliente' => true] : []));
+        session()->put(self::CHIAVE, ['state' => $state, 'verificatore' => $verificatore] + ($tipo !== null ? [$tipo => true] : []));
 
         $query = http_build_query([
             'app' => $app,
