@@ -1105,7 +1105,7 @@ trait Flow
             $this->frena('freni:flow.fisse.crea:'.$chi['persona'], self::FRENI['flow_fisse_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, [
                 'visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)],
-                'nome' => ['bail', 'required', 'string', 'max:'.self::FLOW_FISSA_NOME],
+                'nome' => ['bail', 'required', 'string', 'max:'.self::FLOW_FISSA_NOME, new NomeScritto],
                 'importo' => ['bail', 'required', 'integer:strict', 'between:1,'.self::FLOW_IMPORTO],
                 'frequenza_mesi' => ['bail', 'required', 'integer:strict', Rule::in(self::FLOW_FISSE_FREQUENZE)],
                 'prima_data' => ['bail', 'nullable', Rule::requiredIf(fn () => in_array($corpo['frequenza_mesi'] ?? null, [3, 12], true)), 'string', 'date_format:Y-m-d'],
