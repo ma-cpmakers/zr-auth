@@ -137,6 +137,10 @@ return [
         'title' => 'Eccezione già presente',
         'detail' => 'Questa occorrenza del blocco ha già la sua eccezione, una sola: toglila con `bookings.blocchi.eccezioni.elimina` e ripeti con la nuova. Non ripetere la richiesta uguale.',
     ],
+    'movimento_importato' => [
+        'title' => 'Movimento caricato da un estratto',
+        'detail' => 'Questo movimento viene da un estratto caricato e non si toglie da solo: per toglierlo annulla il caricamento con `flow.conti.importazioni.annullamento.crea`. Non ripetere la richiesta uguale.',
+    ],
     'retrospettiva_esistente' => [
         'title' => 'Retrospettiva già aperta',
         'detail' => 'Questo sprint ha già la sua retrospettiva, una sola: la board è in `retrospettiva_board_id` dello sprint. Non ripetere la richiesta.',
