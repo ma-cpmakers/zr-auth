@@ -32,6 +32,7 @@ use Zeiras\Auth\Testing\Finto\CrmFatture;
 use Zeiras\Auth\Testing\Finto\CrmRate;
 use Zeiras\Auth\Testing\Finto\CrmEsiti;
 use Zeiras\Auth\Testing\Finto\BoardFunzioni;
+use Zeiras\Auth\Testing\Finto\BoardPadri;
 use Zeiras\Auth\Testing\Finto\BoardRuoliEpiche;
 use Zeiras\Auth\Testing\Finto\CrmPersonalizzazione;
 use Zeiras\Auth\Testing\Finto\CrmPreventivi;
@@ -85,6 +86,7 @@ use Zeiras\Auth\Testing\Finto\UscitaAzienda;
 final class BackofficeFinto
 {
     use BoardFunzioni;
+    use BoardPadri;
     use BoardRuoliEpiche;
     use BookingsPrenotazioni;
     use NotifichePreferenze;
@@ -889,7 +891,7 @@ final class BackofficeFinto
      * @param  list<array<string, mixed>|string>  $assegnatari
      * @return array{id: string, board_id: string, numero: int, titolo: string}
      */
-    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null, ?int $punti = null, bool $pronta = false, ?string $sprint = null, ?string $orizzonte = null, ?string $dallaScheda = null, ?string $epica = null): array
+    public function scheda(array $workspace, string $titolo, string $board = 'board-di-prova', ?string $scadenza = null, array $assegnatari = [], ?string $tipo = null, ?int $punti = null, bool $pronta = false, ?string $sprint = null, ?string $orizzonte = null, ?string $dallaScheda = null, ?string $epica = null, ?string $padre = null): array
     {
         $idWorkspace = $workspace['id'] ?? null;
 
@@ -913,12 +915,16 @@ final class BackofficeFinto
             throw new InvalidArgumentException('L\'epica non è una scheda di tipo epica di questa board (nata con scheda()), e un\'epica non ha un\'epica.');
         }
 
+        if ($padre !== null && (($this->schede[$padre]['workspace'] ?? null) !== $idWorkspace || $this->schede[$padre]['board'] !== $board || $this->schede[$padre]['archiviata_il'] !== null)) {
+            throw new InvalidArgumentException('Il padre non è una scheda non archiviata di questa board (nata con scheda()).');
+        }
+
         $numero = count(array_filter($this->schede, fn (array $scheda) => $scheda['workspace'] === $idWorkspace && $scheda['board'] === $board)) + 1;
         $id = self::id();
         $ora = now()->toImmutable()->startOfMillisecond();
         $cambiate = [];
         $posizione = $this->inCoda($idWorkspace, $board, $cambiate);
-        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'punti' => $punti, 'pronta' => $pronta, 'orizzonte' => $orizzonte, 'dalla_scheda' => $dallaScheda, 'epica_id' => $epica, 'sprint_id' => $sprint, 'nello_sprint_dal' => $sprint === null ? null : $ora, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
+        $this->schede[$id] = ['id' => $id, 'workspace' => $idWorkspace, 'board' => $board, 'numero' => $numero, 'titolo' => $titolo, 'posizione' => $posizione, 'scadenza' => $scadenza, 'tipo' => $tipo, 'punti' => $punti, 'pronta' => $pronta, 'orizzonte' => $orizzonte, 'dalla_scheda' => $dallaScheda, 'epica_id' => $epica, 'padre_id' => $padre, 'sprint_id' => $sprint, 'nello_sprint_dal' => $sprint === null ? null : $ora, 'assegnatari' => array_values(array_map(fn (array|string $persona) => is_array($persona) ? (string) $persona['id'] : $persona, $assegnatari)), 'completata_il' => null, 'archiviata_il' => null, 'creata_il' => $ora, 'aggiornata_il' => $ora];
 
         $this->versione([$id, ...$cambiate]);
 
@@ -1877,6 +1883,7 @@ final class BackofficeFinto
             'pronta' => $scheda['pronta'] ?? false,
             'orizzonte' => $scheda['orizzonte'] ?? null,
             'epica_id' => $scheda['epica_id'] ?? null,
+            'padre_id' => $scheda['padre_id'] ?? null,
             'sprint_id' => $scheda['sprint_id'] ?? null,
             'nello_sprint_dal' => ($scheda['nello_sprint_dal'] ?? null) === null ? null : self::iso($scheda['nello_sprint_dal']),
             'dalla_scheda_id' => $scheda['dalla_scheda'] ?? null,
@@ -1889,11 +1896,12 @@ final class BackofficeFinto
             'numero_commenti' => 0,
             'attese_aperte' => $this->atteseAperte($scheda['id']),
             'figlie' => $this->contoDelleFiglie($scheda),
+            ...$this->contiDelPadre($scheda),
             'completata_il' => $scheda['completata_il'] === null ? null : self::iso($scheda['completata_il']),
             'archiviata_il' => $scheda['archiviata_il'] === null ? null : self::iso($scheda['archiviata_il']),
             'creata_il' => self::iso($scheda['creata_il']),
             'aggiornata_il' => self::iso($scheda['aggiornata_il']),
-            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 6])).'"',
+            'etag' => '"'.hash('xxh128', implode('|', [$scheda['id'], self::iso($scheda['aggiornata_il']), 7])).'"',
         ];
     }
 
@@ -2519,12 +2527,15 @@ final class BackofficeFinto
             ? array_values(array_map(fn (array $s) => $s['id'], array_filter($this->schede, fn (array $s) => ($s['epica_id'] ?? null) === $mia['id'])))
             : [];
         $senzaEpica = [...(($mia['epica_id'] ?? null) !== null ? [$mia['id']] : []), ...$figlie];
+        $figli = $this->figliDelPadre($mia['id']);
+        $senzaPadre = [...(($mia['padre_id'] ?? null) !== null ? [$mia['id']] : []), ...$figli];
         $risposta = [
             'etichette_create' => [],
             'assegnatari_tolti' => [],
             'collegamenti_tolti' => array_map(fn (array $c) => ['id' => $c['id'], 'scheda_id' => $c['scheda'], 'scheda_aspettata_id' => $c['aspettata']], $tolti),
             'fuori_dallo_sprint' => ($mia['sprint_id'] ?? null) !== null ? [$mia['id']] : [],
             'senza_epica' => $senzaEpica,
+            'senza_padre' => $senzaPadre,
         ];
 
         if (! $davvero) {
@@ -2544,15 +2555,20 @@ final class BackofficeFinto
             $this->schede[$id]['epica_id'] = null;
         }
 
+        foreach ($figli as $id) {
+            $this->schede[$id]['padre_id'] = null;
+        }
+
         $ora = now()->toImmutable()->startOfMillisecond();
         $this->schede[$scheda]['board'] = $arrivo['id'];
         $this->schede[$scheda]['numero'] = $numero;
         $this->schede[$scheda]['posizione'] = $nuova;
         $this->schede[$scheda]['epica_id'] = null;
+        $this->schede[$scheda]['padre_id'] = null;
         $this->schede[$scheda]['sprint_id'] = null;
         $this->schede[$scheda]['nello_sprint_dal'] = null;
         $this->schede[$scheda]['aggiornata_il'] = $ora;
-        $this->versione([$scheda, ...$cambiate, ...$figlie, ...array_map(fn (array $c) => $c['scheda'] === $scheda ? $c['aspettata'] : $c['scheda'], $tolti)]);
+        $this->versione([$scheda, ...$cambiate, ...$figlie, ...$figli, ...array_map(fn (array $c) => $c['scheda'] === $scheda ? $c['aspettata'] : $c['scheda'], $tolti)]);
 
         return [200, ['data' => $this->voceScheda($this->schede[$scheda]), ...$risposta]];
     }
