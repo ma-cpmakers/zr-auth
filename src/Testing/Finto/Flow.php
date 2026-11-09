@@ -412,7 +412,7 @@ trait Flow
                 $this->flow['movimenti'][$movimento] = [
                     'id' => $movimento, 'workspace' => $conto['workspace'], 'conto' => $conto['id'], 'importazione' => $id, 'data' => $riga['data'], 'importo' => $riga['importo'], 'descrizione' => $riga['descrizione'],
                     'impronta' => $riga['impronta'], 'categoria_id' => $riga['categoria_id'], 'categoria_fonte' => $riga['categoria_fonte'], 'nota' => null, 'escluso' => false, 'escluso_motivo' => null,
-                    'origine' => 'importazione', 'archiviato' => false,
+                    'escluso_origine' => null, 'riconoscimento_rifiutato' => false, 'origine' => 'importazione', 'archiviato' => false,
                 ];
             }
 
@@ -582,7 +582,14 @@ trait Flow
         $chi = $this->conFlow($richiesta);
         $grezzi = self::query($richiesta);
         $filtri = ['visibilita', 'conto', 'categoria', 'da', 'a', 'escluso'];
-        $lista = 'flow.movimenti.elenca|'.json_encode(array_map(fn (string $filtro) => is_scalar($grezzi[$filtro] ?? null) ? (string) $grezzi[$filtro] : null, $filtri), JSON_UNESCAPED_UNICODE);
+        $firma = array_map(fn (string $filtro) => is_scalar($grezzi[$filtro] ?? null) ? (string) $grezzi[$filtro] : null, $filtri);
+
+        // Il filtro della tappa 4 entra nella firma solo se c'è (come in Movimenti::listaDi).
+        if (isset($grezzi['escluso_origine']) && is_scalar($grezzi['escluso_origine'])) {
+            $firma[] = (string) $grezzi['escluso_origine'];
+        }
+
+        $lista = 'flow.movimenti.elenca|'.json_encode($firma, JSON_UNESCAPED_UNICODE);
 
         return $this->pagina(
             $richiesta,
@@ -591,13 +598,14 @@ trait Flow
             fn () => $this->movimentiDellaVistaFlow($chi, [
                 'visibilita' => (string) $grezzi['visibilita'], 'conto' => $grezzi['conto'] ?? null, 'categoria' => $grezzi['categoria'] ?? null, 'da' => $grezzi['da'] ?? null, 'a' => $grezzi['a'] ?? null,
                 'escluso' => isset($grezzi['escluso']) ? $grezzi['escluso'] === 'true' : null,
+                'escluso_origine' => $grezzi['escluso_origine'] ?? null,
             ], null),
             fn (array $voce) => [$voce['data'], $voce['id']],
             fn (string $id) => isset($this->flow['movimenti'][$id]) && $this->flow['movimenti'][$id]['workspace'] === $chi['workspace'] ? [$this->flow['movimenti'][$id]['data'], $id] : null,
             true,
             self::LIMITE_MASSIMO,
             null,
-            $this->regoleDeiFiltriFlow(false) + $this->estraneiFlow($grezzi, ['limite', 'cursore', ...$filtri]),
+            $this->regoleDeiFiltriFlow(false) + $this->estraneiFlow($grezzi, ['limite', 'cursore', ...$filtri, 'escluso_origine']),
         );
     }
 
@@ -627,8 +635,8 @@ trait Flow
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.required', ['attribute' => 'q']), 'regola' => Regola::OBBLIGATORIO, 'pointer' => '#/q']]);
         }
 
-        $filtri = ['visibilita' => (string) $campi['visibilita'], 'conto' => $campi['conto'] ?? null, 'categoria' => $campi['categoria'] ?? null, 'da' => $campi['da'] ?? null, 'a' => $campi['a'] ?? null, 'escluso' => $campi['escluso'] ?? null];
-        $lista = 'flow.movimenti.ricerca.crea|'.json_encode([...array_values($filtri), $cercato], JSON_UNESCAPED_UNICODE);
+        $filtri = ['visibilita' => (string) $campi['visibilita'], 'conto' => $campi['conto'] ?? null, 'categoria' => $campi['categoria'] ?? null, 'da' => $campi['da'] ?? null, 'a' => $campi['a'] ?? null, 'escluso' => $campi['escluso'] ?? null, 'escluso_origine' => $campi['escluso_origine'] ?? null];
+        $lista = 'flow.movimenti.ricerca.crea|'.json_encode([...array_values(array_slice($filtri, 0, 6)), $cercato, ...($filtri['escluso_origine'] === null ? [] : [$filtri['escluso_origine']])], JSON_UNESCAPED_UNICODE);
         $this->parametriDelCorpo = true;
 
         try {
@@ -682,7 +690,7 @@ trait Flow
             $id = self::id();
             $this->flow['movimenti'][$id] = [
                 'id' => $id, 'workspace' => $conto['workspace'], 'conto' => $conto['id'], 'importazione' => null, 'data' => $campi['data'], 'importo' => $campi['importo'], 'descrizione' => $campi['descrizione'],
-                'impronta' => null, 'categoria_id' => $categoria, 'categoria_fonte' => $fonte, 'nota' => $campi['nota'] ?? null, 'escluso' => false, 'escluso_motivo' => null, 'origine' => 'manuale', 'archiviato' => false,
+                'impronta' => null, 'categoria_id' => $categoria, 'categoria_fonte' => $fonte, 'nota' => $campi['nota'] ?? null, 'escluso' => false, 'escluso_motivo' => null, 'escluso_origine' => null, 'riconoscimento_rifiutato' => false, 'origine' => 'manuale', 'archiviato' => false,
             ];
             $voce = $this->voceMovimentoFlow($this->flow['movimenti'][$id]);
 
@@ -750,6 +758,14 @@ trait Flow
 
         if ($escluso !== $movimento['escluso']) {
             $nuovo['escluso'] = $escluso;
+            // Chi esclude è la persona; chi rimette nei totali un movimento escluso vuole che il riconoscimento non lo riesclude più (#3523).
+            $nuovo['escluso_origine'] = $escluso ? 'manuale' : null;
+
+            if (! $escluso) {
+                $nuovo['riconoscimento_rifiutato'] = true;
+            }
+        } elseif ($escluso && $motivo !== $movimento['escluso_motivo']) {
+            $nuovo['escluso_origine'] = 'manuale';
         }
 
         if ($motivo !== $movimento['escluso_motivo']) {
@@ -821,6 +837,7 @@ trait Flow
             'da' => ['bail', $facoltativo, 'string', 'date_format:Y-m-d'],
             'a' => ['bail', $facoltativo, 'string', 'date_format:Y-m-d'],
             'escluso' => $inCorpo ? ['bail', 'nullable', 'boolean:strict'] : ['bail', 'sometimes', 'string', Rule::in(['true', 'false'])],
+            'escluso_origine' => ['bail', $facoltativo, 'string', Rule::in(['automatica', 'manuale'])],
         ];
     }
 
@@ -829,7 +846,7 @@ trait Flow
      * nell'altra vista dà una lista vuota. `$cercato` è il testo già normalizzato, o null.
      *
      * @param  array{persona: string, workspace: string}  $chi
-     * @param  array{visibilita: string, conto: mixed, categoria: mixed, da: mixed, a: mixed, escluso: mixed}  $filtri
+     * @param  array{visibilita: string, conto: mixed, categoria: mixed, da: mixed, a: mixed, escluso: mixed, escluso_origine: mixed}  $filtri
      * @return list<array<string, mixed>>
      */
     private function movimentiDellaVistaFlow(array $chi, array $filtri, ?string $cercato): array
@@ -848,6 +865,7 @@ trait Flow
                 || ($filtri['da'] !== null && $movimento['data'] < $filtri['da'])
                 || ($filtri['a'] !== null && $movimento['data'] > $filtri['a'])
                 || ($filtri['escluso'] !== null && $movimento['escluso'] !== $filtri['escluso'])
+                || ($filtri['escluso_origine'] !== null && ! ($movimento['escluso'] && ($movimento['escluso_origine'] ?? 'manuale') === $filtri['escluso_origine']))
                 || ($cercato !== null && ! str_contains(FlowCategorie::normalizza($movimento['descrizione']).'|'.FlowCategorie::normalizza($movimento['nota'] ?? ''), $cercato))) {
                 continue;
             }
@@ -897,6 +915,7 @@ trait Flow
             'nota' => $movimento['nota'],
             'escluso' => $movimento['escluso'],
             'escluso_motivo' => $movimento['escluso_motivo'],
+            'escluso_origine' => $movimento['escluso'] ? ($movimento['escluso_origine'] ?? 'manuale') : null,
             'origine' => $movimento['origine'],
             'importazione_id' => $movimento['importazione'] ?? null,
         ];

@@ -159,7 +159,7 @@ it('un movimento a mano prende la categoria dalla parola chiave, la persona la c
     $creato = alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => '2026-11-02', 'importo' => -4520, 'descrizione' => 'ESSELUNGA Milano', 'nota' => 'spesa settimanale'], $gettoni['bruno']);
 
     expect($creato->status())->toBe(201, $creato->body())
-        ->and(array_keys($creato->json('data')))->toBe(['id', 'conto_id', 'visibilita', 'data', 'importo', 'valuta', 'descrizione', 'categoria_id', 'categoria_fonte', 'nota', 'escluso', 'escluso_motivo', 'origine', 'importazione_id'])
+        ->and(array_keys($creato->json('data')))->toBe(['id', 'conto_id', 'visibilita', 'data', 'importo', 'valuta', 'descrizione', 'categoria_id', 'categoria_fonte', 'nota', 'escluso', 'escluso_motivo', 'escluso_origine', 'origine', 'importazione_id'])
         ->and($creato->json('data.categoria_id'))->toBe($categorie['spesa'])
         ->and($creato->json('data.categoria_fonte'))->toBe('sistema')
         ->and($creato->json('data.origine'))->toBe('manuale')
@@ -170,6 +170,21 @@ it('un movimento a mano prende la categoria dalla parola chiave, la persona la c
     expect($scelta->json('data.categoria_fonte'))->toBe('utente')
         ->and(alFinto('PATCH', "/v1/flow/movimenti/{$id}", ['categoria_id' => null], $gettoni['carla'])->json('data.categoria_fonte'))->toBe('nessuna')
         ->and(alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => '2026-11-02', 'importo' => 0, 'descrizione' => 'x'], $gettoni['bruno'])->json('errors.0.pointer'))->toBe('#/importo');
+});
+
+it('escluso_origine: null se non escluso, manuale se lo esclude la persona; rimesso nei totali torna null; il filtro la prende (#3523)', function () {
+    [, $gettoni] = studioConFinanze();
+    $conto = contoDelFinto($gettoni['anna']);
+    $id = alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => '2026-11-02', 'importo' => -100, 'descrizione' => 'Bar'], $gettoni['anna'])->json('data.id');
+    $ids = fn (string $filtri) => array_column(alFinto('GET', "/v1/flow/movimenti?visibilita=comune{$filtri}", null, $gettoni['anna'])->json('data'), 'id');
+
+    expect(alFinto('GET', "/v1/flow/movimenti/{$id}", null, $gettoni['anna'])->json('data.escluso_origine'))->toBeNull()
+        ->and(alFinto('PATCH', "/v1/flow/movimenti/{$id}", ['escluso' => true, 'escluso_motivo' => 'altro'], $gettoni['anna'])->json('data.escluso_origine'))->toBe('manuale')
+        ->and($ids('&escluso_origine=manuale'))->toBe([$id])
+        ->and($ids('&escluso_origine=automatica'))->toBe([])
+        ->and(alFinto('GET', '/v1/flow/movimenti?visibilita=comune&escluso_origine=tutte', null, $gettoni['anna'])->json('errors.0'))->toMatchArray(['parameter' => 'escluso_origine', 'regola' => 'valore_non_ammesso'])
+        ->and(alFinto('PATCH', "/v1/flow/movimenti/{$id}", ['escluso' => false], $gettoni['anna'])->json('data.escluso_origine'))->toBeNull()
+        ->and($ids('&escluso_origine=manuale'))->toBe([]);
 });
 
 it('escluso vuole il suo motivo; uno importato non cambia data, importo e descrizione (FL.8)', function () {
