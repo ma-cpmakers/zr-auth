@@ -1321,6 +1321,93 @@ trait Flow
     }
 
     /**
+     * flow.riepiloghi.mostra (RiepiloghiController::mostra, App\Flow\Riepilogo): entrate e uscite del mese `AAAA-MM` della vista (`visibilita`, obbligatoria; ogni altro parametro è 422 `campo_estraneo`; un mese che
+     * non è `AAAA-MM` è 404 `non_trovato`, dopo la query). Per categoria col mese prima intero e la media dei tre mesi interi che lo precedono (null con meno di tre mesi interi di storico: dal mese del primo movimento della
+     * vista al mese chiesto, escluso); gli ultimi sei mesi fino al mese chiesto. Esclusi e trasferimenti non contano mai; il segno divide entrate e uscite, e le uscite sono positive. In ordine di uscite, poi di entrate.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraRiepilogoFlow(Request $richiesta, string $mese): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $this->testi->validaQuery(self::query($richiesta), ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow(self::query($richiesta), ['visibilita']));
+        $vista = (string) self::query($richiesta)['visibilita'];
+
+        if (preg_match('/^[0-9]{4}-(0[1-9]|1[0-2])$/D', $mese) !== 1) {
+            throw new Problema('non_trovato');
+        }
+
+        $inizio = CarbonImmutable::createFromFormat('!Y-m-d', $mese.'-01', 'Europe/Rome');
+        $trasferimenti = array_column(array_filter(FlowCategorie::TUTTE, fn (array $categoria) => $categoria['tipo'] === 'trasferimento'), 'id');
+        $movimenti = $this->movimentiBilancioFlow($chi, $vista);
+        $date = array_column($movimenti, 'data');
+        $storico = $date === [] ? 0 : max(0, ($inizio->year * 12 + $inizio->month) - ((int) substr(min($date), 0, 4) * 12 + (int) substr(min($date), 5, 2)));
+
+        $mesi = [];
+
+        for ($i = 5; $i >= 0; $i--) {
+            $mesi[$inizio->subMonthsNoOverflow($i)->format('Y-m')] = ['entrate' => 0, 'uscite' => 0, 'categorie' => []];
+        }
+
+        foreach ($movimenti as $movimento) {
+            $chiave = substr($movimento['data'], 0, 7);
+
+            if (! isset($mesi[$chiave]) || $movimento['escluso'] || in_array($movimento['categoria_id'], $trasferimenti, true)) {
+                continue;
+            }
+
+            $categoria = (string) $movimento['categoria_id'];
+            $mesi[$chiave]['categorie'][$categoria] ??= ['entrate' => 0, 'uscite' => 0];
+
+            if ($movimento['importo'] > 0) {
+                $mesi[$chiave]['entrate'] += $movimento['importo'];
+                $mesi[$chiave]['categorie'][$categoria]['entrate'] += $movimento['importo'];
+            } elseif ($movimento['importo'] < 0) {
+                $mesi[$chiave]['uscite'] -= $movimento['importo'];
+                $mesi[$chiave]['categorie'][$categoria]['uscite'] -= $movimento['importo'];
+            }
+        }
+
+        $uscitePerCategoria = fn (string $chiave, string $categoria): int => ($mesi[$chiave]['categorie'][$categoria]['uscite'] ?? 0);
+        $righe = [];
+
+        foreach ($mesi[$mese]['categorie'] as $categoria => $totali) {
+            $media = null;
+
+            if ($storico >= 3) {
+                $somma = 0;
+
+                for ($i = 1; $i <= 3; $i++) {
+                    $somma += $uscitePerCategoria($inizio->subMonthsNoOverflow($i)->format('Y-m'), (string) $categoria);
+                }
+
+                $media = intdiv(2 * $somma + 3, 6);
+            }
+
+            $righe[] = [
+                'categoria_id' => $categoria === '' ? null : (string) $categoria,
+                'uscite' => $totali['uscite'],
+                'entrate' => $totali['entrate'],
+                'mese_precedente' => $uscitePerCategoria($inizio->subMonthNoOverflow()->format('Y-m'), (string) $categoria),
+                'media_tre_mesi' => $media,
+            ];
+        }
+
+        usort($righe, fn (array $a, array $b) => [$b['uscite'], $b['entrate'], (string) $a['categoria_id']] <=> [$a['uscite'], $a['entrate'], (string) $b['categoria_id']]);
+
+        return [200, ['data' => [
+            'mese' => $mese,
+            'visibilita' => $vista,
+            'movimenti_fino_al' => $date === [] ? null : max($date),
+            'entrate' => $mesi[$mese]['entrate'],
+            'uscite' => $mesi[$mese]['uscite'],
+            'resta' => $mesi[$mese]['entrate'] - $mesi[$mese]['uscite'],
+            'per_categoria' => $righe,
+            'ultimi_mesi' => array_map(fn (string $chiave) => ['mese' => $chiave, 'entrate' => $mesi[$chiave]['entrate'], 'uscite' => $mesi[$chiave]['uscite']], array_keys($mesi)),
+        ]]];
+    }
+
+    /**
      * flow.bilancio.entrate.modifica (BilancioController::entrateModifica): la correzione di «Entri al mese» della vista, o `null` per tornare alle rilevate. Una per workspace nella comune, una per persona nella
      * personale. 200 con `entrate_al_mese`. Il freno si conta prima del corpo.
      *
