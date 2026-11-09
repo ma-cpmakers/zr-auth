@@ -1408,6 +1408,85 @@ trait Flow
     }
 
     /**
+     * flow.previsioni.mostra (PrevisioniController::mostra, App\Flow\Previsione): «Questo mese spenderai» della vista (`visibilita`, obbligatoria; ogni altro parametro è 422 `campo_estraneo`). `mese` deve essere
+     * il mese in corso di Roma: un altro è 422 `valore_non_ammesso` sul parametro `mese`, uno che non è `AAAA-MM` 404 `non_trovato`. Per categoria il massimo fra il già speso (da inizio mese a oggi compreso) e la media dei tre mesi
+     * interi precedenti; con meno di tre mesi interi di storico `storico_insufficiente` e le stime `null`. Esclusi e trasferimenti non contano mai.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraPrevisioneFlow(Request $richiesta, string $mese): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $this->testi->validaQuery(self::query($richiesta), ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow(self::query($richiesta), ['visibilita']));
+        $vista = (string) self::query($richiesta)['visibilita'];
+
+        if (preg_match('/^[0-9]{4}-(0[1-9]|1[0-2])$/D', $mese) !== 1) {
+            throw new Problema('non_trovato');
+        }
+
+        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+
+        if ($mese !== $oggi->format('Y-m')) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.in', ['attribute' => 'mese']), 'regola' => Regola::VALORE_NON_AMMESSO, 'parameter' => 'mese']]);
+        }
+
+        $movimenti = $this->movimentiBilancioFlow($chi, $vista);
+        $date = array_column($movimenti, 'data');
+        $storico = $date === [] ? 0 : max(0, ($oggi->year * 12 + $oggi->month) - ((int) substr(min($date), 0, 4) * 12 + (int) substr(min($date), 5, 2)));
+        $completa = $storico >= 3;
+        $trasferimenti = array_column(array_filter(FlowCategorie::TUTTE, fn (array $categoria) => $categoria['tipo'] === 'trasferimento'), 'id');
+        $inizioMese = $oggi->startOfMonth()->format('Y-m-d');
+        $inizioMedia = $oggi->startOfMonth()->subMonthsNoOverflow(3)->format('Y-m-d');
+        $spese = [];
+        $somme = [];
+
+        foreach ($movimenti as $movimento) {
+            if ($movimento['escluso'] || $movimento['importo'] >= 0 || in_array($movimento['categoria_id'], $trasferimenti, true)) {
+                continue;
+            }
+
+            $categoria = (string) $movimento['categoria_id'];
+
+            if ($movimento['data'] >= $inizioMese && $movimento['data'] <= $oggi->format('Y-m-d')) {
+                $spese[$categoria] = ($spese[$categoria] ?? 0) - $movimento['importo'];
+            } elseif ($movimento['data'] >= $inizioMedia && $movimento['data'] < $inizioMese) {
+                $somme[$categoria] = ($somme[$categoria] ?? 0) - $movimento['importo'];
+            }
+        }
+
+        $medie = $completa ? array_filter(array_map(fn (int $totale) => intdiv(2 * $totale + 3, 6), $somme), fn (int $importo) => $importo > 0) : [];
+        $righe = [];
+
+        foreach (array_keys($spese + $medie) as $categoria) {
+            $categoria = (string) $categoria;
+            $speso = $spese[$categoria] ?? 0;
+            $media = $medie[$categoria] ?? 0;
+            $righe[] = [
+                'categoria_id' => $categoria === '' ? null : $categoria,
+                'gia_speso' => $speso,
+                'stima' => $completa ? max($speso, $media) : null,
+                'base' => $completa ? ($speso >= $media ? 'gia_speso' : 'media_tre_mesi') : null,
+            ];
+        }
+
+        usort($righe, fn (array $a, array $b) => [$b['stima'] ?? $b['gia_speso'], $b['gia_speso'], (string) $a['categoria_id']] <=> [$a['stima'] ?? $a['gia_speso'], $a['gia_speso'], (string) $b['categoria_id']]);
+        $giaSpeso = array_sum($spese);
+        $stima = $completa ? array_sum(array_column($righe, 'stima')) : null;
+
+        return [200, ['data' => [
+            'mese' => $mese,
+            'visibilita' => $vista,
+            'stato' => $completa ? 'completa' : 'storico_insufficiente',
+            'mesi_di_storico' => $storico,
+            'movimenti_fino_al' => $date === [] ? null : max($date),
+            'gia_speso' => $giaSpeso,
+            'stima_fine_mese' => $stima,
+            'ancora_da_spendere' => $stima === null ? null : $stima - $giaSpeso,
+            'per_categoria' => $righe,
+        ]]];
+    }
+
+    /**
      * flow.bilancio.entrate.modifica (BilancioController::entrateModifica): la correzione di «Entri al mese» della vista, o `null` per tornare alle rilevate. Una per workspace nella comune, una per persona nella
      * personale. 200 con `entrate_al_mese`. Il freno si conta prima del corpo.
      *
