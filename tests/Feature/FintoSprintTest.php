@@ -217,6 +217,23 @@ it('la chiusura manda le schede aperte nel backlog o nello sprint dopo, tiene le
     expect(alFinto('POST', "/v1/board/sprint/{$attivo['id']}/chiusura", ['schede' => []], $gettone)->json('codice'))->toBe('sprint_non_attivo');
 });
 
+it('la chiusura risponde con meta.backlog: sotto il tetto senza lista Backlog, oltre il tetto se il test lo semina, e riesce lo stesso (#3552)', function () {
+    [$finto, $studio, $board, $gettone] = conLaBoardScrum();
+    $primo = $finto->sprint($studio, $board, 'Uno', 'attivo');
+    $meta = alFinto('POST', "/v1/board/sprint/{$primo['id']}/chiusura", ['schede' => []], $gettone)->json('meta.backlog');
+
+    expect($meta)->toBe(['lista_id' => null, 'schede' => 0, 'oltre_il_tetto' => false, 'tetto' => null, 'valore_del_tetto' => null, 'eccedenza' => 0]);
+
+    $secondo = $finto->sprint($studio, $board, 'Due', 'attivo');
+    $finto->backlogOltreIlTetto($secondo, 'schede', 503, 500);
+    $chiusura = alFinto('POST', "/v1/board/sprint/{$secondo['id']}/chiusura", ['schede' => []], $gettone);
+
+    expect($chiusura->status())->toBe(201)
+        ->and($chiusura->json('meta.backlog'))->toMatchArray(['schede' => 503, 'oltre_il_tetto' => true, 'tetto' => 'schede', 'valore_del_tetto' => 500, 'eccedenza' => 3]);
+
+    expect(fn () => $finto->backlogOltreIlTetto($secondo, 'limite', 10, 10))->toThrow(\InvalidArgumentException::class);
+});
+
 it('le schede non finite alla chiusura sono congelate: elenco per id con la destinazione e lo stato di adesso, 409 sprint_non_chiuso se lo sprint non è chiuso, 404 se è altrui', function () {
     [$finto, $studio, $board, $gettone] = conLaBoardScrum();
     $attivo = $finto->sprint($studio, $board, 'In corso', 'attivo');
@@ -248,9 +265,9 @@ it('le schede non finite alla chiusura sono congelate: elenco per id con la dest
     $finto->nonCompletate($seminato, [['scheda' => $resta['id'], 'destinazione' => 'backlog']]);
 
     expect(alFinto('GET', "/v1/board/sprint/{$seminato['id']}/schede-non-completate", null, $gettone)->json('data.0.destinazione'))->toBe('backlog')
-        ->and(fn () => $finto->nonCompletate($dopo, []))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->nonCompletate($seminato, [['scheda' => 'x', 'destinazione' => 'backlog']]))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->nonCompletate($seminato, [['scheda' => $resta['id'], 'destinazione' => 'altrove']]))->toThrow(InvalidArgumentException::class);
+        ->and(fn () => $finto->nonCompletate($dopo, []))->toThrow(\InvalidArgumentException::class)
+        ->and(fn () => $finto->nonCompletate($seminato, [['scheda' => 'x', 'destinazione' => 'backlog']]))->toThrow(\InvalidArgumentException::class)
+        ->and(fn () => $finto->nonCompletate($seminato, [['scheda' => $resta['id'], 'destinazione' => 'altrove']]))->toThrow(\InvalidArgumentException::class);
 });
 
 it('la chiusura senza punti conta le schede completate, in unità schede; senza schede la velocità è 0', function () {
@@ -308,8 +325,8 @@ it('le schede portano sprint_id e nello_sprint_dal nelle letture; scheda() rifiu
         ->and($elenco[$dentro['id']]['sprint_id'])->toBe($attivo['id'])
         ->and($elenco[$fuori['id']]['sprint_id'])->toBeNull()->and($elenco[$fuori['id']]['nello_sprint_dal'])->toBeNull();
 
-    expect(fn () => $finto->scheda($studio, 'In un chiuso', $board['id'], sprint: $chiuso['id']))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->scheda($studio, 'In un\'altra board', 'altra-board', sprint: $attivo['id']))->toThrow(InvalidArgumentException::class);
+    expect(fn () => $finto->scheda($studio, 'In un chiuso', $board['id'], sprint: $chiuso['id']))->toThrow(\InvalidArgumentException::class)
+        ->and(fn () => $finto->scheda($studio, 'In un\'altra board', 'altra-board', sprint: $attivo['id']))->toThrow(\InvalidArgumentException::class);
 });
 
 it('sprint() vuole una board Scrum e al più uno sprint attivo e uno pianificato per board', function () {
@@ -318,10 +335,10 @@ it('sprint() vuole una board Scrum e al più uno sprint attivo e uno pianificato
     $finto->sprint($studio, $board, 'Attivo', 'attivo');
     $finto->sprint($studio, $board, 'Pianificato');
 
-    expect(fn () => $finto->sprint($studio, $altra, 'X'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->sprint($studio, $board, 'Un altro attivo', 'attivo'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->sprint($studio, $board, 'Un altro pianificato'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->sprint($studio, $board, 'Un altro chiuso', 'chiuso'))->not->toThrow(InvalidArgumentException::class);
+    expect(fn () => $finto->sprint($studio, $altra, 'X'))->toThrow(\InvalidArgumentException::class)
+        ->and(fn () => $finto->sprint($studio, $board, 'Un altro attivo', 'attivo'))->toThrow(\InvalidArgumentException::class)
+        ->and(fn () => $finto->sprint($studio, $board, 'Un altro pianificato'))->toThrow(\InvalidArgumentException::class)
+        ->and(fn () => $finto->sprint($studio, $board, 'Un altro chiuso', 'chiuso'))->not->toThrow(\InvalidArgumentException::class);
 });
 
 it('con l\'app pm spenta elenca e crea sono 403 app_non_attiva; la Idempotency-Key ripete lo stesso 201 senza un secondo sprint', function () {
@@ -384,6 +401,6 @@ it('l\'andamento dà la serie seminata dal test (sprint_id, unita, inizio, fine,
     expect(alFinto('GET', "/v1/board/sprint/{$vuoto['id']}/andamento", null, $gettone)->json('data.giorni.0'))
         ->toBe(['data' => '2026-10-26', 'pianificato' => 3, 'aggiunto' => 1, 'rimosso' => 0, 'ristimato' => 0, 'completato' => 0, 'rimasto' => 4]);
 
-    expect(fn () => $finto->andamento($sprint, [['data' => '2026-10-12']]))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $finto->andamento($sprint, [], 'ore'))->toThrow(InvalidArgumentException::class);
+    expect(fn () => $finto->andamento($sprint, [['data' => '2026-10-12']]))->toThrow(\InvalidArgumentException::class)
+        ->and(fn () => $finto->andamento($sprint, [], 'ore'))->toThrow(\InvalidArgumentException::class);
 });
