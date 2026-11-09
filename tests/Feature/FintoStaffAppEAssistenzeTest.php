@@ -53,7 +53,7 @@ it('le app di un workspace: le disponibili in ordine di codice, accese o no; il 
 
     $elenco = Api::staff($gettone)->get("/v1/staff/workspace/{$workspace['id']}/app");
 
-    expect($elenco)->toBe(['data' => [['codice' => 'crm', 'attiva' => false], ['codice' => 'pm', 'attiva' => true]], 'successivo' => null]);
+    expect($elenco)->toBe(['data' => [['codice' => 'crm', 'attiva' => false], ['codice' => 'flow', 'attiva' => false], ['codice' => 'pm', 'attiva' => true]], 'successivo' => null]);
     expect(esitoAppEAssistenze(fn () => Api::staff(gettoneAppEAssistenze($this->finto, 'sup@lucianocastro.com', 'supporto'))->get("/v1/staff/workspace/{$workspace['id']}/app")))->toBe(['ok', null])
         ->and(esitoAppEAssistenze(fn () => Api::staff(gettoneAppEAssistenze($this->finto, 'fat@lucianocastro.com', 'fatturazione'))->get("/v1/staff/workspace/{$workspace['id']}/app")))->toBe([403, 'permesso_negato'])
         ->and(esitoAppEAssistenze(fn () => Api::staff($gettone)->get('/v1/staff/workspace/01k8x5c9y7f2r6q0s4t8v2w6z0/app')))->toBe([404, 'non_trovato']);
@@ -68,7 +68,7 @@ it('accendere o spegnere un\'app: solo il superadmin, una riga di registro per u
 
     expect(Api::staff($gettone)->patch($percorso, ['attiva' => true]))->toBe(['data' => ['codice' => 'pm', 'attiva' => true]])
         ->and(count($this->finto->registroDelloStaff()))->toBe($registro + 1)
-        ->and(Api::staff($gettone)->get("/v1/staff/workspace/{$workspace['id']}/app")['data'][1])->toBe(['codice' => 'pm', 'attiva' => true]);
+        ->and(Api::staff($gettone)->get("/v1/staff/workspace/{$workspace['id']}/app")['data'][2])->toBe(['codice' => 'pm', 'attiva' => true]);
 
     Api::staff($gettone)->patch($percorso, ['attiva' => true]);
     expect(count($this->finto->registroDelloStaff()))->toBe($registro + 1);

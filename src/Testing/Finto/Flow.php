@@ -61,8 +61,8 @@ trait Flow
     private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => [], 'nascoste' => [], 'avvisi' => [], 'avvisiStati' => [], 'avvisiSilenzi' => []];
 
     /**
-     * Apre Finanze nel workspace, come l'anteprima del backoffice (`ZR_FLOW_ANTEPRIMA`) e app.modifica: il catalogo del finto la dà «in_arrivo» (app.modifica la rifiuta e apps.elenca la mostra così), ma i metodi
-     * `flow.*` la vedono accesa.
+     * Accende Finanze nel workspace, come app.modifica: dal #3550 il catalogo del finto la dà «disponibile» a tutti, e un workspace che nasce dal finto (io.workspace.crea) l'ha già accesa; serve a un
+     * workspace messo su a mano (workspace()).
      *
      * @param  array<string, mixed>  $workspace  un workspace di workspace()
      */
@@ -75,7 +75,6 @@ trait Flow
         }
 
         $this->attive[$id]['flow'] = true;
-        $this->anteprime[$id]['flow'] = true;
 
         return $this;
     }

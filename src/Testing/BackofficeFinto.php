@@ -439,28 +439,28 @@ final class BackofficeFinto
 
     /**
      * Il catalogo delle app (config/catalogo.php del backoffice, D15): lo stato di ogni app, per codice. `crm` è disponibile per
-     * ogni workspace, come in produzione dal 12/10 (l'anteprima aperta a tutti, #1856).
+     * ogni workspace, come in produzione dal 12/10 (l'anteprima aperta a tutti, #1856); `flow` (Finanze) lo è senza anteprima (#3550, zr-pm-07 09/11).
      */
     private const CATALOGO = [
         'automations' => 'in_arrivo',
         'bookings' => 'in_arrivo',
         'content' => 'in_arrivo',
         'crm' => 'disponibile',
-        'flow' => 'in_arrivo',
+        'flow' => 'disponibile',
         'pm' => 'disponibile',
         'reports' => 'in_arrivo',
     ];
 
     /**
      * Il nome di ogni app (config/catalogo.php del backoffice, `nomi`, #1204): per codice e per lingua. Il nome del
-     * prodotto è lo stesso nelle tre lingue.
+     * prodotto è lo stesso nelle tre lingue; Finanze si traduce («Finance», «Finanzas»: zr-pm-07 09/11, #3550).
      */
     private const NOMI = [
         'automations' => ['it' => 'Automations', 'en' => 'Automations', 'es' => 'Automations'],
         'bookings' => ['it' => 'Bookings', 'en' => 'Bookings', 'es' => 'Bookings'],
         'content' => ['it' => 'Content', 'en' => 'Content', 'es' => 'Content'],
         'crm' => ['it' => 'CRM', 'en' => 'CRM', 'es' => 'CRM'],
-        'flow' => ['it' => 'Finanze', 'en' => 'Finanze', 'es' => 'Finanze'],
+        'flow' => ['it' => 'Finanze', 'en' => 'Finance', 'es' => 'Finanzas'],
         'pm' => ['it' => 'Project Management', 'en' => 'Project Management', 'es' => 'Project Management'],
         'reports' => ['it' => 'Reports', 'en' => 'Reports', 'es' => 'Reports'],
     ];
@@ -5538,8 +5538,9 @@ final class BackofficeFinto
 
             $this->entra($id, $persona, 'proprietario');
             $this->nascitaDelWorkspace($id, $persona);
-            // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
+            // Le app pm (#1577) e flow (#3550) nascono attive, come nel backoffice quando il catalogo le dà disponibili.
             $this->attive[$id]['pm'] = true;
+            $this->attive[$id]['flow'] = true;
 
             // Chi si invita entra con un invito da accettare, mai con un ingresso diretto: la mail parte da ultimoInvito().
             foreach ($membriIniziali as [$invitata, $ruolo]) {
