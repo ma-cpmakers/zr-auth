@@ -1518,6 +1518,200 @@ trait Flow
         return array_replace($voce, ['movimenti' => array_slice($voce['movimenti'], 0, 24)]);
     }
 
+    // ———————————————————————————————————————— Le spese future
+
+    /**
+     * flow.futuro.mostra (FuturoController::mostra, App\Flow\Futuro): quanto uscirà nei prossimi 30 giorni, se i soldi bastano e i dodici mesi, mese per mese, della vista chiesta (`visibilita`, obbligatoria; ogni
+     * altro parametro è 422 `campo_estraneo`). Le spese sono le ricorrenti rilevate (le `nascoste` no) ripetute lungo la cadenza più le spese fisse inserite; una voce senza giorno conta alla fine del suo periodo.
+     * Il mese e il giorno sono quelli di Roma.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraFuturoFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $this->testi->validaQuery(self::query($richiesta), ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow(self::query($richiesta), ['visibilita']));
+        $vista = (string) self::query($richiesta)['visibilita'];
+        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+        $date = array_column($this->movimentiBilancioFlow($chi, $vista), 'data');
+        $storico = $date === [] ? 0 : max(0, ($oggi->year * 12 + $oggi->month) - ((int) substr(min($date), 0, 4) * 12 + (int) substr(min($date), 5, 2)));
+        $primoMese = $oggi->startOfMonth();
+        $voci = $this->vociFuturoFlow($chi, $vista, $oggi, $primoMese->addMonthsNoOverflow(12));
+        $entro30 = $oggi->addDays(30)->format('Y-m-d');
+
+        $spese30 = 0;
+        $entrate30 = 0;
+        $mesi = [];
+
+        for ($i = 0; $i < 12; $i++) {
+            $mesi[$primoMese->addMonthsNoOverflow($i)->format('Y-m')] = ['totale' => 0, 'rara' => null];
+        }
+
+        foreach ($voci as $voce) {
+            if ($voce['importo'] > 0) {
+                if ($voce['certezza'] !== 'possibile' && $voce['fine'] < $entro30) {
+                    $entrate30 += $voce['importo'];
+                }
+
+                continue;
+            }
+
+            if ($voce['fine'] < $entro30) {
+                $spese30 += $voce['importo'];
+            }
+
+            $mese = substr($voce['fine'], 0, 7);
+
+            if (! isset($mesi[$mese])) {
+                continue;
+            }
+
+            $mesi[$mese]['totale'] += $voce['importo'];
+            $rara = $mesi[$mese]['rara'];
+
+            if ($voce['rara'] && ($rara === null || [$voce['importo'], $voce['nome'], $voce['riferimento_id']] < [$rara['importo'], $rara['nome'], $rara['id']])) {
+                $mesi[$mese]['rara'] = ['nome' => $voce['nome'], 'importo' => $voce['importo'], 'id' => $voce['riferimento_id']];
+            }
+        }
+
+        $somma = array_sum(array_column($mesi, 'totale'));
+        $saldi = array_filter(array_column(array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista)), 'saldo'), fn (mixed $saldo) => $saldo !== null);
+        $disponibile = $saldi === [] ? null : (int) array_sum($saldi) + $entrate30;
+        $mancano = $disponibile === null ? null : max(0, -$spese30 - $disponibile);
+        $elenco = [];
+
+        foreach ($mesi as $mese => $dati) {
+            $pesante = $dati['totale'] !== 0 && abs($dati['totale']) * 12 * 1000 >= 1200 * abs($somma);
+            $elenco[] = ['mese' => (string) $mese, 'totale' => $dati['totale'], 'motivo' => $pesante && $dati['rara'] !== null ? ['nome' => $dati['rara']['nome'], 'importo' => $dati['rara']['importo']] : null];
+        }
+
+        return [200, ['data' => [
+            'visibilita' => $vista,
+            'movimenti_fino_al' => $date === [] ? null : max($date),
+            'mesi_di_storico' => $storico,
+            'prossimi_30_giorni' => ['importo' => $spese30, 'disponibile' => $disponibile, 'mancano' => $mancano === 0 ? null : $mancano],
+            'prossimi_12_mesi' => ['importo' => $somma],
+            'mesi' => $elenco,
+        ]]];
+    }
+
+    /**
+     * flow.futuro.calendario.elenca (FuturoController::calendarioElenca): le spese dei prossimi 60 giorni della vista chiesta, per data (le voci col solo periodo per l'inizio del periodo), poi per nome e
+     * `riferimento_id`, a cursore legato alla vista. Senza entrate. Ogni altro parametro che non è `limite`, `cursore` o `visibilita` è 422 `campo_estraneo`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaCalendarioFuturoFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $grezzi = self::query($richiesta);
+        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+        $vista = is_string($grezzi['visibilita'] ?? null) ? $grezzi['visibilita'] : '';
+
+        [$stato, $corpo] = $this->pagina(
+            $richiesta,
+            'flow.futuro.calendario.elenca:'.$vista,
+            'chiave',
+            function () use ($chi, $vista, $oggi) {
+                $fine = $oggi->addDays(60);
+
+                return array_map(
+                    fn (array $voce) => $voce + ['chiave' => $voce['ordine'].'|'.$voce['nome']."\x1f".$voce['riferimento_id']],
+                    array_values(array_filter($this->vociFuturoFlow($chi, $vista, $oggi, $fine), fn (array $voce) => $voce['importo'] < 0 && $voce['ordine'] < $fine->format('Y-m-d'))),
+                );
+            },
+            fn (array $voce) => [$voce['chiave']],
+            fn (string $chiave) => str_contains($chiave, '|') ? [$chiave] : null,
+            false,
+            self::LIMITE_MASSIMO,
+            null,
+            ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow($grezzi, ['limite', 'cursore', 'visibilita']),
+        );
+
+        $corpo['data'] = array_map(fn (array $voce) => [
+            'data' => $voce['data'], 'periodo' => $voce['periodo'], 'nome' => $voce['nome'], 'categoria_id' => $voce['categoria_id'], 'importo' => $voce['importo'], 'certezza' => $voce['certezza'],
+            'base' => $voce['base'], 'origine' => $voce['origine'], 'riferimento_id' => $voce['riferimento_id'],
+        ], $corpo['data']);
+
+        return [$stato, $corpo];
+    }
+
+    /**
+     * Le voci delle spese future da oggi (compreso) a `$fine` (escluso), ogni origine, entrate comprese (App\Flow\Futuro::voci): le spese fisse inserite della vista e le ricorrenti rilevate che non sono
+     * `nascoste` e non hanno il nome di una fissa. Ogni voce ha `data` o `periodo`, `fine` (la data o la fine del periodo), `ordine` (la data o l'inizio del periodo) e `rara` (non torna ogni mese).
+     *
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return list<array<string, mixed>>
+     */
+    private function vociFuturoFlow(array $chi, string $vista, CarbonImmutable $oggi, CarbonImmutable $fine): array
+    {
+        $fisse = array_values(array_filter($this->flow['fisse'], fn (array $fissa) => ! $fissa['archiviato'] && $this->fissaDellaVistaFlow($fissa, $chi, $vista)));
+        $voci = [];
+        $nomi = [];
+
+        foreach ($fisse as $fissa) {
+            $nomi[$this->nomeRicorrenteFlow($fissa['nome'])] = true;
+            $comune = [
+                'origine' => 'fissa', 'riferimento_id' => $fissa['id'], 'nome' => $fissa['nome'], 'categoria_id' => null, 'importo' => -$fissa['importo'], 'certezza' => 'certa',
+                'base' => ['tipo' => 'inserita', 'mesi' => $fissa['frequenza_mesi']], 'rara' => $fissa['frequenza_mesi'] !== 1,
+            ];
+
+            if ($fissa['prima_data'] === null) {
+                for ($mese = $oggi->startOfMonth(); $mese < $fine; $mese = $mese->addMonthNoOverflow()) {
+                    $da = max($oggi, $mese);
+                    $voci[] = $comune + ['data' => null, 'periodo' => ['da' => $da->format('Y-m-d'), 'a' => $mese->endOfMonth()->format('Y-m-d')], 'fine' => $mese->endOfMonth()->format('Y-m-d'), 'ordine' => $da->format('Y-m-d')];
+                }
+
+                continue;
+            }
+
+            $prima = CarbonImmutable::parse($fissa['prima_data'], 'Europe/Rome')->startOfDay();
+
+            for ($passo = 0; ($data = $prima->addMonthsNoOverflow($passo * $fissa['frequenza_mesi'])) < $fine; $passo++) {
+                if ($data >= $oggi) {
+                    $voci[] = $comune + ['data' => $data->format('Y-m-d'), 'periodo' => null, 'fine' => $data->format('Y-m-d'), 'ordine' => $data->format('Y-m-d')];
+                }
+            }
+        }
+
+        foreach ($this->ricorrentiDellaVistaFlow($chi, $vista, $oggi) as $ricorrente) {
+            if ($ricorrente['stato'] === 'nascosta' || isset($nomi[$ricorrente['chiave']])) {
+                continue;
+            }
+
+            $valore = $ricorrente['cadenza']['valore'];
+            $inMesi = $ricorrente['cadenza']['unita'] === 'mesi';
+            $cadenzaGiorni = $inMesi ? $valore * 30.4375 : $valore * 7;
+            $prima = CarbonImmutable::parse($ricorrente['prossima_data'], 'Europe/Rome')->startOfDay();
+            $occorrenza = fn (int $passo): CarbonImmutable => $inMesi ? $prima->addMonthsNoOverflow($passo * $valore) : $prima->addWeeks($passo * $valore);
+            $giorni = intdiv((int) strtotime($oggi->format('Y-m-d').' UTC') - (int) strtotime($ricorrente['movimenti'][0]['data'].' UTC'), 86400);
+            $certezza = match (true) {
+                $ricorrente['tipo'] === 'stagionale', $ricorrente['tipo'] === 'abitudine', $giorni > 2 * $cadenzaGiorni => 'possibile',
+                in_array($ricorrente['tipo'], ['fissa', 'bolletta'], true) && $ricorrente['occorrenze'] >= 6 && $giorni <= 1.5 * $cadenzaGiorni => 'certa',
+                default => 'stima',
+            };
+            $comune = [
+                'origine' => 'ricorrente', 'riferimento_id' => $ricorrente['id'], 'nome' => $ricorrente['nome'], 'categoria_id' => $ricorrente['categoria_id'], 'importo' => $ricorrente['importo_tipico'],
+                'certezza' => $certezza, 'base' => $ricorrente['base'], 'rara' => $inMesi && $valore >= 3,
+            ];
+            $passo = 0;
+
+            while ($occorrenza($passo) < $oggi) {
+                $passo++;
+            }
+
+            if ($passo === 1 && ($attesa = min($occorrenza(1)->subDay(), $oggi->endOfMonth()->startOfDay())) >= $oggi) {
+                $voci[] = $comune + ['data' => null, 'periodo' => ['da' => $oggi->format('Y-m-d'), 'a' => $attesa->format('Y-m-d')], 'fine' => $attesa->format('Y-m-d'), 'ordine' => $oggi->format('Y-m-d')];
+            }
+
+            for (; ($data = $occorrenza($passo)) < $fine; $passo++) {
+                $voci[] = $comune + ['data' => $data->format('Y-m-d'), 'periodo' => null, 'fine' => $data->format('Y-m-d'), 'ordine' => $data->format('Y-m-d')];
+            }
+        }
+
+        return $voci;
+    }
+
     /**
      * Le ricorrenti di una vista, nella forma dello schema Ricorrente (Ricorrenti::rileva e Ricorrenti::forma del backoffice): i movimenti degli ultimi 36 mesi, senza esclusi, trasferimenti né importi a zero,
      * raggruppati per conto, segno e nome normalizzato; un gruppo con almeno 3 occorrenze (4 per un'abitudine) a cadenza regolare è una ricorrente.
