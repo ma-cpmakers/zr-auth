@@ -1210,7 +1210,7 @@ trait Flow
         $mensili = array_sum(array_column(array_filter($fisse, fn (array $fissa) => $fissa['frequenza_mesi'] === 1), 'importo'));
         $daConti = $medie === null ? null : array_sum($medie['uscite']);
         $totale = $daConti === null ? null : $daConti + $mensili;
-        $daParte = $this->mettiDaParteFlow($fisse, $oggi);
+        $daParte = $this->mettiDaParteFlow($fisse, array_values(array_filter($this->ricorrentiDellaVistaFlow($chi, $vista, $oggi), fn (array $voce) => $voce['tipo'] === 'stagionale' && $voce['importo_tipico'] < 0 && $voce['stato'] === 'attiva')), $oggi);
         $conti = array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista));
 
         return [200, ['data' => [
@@ -1330,17 +1330,22 @@ trait Flow
 
     /**
      * Quanto mettere da parte (Bilancio::mettiDaParte): il massimo, sulle scadenze dei prossimi dodici mesi (da oggi compreso a fra dodici mesi escluso) delle spese non mensili in ordine di data, del cumulato diviso i
-     * mesi di calendario fino alla scadenza (almeno 1), per eccesso a 5 €. Una `prima_data` passata si porta avanti di `frequenza_mesi`.
+     * mesi di calendario fino alla scadenza (almeno 1), per eccesso a 5 €. Una `prima_data` passata si porta avanti di `frequenza_mesi`. Le rilevate sono le ricorrenti stagionali attive (uscite) dalla loro `prossima_data`
+     * (passata: nessuna scadenza), senza quelle col nome di una spesa fissa.
      *
      * @param  list<array<string, mixed>>  $fisse
+     * @param  list<array<string, mixed>>  $rilevate
      * @return array{importo: int, scadenze: list<array<string, mixed>>, totale_scadenze: int}
      */
-    private function mettiDaParteFlow(array $fisse, CarbonImmutable $oggi): array
+    private function mettiDaParteFlow(array $fisse, array $rilevate, CarbonImmutable $oggi): array
     {
         $fine = $oggi->addMonthsNoOverflow(12);
         $scadenze = [];
+        $nomiInseriti = [];
 
         foreach ($fisse as $fissa) {
+            $nomiInseriti[$this->nomeRicorrenteFlow($fissa['nome'])] = true;
+
             if ($fissa['frequenza_mesi'] === 1 || $fissa['prima_data'] === null) {
                 continue;
             }
@@ -1349,21 +1354,36 @@ trait Flow
 
             for ($passo = 0; ($data = $prima->addMonthsNoOverflow($passo * $fissa['frequenza_mesi'])) < $fine; $passo++) {
                 if ($data >= $oggi) {
-                    $scadenze[] = ['fissa' => $fissa, 'data' => $data];
+                    $scadenze[] = ['data' => $data, 'nome' => $fissa['nome'], 'id' => $fissa['id'], 'importo' => $fissa['importo'], 'fissa_id' => $fissa['id'], 'ricorrente_id' => null, 'origine' => 'inserita'];
                 }
             }
         }
 
-        usort($scadenze, fn (array $a, array $b) => [$a['data'], $a['fissa']['nome'], $a['fissa']['id']] <=> [$b['data'], $b['fissa']['nome'], $b['fissa']['id']]);
+        foreach ($rilevate as $ricorrente) {
+            $prima = CarbonImmutable::parse($ricorrente['prossima_data'], 'Europe/Rome')->startOfDay();
+
+            if (isset($nomiInseriti[$ricorrente['chiave']]) || $prima < $oggi) {
+                continue;
+            }
+
+            for ($passo = 0; ($data = $prima->addMonthsNoOverflow($passo * $ricorrente['cadenza']['valore'])) < $fine; $passo++) {
+                $scadenze[] = ['data' => $data, 'nome' => $ricorrente['nome'], 'id' => $ricorrente['id'], 'importo' => -$ricorrente['importo_tipico'], 'fissa_id' => null, 'ricorrente_id' => $ricorrente['id'], 'origine' => 'rilevata'];
+            }
+        }
+
+        usort($scadenze, fn (array $a, array $b) => [$a['data'], $a['nome'], $a['id']] <=> [$b['data'], $b['nome'], $b['id']]);
         $cumulato = 0;
         $massimo = 0;
         $elenco = [];
 
-        foreach ($scadenze as ['fissa' => $fissa, 'data' => $data]) {
-            $mesi = max(1, ($data->year * 12 + $data->month) - ($oggi->year * 12 + $oggi->month));
-            $cumulato += $fissa['importo'];
+        foreach ($scadenze as $scadenza) {
+            $mesi = max(1, ($scadenza['data']->year * 12 + $scadenza['data']->month) - ($oggi->year * 12 + $oggi->month));
+            $cumulato += $scadenza['importo'];
             $massimo = max($massimo, intdiv($cumulato + $mesi - 1, $mesi));
-            $elenco[] = ['fissa_id' => $fissa['id'], 'nome' => $fissa['nome'], 'data' => $data->format('Y-m-d'), 'importo' => $fissa['importo'], 'mesi' => $mesi];
+            $elenco[] = [
+                'fissa_id' => $scadenza['fissa_id'], 'ricorrente_id' => $scadenza['ricorrente_id'], 'origine' => $scadenza['origine'], 'nome' => $scadenza['nome'],
+                'data' => $scadenza['data']->format('Y-m-d'), 'importo' => $scadenza['importo'], 'mesi' => $mesi,
+            ];
         }
 
         return ['importo' => intdiv($massimo + 499, 500) * 500, 'scadenze' => $elenco, 'totale_scadenze' => $cumulato];
