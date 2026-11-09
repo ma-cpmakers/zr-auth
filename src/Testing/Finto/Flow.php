@@ -30,6 +30,12 @@ trait Flow
 
     private const FLOW_FISSE_TETTO = 100;
 
+    private const FLOW_RICORRENTI_TIPI = ['fissa', 'bolletta', 'abitudine', 'stagionale'];
+
+    private const FLOW_RICORRENTI_STATI = ['attiva', 'nascosta'];
+
+    private const FLOW_RICORRENTI_RIFERIMENTI = ['rif', 'riferimento', 'ref', 'cro', 'trn', 'cod', 'codice', 'id', 'n', 'nr', 'num', 'numero', 'ord', 'ordine', 'del', 'data'];
+
     private const FLOW_FISSA_NOME = 80;
 
     private const FLOW_FISSE_FREQUENZE = [1, 3, 12];
@@ -49,7 +55,7 @@ trait Flow
     private const FLOW_DESCRIZIONE = 500;
 
     /** @var array{conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>, correzioni: array<string, int|null>} */
-    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => []];
+    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => [], 'nascoste' => []];
 
     /**
      * Apre Finanze nel workspace, come l'anteprima del backoffice (`ZR_FLOW_ANTEPRIMA`) e app.modifica: il catalogo del finto la dà «in_arrivo» (app.modifica la rifiuta e apps.elenca la mostra così), ma i metodi
@@ -1362,4 +1368,317 @@ trait Flow
 
         return ['importo' => intdiv($massimo + 499, 500) * 500, 'scadenze' => $elenco, 'totale_scadenze' => $cumulato];
     }
+
+    // ———————————————————————————————————————— Ricorrenti
+
+    /**
+     * flow.ricorrenti.elenca (RicorrentiController::elenca): le spese e le entrate che tornano, trovate dai movimenti degli ultimi 36 mesi della vista chiesta (`visibilita`, obbligatoria), per `prossima_data`
+     * crescente e poi per `id`, a cursore. Filtri `tipo` e `stato` (`attiva` di default). Il cursore è legato alla vista e ai filtri; ogni altro parametro è 422 `campo_estraneo`. Il giorno è quello di Roma.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaRicorrentiFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $grezzi = self::query($richiesta);
+        $testo = fn (string $nome) => is_string($grezzi[$nome] ?? null) ? $grezzi[$nome] : '';
+        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+
+        return $this->pagina(
+            $richiesta,
+            'flow.ricorrenti.elenca:'.$testo('visibilita').':'.$testo('tipo').':'.$testo('stato'),
+            'id',
+            function () use ($chi, $grezzi, $oggi) {
+                $stato = (string) ($grezzi['stato'] ?? 'attiva');
+                $tipo = $grezzi['tipo'] ?? null;
+
+                return array_map(
+                    fn (array $voce) => array_diff_key($voce, ['movimenti' => 1, 'base' => 1]),
+                    array_values(array_filter(
+                        $this->ricorrentiDellaVistaFlow($chi, (string) $grezzi['visibilita'], $oggi),
+                        fn (array $voce) => $voce['stato'] === $stato && ($tipo === null || $voce['tipo'] === $tipo),
+                    )),
+                );
+            },
+            fn (array $voce) => [$voce['prossima_data'], $voce['id']],
+            function (string $id) use ($chi, $grezzi, $oggi) {
+                foreach ($this->ricorrentiDellaVistaFlow($chi, (string) $grezzi['visibilita'], $oggi) as $voce) {
+                    if ($voce['id'] === $id) {
+                        return [$voce['prossima_data'], $id];
+                    }
+                }
+
+                return null;
+            },
+            false,
+            self::LIMITE_MASSIMO,
+            null,
+            [
+                'visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)],
+                'tipo' => ['bail', 'sometimes', 'string', Rule::in(self::FLOW_RICORRENTI_TIPI)],
+                'stato' => ['bail', 'sometimes', 'string', Rule::in(self::FLOW_RICORRENTI_STATI)],
+            ] + $this->estraneiFlow($grezzi, ['limite', 'cursore', 'visibilita', 'tipo', 'stato']),
+        );
+    }
+
+    /**
+     * flow.ricorrenti.mostra (RicorrentiController::mostra): una ricorrente con i suoi movimenti (al più 24, i più recenti prima) e `base`. Un id che non c'è, mal formato, non più rilevato o di un conto personale
+     * altrui è 404 `non_trovato`, uguale nei casi.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraRicorrenteFlow(Request $richiesta, string $id): array
+    {
+        $voce = $this->trovaRicorrenteFlow($this->conFlow($richiesta), $id) ?? throw new Problema('non_trovato');
+
+        return [200, ['data' => $this->dettaglioRicorrenteFlow($voce)], ['ETag' => self::etagCrm(['id' => $voce['id'], 'stato' => $voce['stato']])]];
+    }
+
+    /**
+     * flow.ricorrenti.modifica (RicorrentiController::modifica): nasconde o riattiva una ricorrente (`stato`). Il freno si conta prima di tutto; una ricorrente che non c'è o è personale di un altro è 404, prima
+     * dell'`If-Match` (412 sullo stato cambiato) e del corpo. Ripetere lo stato che c'è non cambia niente.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function modificaRicorrenteFlow(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $this->frena('freni:flow.ricorrenti.modifica:'.$chi['persona'], self::FRENI['flow_ricorrenti_persona'], self::ORA);
+        $voce = $this->trovaRicorrenteFlow($chi, $id) ?? throw new Problema('non_trovato');
+        $this->pretendiLaVersioneCrm($richiesta, ['id' => $voce['id'], 'stato' => $voce['stato']]);
+        $campi = $this->modificaCrm($corpo, ['stato' => ['bail', 'required', 'string', Rule::in(self::FLOW_RICORRENTI_STATI)]]);
+
+        if ($campi['stato'] === 'nascosta') {
+            $this->flow['nascoste'][$voce['id']] = true;
+        } else {
+            unset($this->flow['nascoste'][$voce['id']]);
+        }
+
+        $voce['stato'] = $campi['stato'];
+
+        return [200, ['data' => $this->dettaglioRicorrenteFlow($voce)], ['ETag' => self::etagCrm(['id' => $voce['id'], 'stato' => $voce['stato']])]];
+    }
+
+    /**
+     * La ricorrente con questo id fra quelle che chi chiama vede (le comuni e le sue personali), o null: un id mal formato, che non c'è, non più rilevato o di un conto personale altrui.
+     *
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return array<string, mixed>|null
+     */
+    private function trovaRicorrenteFlow(array $chi, string $id): ?array
+    {
+        $id = mb_strtolower($id);
+
+        if (preg_match('/^[0-7][0-9a-hjkmnp-tv-z]{25}$/', $id) !== 1) {
+            return null;
+        }
+
+        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+
+        foreach (self::FLOW_VISIBILITA as $vista) {
+            foreach ($this->ricorrentiDellaVistaFlow($chi, $vista, $oggi) as $voce) {
+                if ($voce['id'] === $id) {
+                    return $voce;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * La ricorrente con i suoi movimenti (al più 24, i più recenti prima).
+     *
+     * @param  array<string, mixed>  $voce
+     * @return array<string, mixed>
+     */
+    private function dettaglioRicorrenteFlow(array $voce): array
+    {
+        return array_replace($voce, ['movimenti' => array_slice($voce['movimenti'], 0, 24)]);
+    }
+
+    /**
+     * Le ricorrenti di una vista, nella forma dello schema Ricorrente (Ricorrenti::rileva e Ricorrenti::forma del backoffice): i movimenti degli ultimi 36 mesi, senza esclusi, trasferimenti né importi a zero,
+     * raggruppati per conto, segno e nome normalizzato; un gruppo con almeno 3 occorrenze (4 per un'abitudine) a cadenza regolare è una ricorrente.
+     *
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return list<array<string, mixed>>
+     */
+    private function ricorrentiDellaVistaFlow(array $chi, string $vista, CarbonImmutable $oggi): array
+    {
+        $inizio = $oggi->subMonthsNoOverflow(36)->format('Y-m-d');
+        $fine = $oggi->format('Y-m-d');
+        $trasferimenti = array_column(array_filter(FlowCategorie::TUTTE, fn (array $categoria) => $categoria['tipo'] === 'trasferimento'), 'id');
+        $movimenti = array_filter(
+            $this->movimentiBilancioFlow($chi, $vista),
+            fn (array $movimento) => ! $movimento['escluso'] && $movimento['importo'] !== 0 && $movimento['data'] >= $inizio && $movimento['data'] <= $fine && ! in_array($movimento['categoria_id'], $trasferimenti, true),
+        );
+        usort($movimenti, fn (array $uno, array $altro) => [$uno['data'], $uno['id']] <=> [$altro['data'], $altro['id']]);
+
+        $gruppi = [];
+
+        foreach ($movimenti as $movimento) {
+            $nome = $this->nomeRicorrenteFlow((string) $movimento['descrizione']);
+
+            if ($nome === '') {
+                continue;
+            }
+
+            $segno = $movimento['importo'] > 0 ? 'entrata' : 'uscita';
+            $gruppi[$movimento['conto'].'|'.$segno.'|'.$nome]['dati'] = [$movimento['conto'], $segno, $nome];
+            $gruppi[$movimento['conto'].'|'.$segno.'|'.$nome]['movimenti'][] = $movimento;
+            $gruppi[$movimento['conto'].'|'.$segno.'|'.$nome]['ultima'] = (string) $movimento['descrizione'];
+        }
+
+        $voci = [];
+
+        foreach ($gruppi as $gruppo) {
+            $voce = $this->valutaRicorrenteFlow($gruppo['dati'], $gruppo['movimenti'], $chi['workspace'], $vista, $gruppo['ultima']);
+
+            if ($voce !== null) {
+                $voci[] = $voce;
+            }
+        }
+
+        usort($voci, fn (array $uno, array $altro) => strcmp($uno['prossima_data'].$uno['id'], $altro['prossima_data'].$altro['id']));
+
+        return $voci;
+    }
+
+    /** Il nome di un movimento per una ricorrente (Ricorrenti::nome): minuscolo, senza punteggiatura né parole con una cifra né parole di riferimento, al più 80 caratteri. */
+    private function nomeRicorrenteFlow(string $descrizione): string
+    {
+        $testo = preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower($descrizione, 'UTF-8')) ?? '';
+        $parole = array_filter(
+            explode(' ', trim($testo)),
+            fn (string $parola) => $parola !== '' && ! preg_match('/\p{N}/u', $parola) && ! in_array($parola, self::FLOW_RICORRENTI_RIFERIMENTI, true),
+        );
+
+        return mb_substr(implode(' ', $parole), 0, 80);
+    }
+
+    /**
+     * Un gruppo di movimenti, dal più vecchio, che è una ricorrente o non lo è (Ricorrenti::valuta).
+     *
+     * @param  array{string, string, string}  $dati  conto, segno, nome
+     * @param  list<array<string, mixed>>  $movimenti
+     * @return array<string, mixed>|null
+     */
+    private function valutaRicorrenteFlow(array $dati, array $movimenti, string $workspace, string $vista, string $ultima): ?array
+    {
+        $occorrenze = count($movimenti);
+
+        if ($occorrenze < 3) {
+            return null;
+        }
+
+        $giorni = array_map(fn (array $movimento) => intdiv((int) strtotime($movimento['data'].' UTC'), 86400), $movimenti);
+        $intervalli = [];
+
+        for ($i = 1; $i < $occorrenze; $i++) {
+            $intervalli[] = $giorni[$i] - $giorni[$i - 1];
+        }
+
+        $cadenza = $this->medianaFlow($intervalli);
+
+        if ($cadenza <= 0 || max(array_map(fn (int $intervallo) => abs($intervallo - $cadenza), $intervalli)) > 0.15 * $cadenza) {
+            return null;
+        }
+
+        $importi = array_column($movimenti, 'importo');
+        $tipico = (int) round($this->medianaFlow($importi));
+        $ultimo = $movimenti[$occorrenze - 1];
+        $ultimaData = CarbonImmutable::createFromFormat('Y-m-d', $ultimo['data'], 'Europe/Rome')->startOfDay();
+
+        if ($cadenza < 26) {
+            $settimane = (int) round($cadenza / 7);
+
+            if ($settimane < 1 || $occorrenze < 4) {
+                return null;
+            }
+
+            $tipo = 'abitudine';
+            $forma = ['valore' => $settimane, 'unita' => 'settimane'];
+            $prossima = $ultimaData->addWeeks($settimane);
+            $base = ['tipo' => 'cadenza_settimanale', 'settimane' => $settimane];
+        } else {
+            $mesi = max(1, (int) round($cadenza / 30.4375));
+            $fissa = max(array_map(fn (int $importo) => abs($importo - $tipico), $importi)) <= 0.02 * abs($tipico);
+            $tipo = match (true) {
+                $mesi >= 3 => 'stagionale',
+                $mesi === 1 && $fissa => 'fissa',
+                default => 'bolletta',
+            };
+            $forma = ['valore' => $mesi, 'unita' => 'mesi'];
+            $prossima = $ultimaData->addMonthsNoOverflow($mesi);
+            $base = match (true) {
+                $mesi === 12 => ['tipo' => 'annuale', 'anni' => 1],
+                $mesi >= 3 => ['tipo' => 'stagionale', 'mesi' => $mesi],
+                default => ['tipo' => $fissa ? 'stesso_importo' : 'importo_variabile', 'mesi' => $mesi * $occorrenze],
+            };
+        }
+
+        $categorie = [];
+
+        foreach ($movimenti as $movimento) {
+            if ($movimento['categoria_id'] !== null) {
+                $categorie[(string) $movimento['categoria_id']] = ($categorie[(string) $movimento['categoria_id']] ?? 0) + 1;
+            }
+        }
+
+        arsort($categorie);
+        $id = $this->idRicorrenteFlow($workspace, $dati[0], $dati[1], $dati[2]);
+
+        return [
+            'id' => $id,
+            'nome' => mb_substr(trim((string) preg_replace('/\s+/u', ' ', $ultima)), 0, 80),
+            'chiave' => $dati[2],
+            'categoria_id' => array_key_first($categorie),
+            'tipo' => $tipo,
+            'importo_tipico' => $tipico,
+            'cadenza' => $forma,
+            'prossima_data' => $prossima->format('Y-m-d'),
+            'occorrenze' => $occorrenze,
+            'ultimo_importo' => $ultimo['importo'],
+            'variazione' => $ultimo['importo'] - $tipico,
+            'conto_id' => $dati[0],
+            'visibilita' => $vista,
+            'stato' => isset($this->flow['nascoste'][$id]) ? 'nascosta' : 'attiva',
+            'movimenti' => array_reverse(array_map(fn (array $movimento) => ['id' => $movimento['id'], 'data' => $movimento['data'], 'importo' => $movimento['importo']], $movimenti)),
+            'base' => $base,
+        ];
+    }
+
+    /** L'id di una ricorrente (Ricorrenti::id): un ULID che deriva da workspace, conto, segno e nome normalizzato. */
+    private function idRicorrenteFlow(string $workspace, string $conto, string $segno, string $nome): string
+    {
+        $bit = '00';
+
+        foreach (str_split(substr(hash('sha256', implode('|', ['flow.ricorrente', $workspace, $conto, $segno, $nome]), true), 0, 16)) as $byte) {
+            $bit .= str_pad(decbin(ord($byte)), 8, '0', STR_PAD_LEFT);
+        }
+
+        $id = '';
+
+        for ($posto = 0; $posto < 26; $posto++) {
+            $id .= '0123456789abcdefghjkmnpqrstvwxyz'[(int) bindec(substr($bit, $posto * 5, 5))];
+        }
+
+        return $id;
+    }
+
+    /**
+     * La mediana: il valore di mezzo, o la media dei due di mezzo.
+     *
+     * @param  non-empty-list<int>  $valori
+     */
+    private function medianaFlow(array $valori): float
+    {
+        sort($valori);
+        $mezzo = intdiv(count($valori), 2);
+
+        return count($valori) % 2 === 1 ? (float) $valori[$mezzo] : ($valori[$mezzo - 1] + $valori[$mezzo]) / 2;
+    }
 }
+
