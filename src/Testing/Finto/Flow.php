@@ -57,8 +57,8 @@ trait Flow
 
     private const FLOW_DESCRIZIONE = 500;
 
-    /** @var array{conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>, correzioni: array<string, int|null>} */
-    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => [], 'nascoste' => []];
+    /** @var array{avvisi: array<string, array<string, mixed>>, avvisiStati: array<string, array<string, string>>, avvisiSilenzi: array<string, true>, conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>, correzioni: array<string, int|null>} */
+    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => [], 'nascoste' => [], 'avvisi' => [], 'avvisiStati' => [], 'avvisiSilenzi' => []];
 
     /**
      * Apre Finanze nel workspace, come l'anteprima del backoffice (`ZR_FLOW_ANTEPRIMA`) e app.modifica: il catalogo del finto la dà «in_arrivo» (app.modifica la rifiuta e apps.elenca la mostra così), ma i metodi
@@ -1624,8 +1624,18 @@ trait Flow
     {
         $chi = $this->conFlow($richiesta);
         $this->testi->validaQuery(self::query($richiesta), ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow(self::query($richiesta), ['visibilita']));
-        $vista = (string) self::query($richiesta)['visibilita'];
-        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+
+        return [200, ['data' => $this->futuroDellaVistaFlow($chi, (string) self::query($richiesta)['visibilita'], CarbonImmutable::now('Europe/Rome')->startOfDay())]];
+    }
+
+    /**
+     * Lo schema SpeseFuture di una vista (Futuro::mostra).
+     *
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return array<string, mixed>
+     */
+    private function futuroDellaVistaFlow(array $chi, string $vista, CarbonImmutable $oggi): array
+    {
         $date = array_column($this->movimentiBilancioFlow($chi, $vista), 'data');
         $storico = $date === [] ? 0 : max(0, ($oggi->year * 12 + $oggi->month) - ((int) substr(min($date), 0, 4) * 12 + (int) substr(min($date), 5, 2)));
         $primoMese = $oggi->startOfMonth();
@@ -1678,14 +1688,14 @@ trait Flow
             $elenco[] = ['mese' => (string) $mese, 'totale' => $dati['totale'], 'motivo' => $pesante && $dati['rara'] !== null ? ['nome' => $dati['rara']['nome'], 'importo' => $dati['rara']['importo']] : null];
         }
 
-        return [200, ['data' => [
+        return [
             'visibilita' => $vista,
             'movimenti_fino_al' => $date === [] ? null : max($date),
             'mesi_di_storico' => $storico,
             'prossimi_30_giorni' => ['importo' => $spese30, 'disponibile' => $disponibile, 'mancano' => $mancano === 0 ? null : $mancano],
             'prossimi_12_mesi' => ['importo' => $somma],
             'mesi' => $elenco,
-        ]]];
+        ];
     }
 
     /**
@@ -1727,6 +1737,25 @@ trait Flow
         ], $corpo['data']);
 
         return [$stato, $corpo];
+    }
+
+    /**
+     * La certezza di una ricorrente oggi (Futuro::certezza): `certa` (una `fissa` o una `bolletta` con almeno 6 occorrenze e l'ultima entro 1,5 cadenze), `possibile` (una `stagionale`, un'`abitudine`, o non vista da più di
+     * 2 cadenze), `stima` il resto. La usano le voci del futuro e l'avviso «un addebito non è arrivato».
+     *
+     * @param  array<string, mixed>  $ricorrente
+     */
+    private function certezzaRicorrenteFlow(array $ricorrente, CarbonImmutable $oggi): string
+    {
+        $valore = $ricorrente['cadenza']['valore'];
+        $cadenzaGiorni = $ricorrente['cadenza']['unita'] === 'mesi' ? $valore * 30.4375 : $valore * 7;
+        $giorni = intdiv((int) strtotime($oggi->format('Y-m-d').' UTC') - (int) strtotime($ricorrente['movimenti'][0]['data'].' UTC'), 86400);
+
+        return match (true) {
+            $ricorrente['tipo'] === 'stagionale', $ricorrente['tipo'] === 'abitudine', $giorni > 2 * $cadenzaGiorni => 'possibile',
+            in_array($ricorrente['tipo'], ['fissa', 'bolletta'], true) && $ricorrente['occorrenze'] >= 6 && $giorni <= 1.5 * $cadenzaGiorni => 'certa',
+            default => 'stima',
+        };
     }
 
     /**
@@ -1774,15 +1803,9 @@ trait Flow
 
             $valore = $ricorrente['cadenza']['valore'];
             $inMesi = $ricorrente['cadenza']['unita'] === 'mesi';
-            $cadenzaGiorni = $inMesi ? $valore * 30.4375 : $valore * 7;
             $prima = CarbonImmutable::parse($ricorrente['prossima_data'], 'Europe/Rome')->startOfDay();
             $occorrenza = fn (int $passo): CarbonImmutable => $inMesi ? $prima->addMonthsNoOverflow($passo * $valore) : $prima->addWeeks($passo * $valore);
-            $giorni = intdiv((int) strtotime($oggi->format('Y-m-d').' UTC') - (int) strtotime($ricorrente['movimenti'][0]['data'].' UTC'), 86400);
-            $certezza = match (true) {
-                $ricorrente['tipo'] === 'stagionale', $ricorrente['tipo'] === 'abitudine', $giorni > 2 * $cadenzaGiorni => 'possibile',
-                in_array($ricorrente['tipo'], ['fissa', 'bolletta'], true) && $ricorrente['occorrenze'] >= 6 && $giorni <= 1.5 * $cadenzaGiorni => 'certa',
-                default => 'stima',
-            };
+            $certezza = $this->certezzaRicorrenteFlow($ricorrente, $oggi);
             $comune = [
                 'origine' => 'ricorrente', 'riferimento_id' => $ricorrente['id'], 'nome' => $ricorrente['nome'], 'categoria_id' => $ricorrente['categoria_id'], 'importo' => $ricorrente['importo_tipico'],
                 'certezza' => $certezza, 'base' => $ricorrente['base'], 'rara' => $inMesi && $valore >= 3,
@@ -1973,6 +1996,312 @@ trait Flow
         }
 
         return $id;
+    }
+
+    // ———————————————————————————————————————— Avvisi
+
+    /**
+     * flow.avvisi.elenca (AvvisiController::elenca): gli avvisi della vista chiesta (`visibilita`, obbligatoria) che la persona vede, dal più nuovo (per `id`), a cursore. `stato=aperti` (di default) porta quelli che la persona non ha
+     * chiuso, `chiusi` gli altri; un avviso silenziato è chiuso per chi l'ha silenziato. Ogni altro parametro è 422 `campo_estraneo`. Il compito `flow:avvisi` del backoffice li scrive una volta al giorno: il finto li scrive alla prima
+     * lettura (elenca, mostra o modifica) dopo che i dati li giustificano, e da lì restano, come le righe del backoffice (non emette la notifica in campanella, come non emette gli eventi).
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaAvvisiFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $grezzi = self::query($richiesta);
+        $testo = fn (string $nome) => is_string($grezzi[$nome] ?? null) ? $grezzi[$nome] : '';
+
+        return $this->pagina(
+            $richiesta,
+            'flow.avvisi.elenca:'.$testo('visibilita').':'.$testo('stato'),
+            'id',
+            function () use ($chi, $grezzi) {
+                $this->generaAvvisiFlow($chi['workspace']);
+                $chiusi = ($grezzi['stato'] ?? 'aperti') === 'chiusi';
+                $voci = [];
+
+                foreach ($this->flow['avvisi'] as $avviso) {
+                    if ($avviso['visibilita'] !== $grezzi['visibilita'] || ! $this->avvisoVisibileFlow($avviso, $chi)) {
+                        continue;
+                    }
+
+                    $stato = $this->statoAvvisoFlow($avviso, $chi);
+
+                    if (($stato['stato'] === 'chiuso') === $chiusi) {
+                        $voci[] = $this->voceAvvisoFlow($avviso, $stato);
+                    }
+                }
+
+                return $voci;
+            },
+            fn (array $voce) => [$voce['id']],
+            fn (string $id) => [$id],
+            true,
+            self::LIMITE_MASSIMO,
+            null,
+            [
+                'visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)],
+                'stato' => ['bail', 'sometimes', 'string', Rule::in(['aperti', 'chiusi'])],
+            ] + $this->estraneiFlow($grezzi, ['limite', 'cursore', 'visibilita', 'stato']),
+        );
+    }
+
+    /**
+     * flow.avvisi.mostra (AvvisiController::mostra): un avviso, con l'`ETag` del suo stato per chi chiama. Un `id` che non c'è, mal formato o di un conto personale altrui è 404 `non_trovato`, uguale nei tre casi.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function mostraAvvisoFlow(Request $richiesta, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $this->generaAvvisiFlow($chi['workspace']);
+        $avviso = $this->trovaAvvisoFlow($chi, $id) ?? throw new Problema('non_trovato');
+        $voce = $this->voceAvvisoFlow($avviso, $this->statoAvvisoFlow($avviso, $chi));
+
+        return [200, ['data' => $voce], ['ETag' => $voce['etag']]];
+    }
+
+    /**
+     * flow.avvisi.modifica (AvvisiController::modifica): cambia lo stato (`letto` o `chiuso`) e il silenzio (`silenzia`) di questa persona sull'avviso; gli altri non lo vedono cambiare. `silenzia: true` chiude anche l'avviso (con
+     * `stato: letto` è 422), `false` toglie il silenzio. Il freno si conta prima di tutto; un avviso che non c'è o di un conto personale altrui è 404, prima dell'`If-Match` (letto prima del corpo: formato sbagliato 422) e del corpo
+     * (almeno un campo); la versione vecchia è 412 dopo il corpo. `If-Match` è facoltativo.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function modificaAvvisoFlow(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $this->frena('freni:flow.avvisi.modifica:'.$chi['persona'], self::FRENI['flow_avvisi_persona'], self::ORA);
+        $this->generaAvvisiFlow($chi['workspace']);
+        $avviso = $this->trovaAvvisoFlow($chi, $id) ?? throw new Problema('non_trovato');
+        $se = $this->ifMatchFlow($richiesta);
+        $campi = $this->modificaCrm($corpo, [
+            'stato' => ['bail', 'sometimes', 'string', Rule::in(($corpo['silenzia'] ?? null) === true ? ['chiuso'] : ['letto', 'chiuso'])],
+            'silenzia' => ['bail', 'sometimes', 'boolean:strict'],
+        ]);
+        $prima = $this->statoAvvisoFlow($avviso, $chi);
+
+        if ($se !== null && ! self::trovaEtagCrm($se, self::etagAvvisoFlow($avviso['id'], $prima['stato'], $prima['silenziato']), false)) {
+            throw new Problema('precondizione_fallita');
+        }
+
+        if ($campi['silenzia'] ?? false) {
+            $campi['stato'] = 'chiuso';
+        }
+
+        if (isset($campi['stato'])) {
+            $this->flow['avvisiStati'][$avviso['id']][$chi['persona']] = $campi['stato'];
+        }
+
+        if (isset($campi['silenzia'])) {
+            $chiave = $this->chiaveSilenzioFlow($avviso, $chi);
+
+            if ($campi['silenzia']) {
+                $this->flow['avvisiSilenzi'][$chiave] = true;
+            } else {
+                unset($this->flow['avvisiSilenzi'][$chiave]);
+            }
+        }
+
+        $voce = $this->voceAvvisoFlow($avviso, $this->statoAvvisoFlow($avviso, $chi));
+
+        return [200, ['data' => $voce], ['ETag' => $voce['etag']]];
+    }
+
+    /** L'`If-Match` di una scrittura (Precondizione::daRichiesta): il valore, o null senza header; né `*` né una lista di entity-tag è 422 sull'header. */
+    private function ifMatchFlow(Request $richiesta): ?string
+    {
+        $psr = $richiesta->toPsrRequest();
+
+        if (! $psr->hasHeader('If-Match')) {
+            return null;
+        }
+
+        $valore = trim($psr->getHeaderLine('If-Match'));
+        $tag = '(?:W/)?"[\x21\x23-\x7E\x80-\xFF]*"';
+
+        if ($valore !== '*' && preg_match('~^'.$tag.'(?:\s*,\s*'.$tag.')*$~D', $valore) !== 1) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.if_match'), 'regola' => Regola::FORMATO, 'header' => 'If-Match']]);
+        }
+
+        return $valore;
+    }
+
+    /** La versione di un avviso per `If-Match` (Avvisi::versione): dipende dal suo `id` e dallo stato di questa persona, mai da quello di un'altra. */
+    private static function etagAvvisoFlow(string $id, string $stato, bool $silenziato): string
+    {
+        return '"'.md5('avviso-1|'.$id.'|'.$stato.'|'.($silenziato ? '1' : '0')).'"';
+    }
+
+    /**
+     * Lo schema Avviso (Avvisi::forma).
+     *
+     * @param  array<string, mixed>  $avviso
+     * @param  array{stato: string, silenziato: bool}  $stato
+     * @return array<string, mixed>
+     */
+    private function voceAvvisoFlow(array $avviso, array $stato): array
+    {
+        return [
+            'id' => $avviso['id'],
+            'tipo' => $avviso['tipo'],
+            'riferimento' => $avviso['riferimento'],
+            'importo' => $avviso['importo'],
+            'mese' => $avviso['mese'],
+            'creato_il' => self::iso($avviso['creato_il']),
+            'stato' => $stato['stato'],
+            'silenziato' => $stato['silenziato'],
+            'etag' => self::etagAvvisoFlow($avviso['id'], $stato['stato'], $stato['silenziato']),
+        ];
+    }
+
+    /**
+     * Lo stato e il silenzio di una persona su un avviso (Avvisi::stati, senza le notifiche): lo stato scritto vince; senza, un avviso silenziato è `chiuso`, gli altri `aperto`.
+     *
+     * @param  array<string, mixed>  $avviso
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return array{stato: string, silenziato: bool}
+     */
+    private function statoAvvisoFlow(array $avviso, array $chi): array
+    {
+        $silenziato = isset($this->flow['avvisiSilenzi'][$this->chiaveSilenzioFlow($avviso, $chi)]);
+
+        return ['stato' => $this->flow['avvisiStati'][$avviso['id']][$chi['persona']] ?? ($silenziato ? 'chiuso' : 'aperto'), 'silenziato' => $silenziato];
+    }
+
+    /** @param  array<string, mixed>  $avviso */
+    private function chiaveSilenzioFlow(array $avviso, array $chi): string
+    {
+        return implode('|', [$chi['workspace'], $chi['persona'], $avviso['tipo'], (string) $avviso['riferimento']]);
+    }
+
+    /** Un avviso lo vede ogni membro se è comune, solo il titolare se è personale (e sempre nel suo workspace). */
+    private function avvisoVisibileFlow(array $avviso, array $chi): bool
+    {
+        return $avviso['workspace'] === $chi['workspace'] && ($avviso['titolare'] === null || $avviso['titolare'] === $chi['persona']);
+    }
+
+    /**
+     * L'avviso con questo `id` fra quelli che chi chiama vede (Avvisi::trova), o null: un `id` mal formato, che non c'è o di un conto personale altrui, tutti uguali.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function trovaAvvisoFlow(array $chi, string $id): ?array
+    {
+        $id = mb_strtolower($id);
+
+        if (preg_match('/^[0-7][0-9a-hjkmnp-tv-z]{25}$/', $id) !== 1) {
+            return null;
+        }
+
+        $avviso = $this->flow['avvisi'][$id] ?? null;
+
+        return $avviso !== null && $this->avvisoVisibileFlow($avviso, $chi) ? $avviso : null;
+    }
+
+    /**
+     * Scrive gli avvisi di oggi del workspace (Avvisi::genera): la vista comune e quella di ogni titolare di conti personali. Uno con la stessa chiave (workspace, vista, titolare, tipo, riferimento, mese) non si riscrive.
+     */
+    private function generaAvvisiFlow(string $workspace): void
+    {
+        $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
+        $titolari = [];
+
+        foreach ($this->flow['conti'] as $conto) {
+            if ($conto['workspace'] === $workspace && ! $conto['archiviato'] && $conto['visibilita'] === 'personale') {
+                $titolari[(string) $conto['titolare']] = true;
+            }
+        }
+
+        ksort($titolari);
+        $viste = [['comune', null]];
+
+        foreach (array_keys($titolari) as $titolare) {
+            $viste[] = ['personale', (string) $titolare];
+        }
+
+        $chiavi = array_column($this->flow['avvisi'], 'chiave');
+
+        foreach ($viste as [$vista, $titolare]) {
+            foreach ($this->avvisiTrovatiFlow(['persona' => (string) $titolare, 'workspace' => $workspace], $vista, $oggi) as $trovato) {
+                $chiave = hash('sha256', implode('|', [$workspace, $vista, (string) $titolare, $trovato['tipo'], (string) $trovato['riferimento'], $trovato['mese']]));
+
+                if (in_array($chiave, $chiavi, true)) {
+                    continue;
+                }
+
+                $id = self::id();
+                $this->flow['avvisi'][$id] = $trovato + ['id' => $id, 'workspace' => $workspace, 'visibilita' => $vista, 'titolare' => $titolare, 'chiave' => $chiave, 'creato_il' => self::istanteFlow()];
+                $chiavi[] = $chiave;
+            }
+        }
+    }
+
+    /**
+     * Ciò che merita un avviso in una vista, oggi (Avvisi::trovati), con le soglie di `config/flow.php`: una categoria che spende nel mese almeno il 30 % e 50 € sopra la media dei tre mesi interi precedenti (con almeno tre mesi di storico);
+     * una ricorrente di spesa `certa` non nascosta la cui `prossima_data` è passata da più di 5 giorni; i prossimi 30 giorni che dicono `mancano`; un conto il cui ultimo movimento ha più di 35 giorni.
+     *
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return list<array{tipo: string, riferimento: string|null, mese: string, importo: int|null}>
+     */
+    private function avvisiTrovatiFlow(array $chi, string $vista, CarbonImmutable $oggi): array
+    {
+        $mese = $oggi->format('Y-m');
+        $movimenti = $this->movimentiBilancioFlow($chi, $vista);
+        $date = array_column($movimenti, 'data');
+        $copertura = $date === [] ? 0 : max(0, ($oggi->year * 12 + $oggi->month) - ((int) substr(min($date), 0, 4) * 12 + (int) substr(min($date), 5, 2)));
+        $trovati = [];
+
+        if ($copertura >= 3) {
+            $medie = $this->medieBilancioFlow($chi, $vista, $oggi)['uscite'];
+            $trasferimenti = array_column(array_filter(FlowCategorie::TUTTE, fn (array $categoria) => $categoria['tipo'] === 'trasferimento'), 'id');
+            $spese = [];
+
+            foreach ($movimenti as $movimento) {
+                if (! $movimento['escluso'] && $movimento['importo'] < 0 && $movimento['data'] >= $oggi->startOfMonth()->format('Y-m-d') && $movimento['data'] <= $oggi->format('Y-m-d') && ! in_array($movimento['categoria_id'], $trasferimenti, true)) {
+                    $spese[(string) $movimento['categoria_id']] = ($spese[(string) $movimento['categoria_id']] ?? 0) - $movimento['importo'];
+                }
+            }
+
+            foreach ($spese as $categoria => $spesa) {
+                $media = $medie[(string) $categoria] ?? 0;
+
+                if ((string) $categoria !== '' && $media > 0 && $spesa * 100 >= $media * 130 && $spesa - $media >= 5000) {
+                    $trovati[] = ['tipo' => 'spesa_fuori_dal_solito', 'riferimento' => (string) $categoria, 'mese' => $mese, 'importo' => -$spesa];
+                }
+            }
+        }
+
+        $limite = $oggi->subDays(5)->format('Y-m-d');
+
+        foreach ($this->ricorrentiDellaVistaFlow($chi, $vista, $oggi) as $ricorrente) {
+            if ($ricorrente['importo_tipico'] < 0 && $ricorrente['stato'] !== 'nascosta' && $ricorrente['prossima_data'] < $limite && $this->certezzaRicorrenteFlow($ricorrente, $oggi) === 'certa') {
+                $trovati[] = ['tipo' => 'addebito_non_arrivato', 'riferimento' => $ricorrente['id'], 'mese' => substr($ricorrente['prossima_data'], 0, 7), 'importo' => $ricorrente['importo_tipico']];
+            }
+        }
+
+        $mancano = $this->futuroDellaVistaFlow($chi, $vista, $oggi)['prossimi_30_giorni']['mancano'];
+
+        if (is_int($mancano) && $mancano > 0) {
+            $trovati[] = ['tipo' => 'saldo_non_basta', 'riferimento' => null, 'mese' => $mese, 'importo' => -$mancano];
+        }
+
+        $fermo = $oggi->subDays(35)->format('Y-m-d');
+        $conti = array_keys(array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista)));
+        sort($conti);
+
+        foreach ($conti as $conto) {
+            $ultimi = array_column(array_filter($movimenti, fn (array $movimento) => $movimento['conto'] === $conto), 'data');
+
+            if ($ultimi !== [] && max($ultimi) < $fermo) {
+                $trovati[] = ['tipo' => 'estratto_fermo', 'riferimento' => (string) $conto, 'mese' => $mese, 'importo' => null];
+            }
+        }
+
+        return $trovati;
     }
 
     /**

@@ -331,7 +331,7 @@ it('una regola vale per i movimenti che nascono dopo; comune per i conti comuni,
 
     $crea = alFinto('POST', '/v1/flow/regole', ['testo' => 'ZORZI  Bottega', 'categoria_id' => $categorie['casa'], 'visibilita' => 'comune'], $gettoni['bruno']);
     expect($crea->status())->toBe(201, $crea->body())
-        ->and(array_keys($crea->json('data')))->toBe(['id', 'testo', 'categoria_id', 'visibilita', 'creata_da', 'creata_il'])
+        ->and(array_keys($crea->json('data')))->toBe(['id', 'testo', 'categoria_id', 'visibilita', 'creata_da', 'creata_il', 'applicata_volte'])
         ->and($crea->json('data.creata_da'))->toBe(['id' => $crea->json('data.creata_da.id'), 'nome' => 'Bruno'])
         ->and($crea->header('Location'))->toBe('');
 
