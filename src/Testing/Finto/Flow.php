@@ -28,6 +28,9 @@ trait Flow
 
     private const FLOW_REGOLE_TETTO = 500;
 
+    /** I movimenti che una sola `flow.regole.applicazioni.crea` può toccare (config `flow.regole.applicazione_massimo`). */
+    private const FLOW_REGOLE_APPLICAZIONE_MASSIMO = 2000;
+
     private const FLOW_FISSE_TETTO = 100;
 
     private const FLOW_RICORRENTI_TIPI = ['fissa', 'bolletta', 'abitudine', 'stagionale'];
@@ -411,7 +414,7 @@ trait Flow
                 $movimento = self::id();
                 $this->flow['movimenti'][$movimento] = [
                     'id' => $movimento, 'workspace' => $conto['workspace'], 'conto' => $conto['id'], 'importazione' => $id, 'data' => $riga['data'], 'importo' => $riga['importo'], 'descrizione' => $riga['descrizione'],
-                    'impronta' => $riga['impronta'], 'categoria_id' => $riga['categoria_id'], 'categoria_fonte' => $riga['categoria_fonte'], 'nota' => null, 'escluso' => false, 'escluso_motivo' => null,
+                    'impronta' => $riga['impronta'], 'categoria_id' => $riga['categoria_id'], 'categoria_fonte' => $riga['categoria_fonte'], 'regola_id' => $riga['regola_id'], 'nota' => null, 'escluso' => false, 'escluso_motivo' => null,
                     'escluso_origine' => null, 'riconoscimento_rifiutato' => false, 'origine' => 'importazione', 'archiviato' => false,
                 ];
             }
@@ -469,7 +472,7 @@ trait Flow
      *
      * @param  array<string, mixed>  $conto
      * @param  list<array<string, mixed>>  $righe
-     * @return list<array{data: string, importo: int, descrizione: string, impronta: string, doppione: bool, categoria_id: string|null, categoria_fonte: string}>
+     * @return list<array{data: string, importo: int, descrizione: string, impronta: string, doppione: bool, categoria_id: string|null, categoria_fonte: string, regola_id: string|null}>
      */
     private function analizzaLeRigheFlow(array $conto, array $righe): array
     {
@@ -482,8 +485,8 @@ trait Flow
             $uguale = $riga['data'].'|'.$riga['importo'].'|'.trim((string) preg_replace('/\s+/u', ' ', mb_strtolower($riga['descrizione'])));
             $posti[$uguale] = ($posti[$uguale] ?? -1) + 1;
             $impronta = hash('sha256', $uguale.'|'.$posti[$uguale]);
-            [$categoria, $fonte] = $this->categoriaDiUnaRigaFlow($regole, $riga['descrizione']);
-            $lette[] = ['data' => $riga['data'], 'importo' => $riga['importo'], 'descrizione' => $riga['descrizione'], 'impronta' => $impronta, 'doppione' => isset($esistenti[$impronta]), 'categoria_id' => $categoria, 'categoria_fonte' => $fonte];
+            [$categoria, $fonte, $regola] = $this->categoriaDiUnaRigaFlow($regole, $riga['descrizione']);
+            $lette[] = ['data' => $riga['data'], 'importo' => $riga['importo'], 'descrizione' => $riga['descrizione'], 'impronta' => $impronta, 'doppione' => isset($esistenti[$impronta]), 'categoria_id' => $categoria, 'categoria_fonte' => $fonte, 'regola_id' => $regola];
         }
 
         return $lette;
@@ -686,11 +689,11 @@ trait Flow
             $this->frena('freni:flow.movimenti.crea:'.$chi['persona'], self::FRENI['flow_movimenti_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, $this->regoleMovimentoFlow(true));
             $conto = $this->contoFlow($chi, $campi['conto_id']);
-            [$categoria, $fonte] = isset($campi['categoria_id']) ? [$campi['categoria_id'], 'utente'] : $this->categoriaDiUnaRigaFlow($this->regoleDelContoFlow($conto), $campi['descrizione']);
+            [$categoria, $fonte, $regola] = isset($campi['categoria_id']) ? [$campi['categoria_id'], 'utente', null] : $this->categoriaDiUnaRigaFlow($this->regoleDelContoFlow($conto), $campi['descrizione']);
             $id = self::id();
             $this->flow['movimenti'][$id] = [
                 'id' => $id, 'workspace' => $conto['workspace'], 'conto' => $conto['id'], 'importazione' => null, 'data' => $campi['data'], 'importo' => $campi['importo'], 'descrizione' => $campi['descrizione'],
-                'impronta' => null, 'categoria_id' => $categoria, 'categoria_fonte' => $fonte, 'nota' => $campi['nota'] ?? null, 'escluso' => false, 'escluso_motivo' => null, 'escluso_origine' => null, 'riconoscimento_rifiutato' => false, 'origine' => 'manuale', 'archiviato' => false,
+                'impronta' => null, 'categoria_id' => $categoria, 'categoria_fonte' => $fonte, 'regola_id' => $regola, 'nota' => $campi['nota'] ?? null, 'escluso' => false, 'escluso_motivo' => null, 'escluso_origine' => null, 'riconoscimento_rifiutato' => false, 'origine' => 'manuale', 'archiviato' => false,
             ];
             $voce = $this->voceMovimentoFlow($this->flow['movimenti'][$id]);
 
@@ -740,6 +743,7 @@ trait Flow
             if ($campi['categoria_id'] !== $movimento['categoria_id'] || $fonte !== $movimento['categoria_fonte']) {
                 $nuovo['categoria_id'] = $campi['categoria_id'];
                 $nuovo['categoria_fonte'] = $fonte;
+                $nuovo['regola_id'] = null;
             }
         }
 
@@ -1022,6 +1026,63 @@ trait Flow
     }
 
     /**
+     * flow.regole.applicazioni.crea (RegoleController::applicazioniCrea): applica la regola ai movimenti passati della sua vista e risponde 200 `{movimenti_toccati}`. Tocca i movimenti vivi che la regola
+     * cattura, dove è la più recente fra le regole della vista, e che la persona non ha corretto a mano; idempotente (la seconda volta 0); tutto o niente, oltre 2.000 movimenti è 409 `limite_raggiunto`. La
+     * applica chi può eliminare la regola (403 `permesso_negato` per gli altri); una personale di un altro è 404. Il freno si conta prima del corpo, che se c'è è un oggetto senza campi.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function applicaRegolaFlow(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $regola = $this->flow['regole'][strtolower($id)] ?? null;
+
+        if ($regola === null || $regola['archiviato'] || ! $this->regolaVisibileFlow($regola, $chi)) {
+            throw new Problema('non_trovato');
+        }
+
+        if ($regola['creata_da'] !== $chi['persona'] && ! in_array($this->membri[$chi['workspace']][$chi['persona']], ['proprietario', 'amministratore'], true)) {
+            throw new Problema('permesso_negato');
+        }
+
+        $this->frena('freni:flow.regole.applicazioni.crea:'.$chi['persona'], self::FRENI['flow_regole_applicazioni_persona'], self::ORA);
+        $this->testi->validaCorpo($corpo, []);
+        $regole = $this->regoleDellaVistaFlow($regola['workspace'], $regola['visibilita'], $regola['creata_da']);
+        $conti = array_keys(array_filter($this->flow['conti'], fn (array $conto) => ! $conto['archiviato'] && $conto['workspace'] === $regola['workspace'] && $conto['visibilita'] === $regola['visibilita']
+            && ($regola['visibilita'] === 'comune' || $conto['titolare'] === $regola['creata_da'])));
+        $da = [];
+
+        foreach ($this->flow['movimenti'] as $movimento) {
+            if ($movimento['archiviato'] || ! in_array($movimento['conto'], $conti, true) || $movimento['categoria_fonte'] === 'utente') {
+                continue;
+            }
+
+            foreach ($regole as $candidata) {
+                if (str_contains(FlowCategorie::normalizza($movimento['descrizione']), $candidata['testo'])) {
+                    if ($candidata['id'] === $regola['id'] && ! ($movimento['categoria_fonte'] === 'regola' && ($movimento['regola_id'] ?? null) === $regola['id'] && $movimento['categoria_id'] === $regola['categoria_id'])) {
+                        $da[] = $movimento['id'];
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        if (count($da) > self::FLOW_REGOLE_APPLICAZIONE_MASSIMO) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_REGOLE_APPLICAZIONE_MASSIMO]);
+        }
+
+        foreach ($da as $movimento) {
+            $this->flow['movimenti'][$movimento]['categoria_id'] = $regola['categoria_id'];
+            $this->flow['movimenti'][$movimento]['categoria_fonte'] = 'regola';
+            $this->flow['movimenti'][$movimento]['regola_id'] = $regola['id'];
+        }
+
+        return [200, ['movimenti_toccati' => count($da)]];
+    }
+
+    /**
      * @param  array<string, mixed>  $regola
      * @param  array{persona: string, workspace: string}  $chi
      */
@@ -1034,22 +1095,32 @@ trait Flow
      * Le regole che valgono per un conto, dalla più recente: le comuni per un conto comune, le personali del suo titolare per uno personale (Regole::delConto).
      *
      * @param  array<string, mixed>  $conto
-     * @return list<array{testo: string, categoria_id: string}>
+     * @return list<array{id: string, testo: string, categoria_id: string}>
      */
     private function regoleDelContoFlow(array $conto): array
     {
-        $regole = array_filter($this->flow['regole'], fn (array $regola) => ! $regola['archiviato'] && $regola['workspace'] === $conto['workspace'] && $regola['visibilita'] === $conto['visibilita']
-            && ($conto['visibilita'] === 'comune' || $regola['creata_da'] === $conto['titolare']));
+        return $this->regoleDellaVistaFlow($conto['workspace'], $conto['visibilita'], $conto['titolare']);
+    }
+
+    /**
+     * Le regole di una vista, dalla più recente: le comuni del workspace, o le personali di `$titolare` (Regole::dellaVista).
+     *
+     * @return list<array{id: string, testo: string, categoria_id: string}>
+     */
+    private function regoleDellaVistaFlow(string $workspace, string $visibilita, string $titolare): array
+    {
+        $regole = array_filter($this->flow['regole'], fn (array $regola) => ! $regola['archiviato'] && $regola['workspace'] === $workspace && $regola['visibilita'] === $visibilita
+            && ($visibilita === 'comune' || $regola['creata_da'] === $titolare));
         usort($regole, fn (array $una, array $altra) => [$altra['creata_il'], $altra['id']] <=> [$una['creata_il'], $una['id']]);
 
-        return array_map(fn (array $regola) => ['testo' => $regola['testo_chiave'], 'categoria_id' => $regola['categoria_id']], $regole);
+        return array_values(array_map(fn (array $regola) => ['id' => $regola['id'], 'testo' => $regola['testo_chiave'], 'categoria_id' => $regola['categoria_id']], $regole));
     }
 
     /**
      * La categoria di una riga che nasce e da dove viene (Regole::categoriaDi): la regola, poi la parola chiave di sistema, poi niente.
      *
-     * @param  list<array{testo: string, categoria_id: string}>  $regole
-     * @return array{0: string|null, 1: string}
+     * @param  list<array{id: string, testo: string, categoria_id: string}>  $regole
+     * @return array{0: string|null, 1: string, 2: string|null} la categoria, la `categoria_fonte` e la regola (solo se la fonte è `regola`)
      */
     private function categoriaDiUnaRigaFlow(array $regole, string $descrizione): array
     {
@@ -1057,13 +1128,13 @@ trait Flow
 
         foreach ($regole as $regola) {
             if (str_contains($normalizzato, $regola['testo'])) {
-                return [$regola['categoria_id'], 'regola'];
+                return [$regola['categoria_id'], 'regola', $regola['id']];
             }
         }
 
         $categoria = FlowCategorie::assegna($normalizzato);
 
-        return [$categoria, $categoria === null ? 'nessuna' : 'sistema'];
+        return [$categoria, $categoria === null ? 'nessuna' : 'sistema', null];
     }
 
     /**
@@ -1074,6 +1145,8 @@ trait Flow
      */
     private function voceRegolaFlow(array $regola): array
     {
+        $volte = count(array_filter($this->flow['movimenti'], fn (array $movimento) => ! $movimento['archiviato'] && $movimento['categoria_fonte'] === 'regola' && ($movimento['regola_id'] ?? null) === $regola['id']));
+
         return [
             'id' => $regola['id'],
             'testo' => $regola['testo'],
@@ -1081,6 +1154,7 @@ trait Flow
             'visibilita' => $regola['visibilita'],
             'creata_da' => ['id' => $regola['creata_da'], 'nome' => $this->nomeFlow($regola['workspace'], $regola['creata_da'])],
             'creata_il' => self::iso($regola['creata_il']),
+            'applicata_volte' => $volte,
         ];
     }
 
