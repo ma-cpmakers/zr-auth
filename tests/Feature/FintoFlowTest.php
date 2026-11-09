@@ -386,10 +386,12 @@ it('i freni contano per persona: oltre il tetto è 429 con Retry-After (FL.16)',
 it('Idempotency-Key ripete la risposta di conti, movimenti e regole, ma non la prova di un caricamento (FL.17)', function () {
     [, $gettoni] = studioConFinanze();
     $corpo = ['banca' => 'B', 'nome' => 'Unico', 'tipo' => 'altro', 'visibilita' => 'comune'];
+    $ordine = 'ordine-1';
+    $ordineProva = 'p';
 
-    $uno = alFinto('POST', '/v1/flow/conti', $corpo, $gettoni['anna'], null, ['Idempotency-Key' => 'chiave-1']);
-    $due = alFinto('POST', '/v1/flow/conti', $corpo, $gettoni['anna'], null, ['Idempotency-Key' => 'chiave-1']);
-    $altro = alFinto('POST', '/v1/flow/conti', ['nome' => 'Diverso'] + $corpo, $gettoni['anna'], null, ['Idempotency-Key' => 'chiave-1']);
+    $uno = alFinto('POST', '/v1/flow/conti', $corpo, $gettoni['anna'], null, ['Idempotency-Key' => $ordine]);
+    $due = alFinto('POST', '/v1/flow/conti', $corpo, $gettoni['anna'], null, ['Idempotency-Key' => $ordine]);
+    $altro = alFinto('POST', '/v1/flow/conti', ['nome' => 'Diverso'] + $corpo, $gettoni['anna'], null, ['Idempotency-Key' => $ordine]);
 
     expect($uno->status())->toBe(201)
         ->and($due->json('data.id'))->toBe($uno->json('data.id'))
@@ -400,8 +402,8 @@ it('Idempotency-Key ripete la risposta di conti, movimenti e regole, ma non la p
         ->and(alFinto('GET', '/v1/flow/conti', null, $gettoni['anna'])->json('data'))->toHaveCount(1);
 
     $prova = ['file_nome' => 'o.csv', 'prova' => true, 'righe' => [['data' => '2026-10-01', 'importo' => 1, 'descrizione' => 'Uno']]];
-    $primaProva = alFinto('POST', "/v1/flow/conti/{$uno->json('data.id')}/importazioni", $prova, $gettoni['anna'], null, ['Idempotency-Key' => 'p']);
-    $veraUno = alFinto('POST', "/v1/flow/conti/{$uno->json('data.id')}/importazioni", ['prova' => false] + $prova, $gettoni['anna'], null, ['Idempotency-Key' => 'p']);
+    $primaProva = alFinto('POST', "/v1/flow/conti/{$uno->json('data.id')}/importazioni", $prova, $gettoni['anna'], null, ['Idempotency-Key' => $ordineProva]);
+    $veraUno = alFinto('POST', "/v1/flow/conti/{$uno->json('data.id')}/importazioni", ['prova' => false] + $prova, $gettoni['anna'], null, ['Idempotency-Key' => $ordineProva]);
 
     expect($primaProva->status())->toBe(200)->and($veraUno->status())->toBe(201);
 });
@@ -450,7 +452,7 @@ it('il conto del mese: le medie dei tre mesi interi, le fisse mensili, quanto me
     [, $gettoni] = studioConFinanze();
     $oggi = Carbon\CarbonImmutable::now('Europe/Rome')->startOfDay();
     $conto = alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Uno', 'nome' => 'Casa', 'tipo' => 'corrente', 'visibilita' => 'comune', 'saldo' => 100000], $gettoni['anna'])->json('data');
-    $luce = Zeiras\Auth\Testing\Finto\FlowCategorie::id()[array_search('casa.luce', array_column(Zeiras\Auth\Testing\Finto\FlowCategorie::TUTTE, 'chiave'), true)];
+    $luce = Zeiras\Auth\Testing\Finto\FlowCategorie::id()[array_search('casa.luce', array_column(Zeiras\Auth\Testing\Finto\FlowCategorie::TUTTE, 'codice'), true)];
 
     foreach ([3, 2, 1] as $indietro) {
         $giorno = $oggi->startOfMonth()->subMonthsNoOverflow($indietro)->addDays(4)->format('Y-m-d');
