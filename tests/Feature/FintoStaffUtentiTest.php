@@ -76,8 +76,8 @@ it('l\'elenco e la scheda: i campi dichiarati, i null del vero, la lettura della
 
     $scheda = Api::staff($gettone)->get("/v1/staff/utenti/{$marco['id']}")['data'];
 
-    expect(array_keys($scheda))->toBe(['id', 'nome', 'cognome', 'email', 'stato', 'mai_acceduto', 'workspace_n', 'ultimo_accesso', 'creato_il', 'telefono', 'lingua', 'fuso_orario', 'paese', 'nota_staff', 'consensi', 'sicurezza', 'accessi_n', 'workspace', 'sospensione', 'eliminazione'])
-        ->and($scheda)->toMatchArray(['telefono' => null, 'paese' => null, 'nota_staff' => null, 'consensi' => [], 'sospensione' => null, 'eliminazione' => null, 'accessi_n' => 0, 'workspace' => [], 'sicurezza' => ['provider' => [], 'sessioni_aperte' => 0]]);
+    expect(array_keys($scheda))->toBe(['id', 'nome', 'cognome', 'email', 'stato', 'mai_acceduto', 'workspace_n', 'ultimo_accesso', 'creato_il', 'telefono', 'lingua', 'fuso_orario', 'paese', 'nota_staff', 'consensi', 'sicurezza', 'accessi_n', 'workspace', 'sospensione', 'eliminazione', 'cambio_email'])
+        ->and($scheda)->toMatchArray(['telefono' => null, 'paese' => null, 'nota_staff' => null, 'consensi' => [], 'sospensione' => null, 'eliminazione' => null, 'cambio_email' => null, 'accessi_n' => 0, 'workspace' => [], 'sicurezza' => ['provider' => [], 'sessioni_aperte' => 0]]);
     expect(Api::staff($gettone)->get("/v1/staff/utenti/{$giulia['id']}")['data'])->toMatchArray(['paese' => 'IT', 'nota_staff' => 'Cliente storica.', 'accessi_n' => 1, 'sicurezza' => ['provider' => [], 'sessioni_aperte' => 1]]);
 
     $righeDelRegistro = array_values(array_filter($this->finto->registroDelloStaff(), fn (array $riga) => str_starts_with($riga['azione'], 'staff.utenti.')));
