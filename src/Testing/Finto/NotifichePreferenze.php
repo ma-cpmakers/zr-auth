@@ -77,6 +77,8 @@ trait NotifichePreferenze
         'board.scheda.scade_oggi' => 'board',
         'io.invito.accettato' => 'workspace',
         'board.gate.deciso' => 'board',
+        'flow.avviso.saldo_non_basta' => 'flow',
+        'flow.avviso.addebito_non_arrivato' => 'flow',
     ];
 
     /** I tipi che hanno anche il canale `email` (Notifica::ASSEGNATE). */

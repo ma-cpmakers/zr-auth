@@ -137,6 +137,10 @@ return [
         'title' => 'Exception already present',
         'detail' => 'This occurrence of the block already has its exception, only one: remove it with `bookings.blocchi.eccezioni.elimina` and repeat with the new one. Do not repeat the same request.',
     ],
+    'movimento_importato' => [
+        'title' => 'Movement loaded from a statement',
+        'detail' => 'This movement comes from a loaded statement and cannot be removed on its own: to remove it, cancel the upload with `flow.conti.importazioni.annullamento.crea`. Do not repeat the same request.',
+    ],
     'retrospettiva_esistente' => [
         'title' => 'Retrospective already open',
         'detail' => 'This sprint already has its retrospective, only one: the board is in the sprint\'s `retrospettiva_board_id`. Do not repeat the request.',

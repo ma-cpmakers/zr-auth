@@ -22,6 +22,7 @@ use stdClass;
 use Zeiras\Auth\Eventi\Firma;
 use Zeiras\Auth\Testing\Finto\BookingsPrenotazioni;
 use Zeiras\Auth\Testing\Finto\Crm;
+use Zeiras\Auth\Testing\Finto\Flow;
 use Zeiras\Auth\Testing\Finto\Fornitori;
 use Zeiras\Auth\Testing\Finto\CrmAcquisti;
 use Zeiras\Auth\Testing\Finto\CrmAvanzate;
@@ -91,6 +92,7 @@ final class BackofficeFinto
     use BookingsPrenotazioni;
     use NotifichePreferenze;
     use Crm;
+    use Flow;
     use Fornitori;
     use CrmAcquisti;
     use CrmAvanzate;
@@ -136,7 +138,7 @@ final class BackofficeFinto
      * scambiare un codice nato per lei; i client di sistema (il monitoraggio e la UAT) scambiano quello di qualunque app. `finto` è il client di prova del finto, e
      * vale per ogni app: un modulo che nei suoi test firma come `finto` non cambia. Il finto firma con lo stesso segreto per tutti i nomi: quale nome firma lo decide il test.
      */
-    private const CLIENT_DELL_APP = ['bookings' => ['bookings'], 'crm' => ['crm'], 'pm' => ['board']];
+    private const CLIENT_DELL_APP = ['bookings' => ['bookings'], 'crm' => ['crm'], 'flow' => ['flow'], 'pm' => ['board']];
 
     private const CLIENT_DI_SISTEMA = ['monitor', 'uat'];
 
@@ -166,7 +168,7 @@ final class BackofficeFinto
 
     /** L'app di un tipo di evento, dal primo prefisso che il tipo ha (config/catalogo.php del backoffice, `prefissi`). */
     /** I prefissi dei tipi di notifica e l'app, come `catalogo.prefissi` del backoffice (anche quelli di `crm.`, `board.` e `bookings.`, che non sono eventi: #3323). */
-    private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm', 'com.zeiras.crm.' => 'crm', 'com.zeiras.bookings.' => 'bookings', 'crm.' => 'crm', 'board.' => 'pm', 'bookings.' => 'bookings'];
+    private const PREFISSI_DELLE_APP = ['com.zeiras.board.' => 'pm', 'com.zeiras.crm.' => 'crm', 'com.zeiras.bookings.' => 'bookings', 'com.zeiras.flow.' => 'flow', 'crm.' => 'crm', 'board.' => 'pm', 'bookings.' => 'bookings'];
 
     /** I quattro metodi di una board (#2928). */
     public const METODI_DELLA_BOARD = ['kanban', 'scrum', 'scrumban', 'waterfall'];
@@ -382,6 +384,41 @@ final class BackofficeFinto
         ['GET', '#^/v1/moduli/interesse$#', 'moduli.interesse.elenca'],
         ['POST', '#^/v1/moduli/([^/]+)/interesse$#', 'moduli.interesse.crea'],
         ['DELETE', '#^/v1/moduli/([^/]+)/interesse$#', 'moduli.interesse.elimina'],
+        ['GET', '#^/v1/flow/conti$#', 'flow.conti.elenca'],
+        ['POST', '#^/v1/flow/conti$#', 'flow.conti.crea'],
+        ['GET', '#^/v1/flow/conti/([^/]+)$#', 'flow.conti.mostra'],
+        ['PATCH', '#^/v1/flow/conti/([^/]+)$#', 'flow.conti.modifica'],
+        ['DELETE', '#^/v1/flow/conti/([^/]+)$#', 'flow.conti.elimina'],
+        ['GET', '#^/v1/flow/conti/([^/]+)/importazioni$#', 'flow.conti.importazioni.elenca'],
+        ['POST', '#^/v1/flow/conti/([^/]+)/importazioni$#', 'flow.conti.importazioni.crea'],
+        ['POST', '#^/v1/flow/conti/([^/]+)/importazioni/([^/]+)/annullamento$#', 'flow.conti.importazioni.annullamento.crea'],
+        ['GET', '#^/v1/flow/categorie$#', 'flow.categorie.elenca'],
+        ['GET', '#^/v1/flow/movimenti$#', 'flow.movimenti.elenca'],
+        ['POST', '#^/v1/flow/movimenti$#', 'flow.movimenti.crea'],
+        ['POST', '#^/v1/flow/movimenti/ricerca$#', 'flow.movimenti.ricerca.crea'],
+        ['GET', '#^/v1/flow/movimenti/([^/]+)$#', 'flow.movimenti.mostra'],
+        ['PATCH', '#^/v1/flow/movimenti/([^/]+)$#', 'flow.movimenti.modifica'],
+        ['DELETE', '#^/v1/flow/movimenti/([^/]+)$#', 'flow.movimenti.elimina'],
+        ['GET', '#^/v1/flow/regole$#', 'flow.regole.elenca'],
+        ['POST', '#^/v1/flow/regole$#', 'flow.regole.crea'],
+        ['DELETE', '#^/v1/flow/regole/([^/]+)$#', 'flow.regole.elimina'],
+        ['POST', '#^/v1/flow/regole/([^/]+)/applicazioni$#', 'flow.regole.applicazioni.crea'],
+        ['GET', '#^/v1/flow/fisse$#', 'flow.fisse.elenca'],
+        ['POST', '#^/v1/flow/fisse$#', 'flow.fisse.crea'],
+        ['DELETE', '#^/v1/flow/fisse/([^/]+)$#', 'flow.fisse.elimina'],
+        ['GET', '#^/v1/flow/ricorrenti$#', 'flow.ricorrenti.elenca'],
+        ['GET', '#^/v1/flow/ricorrenti/([^/]+)$#', 'flow.ricorrenti.mostra'],
+        ['PATCH', '#^/v1/flow/ricorrenti/([^/]+)$#', 'flow.ricorrenti.modifica'],
+        ['GET', '#^/v1/flow/avvisi$#', 'flow.avvisi.elenca'],
+        ['GET', '#^/v1/flow/avvisi/([^/]+)$#', 'flow.avvisi.mostra'],
+        ['PATCH', '#^/v1/flow/avvisi/([^/]+)$#', 'flow.avvisi.modifica'],
+        ['GET', '#^/v1/flow/bilancio$#', 'flow.bilancio.mostra'],
+        ['PATCH', '#^/v1/flow/bilancio/entrate$#', 'flow.bilancio.entrate.modifica'],
+        ['GET', '#^/v1/flow/riepiloghi/([^/]+)$#', 'flow.riepiloghi.mostra'],
+        ['GET', '#^/v1/flow/previsioni/([^/]+)$#', 'flow.previsioni.mostra'],
+        ['GET', '#^/v1/flow/membri/([^/]+)/uscita$#', 'flow.membri.uscita.mostra'],
+        ['GET', '#^/v1/flow/futuro$#', 'flow.futuro.mostra'],
+        ['GET', '#^/v1/flow/futuro/calendario$#', 'flow.futuro.calendario.elenca'],
         ['GET', '#^/v1/io/fornitori$#', 'io.fornitori.elenca'],
         ['GET', '#^/v1/io/fornitori/nascosti$#', 'io.fornitori.nascosti.elenca'],
         ['POST', '#^/v1/io/fornitori/nascosti$#', 'io.fornitori.nascosti.crea'],
@@ -407,26 +444,28 @@ final class BackofficeFinto
 
     /**
      * Il catalogo delle app (config/catalogo.php del backoffice, D15): lo stato di ogni app, per codice. `crm` è disponibile per
-     * ogni workspace, come in produzione dal 12/10 (l'anteprima aperta a tutti, #1856).
+     * ogni workspace, come in produzione dal 12/10 (l'anteprima aperta a tutti, #1856); `flow` (Finanze) lo è senza anteprima (#3550, zr-pm-07 09/11).
      */
     private const CATALOGO = [
         'automations' => 'in_arrivo',
         'bookings' => 'in_arrivo',
         'content' => 'in_arrivo',
         'crm' => 'disponibile',
+        'flow' => 'disponibile',
         'pm' => 'disponibile',
         'reports' => 'in_arrivo',
     ];
 
     /**
      * Il nome di ogni app (config/catalogo.php del backoffice, `nomi`, #1204): per codice e per lingua. Il nome del
-     * prodotto è lo stesso nelle tre lingue.
+     * prodotto è lo stesso nelle tre lingue; Finanze si traduce («Finance», «Finanzas»: zr-pm-07 09/11, #3550).
      */
     private const NOMI = [
         'automations' => ['it' => 'Automations', 'en' => 'Automations', 'es' => 'Automations'],
         'bookings' => ['it' => 'Bookings', 'en' => 'Bookings', 'es' => 'Bookings'],
         'content' => ['it' => 'Content', 'en' => 'Content', 'es' => 'Content'],
         'crm' => ['it' => 'CRM', 'en' => 'CRM', 'es' => 'CRM'],
+        'flow' => ['it' => 'Finanze', 'en' => 'Finance', 'es' => 'Finanzas'],
         'pm' => ['it' => 'Project Management', 'en' => 'Project Management', 'es' => 'Project Management'],
         'reports' => ['it' => 'Reports', 'en' => 'Reports', 'es' => 'Reports'],
     ];
@@ -497,7 +536,7 @@ final class BackofficeFinto
      * I freni del backoffice (config zeiras.freni): per email, richieste in un minuto ai metodi senza gettone; `gettone`,
      * chiamate in un minuto per gettone (FrenoPerGettone); `gettoni`, gettoni di gettoni.crea in un'ora per persona.
      */
-    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_fornitori_nascosti_per_persona' => 120, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'io_foto_modifica_per_persona' => 20, 'io_foto_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'documenti_pubblici_letture_per_token' => 30, 'documenti_pubblici_firme_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30];
+    private const FRENI = ['accessi' => 5, 'accessi_codici' => 5, 'accessi_codici_verifiche' => 5, 'codici' => 5, 'registrazioni' => 5, 'verifiche' => 5, 'recuperi' => 5, 'reimpostazioni' => 5, 'gettone' => 600, 'gettoni' => 60, 'inviti_per_email' => 5, 'inviti_per_workspace' => 50, 'inviti_per_persona_al_giorno' => 100, 'link_per_persona_al_giorno' => 20, 'link_per_workspace' => 10, 'link_accettazioni_per_persona' => 20, 'link_verifiche_per_codice' => 30, 'inviti_verifiche_per_codice' => 30, 'io_inviti_verifiche_per_persona' => 30, 'legale_accettazioni_per_persona' => 60, 'moduli_interesse_per_persona' => 60, 'io_fornitori_nascosti_per_persona' => 120, 'io_provider_partenza_per_persona' => 20, 'io_provider_arrivo_per_persona' => 20, 'io_provider_elimina_per_persona' => 20, 'io_foto_modifica_per_persona' => 20, 'io_foto_elimina_per_persona' => 20, 'workspace' => 10, 'provider_elenco' => 120, 'provider_globale' => 120, 'provider_partenza' => 60, 'provider_arrivo_globale' => 120, 'provider_arrivo' => 60, 'provider_stato' => 5, 'board_collegamenti_persona' => 60, 'board_crm_persona' => 60, 'board_promemoria_persona' => 60, 'board_todo_liste_persona' => 60, 'board_todo_elementi_persona' => 1000, 'ricerca_minuto' => 120, 'ricerca_giorno' => 2000, 'azienda_modifiche' => 20, 'accessi_massimo' => 30, 'accessi_per_ip' => 5, 'eliminazioni_persona' => 5, 'preventivi_pubblici_letture_per_token' => 30, 'preventivi_pubblici_accettazioni_per_token' => 10, 'preventivi_pubblici_richieste_per_token' => 10, 'documenti_pubblici_letture_per_token' => 30, 'documenti_pubblici_firme_per_token' => 10, 'notifiche_disiscrizione_per_token' => 30, 'flow_conti_persona' => 60, 'flow_annullamenti_persona' => 60, 'flow_importazioni_persona' => 30, 'flow_importazioni_prova_persona' => 120, 'flow_movimenti_persona' => 300, 'flow_regole_persona' => 60, 'flow_regole_applicazioni_persona' => 30, 'flow_fisse_persona' => 60, 'flow_bilancio_persona' => 120, 'flow_ricorrenti_persona' => 120, 'flow_avvisi_persona' => 120];
 
     /** La palette del colore del workspace (Workspace::COLORI, #2010). */
     private const COLORI = ['pine', 'citrus', 'coral', 'sky', 'plum', 'neutral'];
@@ -1685,6 +1724,41 @@ final class BackofficeFinto
                 'moduli.interesse.elenca' => $this->elencaModuliInteresse($richiesta),
                 'moduli.interesse.crea' => $this->chiediAvvisoModulo($richiesta, $parametri[0]),
                 'moduli.interesse.elimina' => $this->togliAvvisoModulo($richiesta, $parametri[0]),
+                'flow.conti.elenca' => $this->elencaContiFlow($richiesta),
+                'flow.conti.crea' => $this->creaContoFlow($richiesta, $corpo),
+                'flow.conti.mostra' => $this->mostraContoFlow($richiesta, $parametri[0]),
+                'flow.conti.modifica' => $this->modificaContoFlow($richiesta, $corpo, $parametri[0]),
+                'flow.conti.elimina' => $this->eliminaContoFlow($richiesta, $parametri[0]),
+                'flow.conti.importazioni.elenca' => $this->elencaImportazioniFlow($richiesta, $parametri[0]),
+                'flow.conti.importazioni.crea' => $this->creaImportazioneFlow($richiesta, $corpo, $parametri[0]),
+                'flow.conti.importazioni.annullamento.crea' => $this->annullaImportazioneFlow($richiesta, $corpo, $parametri[0], $parametri[1]),
+                'flow.categorie.elenca' => $this->elencaCategorieFlow($richiesta),
+                'flow.movimenti.elenca' => $this->elencaMovimentiFlow($richiesta),
+                'flow.movimenti.crea' => $this->creaMovimentoFlow($richiesta, $corpo),
+                'flow.movimenti.ricerca.crea' => $this->cercaMovimentiFlow($richiesta, $corpo),
+                'flow.movimenti.mostra' => $this->mostraMovimentoFlow($richiesta, $parametri[0]),
+                'flow.movimenti.modifica' => $this->modificaMovimentoFlow($richiesta, $corpo, $parametri[0]),
+                'flow.movimenti.elimina' => $this->eliminaMovimentoFlow($richiesta, $parametri[0]),
+                'flow.regole.elenca' => $this->elencaRegoleFlow($richiesta),
+                'flow.regole.crea' => $this->creaRegolaFlow($richiesta, $corpo),
+                'flow.regole.elimina' => $this->eliminaRegolaFlow($richiesta, $parametri[0]),
+                'flow.regole.applicazioni.crea' => $this->applicaRegolaFlow($richiesta, $corpo, $parametri[0]),
+                'flow.fisse.elenca' => $this->elencaFisseFlow($richiesta),
+                'flow.fisse.crea' => $this->creaFissaFlow($richiesta, $corpo),
+                'flow.fisse.elimina' => $this->eliminaFissaFlow($richiesta, $parametri[0]),
+                'flow.ricorrenti.elenca' => $this->elencaRicorrentiFlow($richiesta),
+                'flow.ricorrenti.mostra' => $this->mostraRicorrenteFlow($richiesta, $parametri[0]),
+                'flow.ricorrenti.modifica' => $this->modificaRicorrenteFlow($richiesta, $corpo, $parametri[0]),
+                'flow.avvisi.elenca' => $this->elencaAvvisiFlow($richiesta),
+                'flow.avvisi.mostra' => $this->mostraAvvisoFlow($richiesta, $parametri[0]),
+                'flow.avvisi.modifica' => $this->modificaAvvisoFlow($richiesta, $corpo, $parametri[0]),
+                'flow.bilancio.mostra' => $this->mostraBilancioFlow($richiesta),
+                'flow.riepiloghi.mostra' => $this->mostraRiepilogoFlow($richiesta, $parametri[0]),
+                'flow.previsioni.mostra' => $this->mostraPrevisioneFlow($richiesta, $parametri[0]),
+                'flow.membri.uscita.mostra' => $this->mostraUscitaFlow($richiesta, $parametri[0]),
+                'flow.futuro.mostra' => $this->mostraFuturoFlow($richiesta),
+                'flow.futuro.calendario.elenca' => $this->elencaCalendarioFuturoFlow($richiesta),
+                'flow.bilancio.entrate.modifica' => $this->correggiEntrateFlow($richiesta, $corpo),
                 'io.fornitori.elenca' => $this->elencaFornitori($richiesta),
                 'io.fornitori.nascosti.elenca' => $this->elencaFornitoriNascosti($richiesta),
                 'io.fornitori.nascosti.crea' => $this->nascondiFornitore($richiesta, $corpo),
@@ -5486,8 +5560,9 @@ final class BackofficeFinto
 
             $this->entra($id, $persona, 'proprietario');
             $this->nascitaDelWorkspace($id, $persona);
-            // L'app pm nasce attiva (#1577), come nel backoffice quando il catalogo la dà disponibile.
+            // Le app pm (#1577) e flow (#3550) nascono attive, come nel backoffice quando il catalogo le dà disponibili.
             $this->attive[$id]['pm'] = true;
+            $this->attive[$id]['flow'] = true;
 
             // Chi si invita entra con un invito da accettare, mai con un ingresso diretto: la mail parte da ultimoInvito().
             foreach ($membriIniziali as [$invitata, $ruolo]) {
@@ -6661,7 +6736,8 @@ final class BackofficeFinto
                 throw new Problema('chiave_idempotenza_riusata');
             }
 
-            return [$ricordata['stato'], $ricordata['dati'], $ricordata['header']];
+            // Il backoffice ripete di una creazione di Finanze il corpo e la Location, non l'ETag (Idempotenza::ricordata): chi lo vuole rilegge la risorsa.
+            return [$ricordata['stato'], $ricordata['dati'], str_starts_with($operazione, 'flow.') ? array_diff_key($ricordata['header'], ['ETag' => true]) : $ricordata['header']];
         }
 
         $esito = $esegue();

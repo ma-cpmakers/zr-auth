@@ -172,7 +172,7 @@ it('io.workspace.elenca dà le pagine a cursore: ogni workspace una volta, e il 
         ->and(tutteLePagine('/v1/io/workspace', $gettone, 2))->toBe($tutti);
 });
 
-it('app.elenca dà il catalogo delle app in ordine di codice, pm e crm disponibili e le altre in_arrivo, ai tre ruoli del workspace, e a pagine col solo codice (T6.1; #1289, AP3)', function (string $ruolo) {
+it('app.elenca dà il catalogo delle app in ordine di codice, pm, crm e flow (Finanze, senza anteprima dal #3550) disponibili e le altre in_arrivo, ai tre ruoli del workspace, e a pagine col solo codice (T6.1; #1289, AP3)', function (string $ruolo) {
     $finto = BackofficeFinto::attiva();
     $anna = $finto->persona('anna@example.com', PASSWORD);
     $bruno = $finto->persona('bruno@example.com', PASSWORD, nome: 'Bruno');
@@ -193,6 +193,7 @@ it('app.elenca dà il catalogo delle app in ordine di codice, pm e crm disponibi
         ['codice' => 'bookings', 'stato' => 'in_arrivo', 'nome' => $nome('Bookings')],
         ['codice' => 'content', 'stato' => 'in_arrivo', 'nome' => $nome('Content')],
         ['codice' => 'crm', 'stato' => 'disponibile', 'nome' => $nome('CRM')],
+        ['codice' => 'flow', 'stato' => 'disponibile', 'nome' => ['it' => 'Finanze', 'en' => 'Finance', 'es' => 'Finanzas']],
         ['codice' => 'pm', 'stato' => 'disponibile', 'nome' => $nome('Project Management')],
         ['codice' => 'reports', 'stato' => 'in_arrivo', 'nome' => $nome('Reports')],
     ];

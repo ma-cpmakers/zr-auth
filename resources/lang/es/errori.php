@@ -137,6 +137,10 @@ return [
         'title' => 'Excepción ya presente',
         'detail' => 'Esta ocurrencia del bloqueo ya tiene su excepción, una sola: quítala con `bookings.blocchi.eccezioni.elimina` y repite con la nueva. No repitas la misma petición.',
     ],
+    'movimento_importato' => [
+        'title' => 'Movimiento cargado desde un extracto',
+        'detail' => 'Este movimiento viene de un extracto cargado y no se quita por sí solo: para quitarlo anula la carga con `flow.conti.importazioni.annullamento.crea`. No repitas la misma petición.',
+    ],
     'retrospettiva_esistente' => [
         'title' => 'Retrospectiva ya abierta',
         'detail' => 'Este sprint ya tiene su retrospectiva, una sola: el tablero está en `retrospettiva_board_id` del sprint. No repitas la petición.',
