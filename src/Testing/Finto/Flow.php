@@ -1487,6 +1487,35 @@ trait Flow
     }
 
     /**
+     * flow.membri.uscita.mostra (UscitaController::mostra): i conti personali vivi di chi chiama nel workspace, in ordine di banca, nome e id, con i movimenti vivi di ognuno e, uguali su ogni riga, gli avvisi personali e le
+     * regole personali che la persona ha. `{utente}` che non è la persona del gettone (anche in maiuscole: vale lo stesso) è 404 `non_trovato`, un id mal formato o inesistente compreso. Sola lettura, `Cache-Control: no-store, private`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function mostraUscitaFlow(Request $richiesta, string $utente): array
+    {
+        $chi = $this->conFlow($richiesta);
+
+        if (strtolower($utente) !== strtolower($chi['persona'])) {
+            throw new Problema('non_trovato');
+        }
+
+        $conti = array_values(array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, 'personale')));
+        usort($conti, fn (array $a, array $b) => [$a['banca'], $a['nome'], $a['id']] <=> [$b['banca'], $b['nome'], $b['id']]);
+        $avvisi = count(array_filter($this->flow['avvisi'], fn (array $avviso) => $avviso['workspace'] === $chi['workspace'] && $avviso['visibilita'] === 'personale' && $avviso['titolare'] === $chi['persona']));
+        $regole = count(array_filter($this->flow['regole'], fn (array $regola) => ! $regola['archiviato'] && $regola['workspace'] === $chi['workspace'] && $regola['visibilita'] === 'personale' && $regola['creata_da'] === $chi['persona']));
+
+        return [200, ['data' => ['conti_personali' => array_map(fn (array $conto) => [
+            'id' => $conto['id'],
+            'banca' => $conto['banca'],
+            'nome' => $conto['nome'],
+            'movimenti' => count(array_filter($this->flow['movimenti'], fn (array $movimento) => ! $movimento['archiviato'] && $movimento['conto'] === $conto['id'])),
+            'avvisi' => $avvisi,
+            'regole' => $regole,
+        ], $conti)]]];
+    }
+
+    /**
      * flow.bilancio.entrate.modifica (BilancioController::entrateModifica): la correzione di «Entri al mese» della vista, o `null` per tornare alle rilevate. Una per workspace nella comune, una per persona nella
      * personale. 200 con `entrate_al_mese`. Il freno si conta prima del corpo.
      *
