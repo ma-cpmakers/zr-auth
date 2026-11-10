@@ -74,3 +74,16 @@ it('chi ha chiesto di eliminare l\'account non riceve la proprietà: 422 non_tro
     expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.pointer'))->toBe('#/utente')->and($risposta->json('errors.0.regola'))->toBe('non_trovato')
         ->and($risposta->json('errors.0.detail'))->toBe($inventato->json('errors.0.detail'));
 });
+
+it('un ospite non diventa proprietario: 422 valore_non_ammesso su #/utente, col testo dell\'ospite, e i ruoli non cambiano (#3366)', function () {
+    [$finto, $studio, $anna, , $gettoneAnna] = conIlProprietario();
+    $olga = $finto->persona('olga@example.com', PASSWORD, nome: 'Olga');
+    $finto->membro($studio, $olga, 'ospite');
+
+    $risposta = alFinto('PATCH', '/v1/workspace/proprietario', ['utente' => $olga['id']], $gettoneAnna);
+    $ruoli = collect(alFinto('GET', '/v1/workspace/membri', gettone: $gettoneAnna)->json('data'))->pluck('ruolo', 'id')->all();
+
+    expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.pointer'))->toBe('#/utente')->and($risposta->json('errors.0.regola'))->toBe('valore_non_ammesso')
+        ->and($risposta->json('errors.0.detail'))->toContain('A guest is view-only')
+        ->and($ruoli[$olga['id']])->toBe('ospite')->and($ruoli[$anna['id']])->toBe('proprietario');
+});

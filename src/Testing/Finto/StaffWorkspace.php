@@ -353,6 +353,11 @@ trait StaffWorkspace
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => 'non_trovato', 'pointer' => '#/utente']]);
         }
 
+        // Un ospite è in sola visualizzazione (#3366): non diventa proprietario, nemmeno per lo staff.
+        if ($this->membri[$id][$scelto] === 'ospite') {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_ospite'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/utente']]);
+        }
+
         if (is_string($vecchio)) {
             $this->membri[$id][$vecchio] = 'amministratore';
         }

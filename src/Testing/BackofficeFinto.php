@@ -6273,6 +6273,11 @@ final class BackofficeFinto
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => 'non_trovato', 'pointer' => '#/utente']]);
         }
 
+        // Un ospite è in sola visualizzazione (#3366): non diventa proprietario.
+        if ($this->membri[$workspace][$scelto] === 'ospite') {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_ospite'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/utente']]);
+        }
+
         $this->membri[$workspace][$chi['persona']] = 'amministratore';
         $this->membri[$workspace][$scelto] = 'proprietario';
 
