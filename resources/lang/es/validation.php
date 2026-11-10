@@ -278,6 +278,7 @@ return [
         'fuso_orario' => 'zona horaria',
         'formato_data' => 'formato de fecha',
         'inizio_settimana' => 'inicio de la semana',
+        'tema' => 'tema',
         'azienda.partita_iva' => 'NIF',
         'azienda.settore' => 'sector',
         'azienda.persone' => 'número de personas',
@@ -308,5 +309,6 @@ return [
         'utente.fuso_orario' => 'zona horaria',
         'utente.formato_data' => 'formato de fecha',
         'utente.inizio_settimana' => 'inicio de la semana',
+        'utente.tema' => 'tema',
     ],
 ];

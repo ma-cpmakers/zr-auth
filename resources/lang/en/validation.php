@@ -280,6 +280,7 @@ return [
         'fuso_orario' => 'time zone',
         'formato_data' => 'date format',
         'inizio_settimana' => 'start of the week',
+        'tema' => 'theme',
         'azienda.partita_iva' => 'VAT number',
         'azienda.settore' => 'industry',
         'azienda.persone' => 'number of people',
@@ -310,6 +311,7 @@ return [
         'utente.fuso_orario' => 'time zone',
         'utente.formato_data' => 'date format',
         'utente.inizio_settimana' => 'start of the week',
+        'utente.tema' => 'theme',
     ],
 
 ];

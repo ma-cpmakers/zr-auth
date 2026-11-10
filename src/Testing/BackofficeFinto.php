@@ -651,7 +651,7 @@ final class BackofficeFinto
     /** Quanti caratteri può avere la risposta del widget (Turnstile::LUNGHEZZA). */
     private const LUNGHEZZA_TURNSTILE = 2048;
 
-    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, formato_data: ?string, inizio_settimana: ?string, creato_il: CarbonImmutable, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
+    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, formato_data: ?string, inizio_settimana: ?string, tema: ?string, creato_il: CarbonImmutable, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
     private array $persone = [];
 
     /** @var array<string, array{codice: string, email: string, scade: CarbonImmutable, tentativi: int}> per id della persona: il cambio di email in attesa */
@@ -903,6 +903,7 @@ final class BackofficeFinto
             'telefono' => null,
             'formato_data' => null,
             'inizio_settimana' => null,
+            'tema' => null,
             'foto_aggiornata_il' => null,
             'creato_il' => now()->toImmutable()->startOfMillisecond(),
             'email' => $email,
@@ -3290,6 +3291,7 @@ final class BackofficeFinto
                     'telefono' => null,
                     'formato_data' => null,
                     'inizio_settimana' => null,
+                    'tema' => null,
                     'foto_aggiornata_il' => null,
                     'creato_il' => now()->toImmutable()->startOfMillisecond(),
                     'email' => $email,
@@ -4328,6 +4330,7 @@ final class BackofficeFinto
                 'telefono' => null,
                 'formato_data' => null,
                 'inizio_settimana' => null,
+                'tema' => null,
                 'foto_aggiornata_il' => null,
                 'creato_il' => now()->toImmutable()->startOfMillisecond(),
                 'email' => $email,
@@ -4745,6 +4748,8 @@ final class BackofficeFinto
             // Le preferenze di data (#2228): `null` torna a quello della lingua.
             'utente.formato_data' => ['sometimes', 'nullable', 'string', Rule::in(['gg/mm/aaaa', 'mm/gg/aaaa', 'aaaa-mm-gg'])],
             'utente.inizio_settimana' => ['sometimes', 'nullable', 'string', Rule::in(['lunedi', 'domenica', 'sabato'])],
+            // Il tema (#3365) non si toglie: `null`, vuoto o fuori elenco è un errore sul suo pointer.
+            'utente.tema' => ['filled', 'string', Rule::in(['chiaro', 'scuro', 'sistema'])],
             'utente.cognome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
             'utente.mansione' => ['sometimes', 'nullable', 'string', 'max:100', new NomeScritto],
             'utente.telefono' => ['sometimes', 'nullable', 'bail', 'string', 'max:32', 'regex:/^(?=(?:\\D*\\d){5})[0-9+().\\- ]+$/'],
@@ -4782,7 +4787,7 @@ final class BackofficeFinto
 
         if (! is_array($utente) || $utente === []) {
             throw new Problema('dati_non_validi', [[
-                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.cognome, utente.mansione, utente.telefono, utente.lingua, utente.fuso_orario, utente.formato_data, utente.inizio_settimana']),
+                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.cognome, utente.mansione, utente.telefono, utente.lingua, utente.fuso_orario, utente.formato_data, utente.inizio_settimana, utente.tema']),
                 'regola' => 'obbligatorio',
                 'pointer' => array_key_exists('utente', $campi) ? '#/utente' : '#',
             ]]);
@@ -7133,6 +7138,7 @@ final class BackofficeFinto
                 'telefono' => null,
                 'formato_data' => null,
                 'inizio_settimana' => null,
+                'tema' => null,
                 'foto_aggiornata_il' => null,
                 'creato_il' => now()->toImmutable()->startOfMillisecond(),
                 'email' => $email,
@@ -7318,6 +7324,8 @@ final class BackofficeFinto
             'fuso_orario' => $persona['fuso_orario'],
             'formato_data' => $persona['formato_data'],
             'inizio_settimana' => $persona['inizio_settimana'],
+            // Mai null (#3365): chi non ha mai scelto ha `sistema`.
+            'tema' => $persona['tema'] ?? 'sistema',
             'cognome' => $persona['cognome'],
             'mansione' => $persona['mansione'],
             'telefono' => $persona['telefono'],
