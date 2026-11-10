@@ -173,3 +173,17 @@ it('è del solo superadmin: supporto e fatturazione sono 403, un utente che non 
     expect(esitoModificaUtente(fn () => Api::staff($superadmin)->patch('/v1/staff/utenti/01k8x5c9y7f2r6q0s4t8v2w6z0', ['nome' => 'Altro']))[0])->toBe(404)
         ->and(count($this->finto->registroDelloStaff()))->toBe($registro);
 });
+
+it('senza email, motivo e identita_verificata con un valore sono 422 sul loro pointer e non scrivono; null no (#3568, R5)', function () {
+    $gettone = gettoneModificaUtente($this->finto);
+    $anna = $this->finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
+    $percorso = "/v1/staff/utenti/{$anna['id']}";
+    $registro = count($this->finto->registroDelloStaff());
+
+    foreach ([['motivo', 'qualsiasi cosa'], ['identita_verificata', 5]] as [$campo, $valore]) {
+        expect(esitoModificaUtente(fn () => Api::staff($gettone)->patch($percorso, [$campo => $valore])))->toBe([422, 'dati_non_validi', "#/{$campo}"]);
+    }
+
+    expect(count($this->finto->registroDelloStaff()))->toBe($registro)
+        ->and(Api::staff($gettone)->patch($percorso, ['nome' => 'Anita', 'motivo' => null])['data']['nome'])->toBe('Anita');
+});

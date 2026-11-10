@@ -217,7 +217,7 @@ trait StaffUtenti
             ...$conEmail ? [
                 'identita_verificata' => ['bail', 'required', 'boolean:strict', 'accepted'],
                 'motivo' => ['bail', 'required', 'string', Rule::in(self::MOTIVI_DEL_REGISTRO_DELLO_STAFF)],
-            ] : ['identita_verificata' => ['sometimes', 'nullable'], 'motivo' => ['sometimes', 'nullable']],
+            ] : ['identita_verificata' => ['prohibited'], 'motivo' => ['prohibited']], // senza `email` un valore è 422 sul suo pointer (#3568, R5); `null` o vuoto no
         ];
         $campi = $this->testi->validaStretta($corpo, $regole);
 
