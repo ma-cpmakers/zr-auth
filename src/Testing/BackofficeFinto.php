@@ -628,6 +628,11 @@ final class BackofficeFinto
     /** I moduli che l'ospite legge, come `zeiras.ospite_legge` del backoffice: il primo segmento del nome del metodo. Solo in GET, nei metodi senza ruoli scritti. */
     private const OSPITE_LEGGE = ['board'];
 
+    /** I singoli metodi, fuori da quei moduli, che l'ospite legge in GET (#3591), come `zeiras.ospite_legge_metodi`; e le app che vede (`zeiras.ospite_ingressi`). */
+    private const OSPITE_LEGGE_METODI = ['app.elenca'];
+
+    private const OSPITE_APP = ['pm'];
+
     /** Quanti giorni vale un invito (Invito::GIORNI). */
     private const GIORNI_DELL_INVITO = 7;
 
@@ -5670,16 +5675,22 @@ final class BackofficeFinto
      * app.elenca (AppController::elenca): le app del catalogo in ordine di codice, ognuna col suo stato nel workspace del
      * gettone: `attivo` se il catalogo la dà disponibile e il workspace l'ha attivata (app.modifica, attivaApp()), se no
      * quello del catalogo. Il cursore porta il codice, e la pagina dopo parte dal
-     * codice dopo.
+     * codice dopo. All'ospite (#3591) solo le app di OSPITE_APP.
      *
      * @return array{int, array<string, mixed>}
      */
     private function elencaApp(Request $richiesta): array
     {
         $workspace = $this->delWorkspace($richiesta);
+        $ospite = $this->membri[$workspace][$this->autentica($richiesta)['persona']] === 'ospite';
         $voci = [];
 
         foreach (self::CATALOGO as $codice => $stato) {
+            // L'ospite (#3591) vede solo le app in cui può entrare: il filtro sta prima della pagina.
+            if ($ospite && ! in_array($codice, self::OSPITE_APP, true)) {
+                continue;
+            }
+
             $voci[] = $this->voceApp($codice, $this->appAttiva($workspace, $codice) ? 'attivo' : $stato);
         }
 
@@ -6776,7 +6787,7 @@ final class BackofficeFinto
      */
     private function rifiutaLOspite(Request $richiesta, string $ruolo): void
     {
-        if ($ruolo === 'ospite' && (! in_array($richiesta->method(), ['GET', 'HEAD'], true) || ! in_array(explode('.', (string) $this->operazioneInCorso, 2)[0], self::OSPITE_LEGGE, true))) {
+        if ($ruolo === 'ospite' && (! in_array($richiesta->method(), ['GET', 'HEAD'], true) || ! (in_array(explode('.', (string) $this->operazioneInCorso, 2)[0], self::OSPITE_LEGGE, true) || in_array((string) $this->operazioneInCorso, self::OSPITE_LEGGE_METODI, true)))) {
             throw new Problema('permesso_negato');
         }
     }

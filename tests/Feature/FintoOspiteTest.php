@@ -39,3 +39,15 @@ it("l'ospite non legge membri e inviti (403 permesso_negato) e il suo profilo po
         ->and($inviti->status())->toBe(403)->and($inviti->json('codice'))->toBe('permesso_negato')
         ->and($io->status())->toBe(200)->and($io->json('data.ruolo'))->toBe('ospite');
 });
+
+it("app.elenca: l'ospite riceve solo le app in cui può entrare (pm), gli altri ruoli l'elenco intero, e app.modifica resta 403 (#3591)", function () {
+    [, , , , $gettoneAnna, $gettoneBruno] = conLOspite();
+
+    $suo = alFinto('GET', '/v1/app', gettone: $gettoneBruno);
+    $intero = alFinto('GET', '/v1/app', gettone: $gettoneAnna);
+    $modifica = alFinto('PATCH', '/v1/app/pm', ['stato' => 'disponibile'], $gettoneBruno);
+
+    expect($suo->status())->toBe(200)->and(array_column($suo->json('data'), 'codice'))->toBe(['pm'])->and($suo->json('successivo'))->toBeNull()
+        ->and(count($intero->json('data')))->toBeGreaterThan(1)
+        ->and($modifica->status())->toBe(403)->and($modifica->json('codice'))->toBe('permesso_negato');
+});
