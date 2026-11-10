@@ -84,6 +84,6 @@ it('un ospite non diventa proprietario: 422 valore_non_ammesso su #/utente, col 
     $ruoli = collect(alFinto('GET', '/v1/workspace/membri', gettone: $gettoneAnna)->json('data'))->pluck('ruolo', 'id')->all();
 
     expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.pointer'))->toBe('#/utente')->and($risposta->json('errors.0.regola'))->toBe('valore_non_ammesso')
-        ->and($risposta->json('errors.0.detail'))->toContain('A guest is view-only')
+        ->and($risposta->json('errors.0.detail'))->toContain('workspace.membri.modifica')
         ->and($ruoli[$olga['id']])->toBe('ospite')->and($ruoli[$anna['id']])->toBe('proprietario');
 });

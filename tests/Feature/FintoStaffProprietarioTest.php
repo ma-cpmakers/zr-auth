@@ -151,6 +151,6 @@ it('un ospite non diventa proprietario: 422 su #/utente, col testo dell\'ospite,
 
     expect($errore)->not->toBeNull()
         ->and([$errore->stato, $errore->codice, $errore->errori[0]['pointer'], $errore->errori[0]['regola']])->toBe([422, 'dati_non_validi', '#/utente', 'valore_non_ammesso'])
-        ->and($errore->errori[0]['detail'])->toContain('A guest is view-only')
+        ->and($errore->errori[0]['detail'])->toContain('workspace.membri.modifica')
         ->and(count($this->finto->registroDelloStaff()))->toBe($registro);
 });
