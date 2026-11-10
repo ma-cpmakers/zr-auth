@@ -137,6 +137,7 @@ trait StaffAssistenza
             'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO_DELLO_STAFF],
             'cursore' => ['sometimes', 'string', $this->regolaDelCursoreDelloStaff($lista)],
             'stato' => ['bail', 'sometimes', 'string', 'in:aperte,chiuse,tutte'],
+            'prova' => $this->regolaDellaProva(),
         ]);
         $stato = (string) ($query['stato'] ?? 'aperte');
         $adesso = now()->toImmutable();
@@ -145,7 +146,10 @@ trait StaffAssistenza
         foreach ($this->assistenze as $id => $assistenza) {
             $aperta = $assistenza['fine'] === null && $assistenza['scade']->gt($adesso);
 
-            if (($stato === 'aperte' && ! $aperta) || ($stato === 'chiuse' && $aperta) || ($chi['solo_uat'] && ! $this->proprietarioDiProva($assistenza['workspace']))) {
+            // `prova=escludi` (#3574): via le assistenze su una persona o su un workspace di prova.
+            $diProva = $this->escludiLaProva($query) && ($this->personaDiProva($assistenza['utente']) || $this->workspaceDiProva($assistenza['workspace']));
+
+            if (($stato === 'aperte' && ! $aperta) || ($stato === 'chiuse' && $aperta) || ($chi['solo_uat'] && ! $this->proprietarioDiProva($assistenza['workspace'])) || $diProva) {
                 continue;
             }
 

@@ -553,9 +553,13 @@ trait Staff
 
         return $this->pagina(
             $richiesta, 'staff', 'id',
-            fn () => array_map(fn (array $riga) => $this->voceDelloStaff($riga['id']), $this->righeDelPerimetro($chi)),
+            fn () => array_map(
+                fn (array $riga) => $this->voceDelloStaff($riga['id']),
+                array_filter($this->righeDelPerimetro($chi), fn (array $riga) => ! ($this->escludiLaProva(self::query($richiesta)) && $riga['solo_uat'])),
+            ),
             fn (array $voce) => [$voce['id']],
             fn (string $chiave) => [$chiave],
+            regole: ['prova' => $this->regolaDellaProva()],
         );
     }
 
@@ -682,7 +686,8 @@ trait Staff
     private function contaLePersoneDelloStaff(Request $richiesta): array
     {
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
-        $persone = array_filter(array_keys($this->persone), fn (string $id) => ! $chi['solo_uat'] || $this->emailDelPerimetroUat($this->persone[$id]['email']));
+        $escludi = $this->escludiLaProva($this->testi->validaQuery(self::query($richiesta), ['prova' => $this->regolaDellaProva()]));
+        $persone = array_filter(array_keys($this->persone), fn (string $id) => (! $chi['solo_uat'] || $this->emailDelPerimetroUat($this->persone[$id]['email'])) && ! ($escludi && $this->personaDiProva($id)));
 
         $inEliminazione = array_filter($persone, fn (string $id) => isset($this->eliminazioniPersona[$id]));
         $sospesi = array_filter($persone, fn (string $id) => isset($this->sospensioniStaff[$id]) && ! isset($this->eliminazioniPersona[$id]));
@@ -699,7 +704,8 @@ trait Staff
     private function contaIWorkspaceDelloStaff(Request $richiesta): array
     {
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
-        $workspace = array_filter(array_keys($this->workspace), fn (string $id) => ! $chi['solo_uat'] || $this->proprietarioDiProva($id));
+        $escludi = $this->escludiLaProva($this->testi->validaQuery(self::query($richiesta), ['prova' => $this->regolaDellaProva()]));
+        $workspace = array_filter(array_keys($this->workspace), fn (string $id) => (! $chi['solo_uat'] || $this->proprietarioDiProva($id)) && ! ($escludi && $this->workspaceDiProva($id)));
 
         return [200, ['data' => $this->conteggiPerStato(count($workspace), count(array_filter($workspace, fn (string $id) => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture())))]];
     }
@@ -769,7 +775,7 @@ trait Staff
     private function esportaIlRegistroDelloStaff(Request $richiesta, array $corpo): array
     {
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
-        $filtri = $this->testi->validaStretta($corpo, $this->regoleDelRegistro());
+        $filtri = $this->testi->validaStretta($corpo, $this->regoleDelRegistro(true));
         $colonne = ['posizione', 'id', 'staff_id', 'ruolo', 'azione', 'bersaglio_tipo', 'bersaglio_id', 'campi', 'motivo', 'ip', 'impersonificazione_id', 'quando'];
         // La riga di questa esportazione si scrive prima, e il file arriva fino a lei: dalla più vecchia, come il backoffice.
         $this->scriviNelRegistroDelloStaff($chi, 'staff.registro.esportazioni.crea', 'registro', null);
@@ -798,7 +804,7 @@ trait Staff
     // ── Sotto il cofano ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
     /** @return array<string, mixed> */
-    private function regoleDelRegistro(): array
+    private function regoleDelRegistro(bool $nelCorpo = false): array
     {
         $id = ['sometimes', 'string', 'regex:/^[0-9A-Za-z]{26}$/'];
 
@@ -809,6 +815,7 @@ trait Staff
             'azione' => ['sometimes', 'string', 'max:120'],
             'dal' => ['sometimes', 'string', 'date'],
             'al' => ['sometimes', 'string', 'date'],
+            'prova' => $this->regolaDellaProva($nelCorpo),
         ];
     }
 
@@ -1037,6 +1044,55 @@ trait Staff
     }
 
     /**
+     * Le regole del parametro `prova` (#3574): `escludi` o `includi`, altro è 422 sul parametro (nella query) o su `#/prova` (nel corpo, dove `null` vale `includi`).
+     *
+     * @return list<mixed>
+     */
+    private function regolaDellaProva(bool $nelCorpo = false): array
+    {
+        return $nelCorpo ? ['bail', 'sometimes', 'nullable', 'string', 'in:includi,escludi'] : ['bail', 'sometimes', 'string', 'in:includi,escludi'];
+    }
+
+    /** `true` se i filtri o la query (già validati) chiedono di togliere i dati di prova. @param  array<string, mixed>  $filtri */
+    private function escludiLaProva(array $filtri): bool
+    {
+        return ($filtri['prova'] ?? null) === 'escludi';
+    }
+
+    /** Una persona è di prova dall'email (come il backoffice, che mette il segno alla nascita): `uat+…@castroandpartners.com`, `…@prova.invalid`, `prova@lucianocastro.com`. */
+    private function personaDiProva(string $id): bool
+    {
+        $email = self::normalizza($this->persone[$id]['email'] ?? '');
+
+        return $this->emailDelPerimetroUat($email) || preg_match('/^[^@\s]+@prova\.invalid$/', $email) === 1 || $email === 'prova@lucianocastro.com';
+    }
+
+    /** Un workspace è di prova se lo è il suo proprietario (le persone con il segno `di_prova`, non solo il perimetro `uat+`); senza proprietario non lo è. */
+    private function workspaceDiProva(string $id): bool
+    {
+        foreach ($this->membri[$id] ?? [] as $persona => $ruolo) {
+            if ($ruolo === 'proprietario' && isset($this->persone[$persona]) && $this->personaDiProva($persona)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Una riga di registro tocca un dato di prova: il suo oggetto è una persona, un workspace o una persona dello staff di prova. @param  array<string, mixed>  $riga */
+    private function laRigaToccaLaProva(array $riga): bool
+    {
+        $id = (string) $riga['bersaglio_id'];
+
+        return match ($riga['bersaglio_tipo']) {
+            'utente' => isset($this->persone[$id]) && $this->personaDiProva($id),
+            'workspace' => isset($this->workspace[$id]) && $this->workspaceDiProva($id),
+            'staff' => isset($this->righeStaff[$id]) && $this->righeStaff[$id]['solo_uat'],
+            default => false,
+        };
+    }
+
+    /**
      * Le persone dello staff che chi chiama vede: tutte le vive, o, se è solo_uat, quelle del suo perimetro. Nell'ordine degli id.
      *
      * @param  array<string, mixed>  $chi
@@ -1109,6 +1165,7 @@ trait Staff
             'cognome' => $persona['cognome'],
             'email' => $persona['email'],
             'ruolo' => $staff['ruolo'],
+            'di_prova' => (bool) $staff['solo_uat'],
             'creato_il' => self::iso($staff['creato_il']),
             'creato_da' => $creatoDa,
             'ultimo_ingresso' => isset($staff['ultimo_ingresso']) ? self::iso($staff['ultimo_ingresso']) : null,
@@ -1151,6 +1208,11 @@ trait Staff
     {
         return array_values(array_filter($this->registroStaff, function (array $riga) use ($chi, $filtri) {
             if (($chi['ruolo'] !== 'superadmin' || $chi['solo_uat']) && $riga['staff_id'] !== $chi['id']) {
+                return false;
+            }
+
+            // `prova=escludi` (#3574): via le righe il cui oggetto è di prova; le altre (il registro, le esportazioni) restano.
+            if ($this->escludiLaProva($filtri) && $this->laRigaToccaLaProva($riga)) {
                 return false;
             }
 
