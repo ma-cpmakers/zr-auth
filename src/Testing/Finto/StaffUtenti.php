@@ -5,6 +5,7 @@ namespace Zeiras\Auth\Testing\Finto;
 use Closure;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 
 /**
@@ -21,6 +22,9 @@ trait StaffUtenti
     private const STATI_DELL_UTENTE = ['attivo', 'sospeso', 'in_eliminazione'];
 
     private const MOTIVI_DELLA_SOSPENSIONE = ['segnalazione_abuso', 'pagamento_non_riuscito', 'accesso_sospetto', 'altro'];
+
+    /** I motivi del registro dello staff (l'enum `Motivo` del backoffice): un elenco chiuso, mai testo libero. */
+    private const MOTIVI_DEL_REGISTRO_DELLO_STAFF = ['assistenza', 'problema_tecnico', 'sicurezza', 'verifica_account'];
 
     private const LETTURE_ALL_ORA = 300;
 
@@ -45,6 +49,9 @@ trait StaffUtenti
     /** @var array<string, array{paese?: ?string, nota_staff?: ?string}> i dati della scheda che il finto non ha altrove, per utente */
     private array $datiStaffSugliUtenti = [];
 
+    /** @var array<string, array{email: string, effettivo_il: \Carbon\CarbonImmutable, motivo: string}> il cambio di email in attesa, per utente (#2915, F5.5) */
+    private array $cambiEmailStaff = [];
+
     // ── Quello che il test prepara ─────────────────────────────────────────────────────
 
     /**
@@ -62,6 +69,32 @@ trait StaffUtenti
         }
 
         $this->datiStaffSugliUtenti[$id] = $dati + ($this->datiStaffSugliUtenti[$id] ?? []);
+
+        return $this;
+    }
+
+    /**
+     * Applica i cambi di email dello staff arrivati a scadenza (il comando orario del backoffice, `staff:applica-cambi-email`): l'email cambia ed è non verificata, le sessioni si chiudono e la richiesta
+     * sparisce. Nessun avviso a nessuno. Il finto non ha un orologio che lo chiami: un test lo chiama dopo aver fatto passare le 72 ore (`Carbon::setTestNow`), e il finto lo chiama da sé prima di
+     * rispondere con una scheda o con una modifica.
+     */
+    public function applicaICambiEmailDelloStaff(): self
+    {
+        foreach ($this->cambiEmailStaff as $utente => $cambio) {
+            if ($cambio['effettivo_il']->gt(now())) {
+                continue;
+            }
+
+            unset($this->cambiEmailStaff[$utente]);
+
+            if ($this->conEmail($cambio['email']) !== null || ! isset($this->persone[$utente])) {
+                continue;
+            }
+
+            $this->persone[$utente]['email'] = $cambio['email'];
+            $this->persone[$utente]['email_verificata_il'] = null;
+            $this->chiudiLeSessioniDellUtente($utente);
+        }
 
         return $this;
     }
@@ -150,9 +183,110 @@ trait StaffUtenti
     {
         [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin', 'supporto']);
         $utente = $this->bersaglioUtente($chi, $id);
+        $this->applicaICambiEmailDelloStaff();
         $this->scriviNelRegistroDelloStaff($chi, 'staff.utenti.mostra', 'utente', $utente);
 
         return [200, ['data' => $this->schedaDellUtente($utente)]];
+    }
+
+    /**
+     * staff.utenti.modifica (#2915, F5.1, F5.4, F5.5): l'anagrafica di una persona, come JSON Merge Patch. Solo il superadmin. Nell'ordine del backoffice: il ruolo, il bersaglio (404, 403), il corpo
+     * (422: almeno un campo, un estraneo come la password o il TOTP, un valore fuori regola; con `email` anche `identita_verificata: true` e `motivo` dell'elenco chiuso), l'email di un'altra persona (422
+     * sul campo). Un valore uguale a quello di oggi non scrive niente; un cambio vero lascia una riga nel registro dello staff coi nomi dei campi. L'email non cambia subito: resta in attesa 72 ore
+     * (`cambio_email` della scheda), una richiesta nuova sostituisce la precedente. Risponde con la scheda. Nessun avviso a nessuno.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function modificaUnUtenteDelloStaff(Request $richiesta, array $corpo, string $id): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $utente = $this->bersaglioUtente($chi, $id);
+        $this->applicaICambiEmailDelloStaff();
+        $conEmail = array_key_exists('email', $corpo);
+        $regole = [
+            'nome' => ['filled', 'string', 'max:255', new NomeScritto],
+            'cognome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
+            'telefono' => ['sometimes', 'nullable', 'bail', 'string', 'max:32', 'regex:/^(?=(?:\\D*\\d){5})[0-9+().\\- ]+$/'],
+            'lingua' => ['filled', 'string', Rule::in(Testi::LINGUE)],
+            'fuso_orario' => ['filled', 'string', 'timezone:all'],
+            'paese' => ['sometimes', 'nullable', 'bail', 'string', Rule::in(self::PAESI)],
+            'nota_staff' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'email' => ['sometimes', 'bail', 'required', 'string', 'max:254', 'email:rfc,filter'],
+            ...$conEmail ? [
+                'identita_verificata' => ['bail', 'required', 'boolean:strict', 'accepted'],
+                'motivo' => ['bail', 'required', 'string', Rule::in(self::MOTIVI_DEL_REGISTRO_DELLO_STAFF)],
+            ] : ['identita_verificata' => ['sometimes', 'nullable'], 'motivo' => ['sometimes', 'nullable']],
+        ];
+        $campi = $this->testi->validaStretta($corpo, $regole);
+
+        if ($campi === []) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => implode(', ', array_keys($regole))]), 'regola' => 'obbligatorio', 'pointer' => '#']]);
+        }
+
+        $cambiati = [];
+        $correnti = ['paese' => $this->datiStaffSugliUtenti[$utente]['paese'] ?? null, 'nota_staff' => $this->datiStaffSugliUtenti[$utente]['nota_staff'] ?? null] + $this->persone[$utente];
+
+        foreach (['nome', 'cognome', 'telefono', 'lingua', 'fuso_orario', 'paese', 'nota_staff'] as $campo) {
+            if (array_key_exists($campo, $campi) && $campi[$campo] !== $correnti[$campo]) {
+                $cambiati[] = $campo;
+            }
+        }
+
+        $inAttesa = false;
+
+        if ($conEmail) {
+            $nuova = strtolower(trim((string) $campi['email']));
+            $vivo = $this->cambiEmailStaff[$utente] ?? null;
+
+            if ($nuova !== $this->persone[$utente]['email'] && ($vivo === null || $vivo['email'] !== $nuova)) {
+                if ($this->conEmail($nuova) !== null) {
+                    throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.unique', ['attribute' => 'email']), 'regola' => 'duplicato', 'pointer' => '#/email']]);
+                }
+
+                $inAttesa = true;
+            }
+        }
+
+        foreach ($cambiati as $campo) {
+            if (in_array($campo, ['paese', 'nota_staff'], true)) {
+                $this->datiStaffSugliUtenti[$utente][$campo] = $campi[$campo];
+            } else {
+                $this->persone[$utente][$campo] = $campi[$campo];
+            }
+        }
+
+        if ($inAttesa) {
+            $this->cambiEmailStaff[$utente] = ['email' => $nuova, 'effettivo_il' => now()->toImmutable()->startOfMillisecond()->addHours(72), 'motivo' => (string) $campi['motivo']];
+            $cambiati[] = 'email';
+        }
+
+        if ($cambiati !== []) {
+            $this->scriviNelRegistroDelloStaff($chi, 'staff.utenti.modifica', 'utente', $utente, $cambiati, $inAttesa ? (string) $campi['motivo'] : null);
+        }
+
+        return [200, ['data' => $this->schedaDellUtente($utente)]];
+    }
+
+    /**
+     * staff.utenti.cambio-email.elimina (#2915, F5.5): annulla il cambio di email in attesa. Solo il superadmin; 204, o 404 se non ce n'è uno. Una riga nel registro dello staff.
+     *
+     * @return array{int, null}
+     */
+    private function annullaIlCambioEmailDiUnUtente(Request $richiesta, string $id): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $utente = $this->bersaglioUtente($chi, $id);
+        $this->applicaICambiEmailDelloStaff();
+
+        if (! isset($this->cambiEmailStaff[$utente])) {
+            throw new Problema('non_trovato');
+        }
+
+        unset($this->cambiEmailStaff[$utente]);
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.utenti.cambio-email.elimina', 'utente', $utente);
+
+        return [204, null];
     }
 
     /** @return array{int, array<string, mixed>} */
@@ -508,6 +642,11 @@ trait StaffUtenti
                 'motivo' => null,
                 'quando' => null,
             ],
+            'cambio_email' => isset($this->cambiEmailStaff[$id]) ? [
+                'email' => $this->cambiEmailStaff[$id]['email'],
+                'effettivo_il' => self::iso($this->cambiEmailStaff[$id]['effettivo_il']),
+                'motivo' => $this->cambiEmailStaff[$id]['motivo'],
+            ] : null,
         ];
     }
 

@@ -322,6 +322,45 @@ trait StaffWorkspace
         return [204, null];
     }
 
+    /**
+     * staff.workspace.proprietario.modifica (#3260, StaffWorkspaceProprietarioController::modifica): lo staff passa la proprietà a un altro membro, con un `motivo` dell'elenco chiuso del registro dello
+     * staff. Solo il superadmin. Nell'ordine del backoffice: il workspace (404), il corpo (422: `utente` e `motivo`), l'eliminazione programmata (409 `workspace_in_eliminazione`), chi è già il
+     * proprietario (422 `valore_non_ammesso` su `#/utente`), chi non è membro o ha chiesto di eliminare l'account (422 `non_trovato`, lo stesso testo di un id inventato). Il vecchio proprietario diventa
+     * amministratore. Risponde 200 col nuovo proprietario; una riga nel registro dello staff (nei campi `proprietario`, col motivo); nessun avviso a nessuno.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function passaLaProprietaDelloStaff(Request $richiesta, array $corpo, string $workspace): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $dati = $this->testi->validaStretta($corpo, [
+            'utente' => ['bail', 'required', 'string', 'ulid'],
+            'motivo' => ['required', 'string', Rule::in(['assistenza', 'problema_tecnico', 'sicurezza', 'verifica_account'])],
+        ]);
+        $scelto = strtolower((string) $dati['utente']);
+        $this->rifiutaSeInEliminazione($id);
+        $vecchio = array_search('proprietario', $this->membri[$id], true);
+
+        if ($scelto === $vecchio) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_gia_proprietario'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/utente']]);
+        }
+
+        if (! isset($this->membri[$id][$scelto]) || isset($this->eliminazioniPersona[$scelto])) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => 'non_trovato', 'pointer' => '#/utente']]);
+        }
+
+        if (is_string($vecchio)) {
+            $this->membri[$id][$vecchio] = 'amministratore';
+        }
+
+        $this->membri[$id][$scelto] = 'proprietario';
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.proprietario.modifica', 'workspace', $id, ['proprietario'], (string) $dati['motivo']);
+
+        return [200, ['data' => $this->voceDelMembroPerLoStaff($id, $scelto)]];
+    }
+
     /** L'id di una persona che è membro di quel workspace, o 404: di un altro workspace, tolta o inventata è lo stesso 404. */
     private function membroDelloStaff(string $workspace, string $utente): string
     {
