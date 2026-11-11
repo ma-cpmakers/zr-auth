@@ -444,12 +444,13 @@ it('il codice si scambia solo da una richiesta del browser dello stesso sito di 
     'Sec-Fetch-Site assente' => [['Origin' => ADMIN_DI_PROVA]],
 ]);
 
-it('con Referrer-Policy no-referrer il browser manda Origin: null; con same-site vale lo stesso (#3386 T1.2)', function () {
+it('Origin: null, che il browser manda da una pagina con Referrer-Policy: no-referrer, non apre la sessione e brucia il codice: la pagina d\'errore (#3410 G1.1)', function () {
     [$codice] = codiceDiAssistenza();
 
-    consegnaAssistenza($this, $codice, ['Sec-Fetch-Site' => 'same-site', 'Origin' => 'null'])->assertRedirect(FRONTEND);
+    consegnaAssistenza($this, $codice, ['Sec-Fetch-Site' => 'same-site', 'Origin' => 'null'])->assertRedirect(INGRESSO);
+    consegnaAssistenza($this, $codice)->assertRedirect(INGRESSO);
 
-    expect(Sessione::aperta())->toBeTrue();
+    expect(Sessione::aperta())->toBeFalse();
 });
 
 it('un codice rifiutato dal sito brucia: il secondo tentativo giusto non vale più (#3386 T1.2)', function () {

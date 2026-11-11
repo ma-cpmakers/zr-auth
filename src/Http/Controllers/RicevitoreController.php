@@ -99,8 +99,9 @@ final class RicevitoreController
      * Il codice di un «Accedi come» (staff.utenti.impersonificazioni.crea, #2914 F4.1) arriva con un POST auto-inviato dalla pagina di zr-superadmin, nel corpo e mai in un indirizzo (#3386):
      * non finisce nella cronologia del browser né nel log di un proxy, nemmeno per i 60 secondi in cui vale. Lo scambio vuole una richiesta del browser dello stesso sito: `Sec-Fetch-Site: same-site`
      * (un altro sito manda `cross-site`, una navigazione diretta `none`; un client fuori dal browser le intestazioni le può scrivere come vuole: contro un codice trapelato proteggono
-     * solo «mai in un indirizzo», i 60 secondi e il monouso) e `Origin` quello di zr-superadmin (`zr-auth.admin`), o `null`, che il browser manda quando la
-     * pagina che consegna il codice ha `Referrer-Policy: no-referrer`. Il resto della legatura non cambia: il codice è del client firmato di questo modulo, vale una volta e 60 secondi.
+     * solo «mai in un indirizzo», i 60 secondi e il monouso) e `Origin` quello di zr-superadmin (`zr-auth.admin`), e solo quello: `Origin: null` (che il browser manda da una pagina con
+     * `Referrer-Policy: no-referrer`) non vale più (#3410), perché una pagina qualsiasi di *.zeiras.com con no-referrer avrebbe potuto portare un codice. La pagina di
+     * zr-superadmin che consegna il codice ha quindi `Referrer-Policy: origin`, e il browser manda il suo `Origin` vero. Il resto della legatura non cambia: il codice è del client firmato di questo modulo, vale una volta e 60 secondi.
      * Senza CSRF: arriva da un altro sito per costruzione, e il controllo del sito prende il suo posto. Si risponde con un 303 a un indirizzo pulito.
      */
     public function assistenza(Request $richiesta): RedirectResponse
@@ -169,7 +170,7 @@ final class RicevitoreController
         }
     }
 
-    /** Il POST del codice di assistenza viene dal browser della persona, dalla pagina di zr-superadmin: Sec-Fetch-Site e Origin ci sono, e lo dicono. */
+    /** Il POST del codice di assistenza viene dal browser della persona, dalla pagina di zr-superadmin: Sec-Fetch-Site e Origin ci sono, e lo dicono. `Origin: null` e `Origin` assente no (#3410). */
     private static function dalPaginaDellaStaff(Request $richiesta): bool
     {
         if (strtolower((string) $richiesta->headers->get('Sec-Fetch-Site')) !== 'same-site') {
@@ -178,7 +179,7 @@ final class RicevitoreController
 
         $origine = $richiesta->headers->get('Origin');
 
-        return $origine !== null && ($origine === 'null' || rtrim($origine, '/') === rtrim((string) config('zr-auth.admin'), '/'));
+        return $origine !== null && $origine === rtrim((string) config('zr-auth.admin'), '/');
     }
 
     /** Il ritorno viene dal browser della persona, da zr-home: Sec-Fetch-Site e Origin, quando ci sono, lo dicono. */
