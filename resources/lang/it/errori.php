@@ -654,4 +654,24 @@ return [
         'title' => 'Fattura già emessa',
         'detail' => "Per questa rata o per questo acquisto la fattura è già stata emessa, o lo è una fattura dell'altro (l'acquisto e le sue rate non si fatturano due volte). Il numero lo dà la rata o l'acquisto. Il metodo non ha scritto niente.",
     ],
+    'slot_non_pieno' => [
+        'title' => 'Lo slot non è pieno',
+        'detail' => "Questo slot ha ancora posti liberi: non serve la lista d'attesa, si prenota direttamente con io.prenotazioni.crea. Il metodo non ha scritto niente.",
+    ],
+    'lista_chiusa' => [
+        'title' => "Lista d'attesa chiusa",
+        'detail' => "La lista d'attesa di questo slot è chiusa: si chiude 2 ore prima dell'inizio. Il metodo non ha scritto niente.",
+    ],
+    'gia_in_lista' => [
+        'title' => "Già in lista d'attesa",
+        'detail' => "La persona è già in lista d'attesa per questo slot. Il metodo non ha scritto niente: rileggi la voce con io.attese.mostra.",
+    ],
+    'offerta_scaduta' => [
+        'title' => 'Offerta scaduta',
+        'detail' => "L'offerta del posto è scaduta, o il posto non è più offerto a questa voce: non si può più confermare. Il metodo non ha scritto niente. Se la lista è ancora aperta, la voce resta in attesa del prossimo posto libero.",
+    ],
+    'nessun_destinatario' => [
+        'title' => 'Nessun destinatario',
+        'detail' => "In questo slot non c'è nessuna prenotazione confermata: non c'è nessuno a cui scrivere. Il metodo non ha scritto niente e l'invio non conta nel tetto giornaliero.",
+    ],
 ];
