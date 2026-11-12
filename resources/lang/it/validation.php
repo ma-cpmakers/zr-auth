@@ -279,6 +279,7 @@ return [
         'fuso_orario' => 'fuso orario',
         'formato_data' => 'formato data',
         'inizio_settimana' => 'inizio settimana',
+        'tema' => 'tema',
         'azienda.partita_iva' => 'partita IVA',
         'azienda.settore' => 'settore',
         'azienda.persone' => 'numero di persone',
@@ -309,5 +310,6 @@ return [
         'utente.fuso_orario' => 'fuso orario',
         'utente.formato_data' => 'formato data',
         'utente.inizio_settimana' => 'inizio settimana',
+        'utente.tema' => 'tema',
     ],
 ];

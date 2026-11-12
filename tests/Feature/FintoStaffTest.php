@@ -220,7 +220,7 @@ it('i ruoli: solo il superadmin gestisce lo staff; supporto e fatturazione leggo
 
     // Il supporto legge l'elenco (#3020, sola lettura) con la stessa forma del superadmin; tutto il resto dello staff è del superadmin.
     $elenco = Api::staff($gettone)->get('/v1/staff')['data'];
-    expect(array_column($elenco, 'id'))->toContain($supporto['id'])->and(array_keys($elenco[0]))->toBe(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'creato_il', 'creato_da', 'ultimo_ingresso']);
+    expect(array_column($elenco, 'id'))->toContain($supporto['id'])->and(array_keys($elenco[0]))->toBe(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'di_prova', 'creato_il', 'creato_da', 'ultimo_ingresso']);
 
     $chiamate = [['get', '/v1/staff/'.$supporto['id']], ['post', '/v1/staff', ['email' => 'x@lucianocastro.com', 'ruolo' => 'supporto']],
         ['patch', '/v1/staff/'.$supporto['id'], ['ruolo' => 'supporto']], ['delete', '/v1/staff/'.$supporto['id']],
@@ -259,7 +259,7 @@ it('staff.crea, modifica, elimina e reimpostazione: dominio, ruoli, nessuno su s
 
     $bruno = Api::staff($gettone)->post('/v1/staff', ['email' => 'bruno@castroandpartners.com', 'ruolo' => 'supporto'])['data'];
 
-    expect(array_keys($bruno))->toBe(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'creato_il', 'creato_da', 'ultimo_ingresso'])
+    expect(array_keys($bruno))->toBe(['id', 'utente_id', 'nome', 'cognome', 'email', 'ruolo', 'di_prova', 'creato_il', 'creato_da', 'ultimo_ingresso'])
         ->and($bruno['creato_da'])->toBe(['nome' => 'Sara', 'cognome' => null])->and($bruno['ultimo_ingresso'])->toBeNull()
         ->and($crea('bruno@castroandpartners.com'))->toBe([409, 'staff_gia_presente'])
         ->and($this->finto->ultimoInvitoDelloStaff('bruno@castroandpartners.com'))->toBeNull();

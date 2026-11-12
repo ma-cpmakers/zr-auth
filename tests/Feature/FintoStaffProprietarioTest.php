@@ -134,3 +134,23 @@ it('è del solo superadmin: supporto e fatturazione sono 403 permesso_negato e n
 
     expect(count($this->finto->registroDelloStaff()))->toBe($registro);
 });
+
+it('un ospite non diventa proprietario: 422 su #/utente, col testo dell\'ospite, e i ruoli e il registro restano com\'erano (#3366)', function () {
+    $gettone = gettoneProprietario($this->finto, 'sara@lucianocastro.com');
+    [$workspace] = workspaceDelPassaggio($this->finto);
+    $olga = $this->finto->persona('olga@example.com', PASSWORD, nome: 'Olga');
+    $this->finto->membro($workspace, $olga, 'ospite');
+    $registro = count($this->finto->registroDelloStaff());
+
+    try {
+        Api::staff($gettone)->patch("/v1/staff/workspace/{$workspace['id']}/proprietario", ['utente' => $olga['id'], 'motivo' => 'sicurezza']);
+        $errore = null;
+    } catch (ErroreApi $e) {
+        $errore = $e;
+    }
+
+    expect($errore)->not->toBeNull()
+        ->and([$errore->stato, $errore->codice, $errore->errori[0]['pointer'], $errore->errori[0]['regola']])->toBe([422, 'dati_non_validi', '#/utente', 'valore_non_ammesso'])
+        ->and($errore->errori[0]['detail'])->toContain('workspace.membri.modifica')
+        ->and(count($this->finto->registroDelloStaff()))->toBe($registro);
+});

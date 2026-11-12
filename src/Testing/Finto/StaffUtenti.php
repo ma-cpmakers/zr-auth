@@ -139,6 +139,7 @@ trait StaffUtenti
         $regole = [
             'stato' => ['sometimes', 'string', 'in:'.implode(',', self::STATI_DELL_UTENTE)],
             'mai_acceduto' => ['sometimes', 'string', 'in:true,false'],
+            'prova' => $this->regolaDellaProva(),
         ];
         $query = $this->testi->validaQuery(self::query($richiesta), [
             'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO_DELLO_STAFF],
@@ -216,7 +217,7 @@ trait StaffUtenti
             ...$conEmail ? [
                 'identita_verificata' => ['bail', 'required', 'boolean:strict', 'accepted'],
                 'motivo' => ['bail', 'required', 'string', Rule::in(self::MOTIVI_DEL_REGISTRO_DELLO_STAFF)],
-            ] : ['identita_verificata' => ['sometimes', 'nullable'], 'motivo' => ['sometimes', 'nullable']],
+            ] : ['identita_verificata' => ['prohibited'], 'motivo' => ['prohibited']], // senza `email` un valore è 422 sul suo pointer (#3568, R5); `null` o vuoto no
         ];
         $campi = $this->testi->validaStretta($corpo, $regole);
 
@@ -300,6 +301,7 @@ trait StaffUtenti
             'azione' => ['sometimes', 'string', 'max:120'],
             'dal' => ['sometimes', 'string', 'date'],
             'al' => ['sometimes', 'string', 'date'],
+            'prova' => ['prohibited'],
         ];
         $lista = 'staff.utenti.registro:'.$utente;
         $query = $this->testi->validaQuery(self::query($richiesta), [
@@ -490,6 +492,7 @@ trait StaffUtenti
             'email' => ['sometimes', 'nullable', 'string', 'max:254'],
             'stato' => ['sometimes', 'nullable', 'string', 'in:'.implode(',', self::STATI_DELL_UTENTE)],
             'mai_acceduto' => ['sometimes', 'nullable', 'boolean:strict'],
+            'prova' => $this->regolaDellaProva(true),
         ];
     }
 
@@ -542,7 +545,7 @@ trait StaffUtenti
         $parole = isset($filtri['q']) ? array_values(array_filter(preg_split('/\s+/u', Str::lower(trim((string) $filtri['q']))) ?: [])) : [];
 
         foreach ($this->persone as $id => $persona) {
-            if ($chi['solo_uat'] && ! $this->emailDelPerimetroUat($persona['email'])) {
+            if (($chi['solo_uat'] && ! $this->emailDelPerimetroUat($persona['email'])) || ($this->escludiLaProva($filtri) && $this->personaDiProva($id))) {
                 continue;
             }
 
@@ -582,6 +585,7 @@ trait StaffUtenti
             'email' => $persona['email'],
             'stato' => $this->statoDellUtente($id),
             'mai_acceduto' => array_filter($accessi, fn (array $accesso) => ($accesso['via'] ?? null) !== 'assistenza') === [],
+            'di_prova' => $this->personaDiProva($id),
             'workspace_n' => count(array_filter($this->membri, fn (array $membri, string $workspace) => isset($membri[$id]) && ! isset($this->eliminazioni[$workspace]), ARRAY_FILTER_USE_BOTH)),
             'ultimo_accesso' => $ultimo === null ? null : self::iso($ultimo),
             'creato_il' => self::iso($this->creataIlDellaPersona($id)),

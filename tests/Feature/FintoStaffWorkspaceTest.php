@@ -58,7 +58,7 @@ it('l\'elenco: i campi dichiarati dal più recente, il proprietario, i conteggi,
     $righe = array_column($elenco['data'], null, 'id');
 
     expect(array_column($elenco['data'], 'id'))->toBe([$due['id'], $uno['id']])
-        ->and(array_keys($righe[$due['id']]))->toBe(['id', 'nome', 'indirizzo', 'azienda', 'proprietario', 'membri_n', 'app_attive_n', 'stato', 'creato_il'])
+        ->and(array_keys($righe[$due['id']]))->toBe(['id', 'nome', 'indirizzo', 'azienda', 'proprietario', 'membri_n', 'app_attive_n', 'stato', 'di_prova', 'creato_il'])
         ->and($righe[$due['id']])->toMatchArray(['nome' => 'Studio due', 'indirizzo' => $due['slug'], 'azienda' => 'Studio due', 'membri_n' => 2, 'app_attive_n' => 0, 'stato' => 'attivo', 'creato_il' => '2026-11-05T10:00:05.000Z'])
         ->and($righe[$due['id']]['proprietario'])->toBe(['id' => $anna['id'], 'nome' => 'Anna', 'cognome' => null])
         ->and($elenco['successivo'])->toBeNull()
@@ -145,7 +145,7 @@ it('la scheda: la riga dell\'elenco più consumi, eliminazione e fatturazione, e
 
     $scheda = Api::staff($gettone)->get('/v1/staff/workspace/'.$uno['id'])['data'];
 
-    expect(array_keys($scheda))->toBe(['id', 'nome', 'indirizzo', 'azienda', 'proprietario', 'membri_n', 'app_attive_n', 'stato', 'creato_il', 'consumi', 'eliminazione', 'fatturazione'])
+    expect(array_keys($scheda))->toBe(['id', 'nome', 'indirizzo', 'azienda', 'proprietario', 'membri_n', 'app_attive_n', 'stato', 'di_prova', 'creato_il', 'consumi', 'eliminazione', 'fatturazione'])
         ->and($scheda)->toMatchArray(['id' => $uno['id'], 'nome' => 'Studio uno', 'membri_n' => 2, 'stato' => 'attivo', 'eliminazione' => null])
         ->and($scheda['consumi'])->toBe(['membri_n' => 2, 'board_n' => 0, 'schede_n' => 0, 'contatti_n' => 0, 'prenotazioni_n' => 0])
         ->and($scheda['fatturazione'])->toBe(['partita_iva' => null, 'paese' => null, 'valuta' => null])

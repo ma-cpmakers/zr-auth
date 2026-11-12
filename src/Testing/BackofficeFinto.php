@@ -628,6 +628,11 @@ final class BackofficeFinto
     /** I moduli che l'ospite legge, come `zeiras.ospite_legge` del backoffice: il primo segmento del nome del metodo. Solo in GET, nei metodi senza ruoli scritti. */
     private const OSPITE_LEGGE = ['board'];
 
+    /** I singoli metodi, fuori da quei moduli, che l'ospite legge in GET (#3591), come `zeiras.ospite_legge_metodi`; e le app che vede (`zeiras.ospite_ingressi`). */
+    private const OSPITE_LEGGE_METODI = ['app.elenca'];
+
+    private const OSPITE_APP = ['pm'];
+
     /** Quanti giorni vale un invito (Invito::GIORNI). */
     private const GIORNI_DELL_INVITO = 7;
 
@@ -651,7 +656,7 @@ final class BackofficeFinto
     /** Quanti caratteri può avere la risposta del widget (Turnstile::LUNGHEZZA). */
     private const LUNGHEZZA_TURNSTILE = 2048;
 
-    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, formato_data: ?string, inizio_settimana: ?string, creato_il: CarbonImmutable, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
+    /** @var array<string, array{nome: string, cognome: ?string, mansione: ?string, telefono: ?string, formato_data: ?string, inizio_settimana: ?string, tema: ?string, creato_il: CarbonImmutable, email: string, email_verificata_il: ?CarbonImmutable, lingua: string, fuso_orario: string, password: string}> per id */
     private array $persone = [];
 
     /** @var array<string, array{codice: string, email: string, scade: CarbonImmutable, tentativi: int}> per id della persona: il cambio di email in attesa */
@@ -903,6 +908,7 @@ final class BackofficeFinto
             'telefono' => null,
             'formato_data' => null,
             'inizio_settimana' => null,
+            'tema' => null,
             'foto_aggiornata_il' => null,
             'creato_il' => now()->toImmutable()->startOfMillisecond(),
             'email' => $email,
@@ -3290,6 +3296,7 @@ final class BackofficeFinto
                     'telefono' => null,
                     'formato_data' => null,
                     'inizio_settimana' => null,
+                    'tema' => null,
                     'foto_aggiornata_il' => null,
                     'creato_il' => now()->toImmutable()->startOfMillisecond(),
                     'email' => $email,
@@ -4328,6 +4335,7 @@ final class BackofficeFinto
                 'telefono' => null,
                 'formato_data' => null,
                 'inizio_settimana' => null,
+                'tema' => null,
                 'foto_aggiornata_il' => null,
                 'creato_il' => now()->toImmutable()->startOfMillisecond(),
                 'email' => $email,
@@ -4745,6 +4753,8 @@ final class BackofficeFinto
             // Le preferenze di data (#2228): `null` torna a quello della lingua.
             'utente.formato_data' => ['sometimes', 'nullable', 'string', Rule::in(['gg/mm/aaaa', 'mm/gg/aaaa', 'aaaa-mm-gg'])],
             'utente.inizio_settimana' => ['sometimes', 'nullable', 'string', Rule::in(['lunedi', 'domenica', 'sabato'])],
+            // Il tema (#3365) non si toglie: `null`, vuoto o fuori elenco è un errore sul suo pointer.
+            'utente.tema' => ['filled', 'string', Rule::in(['chiaro', 'scuro', 'sistema'])],
             'utente.cognome' => ['sometimes', 'nullable', 'string', 'max:255', new NomeScritto],
             'utente.mansione' => ['sometimes', 'nullable', 'string', 'max:100', new NomeScritto],
             'utente.telefono' => ['sometimes', 'nullable', 'bail', 'string', 'max:32', 'regex:/^(?=(?:\\D*\\d){5})[0-9+().\\- ]+$/'],
@@ -4782,7 +4792,7 @@ final class BackofficeFinto
 
         if (! is_array($utente) || $utente === []) {
             throw new Problema('dati_non_validi', [[
-                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.cognome, utente.mansione, utente.telefono, utente.lingua, utente.fuso_orario, utente.formato_data, utente.inizio_settimana']),
+                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'utente.nome, utente.cognome, utente.mansione, utente.telefono, utente.lingua, utente.fuso_orario, utente.formato_data, utente.inizio_settimana, utente.tema']),
                 'regola' => 'obbligatorio',
                 'pointer' => array_key_exists('utente', $campi) ? '#/utente' : '#',
             ]]);
@@ -5244,6 +5254,9 @@ final class BackofficeFinto
             $this->persone[$chi['persona']]['email'] = $stato['email'];
             $this->persone[$chi['persona']]['email_verificata_il'] = now()->toImmutable()->startOfMillisecond();
 
+            // Il cambio che la persona ha fatto da sé vince su quello in attesa dello staff (#3568, R3): scadendo non rimette un indirizzo vecchio.
+            unset($this->cambiEmailStaff[$chi['persona']]);
+
             return [200, ['data' => $this->io($chi)]];
         }
 
@@ -5665,16 +5678,22 @@ final class BackofficeFinto
      * app.elenca (AppController::elenca): le app del catalogo in ordine di codice, ognuna col suo stato nel workspace del
      * gettone: `attivo` se il catalogo la dà disponibile e il workspace l'ha attivata (app.modifica, attivaApp()), se no
      * quello del catalogo. Il cursore porta il codice, e la pagina dopo parte dal
-     * codice dopo.
+     * codice dopo. All'ospite (#3591) solo le app di OSPITE_APP.
      *
      * @return array{int, array<string, mixed>}
      */
     private function elencaApp(Request $richiesta): array
     {
         $workspace = $this->delWorkspace($richiesta);
+        $ospite = $this->membri[$workspace][$this->autentica($richiesta)['persona']] === 'ospite';
         $voci = [];
 
         foreach (self::CATALOGO as $codice => $stato) {
+            // L'ospite (#3591) vede solo le app in cui può entrare: il filtro sta prima della pagina.
+            if ($ospite && ! in_array($codice, self::OSPITE_APP, true)) {
+                continue;
+            }
+
             $voci[] = $this->voceApp($codice, $this->appAttiva($workspace, $codice) ? 'attivo' : $stato);
         }
 
@@ -6257,6 +6276,11 @@ final class BackofficeFinto
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => 'non_trovato', 'pointer' => '#/utente']]);
         }
 
+        // Un ospite è in sola visualizzazione (#3366): non diventa proprietario.
+        if ($this->membri[$workspace][$scelto] === 'ospite') {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_ospite'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/utente']]);
+        }
+
         $this->membri[$workspace][$chi['persona']] = 'amministratore';
         $this->membri[$workspace][$scelto] = 'proprietario';
 
@@ -6771,7 +6795,7 @@ final class BackofficeFinto
      */
     private function rifiutaLOspite(Request $richiesta, string $ruolo): void
     {
-        if ($ruolo === 'ospite' && (! in_array($richiesta->method(), ['GET', 'HEAD'], true) || ! in_array(explode('.', (string) $this->operazioneInCorso, 2)[0], self::OSPITE_LEGGE, true))) {
+        if ($ruolo === 'ospite' && (! in_array($richiesta->method(), ['GET', 'HEAD'], true) || ! (in_array(explode('.', (string) $this->operazioneInCorso, 2)[0], self::OSPITE_LEGGE, true) || in_array((string) $this->operazioneInCorso, self::OSPITE_LEGGE_METODI, true)))) {
             throw new Problema('permesso_negato');
         }
     }
@@ -7133,6 +7157,7 @@ final class BackofficeFinto
                 'telefono' => null,
                 'formato_data' => null,
                 'inizio_settimana' => null,
+                'tema' => null,
                 'foto_aggiornata_il' => null,
                 'creato_il' => now()->toImmutable()->startOfMillisecond(),
                 'email' => $email,
@@ -7318,6 +7343,8 @@ final class BackofficeFinto
             'fuso_orario' => $persona['fuso_orario'],
             'formato_data' => $persona['formato_data'],
             'inizio_settimana' => $persona['inizio_settimana'],
+            // Mai null (#3365): chi non ha mai scelto ha `sistema`.
+            'tema' => $persona['tema'] ?? 'sistema',
             'cognome' => $persona['cognome'],
             'mansione' => $persona['mansione'],
             'telefono' => $persona['telefono'],

@@ -159,6 +159,27 @@ it('dopo le 72 ore l\'email cambia e non è verificata: la password da sola non 
         ->and(alFinto('POST', '/v1/accessi', ['email' => 'anna@example.com', 'password' => PASSWORD])->json('codice'))->toBe('credenziali_non_valide');
 });
 
+it('un cambio di email fatto dalla persona vince su quello in attesa dello staff: la scheda non lo ha più e passate le 72 ore non rimette l\'indirizzo dello staff (#3568, R3)', function () {
+    $gettone = gettoneModificaUtente($this->finto);
+    $anna = $this->finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
+    $percorso = "/v1/staff/utenti/{$anna['id']}";
+    Api::staff($gettone)->patch($percorso, emailInAttesa());
+
+    $suo = entraNelFinto('anna@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/accessi/conferma', ['password' => PASSWORD], $suo);
+    alFinto('POST', '/v1/io/email/cambio', ['email' => 'scelta.anna@example.com'], $suo);
+    $verifica = alFinto('POST', '/v1/io/email/cambio/verifica', ['codice' => $this->finto->ultimoCodice('scelta.anna@example.com')], $suo);
+
+    expect($verifica->status())->toBe(200)
+        ->and(Api::staff($gettone)->get($percorso)['data']['cambio_email'])->toBeNull();
+
+    Carbon::setTestNow('2026-11-11 10:00:01');
+    $this->finto->applicaICambiEmailDelloStaff();
+    $nuovo = gettoneModificaUtente($this->finto, 'superadmin', 'secondo.');
+
+    expect(Api::staff($nuovo)->get($percorso)['data']['email'])->toBe('scelta.anna@example.com');
+});
+
 it('è del solo superadmin: supporto e fatturazione sono 403, un utente che non c\'è 404, una persona dello staff 403 (#2915)', function () {
     $anna = $this->finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
     $superadmin = gettoneModificaUtente($this->finto);
@@ -172,4 +193,18 @@ it('è del solo superadmin: supporto e fatturazione sono 403, un utente che non 
 
     expect(esitoModificaUtente(fn () => Api::staff($superadmin)->patch('/v1/staff/utenti/01k8x5c9y7f2r6q0s4t8v2w6z0', ['nome' => 'Altro']))[0])->toBe(404)
         ->and(count($this->finto->registroDelloStaff()))->toBe($registro);
+});
+
+it('senza email, motivo e identita_verificata con un valore sono 422 sul loro pointer e non scrivono; null no (#3568, R5)', function () {
+    $gettone = gettoneModificaUtente($this->finto);
+    $anna = $this->finto->persona('anna@example.com', PASSWORD, nome: 'Anna');
+    $percorso = "/v1/staff/utenti/{$anna['id']}";
+    $registro = count($this->finto->registroDelloStaff());
+
+    foreach ([['motivo', 'qualsiasi cosa'], ['identita_verificata', 5]] as [$campo, $valore]) {
+        expect(esitoModificaUtente(fn () => Api::staff($gettone)->patch($percorso, [$campo => $valore])))->toBe([422, 'dati_non_validi', "#/{$campo}"]);
+    }
+
+    expect(count($this->finto->registroDelloStaff()))->toBe($registro)
+        ->and(Api::staff($gettone)->patch($percorso, ['nome' => 'Anita', 'motivo' => null])['data']['nome'])->toBe('Anita');
 });

@@ -34,13 +34,14 @@ trait StaffWorkspace
             'limite' => ['sometimes', 'integer', 'between:1,'.self::LIMITE_MASSIMO_DELLO_STAFF],
             'cursore' => ['sometimes', 'string', $this->regolaDelCursoreDelloStaff('staff.workspace')],
             'stato' => ['sometimes', 'string', 'in:'.implode(',', self::STATI_DEL_WORKSPACE)],
+            'prova' => $this->regolaDellaProva(),
             'q' => ['prohibited'],
             'nome' => ['prohibited'],
             'indirizzo' => ['prohibited'],
             'azienda' => ['prohibited'],
         ]);
 
-        return $this->impaginaIWorkspace($query, 'staff.workspace', $this->righeDeiWorkspace($chi, array_intersect_key($query, ['stato' => 1])));
+        return $this->impaginaIWorkspace($query, 'staff.workspace', $this->righeDeiWorkspace($chi, array_intersect_key($query, ['stato' => 1, 'prova' => 1])));
     }
 
     /**
@@ -54,6 +55,7 @@ trait StaffWorkspace
         $campi = array_filter($this->testi->validaStretta($corpo, [
             'q' => ['sometimes', 'nullable', 'string', 'max:100'],
             'stato' => ['sometimes', 'nullable', 'string', 'in:'.implode(',', self::STATI_DEL_WORKSPACE)],
+            'prova' => $this->regolaDellaProva(true),
             'limite' => ['sometimes', 'nullable', 'integer:strict', 'between:1,'.self::LIMITE_MASSIMO_DELLO_STAFF],
             'cursore' => ['sometimes', 'nullable', 'string'],
         ]), fn (mixed $valore) => $valore !== null);
@@ -351,6 +353,11 @@ trait StaffWorkspace
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_del_workspace'), 'regola' => 'non_trovato', 'pointer' => '#/utente']]);
         }
 
+        // Un ospite è in sola visualizzazione (#3366): non diventa proprietario, nemmeno per lo staff.
+        if ($this->membri[$id][$scelto] === 'ospite') {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.utente_ospite'), 'regola' => 'valore_non_ammesso', 'pointer' => '#/utente']]);
+        }
+
         if (is_string($vecchio)) {
             $this->membri[$id][$vecchio] = 'amministratore';
         }
@@ -431,7 +438,7 @@ trait StaffWorkspace
         $parole = isset($filtri['q']) ? array_values(array_filter(preg_split('/\s+/u', Str::lower(trim((string) $filtri['q']))) ?: [])) : [];
 
         foreach ($this->workspace as $id => $workspace) {
-            if ($chi['solo_uat'] && ! $this->proprietarioDiProva($id)) {
+            if (($chi['solo_uat'] && ! $this->proprietarioDiProva($id)) || ($this->escludiLaProva($filtri) && $this->workspaceDiProva($id))) {
                 continue;
             }
 
@@ -475,6 +482,7 @@ trait StaffWorkspace
             'membri_n' => count($this->membri[$id] ?? []),
             'app_attive_n' => count($this->attive[$id] ?? []),
             'stato' => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture() ? 'in_eliminazione' : 'attivo',
+            'di_prova' => $this->workspaceDiProva($id),
             'creato_il' => self::iso($this->creatoIlDelWorkspace($id)),
         ];
     }
