@@ -220,6 +220,11 @@ trait Flow
             }
         }
 
+        // Un conto comune senza titolare che diventa personale passa a chi lo cambia (ContiController::modifica).
+        if (($campi['visibilita'] ?? null) === 'personale' && $conto['titolare'] === null) {
+            $this->flow['conti'][$conto['id']]['titolare'] = $chi['persona'];
+        }
+
         $voce = $this->voceContoFlow($this->flow['conti'][$conto['id']]);
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
@@ -2554,6 +2559,8 @@ trait Flow
      * `{id, nome}` per id, a cursore; anche quelli da cui è uscita. Niente importi, niente conte. Un gettone di workspace è 403 `gettone_con_workspace`. `limite` e `cursore` si controllano prima del freno
      * (60 all'ora per persona), che non conta una richiesta rifiutata. `Cache-Control: no-store, private`.
      *
+     * Il finto non ha le ricorrenti nascoste (la persona non le nasconde qui): `conservati` non conta quella riga, che il backoffice conta fra le sue (`flow_ricorrenti_nascoste.nascosta_da`).
+     *
      * @return array{int, array<string, mixed>, array<string, string>}
      */
     private function elencaFinanzeConservateFlow(Request $richiesta): array
@@ -2582,7 +2589,7 @@ trait Flow
 
         return $this->conIdempotenza($richiesta, 'io.finanze.cancellazione.crea', ['persona' => $persona, 'workspace' => $workspace], $corpo, function () use ($persona, $workspace, $corpo) {
             $this->frena('freni:io.finanze.cancellazione.crea:'.$persona, self::FRENI['io_finanze_cancellazione_per_persona'], self::ORA);
-            $this->testi->validaCorpo($corpo, ['conferma' => ['bail', 'required', 'string', 'max:200']]);
+            $this->testi->validaCorpo($corpo, ['conferma' => ['bail', 'required', 'string', 'max:255']]);
 
             if (! isset($this->workspace[$workspace]) || ! (isset($this->membri[$workspace][$persona]) || isset($this->flowEx[$workspace][$persona]))) {
                 throw new Problema('non_trovato');
@@ -2612,7 +2619,7 @@ trait Flow
      */
     private function cancellaConLaConfermaFlow(array $corpo, string $workspace, string $persona): array
     {
-        $campi = $this->testi->validaCorpo($corpo, ['conferma' => ['bail', 'required', 'string', 'max:200']]);
+        $campi = $this->testi->validaCorpo($corpo, ['conferma' => ['bail', 'required', 'string', 'max:255']]);
 
         if ($campi['conferma'] !== $this->workspace[$workspace]['nome']) {
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.in', ['attribute' => 'conferma']), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => '#/conferma']]);
