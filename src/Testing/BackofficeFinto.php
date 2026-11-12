@@ -5254,6 +5254,9 @@ final class BackofficeFinto
             $this->persone[$chi['persona']]['email'] = $stato['email'];
             $this->persone[$chi['persona']]['email_verificata_il'] = now()->toImmutable()->startOfMillisecond();
 
+            // Il cambio che la persona ha fatto da sé vince su quello in attesa dello staff (#3568, R3): scadendo non rimette un indirizzo vecchio.
+            unset($this->cambiEmailStaff[$chi['persona']]);
+
             return [200, ['data' => $this->io($chi)]];
         }
 
