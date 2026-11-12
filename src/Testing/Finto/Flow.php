@@ -2548,6 +2548,7 @@ trait Flow
         $chi = $this->conFlow($richiesta);
 
         return $this->conIdempotenza($richiesta, 'flow.cancellazioni.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $this->pretendiLaConfermaRecenteFlow($chi['accesso']);
             $this->frena('freni:flow.cancellazioni.crea:'.$chi['persona'], self::FRENI['flow_cancellazioni_persona'], self::ORA);
 
             return [200, $this->cancellaConLaConfermaFlow($corpo, $chi['workspace'], $chi['persona']), ['Cache-Control' => 'no-store, private']];
@@ -2585,9 +2586,11 @@ trait Flow
     private function creaCancellazioneDelWorkspaceFlow(Request $richiesta, array $corpo, string $workspace): array
     {
         $persona = $this->personaDelGettoneDellAccessoFlow($richiesta);
+        $accesso = $this->autentica($richiesta)['accesso'];
         $workspace = strtolower($workspace);
 
-        return $this->conIdempotenza($richiesta, 'io.finanze.cancellazione.crea', ['persona' => $persona, 'workspace' => $workspace], $corpo, function () use ($persona, $workspace, $corpo) {
+        return $this->conIdempotenza($richiesta, 'io.finanze.cancellazione.crea', ['persona' => $persona, 'workspace' => $workspace], $corpo, function () use ($persona, $accesso, $workspace, $corpo) {
+            $this->pretendiLaConfermaRecenteFlow($accesso);
             $this->frena('freni:io.finanze.cancellazione.crea:'.$persona, self::FRENI['io_finanze_cancellazione_per_persona'], self::ORA);
             $this->testi->validaCorpo($corpo, ['conferma' => ['bail', 'required', 'string', 'max:255']]);
 
@@ -2597,6 +2600,16 @@ trait Flow
 
             return [200, $this->cancellaConLaConfermaFlow($corpo, $workspace, $persona), ['Cache-Control' => 'no-store, private']];
         });
+    }
+
+    /** La conferma recente dell'accesso (`Conferma::richiedi`): 403 `conferma_richiesta` se non c'è o è scaduta, prima di guardare altro. Chi non ha una password non può darla. */
+    private function pretendiLaConfermaRecenteFlow(string $accesso): void
+    {
+        $fino = $this->accessi[$accesso]['confermato_fino'] ?? null;
+
+        if ($fino === null || $fino->lte(now())) {
+            throw new Problema('conferma_richiesta');
+        }
     }
 
     /** La persona del gettone dell'accesso (middleware `accesso`): un gettone di workspace è 403 `gettone_con_workspace`. */
