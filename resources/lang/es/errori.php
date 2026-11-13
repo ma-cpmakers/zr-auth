@@ -646,6 +646,10 @@ return [
         'title' => 'Programa de facturación no accesible',
         'detail' => 'El programa de facturación no responde o ha rechazado la solicitud: inténtalo de nuevo en breve. El método no ha escrito nada.',
     ],
+    'banca_non_raggiungibile' => [
+        'title' => 'Conexión bancaria no accesible',
+        'detail' => 'El servicio que conecta el banco no responde o ha rechazado la solicitud: inténtalo de nuevo en breve. El método no ha escrito nada.',
+    ],
     'fatturazione_non_collegata' => [
         'title' => 'Facturación no vinculada',
         'detail' => 'Este workspace no tiene un programa de facturación vinculado: vincúlalo con crm.integrazioni.fatturazione.autorizzazione.crea y crm.integrazioni.fatturazione.collegamento.crea. El método no ha escrito nada.',

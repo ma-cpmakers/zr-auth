@@ -143,6 +143,7 @@ final class Problema extends RuntimeException
         'cursore_scaduto' => 410,
         'troppe_richieste' => 429,
         'programma_non_raggiungibile' => 502,
+        'banca_non_raggiungibile' => 502,
         'servizio_non_disponibile' => 503,
         'turnstile_non_disponibile' => 503,
     ];

@@ -646,6 +646,10 @@ return [
         'title' => 'Invoicing program unreachable',
         'detail' => 'The invoicing program is not answering or refused the request: try again shortly. The method wrote nothing.',
     ],
+    'banca_non_raggiungibile' => [
+        'title' => 'Bank connection unreachable',
+        'detail' => 'The service that connects the bank is not answering or refused the request: try again shortly. The method wrote nothing.',
+    ],
     'fatturazione_non_collegata' => [
         'title' => 'Invoicing not linked',
         'detail' => 'This workspace has no invoicing program linked: link one with crm.integrazioni.fatturazione.autorizzazione.crea and crm.integrazioni.fatturazione.collegamento.crea. The method wrote nothing.',

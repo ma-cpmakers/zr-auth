@@ -33,6 +33,11 @@ trait Flow
 
     private const FLOW_FISSE_TETTO = 100;
 
+    /** Il tetto dei collegamenti bancari vivi di una persona (Connessione::TETTO) e l'indirizzo che il finto dà alla banca. */
+    private const FLOW_COLLEGAMENTI_TETTO = 5;
+
+    private const FLOW_COLLEGAMENTO_URL = 'https://www.saltedge.com/connect?token=finto';
+
     private const FLOW_RICORRENTI_TIPI = ['fissa', 'bolletta', 'abitudine', 'stagionale'];
 
     private const FLOW_RICORRENTI_STATI = ['attiva', 'nascosta'];
@@ -58,7 +63,7 @@ trait Flow
     private const FLOW_DESCRIZIONE = 500;
 
     /** @var array{avvisi: array<string, array<string, mixed>>, avvisiStati: array<string, array<string, string>>, avvisiSilenzi: array<string, true>, conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>, correzioni: array<string, int|null>} */
-    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => [], 'nascoste' => [], 'avvisi' => [], 'avvisiStati' => [], 'avvisiSilenzi' => []];
+    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'collegamenti' => [], 'correzioni' => [], 'nascoste' => [], 'avvisi' => [], 'avvisiStati' => [], 'avvisiSilenzi' => []];
 
     /**
      * Accende Finanze nel workspace, come app.modifica: dal #3550 il catalogo del finto la dà «disponibile» a tutti, e un workspace che nasce dal finto (io.workspace.crea) l'ha già accesa; serve a un
@@ -1275,6 +1280,90 @@ trait Flow
             'prima_data' => $fissa['prima_data'],
             'creata_da' => ['id' => $fissa['creata_da'], 'nome' => $this->nomeFlow($fissa['workspace'], $fissa['creata_da'])],
             'creata_il' => self::iso($fissa['creata_il']),
+        ];
+    }
+
+    // ———————————————————————————————————————— Il collegamento bancario
+
+    /**
+     * flow.collegamenti.elenca (CollegamentiController::elenca): i collegamenti vivi di chi chiama in questo workspace, dal più vecchio, senza cursore (al più cinque). Mai l'id di Salt Edge.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaCollegamentiFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+
+        return [200, ['data' => array_values(array_map(
+            fn (array $collegamento) => $this->voceCollegamentoFlow($collegamento),
+            array_filter($this->flow['collegamenti'], fn (array $collegamento) => ! $collegamento['archiviato'] && $collegamento['workspace'] === $chi['workspace'] && $collegamento['persona'] === $chi['persona']),
+        ))], []];
+    }
+
+    /**
+     * flow.collegamenti.crea (CollegamentiController::crea): apre la sessione di collegamento. 201 con il collegamento `in_attesa`, l'`url` della banca e `url_scade_il`; niente nel corpo (422 `campo_estraneo` se c'è). Il sesto
+     * collegamento vivo della persona, in ogni suo workspace, è 409 `limite_raggiunto`. Il freno si conta prima del corpo. Accetta Idempotency-Key.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaCollegamentoFlow(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conFlow($richiesta);
+
+        return $this->conIdempotenza($richiesta, 'flow.collegamenti.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $this->frena('freni:flow.collegamenti.crea:'.$chi['persona'], self::FRENI['flow_collegamenti_persona'], self::ORA);
+            $this->testi->validaCorpo($corpo, []);
+
+            if (count(array_filter($this->flow['collegamenti'], fn (array $collegamento) => ! $collegamento['archiviato'] && $collegamento['persona'] === $chi['persona'])) >= self::FLOW_COLLEGAMENTI_TETTO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_COLLEGAMENTI_TETTO]);
+            }
+
+            $id = self::id();
+            $this->flow['collegamenti'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'archiviato' => false];
+
+            return [201, ['data' => $this->voceCollegamentoFlow($this->flow['collegamenti'][$id]) + [
+                'url' => self::FLOW_COLLEGAMENTO_URL,
+                'url_scade_il' => self::istanteFlow()->addMinutes(30)->utc()->format('Y-m-d\TH:i:s\Z'),
+            ]], []];
+        });
+    }
+
+    /**
+     * flow.collegamenti.elimina (CollegamentiController::elimina): toglie il collegamento archiviandolo (204). Solo il proprio: quello di un'altra persona, di un altro workspace o già tolto è 404.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaCollegamentoFlow(Request $richiesta, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $collegamento = $this->flow['collegamenti'][strtolower($id)] ?? null;
+
+        if ($collegamento === null || $collegamento['archiviato'] || $collegamento['workspace'] !== $chi['workspace'] || $collegamento['persona'] !== $chi['persona']) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->flow['collegamenti'][$collegamento['id']]['archiviato'] = true;
+
+        return [204, null];
+    }
+
+    /**
+     * Lo schema CollegamentoBancario (Collegamenti::forma): nel finto nessuna banca ha ancora risposto, quindi `in_attesa` e senza conti.
+     *
+     * @param  array<string, mixed>  $collegamento
+     * @return array<string, mixed>
+     */
+    private function voceCollegamentoFlow(array $collegamento): array
+    {
+        return [
+            'id' => $collegamento['id'],
+            'banca' => null,
+            'stato' => 'in_attesa',
+            'ultima_sincronizzazione' => null,
+            'sincronizzabile_dal' => null,
+            'consenso_scade_il' => null,
+            'conti' => [],
         ];
     }
 

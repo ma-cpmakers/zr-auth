@@ -646,6 +646,10 @@ return [
         'title' => 'Programma di fatturazione non raggiungibile',
         'detail' => 'Il programma di fatturazione non risponde o ha rifiutato la richiesta: riprova fra poco. Il metodo non ha scritto niente.',
     ],
+    'banca_non_raggiungibile' => [
+        'title' => 'Collegamento bancario non raggiungibile',
+        'detail' => 'Il servizio che collega la banca non risponde o ha rifiutato la richiesta: riprova fra poco. Il metodo non ha scritto niente.',
+    ],
     'fatturazione_non_collegata' => [
         'title' => 'Fatturazione non collegata',
         'detail' => 'Questo workspace non ha un programma di fatturazione collegato: collegalo con crm.integrazioni.fatturazione.autorizzazione.crea e crm.integrazioni.fatturazione.collegamento.crea. Il metodo non ha scritto niente.',
