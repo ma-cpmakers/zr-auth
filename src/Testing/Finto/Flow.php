@@ -1325,7 +1325,7 @@ trait Flow
 
             return [201, ['data' => $this->voceCollegamentoFlow($this->flow['collegamenti'][$id]) + [
                 'url' => self::FLOW_COLLEGAMENTO_URL,
-                'url_scade_il' => self::istanteFlow()->addMinutes(30)->utc()->format('Y-m-d\TH:i:s.v\Z'),
+                'url_scade_il' => self::istanteFlow()->addMinutes(30)->startOfSecond()->utc()->format('Y-m-d\TH:i:s.v\Z'),
             ]], []];
         });
     }
@@ -1368,7 +1368,7 @@ trait Flow
             throw new Problema('transizione_non_valida');
         }
 
-        $adesso = self::istanteFlow();
+        $adesso = self::istanteFlow()->startOfSecond();
         $dal = $collegamento['sincronizzabile_dal'];
 
         if ($dal !== null && $dal > $adesso) {
@@ -1402,7 +1402,7 @@ trait Flow
 
             return [201, ['data' => $this->voceCollegamentoFlow($collegamento) + [
                 'url' => self::FLOW_COLLEGAMENTO_URL,
-                'url_scade_il' => self::istanteFlow()->addMinutes(30)->utc()->format('Y-m-d\TH:i:s.v\Z'),
+                'url_scade_il' => self::istanteFlow()->addMinutes(30)->startOfSecond()->utc()->format('Y-m-d\TH:i:s.v\Z'),
             ]], []];
         });
     }
