@@ -37,6 +37,9 @@ trait Sprint
     /** @var array<string, list<array{scheda: string, destinazione: string|null}>> per sprint chiuso, le schede non finite alla chiusura (#2980) */
     private array $nonCompletate = [];
 
+    /** @var array<string, array<string, mixed>> per sprint attivo, il `meta.backlog` che la sua chiusura risponderà, se il test l'ha seminato (#3552) */
+    private array $backlogDellaChiusura = [];
+
     /**
      * Uno sprint per i test: nasce `pianificato`, `attivo` (avviato il giorno dell'inizio) o `chiuso` (alla fine della sua durata) (con `$velocita` e la sua unità, `punti` o `schede`, e `$nonCompletate`, ciò che era ancora aperto alla chiusura: `pianificate` è la loro somma). La board è di
      * board() e va con il metodo `scrum`; come nel backoffice una board ha al più uno sprint attivo e uno pianificato.
@@ -115,6 +118,32 @@ trait Sprint
         }
 
         $this->andamenti[$sprint['id']] = ['unita' => $unita, 'giorni' => $giorni];
+
+        return $this;
+    }
+
+    /**
+     * Semina il `meta.backlog` che la chiusura di uno sprint attivo risponderà (#3552): il finto non ha le liste, quindi senza questo la risposta dice
+     * che la board non ha una lista Backlog (`lista_id` `null`, mai oltre il tetto). Serve a provare l'avviso di chi chiude: `tetto` è `schede` (500) o
+     * `limite`, `$schede` le schede del Backlog dopo la chiusura e `$valoreDelTetto` il tetto che superano; l'eccedenza è la differenza. La chiusura
+     * riesce lo stesso, come nel backoffice.
+     *
+     * @param  array{id: string}  $sprint  uno sprint di sprint()
+     */
+    public function backlogOltreIlTetto(array $sprint, string $tetto, int $schede, int $valoreDelTetto): self
+    {
+        if (! in_array($tetto, ['schede', 'limite'], true) || $schede <= $valoreDelTetto) {
+            throw new InvalidArgumentException('Il tetto è «schede» o «limite», e le schede del Backlog lo superano.');
+        }
+
+        if (! isset($this->sprint[$sprint['id']])) {
+            throw new InvalidArgumentException('Lo sprint non è di questo finto: nasce con sprint().');
+        }
+
+        $this->backlogDellaChiusura[$sprint['id']] = [
+            'lista_id' => 'lista-backlog-di-prova', 'schede' => $schede, 'oltre_il_tetto' => true, 'tetto' => $tetto,
+            'valore_del_tetto' => $valoreDelTetto, 'eccedenza' => $schede - $valoreDelTetto,
+        ];
 
         return $this;
     }
@@ -467,7 +496,9 @@ trait Sprint
             'obiettivo_raggiunto' => $campi['obiettivo_raggiunto'] ?? null,
         ] + $corrente;
 
-        return [201, ['data' => $this->voceSprint($this->sprint[$id])]];
+        $backlog = $this->backlogDellaChiusura[$id] ?? ['lista_id' => null, 'schede' => 0, 'oltre_il_tetto' => false, 'tetto' => null, 'valore_del_tetto' => null, 'eccedenza' => 0];
+
+        return [201, ['data' => $this->voceSprint($this->sprint[$id]), 'meta' => ['backlog' => $backlog]]];
     }
 
     /**

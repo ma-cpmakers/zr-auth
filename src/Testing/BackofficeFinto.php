@@ -46,6 +46,8 @@ use Zeiras\Auth\Testing\Finto\CrmValori;
 use Zeiras\Auth\Testing\Finto\Eventi;
 use Zeiras\Auth\Testing\Finto\Gate;
 use Zeiras\Auth\Testing\Finto\NomeScritto;
+use Zeiras\Auth\Testing\Finto\Contatti;
+use Zeiras\Auth\Testing\Finto\PrivacyCancellazioni;
 use Zeiras\Auth\Testing\Finto\NotifichePreferenze;
 use Zeiras\Auth\Testing\Finto\Problema;
 use Zeiras\Auth\Testing\Finto\Regola;
@@ -90,6 +92,8 @@ final class BackofficeFinto
     use BoardPadri;
     use BoardRuoliEpiche;
     use BookingsPrenotazioni;
+    use Contatti;
+    use PrivacyCancellazioni;
     use NotifichePreferenze;
     use Crm;
     use Flow;
@@ -352,6 +356,10 @@ final class BackofficeFinto
         ['GET', '#^/v1/io/notifiche$#', 'io.notifiche.elenca'],
         ['GET', '#^/v1/io/notifiche/preferenze$#', 'io.notifiche.preferenze.mostra'],
         ['PATCH', '#^/v1/io/notifiche/preferenze$#', 'io.notifiche.preferenze.modifica'],
+        ['POST', '#^/v1/contatti$#', 'contatti.crea'],
+        ['POST', '#^/v1/privacy/cancellazioni$#', 'privacy.cancellazioni.crea'],
+        ['GET', '#^/v1/privacy/cancellazioni/([^/]+)$#', 'privacy.cancellazioni.mostra'],
+        ['POST', '#^/v1/privacy/cancellazioni/([^/]+)/conferma$#', 'privacy.cancellazioni.conferma.crea'],
         ['POST', '#^/v1/notifiche/disiscrizione$#', 'notifiche.disiscrizione.crea'],
         ['POST', '#^/v1/notifiche/disiscrizione/verifica$#', 'notifiche.disiscrizione.verifica.crea'],
         ['POST', '#^/v1/io/notifiche/letture$#', 'io.notifiche.letture.crea'],
@@ -1481,7 +1489,7 @@ final class BackofficeFinto
     /** I metodi che chi non ha accettato i documenti legali può chiamare (Accettazione::ESENTI del backoffice, #1699). */
     private const APERTI_SENZA_ACCETTAZIONE = ['legale.documenti.elenca', 'legale.accettazioni.crea', 'io.mostra', 'accessi.corrente.elimina', 'accessi.elimina'];
 
-    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.link.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'documenti.pubblici.lettura.crea', 'documenti.pubblici.firma.crea', 'password.recupero.crea', 'password.reimpostazione.crea', 'notifiche.disiscrizione.crea', 'notifiche.disiscrizione.verifica.crea'];
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.link.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'documenti.pubblici.lettura.crea', 'documenti.pubblici.firma.crea', 'password.recupero.crea', 'password.reimpostazione.crea', 'notifiche.disiscrizione.crea', 'notifiche.disiscrizione.verifica.crea', 'contatti.crea', 'privacy.cancellazioni.crea', 'privacy.cancellazioni.mostra', 'privacy.cancellazioni.conferma.crea'];
 
     /**
      * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
@@ -1782,6 +1790,10 @@ final class BackofficeFinto
                 'io.notifiche.elenca' => $this->elencaNotifiche($richiesta),
                 'io.notifiche.preferenze.mostra' => $this->mostraPreferenzeDiNotifica($richiesta),
                 'io.notifiche.preferenze.modifica' => $this->modificaPreferenzeDiNotifica($richiesta, $corpo),
+                'contatti.crea' => $this->mandaUnMessaggioDeiContatti($corpo),
+                'privacy.cancellazioni.crea' => $this->chiediLaCancellazione($corpo),
+                'privacy.cancellazioni.mostra' => $this->mostraLaCancellazione($parametri[0]),
+                'privacy.cancellazioni.conferma.crea' => $this->confermaLaCancellazione($corpo, $parametri[0]),
                 'notifiche.disiscrizione.crea' => $this->disiscrivitiDallEmail($corpo),
                 'notifiche.disiscrizione.verifica.crea' => $this->verificaLaDisiscrizione($corpo),
                 'io.notifiche.letture.crea' => $this->segnaNotificheLette($richiesta, $corpo),
@@ -4654,6 +4666,17 @@ final class BackofficeFinto
         $persona = $chi['persona'];
         $this->frena('freni:io.elimina:persona:'.$persona, self::FRENI['eliminazioni_persona'], self::ORA);
 
+        return $this->avviaLEliminazione($persona);
+    }
+
+    /**
+     * Eliminazione::richiedi del backoffice: 409 `proprieta_da_trasferire` se la persona è proprietaria di un workspace con altri account, altrimenti accessi chiusi, trenta giorni e i workspace in cui è
+     * sola programmati. La usano `io.elimina` e `privacy.cancellazioni.conferma.crea`.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function avviaLEliminazione(string $persona): array
+    {
         $daTrasferire = [];
         $soli = [];
 
