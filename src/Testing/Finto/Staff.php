@@ -737,7 +737,10 @@ trait Staff
         $escludi = $this->escludiLaProva($this->testi->validaQuery(self::query($richiesta), ['prova' => $this->regolaDellaProva()]));
         $workspace = array_filter(array_keys($this->workspace), fn (string $id) => (! $chi['solo_uat'] || $this->proprietarioDiProva($id)) && ! ($escludi && $this->workspaceDiProva($id)));
 
-        return [200, ['data' => $this->conteggiPerStato(count($workspace), count(array_filter($workspace, fn (string $id) => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture())))]];
+        $inEliminazione = array_filter($workspace, fn (string $id) => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture());
+        $sospesi = array_filter($workspace, fn (string $id) => isset($this->sospensioniWorkspace[$id]) && ! in_array($id, $inEliminazione, true));
+
+        return [200, ['data' => $this->conteggiPerStato(count($workspace), count($inEliminazione), count($sospesi))]];
     }
 
     /** Un workspace il cui proprietario è una persona del perimetro di prova. */
@@ -753,7 +756,7 @@ trait Staff
     }
 
     /**
-     * I numeri per stato; `$sospesi` solo per gli utenti (i workspace non si sospendono ancora): senza, la chiave `sospeso` non c'è.
+     * I numeri per stato, con la precedenza `in_eliminazione`, poi `sospeso`, poi `attivo`; `$sospesi` null per chi non ha lo stato (nessuno oggi).
      *
      * @return array<string, int>
      */

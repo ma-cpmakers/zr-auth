@@ -11,11 +11,14 @@ use Illuminate\Validation\Rule;
  * quelle di `Staff`: il client firmato, il gettone dello staff, il ruolo (superadmin e supporto), il perimetro `solo_uat` (i workspace il cui proprietario ha un'email `uat+*@castroandpartners.com`).
  * Il termine di ricerca non sta nell'URL: `q`, `nome`, `indirizzo` e `azienda` nella query sono 422 sul parametro. Leggere conta nel tetto delle pagine letture e non scrive nel registro dello staff.
  * La scheda (#3256, F3b) aggiunge `consumi`, `eliminazione` e `fatturazione` e, a differenza dell'elenco, lascia una riga nel registro dello staff; la apre anche la fatturazione. Il finto non ha prenotazioni di Bookings: `prenotazioni_n` è 0.
- * Ogni campo che il vero manda `null` il finto lo manda `null` (il proprietario di un workspace che non ne ha uno, il cognome). Uno stato `sospeso` non c'è ancora.
+ * Ogni campo che il vero manda `null` il finto lo manda `null` (il proprietario di un workspace che non ne ha uno, il cognome). Lo stato `sospeso` c'è dal #3261, con la precedenza `in_eliminazione`, poi `sospeso`, poi `attivo`.
  */
 trait StaffWorkspace
 {
-    private const STATI_DEL_WORKSPACE = ['attivo', 'in_eliminazione'];
+    private const STATI_DEL_WORKSPACE = ['attivo', 'sospeso', 'in_eliminazione'];
+
+    /** @var array<string, array{motivo: string, nota: ?string, dal: \Carbon\CarbonImmutable}> la sospensione viva dello staff (#3261), per workspace */
+    private array $sospensioniWorkspace = [];
 
     /** @var array<string, \Carbon\CarbonImmutable> quando è nato ogni workspace, per workspace */
     private array $workspaceCreatoIl = [];
@@ -166,6 +169,7 @@ trait StaffWorkspace
                 'contatti_n' => count(array_filter($this->crm['persone'], fn (array $persona) => $persona['workspace'] === $id && ! ($persona['eliminata'] ?? false))),
                 'prenotazioni_n' => 0,
             ],
+            'sospensione' => isset($this->sospensioniWorkspace[$id]) ? ['motivo' => $this->sospensioniWorkspace[$id]['motivo'], 'nota' => $this->sospensioniWorkspace[$id]['nota'], 'dal' => self::iso($this->sospensioniWorkspace[$id]['dal'])] : null,
             'eliminazione' => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture() ? ['prevista_il' => self::iso($this->eliminazioni[$id])] : null,
             'fatturazione' => $azienda === null || ! isset($this->aziende[$azienda]) ? null : ['partita_iva' => $dati['partita_iva'] ?? null, 'paese' => $dati['paese'] ?? null, 'valuta' => $dati['valuta'] ?? null],
         ];
@@ -320,6 +324,56 @@ trait StaffWorkspace
 
         $this->togliIlMembro($id, $persona);
         $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.membri.elimina', 'workspace', $id);
+
+        return [204, null];
+    }
+
+    /**
+     * staff.workspace.sospensione.crea (#3261, StaffWorkspaceSospensioneController::crea): solo il superadmin. Nell'ordine del backoffice: il workspace (404), il corpo (422: `motivo` dell'elenco della
+     * sospensione di una persona e `nota` facoltativa di al più 500 caratteri), il tetto delle azioni sensibili, poi `409` `gia_sospeso`. Risponde 201 con `{motivo, nota, dal}`; una riga nel registro dello
+     * staff col motivo, mai la nota; nessun avviso a nessuno e nessun gettone si chiude.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function sospendiUnWorkspaceDelloStaff(Request $richiesta, array $corpo, string $workspace): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $dati = $this->testi->validaStretta($corpo, [
+            'motivo' => ['required', 'string', 'in:segnalazione_abuso,pagamento_non_riuscito,accesso_sospetto,altro'],
+            'nota' => ['sometimes', 'nullable', 'string', 'max:500'],
+        ]);
+
+        $this->contaUnaAzioneSensibile($chi);
+
+        if (isset($this->sospensioniWorkspace[$id])) {
+            throw new Problema('gia_sospeso');
+        }
+
+        $this->sospensioniWorkspace[$id] = ['motivo' => $dati['motivo'], 'nota' => $dati['nota'] ?? null, 'dal' => now()->toImmutable()->startOfMillisecond()];
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.sospensione.crea', 'workspace', $id, null, $dati['motivo']);
+
+        return [201, ['data' => ['motivo' => $dati['motivo'], 'nota' => $dati['nota'] ?? null, 'dal' => self::iso($this->sospensioniWorkspace[$id]['dal'])]]];
+    }
+
+    /**
+     * staff.workspace.sospensione.elimina (#3261): riattiva. Solo il superadmin; un workspace che non è sospeso è `404`. 204; una riga nel registro dello staff.
+     *
+     * @return array{int, null}
+     */
+    private function riattivaUnWorkspaceDelloStaff(Request $richiesta, string $workspace): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $this->contaUnaAzioneSensibile($chi);
+
+        if (! isset($this->sospensioniWorkspace[$id])) {
+            throw new Problema('non_trovato');
+        }
+
+        unset($this->sospensioniWorkspace[$id]);
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.sospensione.elimina', 'workspace', $id);
 
         return [204, null];
     }
@@ -481,7 +535,7 @@ trait StaffWorkspace
             'proprietario' => $proprietario,
             'membri_n' => count($this->membri[$id] ?? []),
             'app_attive_n' => count($this->attive[$id] ?? []),
-            'stato' => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture() ? 'in_eliminazione' : 'attivo',
+            'stato' => isset($this->eliminazioni[$id]) && $this->eliminazioni[$id]->isFuture() ? 'in_eliminazione' : (isset($this->sospensioniWorkspace[$id]) ? 'sospeso' : 'attivo'),
             'di_prova' => $this->workspaceDiProva($id),
             'creato_il' => self::iso($this->creatoIlDelWorkspace($id)),
         ];

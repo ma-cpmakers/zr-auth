@@ -127,7 +127,7 @@ it('i conteggi: con prova=escludi contano senza i dati di prova, senza parametro
     expect($conta('/v1/staff/utenti/conteggi', ['prova' => 'includi']))->toBe($utenti)
         ->and($senza['tutti'])->toBe($dellElenco)->and($senza['tutti'])->toBeLessThan($utenti['tutti'])
         ->and($conta('/v1/staff/workspace/conteggi'))->toMatchArray(['tutti' => 2])
-        ->and($conta('/v1/staff/workspace/conteggi', ['prova' => 'escludi']))->toBe(['tutti' => 1, 'attivo' => 1, 'in_eliminazione' => 0])
+        ->and($conta('/v1/staff/workspace/conteggi', ['prova' => 'escludi']))->toBe(['tutti' => 1, 'attivo' => 1, 'sospeso' => 0, 'in_eliminazione' => 0])
         ->and(esitoProvaStaff(fn () => $conta('/v1/staff/utenti/conteggi', ['prova' => 'tutto'])))->toBe([422, 'dati_non_validi', 'prova'])
         ->and(esitoProvaStaff(fn () => $conta('/v1/staff/workspace/conteggi', ['prova' => 'tutto'])))->toBe([422, 'dati_non_validi', 'prova']);
 });

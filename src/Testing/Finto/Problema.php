@@ -125,6 +125,7 @@ final class Problema extends RuntimeException
         'staff_gia_presente' => 409,
         'ultimo_superadmin' => 409,
         'account_sospeso' => 403,
+        'workspace_sospeso' => 403,
         'gia_sospeso' => 409,
         'utente_mai_acceduto' => 409,
         'impersonificazione_non_consentita' => 403,

@@ -227,6 +227,8 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/staff/workspace/([^/]+)/membri/([^/]+)$#', 'staff.workspace.membri.modifica'],
         ['DELETE', '#^/v1/staff/workspace/([^/]+)/membri/([^/]+)$#', 'staff.workspace.membri.elimina'],
         ['PATCH', '#^/v1/staff/workspace/([^/]+)/proprietario$#', 'staff.workspace.proprietario.modifica'],
+        ['POST', '#^/v1/staff/workspace/([^/]+)/sospensione$#', 'staff.workspace.sospensione.crea'],
+        ['DELETE', '#^/v1/staff/workspace/([^/]+)/sospensione$#', 'staff.workspace.sospensione.elimina'],
         ['GET', '#^/v1/staff/workspace/([^/]+)$#', 'staff.workspace.mostra'],
         ['PATCH', '#^/v1/staff/workspace/([^/]+)$#', 'staff.workspace.modifica'],
         ['GET', '#^/v1/staff/utenti$#', 'staff.utenti.elenca'],
@@ -1624,6 +1626,8 @@ final class BackofficeFinto
                 'staff.workspace.membri.elenca' => $this->elencaIMembriDelWorkspaceDelloStaff($richiesta, $parametri[0]),
                 'staff.workspace.membri.modifica' => $this->modificaIlRuoloDiUnMembroDelloStaff($richiesta, $corpo, $parametri[0], $parametri[1]),
                 'staff.workspace.proprietario.modifica' => $this->passaLaProprietaDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.workspace.sospensione.crea' => $this->sospendiUnWorkspaceDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.workspace.sospensione.elimina' => $this->riattivaUnWorkspaceDelloStaff($richiesta, $parametri[0]),
                 'staff.workspace.membri.elimina' => $this->eliminaUnMembroDelloStaff($richiesta, $parametri[0], $parametri[1]),
                 'staff.workspace.app.modifica' => $this->modificaLeAppDelWorkspaceDelloStaff($richiesta, $corpo, $parametri[0], $parametri[1]),
                 'staff.workspace.mostra' => $this->mostraUnWorkspaceDelloStaff($richiesta, $parametri[0]),
@@ -4282,6 +4286,11 @@ final class BackofficeFinto
 
         if (! isset($this->membri[$workspace][$chi['persona']]) || isset($this->eliminazioni[$workspace])) {
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.workspace_non_tuo'), 'regola' => 'non_trovato', 'pointer' => '#/workspace_id']]);
+        }
+
+        // Un workspace sospeso dallo staff (#3261) non fa nascere gettoni.
+        if (isset($this->sospensioniWorkspace[$workspace])) {
+            throw new Problema('workspace_sospeso');
         }
 
         // Il freno è della persona, con qualunque suo gettone, e si conta dopo il controllo del membro.
