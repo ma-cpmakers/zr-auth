@@ -543,6 +543,36 @@ trait Staff
         return [201, ['data' => ['codici_di_recupero' => $codici]]];
     }
 
+    /**
+     * staff.totp.codici-di-recupero.crea (#3443): la persona del gettone dello staff rigenera i propri dieci codici col codice attuale dell'app (`000000`); i vecchi non valgono più.
+     * Dal login normale di Zeiras (#3445) vale solo per le persone di prova: per ogni altra riga è 404. Un codice sbagliato, o l'ultimo passo già usato, è `secondo_fattore_non_valido`
+     * e conta su un freno suo (decisione zr-pm 9/11): cinque tentativi in un'ora per gettone, poi `429` `troppe_richieste` anche per il codice giusto, e non sul freno dell'accesso.
+     * Un codice di recupero non vale qui.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function rigeneraICodiciDelloStaff(Request $richiesta, array $corpo): array
+    {
+        [$gettone, $staff] = $this->autenticaLoStaff($richiesta, self::RUOLI_DELLO_STAFF);
+        $this->soloPerLeProve($staff);
+        $dati = $this->testi->valida($corpo, ['codice' => ['bail', 'required', 'string', 'max:32']]);
+        $chiave = 'staff-codici:'.$gettone;
+
+        $this->frena($chiave, 5, 3600);
+
+        if ($dati['codice'] !== self::CODICE_TOTP_DELLO_STAFF || $staff['ultimo_passo'] === self::passoDelloStaff()) {
+            throw new Problema('secondo_fattore_non_valido');
+        }
+
+        $this->freni->decrement($chiave);
+        $this->righeStaff[$staff['id']]['ultimo_passo'] = self::passoDelloStaff();
+        $codici = $this->rigeneraIRecuperi($staff['id']);
+        $this->scriviNelRegistroDelloStaff($staff, 'staff.totp.codici-di-recupero.crea', 'staff', $staff['id']);
+
+        return [201, ['data' => ['codici_di_recupero' => $codici]]];
+    }
+
     // ── Le persone dello staff ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
     /** @return array{int, array<string, mixed>} */

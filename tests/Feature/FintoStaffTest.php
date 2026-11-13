@@ -463,3 +463,39 @@ it('staff.utenti.conteggi.mostra e staff.workspace.conteggi.mostra: solo numeri,
             ->and(esitoDelloStaff(fn () => Api::staff()->get($percorso)))->toBe([401, 'gettone_assente']);
     }
 });
+
+it('i codici di recupero si rigenerano col codice attuale: dieci nuovi, il passo usato non si riusa, per il login normale è 404 (#3443)', function () {
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com', soloUat: true);
+    $gettone = entraComeStaff($sara, true);
+    $rigenera = fn (string $codice) => esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/totp/codici-di-recupero', ['codice' => $codice]));
+
+    // L'accesso ha appena usato il passo di adesso: lo stesso codice non vale due volte.
+    expect($rigenera('000000'))->toBe([401, 'secondo_fattore_non_valido']);
+
+    Carbon::setTestNow(Carbon::now()->addSeconds(30));
+    expect($rigenera('123456'))->toBe([401, 'secondo_fattore_non_valido']);
+
+    $nuovi = Api::staff($gettone)->post('/v1/staff/totp/codici-di-recupero', ['codice' => '000000'])['data']['codici_di_recupero'];
+
+    expect($nuovi)->toHaveCount(10)->and(array_unique($nuovi))->toHaveCount(10)->and($nuovi[0])->toMatch('/^[A-Z2-9]{5}-[A-Z2-9]{5}$/')
+        ->and($rigenera('000000'))->toBe([401, 'secondo_fattore_non_valido']);
+
+    $senza = personaDelloStaff($this->finto, 'bruno@lucianocastro.com', conTotp: false);
+    $gettoneSenza = entraComeStaff($senza);
+
+    expect(esitoDelloStaff(fn () => Api::staff($gettoneSenza)->post('/v1/staff/totp/codici-di-recupero', ['codice' => '000000'])))->toBe([404, 'non_trovato'])
+        ->and(esitoDelloStaff(fn () => Api::staff()->post('/v1/staff/totp/codici-di-recupero', ['codice' => '000000'])))->toBe([401, 'gettone_assente']);
+});
+
+it('i codici di recupero: cinque tentativi sbagliati in un\'ora per gettone, poi 429 anche col codice giusto, e l\'ingresso della persona non è toccato (#3443, decisione zr-pm 9/11)', function () {
+    $sara = personaDelloStaff($this->finto, 'sara@lucianocastro.com', soloUat: true);
+    $gettone = entraComeStaff($sara, true);
+    Carbon::setTestNow(Carbon::now()->addSeconds(30));
+
+    foreach (range(1, 5) as $i) {
+        expect(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/totp/codici-di-recupero', ['codice' => '123456'])))->toBe([401, 'secondo_fattore_non_valido']);
+    }
+
+    expect(esitoDelloStaff(fn () => Api::staff($gettone)->post('/v1/staff/totp/codici-di-recupero', ['codice' => '000000'])))->toBe([429, 'troppe_richieste'])
+        ->and(entraComeStaff($sara, true))->toBeString();
+});
