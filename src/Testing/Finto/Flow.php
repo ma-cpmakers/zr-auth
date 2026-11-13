@@ -60,6 +60,9 @@ trait Flow
     /** @var array{avvisi: array<string, array<string, mixed>>, avvisiStati: array<string, array<string, string>>, avvisiSilenzi: array<string, true>, conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>, correzioni: array<string, int|null>} */
     private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => [], 'nascoste' => [], 'avvisi' => [], 'avvisiStati' => [], 'avvisiSilenzi' => []];
 
+    /** @var array<string, array<string, true>> chi è stato membro di un workspace e ne è uscito (workspace => persona => true): il diritto alla cancellazione dei dati di Finanze non finisce con l'uscita (#3597) */
+    private array $flowEx = [];
+
     /**
      * Accende Finanze nel workspace, come app.modifica: dal #3550 il catalogo del finto la dà «disponibile» a tutti, e un workspace che nasce dal finto (io.workspace.crea) l'ha già accesa; serve a un
      * workspace messo su a mano (workspace()).
@@ -108,10 +111,10 @@ trait Flow
         }]);
     }
 
-    /** Il nome di una persona se è ancora membro del workspace, altrimenti null (Conti::nomi). */
-    private function nomeFlow(string $workspace, string $persona): ?string
+    /** Il nome di una persona se è ancora membro del workspace, altrimenti null (Conti::nomi); senza persona (la riga comune che ha perso chi l'ha creata, #3597) null. */
+    private function nomeFlow(string $workspace, ?string $persona): ?string
     {
-        return isset($this->membri[$workspace][$persona]) ? $this->persone[$persona]['nome'] : null;
+        return $persona !== null && isset($this->membri[$workspace][$persona]) ? $this->persone[$persona]['nome'] : null;
     }
 
     private static function istanteFlow(): CarbonImmutable
@@ -217,6 +220,11 @@ trait Flow
             }
         }
 
+        // Un conto comune senza titolare che diventa personale passa a chi lo cambia (ContiController::modifica).
+        if (($campi['visibilita'] ?? null) === 'personale' && $conto['titolare'] === null) {
+            $this->flow['conti'][$conto['id']]['titolare'] = $chi['persona'];
+        }
+
         $voce = $this->voceContoFlow($this->flow['conti'][$conto['id']]);
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
@@ -287,11 +295,24 @@ trait Flow
             throw new Problema('non_trovato');
         }
 
-        if ($scrive && $conto['titolare'] !== $chi['persona']) {
+        if ($scrive && ! $this->puoScrivereContoFlow($conto, $chi)) {
             throw new Problema('permesso_negato');
         }
 
         return $conto;
+    }
+
+    /**
+     * Chi cambia o toglie un conto (Conti::puoScrivere): il titolare; un conto comune senza titolare (la persona ha chiesto la cancellazione dei suoi dati di Finanze, #3597) lo cambiano e lo tolgono il
+     * proprietario e gli amministratori.
+     *
+     * @param  array<string, mixed>  $conto
+     * @param  array{persona: string, workspace: string}  $chi
+     */
+    private function puoScrivereContoFlow(array $conto, array $chi): bool
+    {
+        return $conto['titolare'] === $chi['persona']
+            || ($conto['titolare'] === null && in_array($this->membri[$chi['workspace']][$chi['persona']], ['proprietario', 'amministratore'], true));
     }
 
     /**
@@ -1106,7 +1127,7 @@ trait Flow
      *
      * @return list<array{id: string, testo: string, categoria_id: string}>
      */
-    private function regoleDellaVistaFlow(string $workspace, string $visibilita, string $titolare): array
+    private function regoleDellaVistaFlow(string $workspace, string $visibilita, ?string $titolare): array
     {
         $regole = array_filter($this->flow['regole'], fn (array $regola) => ! $regola['archiviato'] && $regola['workspace'] === $workspace && $regola['visibilita'] === $visibilita
             && ($visibilita === 'comune' || $regola['creata_da'] === $titolare));
@@ -2510,5 +2531,220 @@ trait Flow
 
         return count($valori) % 2 === 1 ? (float) $valori[$mezzo] : ($valori[$mezzo - 1] + $valori[$mezzo]) / 2;
     }
-}
 
+    // ———————————————————————————————————————— Cancellazione (#3597)
+
+    /**
+     * flow.cancellazioni.crea (CancellazioniController::crea): la persona del gettone cancella per sempre i suoi dati di Finanze in questo workspace, la deroga di Luciano (10/11) a «mai cancellare», solo
+     * per Finanze e solo a richiesta della persona. Il corpo è `{conferma}`, il nome del workspace com'è, lettera per lettera: un valore diverso, mancante o che non è una stringa è 422 `dati_non_validi` su
+     * `#/conferma` e non cambia niente. Il freno (5 all'ora per persona) si conta prima del corpo, anche per una conferma sbagliata. Risponde 200 con le sole conte, senza `data`, e
+     * `Cache-Control: no-store, private`. Accetta `Idempotency-Key`. Il finto non scrive lo storico né gli eventi.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaCancellazioneFlow(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conFlow($richiesta);
+
+        return $this->conIdempotenza($richiesta, 'flow.cancellazioni.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $this->pretendiLaConfermaRecenteFlow($chi['accesso']);
+            $this->frena('freni:flow.cancellazioni.crea:'.$chi['persona'], self::FRENI['flow_cancellazioni_persona'], self::ORA);
+
+            return [200, $this->cancellaConLaConfermaFlow($corpo, $chi['workspace'], $chi['persona']), ['Cache-Control' => 'no-store, private']];
+        });
+    }
+
+    /**
+     * io.finanze.conservati.elenca (IoFinanzeController::conservatiElenca): i workspace dove la persona del gettone dell'accesso ha ancora dati di Finanze (una riga che porta la sua id, anche archiviata),
+     * `{id, nome}` per id, a cursore; anche quelli da cui è uscita. Niente importi, niente conte. Un gettone di workspace è 403 `gettone_con_workspace`. `limite` e `cursore` si controllano prima del freno
+     * (60 all'ora per persona), che non conta una richiesta rifiutata. `Cache-Control: no-store, private`.
+     *
+     * Il finto non ha le ricorrenti nascoste (la persona non le nasconde qui): `conservati` non conta quella riga, che il backoffice conta fra le sue (`flow_ricorrenti_nascoste.nascosta_da`).
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function elencaFinanzeConservateFlow(Request $richiesta): array
+    {
+        $persona = $this->personaDelGettoneDellAccessoFlow($richiesta);
+        $voci = array_map(fn (string $id) => ['id' => $id, 'nome' => $this->workspace[$id]['nome']], array_values(array_filter($this->workspaceConDatiFlow($persona), fn (string $id) => isset($this->workspace[$id]))));
+
+        [$stato, $corpo] = $this->pagina($richiesta, 'io.finanze.conservati.elenca', 'id', $voci, fn (array $voce) => [$voce['id']], fn (string $id) => [$id]);
+        $this->frena('freni:io.finanze.conservati.elenca:'.$persona, self::FRENI['io_finanze_conservati_per_persona'], self::ORA);
+
+        return [$stato, $corpo, ['Cache-Control' => 'no-store, private']];
+    }
+
+    /**
+     * io.finanze.cancellazione.crea (IoFinanzeController::cancellazioneCrea): la stessa cancellazione di `flow.cancellazioni.crea`, col gettone dell'accesso, in un workspace dove la persona è stata membro,
+     * ora o in passato. Nell'ordine del backoffice: il gettone (403 `gettone_con_workspace`), il freno (5 all'ora), il corpo (422 su `#/conferma`), poi un workspace dove non è mai stata membro o che non c'è
+     * (404 `non_trovato`, lo stesso), poi la conferma. Accetta `Idempotency-Key`.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaCancellazioneDelWorkspaceFlow(Request $richiesta, array $corpo, string $workspace): array
+    {
+        $persona = $this->personaDelGettoneDellAccessoFlow($richiesta);
+        $accesso = $this->autentica($richiesta)['accesso'];
+        $workspace = strtolower($workspace);
+
+        return $this->conIdempotenza($richiesta, 'io.finanze.cancellazione.crea', ['persona' => $persona, 'workspace' => $workspace], $corpo, function () use ($persona, $accesso, $workspace, $corpo) {
+            $this->pretendiLaConfermaRecenteFlow($accesso);
+            $this->frena('freni:io.finanze.cancellazione.crea:'.$persona, self::FRENI['io_finanze_cancellazione_per_persona'], self::ORA);
+            $this->testi->validaCorpo($corpo, ['conferma' => ['bail', 'required', 'string', 'max:255']]);
+
+            if (! isset($this->workspace[$workspace]) || ! (isset($this->membri[$workspace][$persona]) || isset($this->flowEx[$workspace][$persona]))) {
+                throw new Problema('non_trovato');
+            }
+
+            return [200, $this->cancellaConLaConfermaFlow($corpo, $workspace, $persona), ['Cache-Control' => 'no-store, private']];
+        });
+    }
+
+    /** La conferma recente dell'accesso (`Conferma::richiedi`): 403 `conferma_richiesta` se non c'è o è scaduta, prima di guardare altro. Chi non ha una password non può darla. */
+    private function pretendiLaConfermaRecenteFlow(string $accesso): void
+    {
+        $fino = $this->accessi[$accesso]['confermato_fino'] ?? null;
+
+        if ($fino === null || $fino->lte(now())) {
+            throw new Problema('conferma_richiesta');
+        }
+    }
+
+    /** La persona del gettone dell'accesso (middleware `accesso`): un gettone di workspace è 403 `gettone_con_workspace`. */
+    private function personaDelGettoneDellAccessoFlow(Request $richiesta): string
+    {
+        $chi = $this->autentica($richiesta);
+
+        if ($chi['workspace'] !== null) {
+            throw new Problema('gettone_con_workspace');
+        }
+
+        return $chi['persona'];
+    }
+
+    /**
+     * Controlla la conferma (il nome del workspace com'è) e cancella.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{movimenti: int, importazioni: int, conti: int}
+     */
+    private function cancellaConLaConfermaFlow(array $corpo, string $workspace, string $persona): array
+    {
+        $campi = $this->testi->validaCorpo($corpo, ['conferma' => ['bail', 'required', 'string', 'max:255']]);
+
+        if ($campi['conferma'] !== $this->workspace[$workspace]['nome']) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.in', ['attribute' => 'conferma']), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => '#/conferma']]);
+        }
+
+        return $this->cancellaIDatiDiFinanzeFlow($workspace, $persona);
+    }
+
+    /**
+     * I workspace dove la persona ha dati di Finanze (Cancellazione::workspaceDi): una riga che porta la sua id, in qualunque tabella, anche archiviata. Solo gli id, in ordine.
+     *
+     * @return list<string>
+     */
+    private function workspaceConDatiFlow(string $persona): array
+    {
+        $trovati = [];
+
+        foreach ([['conti', 'titolare'], ['importazioni', 'creata_da'], ['regole', 'creata_da'], ['fisse', 'creata_da'], ['avvisi', 'titolare']] as [$tabella, $colonna]) {
+            foreach ($this->flow[$tabella] as $riga) {
+                if ($riga[$colonna] === $persona) {
+                    $trovati[$riga['workspace']] = true;
+                }
+            }
+        }
+
+        foreach (array_keys($this->flow['correzioni']) as $chiave) {
+            [$workspace, $vista, $titolare] = explode('|', (string) $chiave) + [null, null, null];
+
+            if ($vista === 'personale' && $titolare === $persona) {
+                $trovati[(string) $workspace] = true;
+            }
+        }
+
+        foreach ($this->flow['avvisiStati'] as $avviso => $stati) {
+            if (isset($stati[$persona]) && isset($this->flow['avvisi'][$avviso])) {
+                $trovati[$this->flow['avvisi'][$avviso]['workspace']] = true;
+            }
+        }
+
+        foreach (array_keys($this->flow['avvisiSilenzi']) as $chiave) {
+            [$workspace, $titolare] = explode('|', (string) $chiave) + [null, null];
+
+            if ($titolare === $persona) {
+                $trovati[(string) $workspace] = true;
+            }
+        }
+
+        $id = array_map('strval', array_keys($trovati));
+        sort($id);
+
+        return $id;
+    }
+
+    /**
+     * Cancella davvero, anche le righe archiviate (Cancellazione::esegui): i conti personali della persona con i loro movimenti e caricamenti; i caricamenti che ha fatto su un conto comune con i movimenti
+     * che ne sono nati; le sue regole, spese fisse ed entrate corrette personali, i suoi avvisi con gli stati e i suoi silenziamenti. Restano, senza di lei (`titolare` e `creata_da` null), i conti comuni, le
+     * regole e le spese fisse comuni che ha creato, e i movimenti scritti a mano su un conto comune. Le ricorrenti nascoste personali vanno con i loro conti: il finto le ricava dai movimenti.
+     *
+     * @return array{movimenti: int, importazioni: int, conti: int} quante righe sono state cancellate
+     */
+    private function cancellaIDatiDiFinanzeFlow(string $workspace, string $persona): array
+    {
+        $conti = array_keys(array_filter($this->flow['conti'], fn (array $conto) => $conto['workspace'] === $workspace && $conto['visibilita'] === 'personale' && $conto['titolare'] === $persona));
+        $importazioni = array_keys(array_filter($this->flow['importazioni'], fn (array $importazione) => $importazione['workspace'] === $workspace && ($importazione['creata_da'] === $persona || in_array($importazione['conto'], $conti, true))));
+        $movimenti = array_keys(array_filter($this->flow['movimenti'], fn (array $movimento) => $movimento['workspace'] === $workspace && (in_array($movimento['conto'], $conti, true) || in_array($movimento['importazione'], $importazioni, true))));
+
+        foreach ($movimenti as $id) {
+            unset($this->flow['movimenti'][$id]);
+        }
+
+        foreach ($importazioni as $id) {
+            unset($this->flow['importazioni'][$id]);
+        }
+
+        foreach ($conti as $id) {
+            unset($this->flow['conti'][$id]);
+        }
+
+        foreach (['conti' => 'titolare', 'regole' => 'creata_da', 'fisse' => 'creata_da'] as $tabella => $colonna) {
+            foreach ($this->flow[$tabella] as $id => $riga) {
+                if ($riga['workspace'] !== $workspace || $riga[$colonna] !== $persona) {
+                    continue;
+                }
+
+                if ($riga['visibilita'] === 'personale') {
+                    unset($this->flow[$tabella][$id]);
+                } else {
+                    $this->flow[$tabella][$id][$colonna] = null;
+                }
+            }
+        }
+
+        foreach (array_keys($this->flow['correzioni']) as $chiave) {
+            if (str_starts_with((string) $chiave, $workspace.'|personale|'.$persona)) {
+                unset($this->flow['correzioni'][$chiave]);
+            }
+        }
+
+        foreach (array_keys($this->flow['avvisiSilenzi']) as $chiave) {
+            if (str_starts_with((string) $chiave, $workspace.'|'.$persona.'|')) {
+                unset($this->flow['avvisiSilenzi'][$chiave]);
+            }
+        }
+
+        foreach ($this->flow['avvisi'] as $id => $avviso) {
+            if ($avviso['workspace'] === $workspace && $avviso['visibilita'] === 'personale' && $avviso['titolare'] === $persona) {
+                unset($this->flow['avvisi'][$id], $this->flow['avvisiStati'][$id]);
+            } elseif ($avviso['workspace'] === $workspace) {
+                unset($this->flow['avvisiStati'][$id][$persona]);
+            }
+        }
+
+        return ['movimenti' => count($movimenti), 'importazioni' => count($importazioni), 'conti' => count($conti)];
+    }
+}
