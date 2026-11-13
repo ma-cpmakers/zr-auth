@@ -591,7 +591,7 @@ return [
     ],
     'transizione_non_valida' => [
         'title' => 'Transición de estado no válida',
-        'detail' => 'El estado pedido no se alcanza desde el estado en que está ahora el recurso: en un tablero, de activo se pasa a cerrado, de cerrado a activo o a papelera, y de la papelera a cerrado. Una negociación se mueve entre fases solo si está abierta y no archivada.',
+        'detail' => 'El estado pedido no se alcanza desde el estado en que está ahora el recurso: en un tablero, de activo se pasa a cerrado, de cerrado a activo o a papelera, y de la papelera a cerrado. Una negociación se mueve entre fases solo si está abierta y no archivada. Una conexión bancaria solo se sincroniza si está activa, y solo se renueva si su consentimiento está por renovar.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor caducado',

@@ -1320,11 +1320,12 @@ trait Flow
             }
 
             $id = self::id();
-            $this->flow['collegamenti'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'archiviato' => false];
+            $this->flow['collegamenti'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'archiviato' => false, 'stato' => 'in_attesa', 'banca' => null,
+                'ultima_sincronizzazione' => null, 'sincronizzabile_dal' => null, 'consenso_scade_il' => null, 'conti' => []];
 
             return [201, ['data' => $this->voceCollegamentoFlow($this->flow['collegamenti'][$id]) + [
                 'url' => self::FLOW_COLLEGAMENTO_URL,
-                'url_scade_il' => self::istanteFlow()->addMinutes(30)->utc()->format('Y-m-d\TH:i:s\Z'),
+                'url_scade_il' => self::istanteFlow()->addMinutes(30)->utc()->format('Y-m-d\TH:i:s.v\Z'),
             ]], []];
         });
     }
@@ -1349,21 +1350,117 @@ trait Flow
     }
 
     /**
-     * Lo schema CollegamentoBancario (Collegamenti::forma): nel finto nessuna banca ha ancora risposto, quindi `in_attesa` e senza conti.
+     * flow.collegamenti.sincronizzazioni.crea (CollegamentiController::sincronizzazioniCrea): la richiesta a mano. 202 col collegamento e `sincronizzabile_dal` (15 minuti
+     * dopo); prima di quell'ora 429 `troppe_richieste` con `Retry-After` e il membro `sincronizzabile_dal`. Solo un collegamento `attivo` (409 `transizione_non_valida`);
+     * il collegamento di un'altra persona, di un altro workspace o già tolto è 404. Il freno per persona si conta prima del corpo (422 `campo_estraneo`).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaSincronizzazioneFlow(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $collegamento = $this->collegamentoFlowDi($chi, $id);
+        $this->frena('freni:flow.collegamenti.sincronizzazioni.crea:'.$chi['persona'], self::FRENI['flow_sincronizzazioni_persona'], self::ORA);
+        $this->testi->validaCorpo($corpo, []);
+
+        if ($collegamento['stato'] !== 'attivo') {
+            throw new Problema('transizione_non_valida');
+        }
+
+        $adesso = self::istanteFlow();
+        $dal = $collegamento['sincronizzabile_dal'];
+
+        if ($dal !== null && $dal > $adesso) {
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, (int) ceil($adesso->diffInSeconds($dal, true)))], estensioni: ['sincronizzabile_dal' => self::iso($dal)]);
+        }
+
+        $this->flow['collegamenti'][$collegamento['id']]['sincronizzabile_dal'] = $adesso->addMinutes(15);
+
+        return [202, ['data' => $this->voceCollegamentoFlow($this->flow['collegamenti'][$collegamento['id']])]];
+    }
+
+    /**
+     * flow.collegamenti.rinnovo.crea (CollegamentiController::rinnovoCrea): una nuova sessione per lo stesso collegamento. 201 col collegamento, l'`url` e `url_scade_il`; solo un
+     * collegamento `da_rinnovare` (409 `transizione_non_valida`); l'altrui o il tolto è 404. Accetta Idempotency-Key.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaRinnovoFlow(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $collegamento = $this->collegamentoFlowDi($chi, $id);
+
+        return $this->conIdempotenza($richiesta, 'flow.collegamenti.rinnovo.crea', $chi, ['corpo' => $corpo, 'percorso' => ['collegamento' => $collegamento['id']]], function () use ($chi, $corpo, $collegamento) {
+            $this->frena('freni:flow.collegamenti.rinnovo.crea:'.$chi['persona'], self::FRENI['flow_rinnovi_persona'], self::ORA);
+            $this->testi->validaCorpo($corpo, []);
+
+            if ($collegamento['stato'] !== 'da_rinnovare') {
+                throw new Problema('transizione_non_valida');
+            }
+
+            return [201, ['data' => $this->voceCollegamentoFlow($collegamento) + [
+                'url' => self::FLOW_COLLEGAMENTO_URL,
+                'url_scade_il' => self::istanteFlow()->addMinutes(30)->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            ]], []];
+        });
+    }
+
+    /**
+     * Cambia i campi di un collegamento perché una prova lo veda com'è dopo l'avviso di Salt Edge: `stato` (`in_attesa`, `attivo`, `da_rinnovare`, `errore`), `banca`,
+     * `ultima_sincronizzazione`, `sincronizzabile_dal`, `consenso_scade_il` (istanti) e `conti` (lista di `{id, nome}`). Nel backoffice li cambiano gli avvisi e la lettura.
+     *
+     * @param  array<string, mixed>  $campi
+     */
+    public function impostaCollegamentoFlow(string $id, array $campi): void
+    {
+        $id = strtolower($id);
+
+        if (! isset($this->flow['collegamenti'][$id])) {
+            throw new InvalidArgumentException("Nessun collegamento bancario {$id} nel finto.");
+        }
+
+        foreach (array_intersect_key($campi, array_flip(['stato', 'banca', 'ultima_sincronizzazione', 'sincronizzabile_dal', 'consenso_scade_il', 'conti'])) as $nome => $valore) {
+            $this->flow['collegamenti'][$id][$nome] = $valore;
+        }
+    }
+
+    /**
+     * Il collegamento vivo di questa persona in questo workspace, o 404 `non_trovato` uguale a un id che non c'è.
+     *
+     * @param  array{persona: ?string, accesso: string, workspace: ?string}  $chi
+     * @return array<string, mixed>
+     */
+    private function collegamentoFlowDi(array $chi, string $id): array
+    {
+        $collegamento = $this->flow['collegamenti'][strtolower($id)] ?? null;
+
+        if ($collegamento === null || $collegamento['archiviato'] || $collegamento['workspace'] !== $chi['workspace'] || $collegamento['persona'] !== $chi['persona']) {
+            throw new Problema('non_trovato');
+        }
+
+        return $collegamento;
+    }
+
+    /**
+     * Lo schema CollegamentoBancario (Collegamenti::forma): un collegamento nuovo è `in_attesa` e senza conti, finché una prova non lo cambia con impostaCollegamentoFlow().
      *
      * @param  array<string, mixed>  $collegamento
      * @return array<string, mixed>
      */
     private function voceCollegamentoFlow(array $collegamento): array
     {
+        $iso = fn (mixed $quando) => $quando === null ? null : self::iso($quando instanceof CarbonImmutable ? $quando : CarbonImmutable::parse($quando));
+
         return [
             'id' => $collegamento['id'],
-            'banca' => null,
-            'stato' => 'in_attesa',
-            'ultima_sincronizzazione' => null,
-            'sincronizzabile_dal' => null,
-            'consenso_scade_il' => null,
-            'conti' => [],
+            'banca' => $collegamento['banca'],
+            'stato' => $collegamento['stato'],
+            'ultima_sincronizzazione' => $iso($collegamento['ultima_sincronizzazione']),
+            'sincronizzabile_dal' => $iso($collegamento['sincronizzabile_dal']),
+            'consenso_scade_il' => $iso($collegamento['consenso_scade_il']),
+            'conti' => $collegamento['conti'],
         ];
     }
 

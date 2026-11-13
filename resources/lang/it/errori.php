@@ -591,7 +591,7 @@ return [
     ],
     'transizione_non_valida' => [
         'title' => 'Transizione di stato non valida',
-        'detail' => 'Lo stato chiesto non si raggiunge da quello in cui la risorsa sta ora: per una board, da attiva si passa a chiusa, da chiusa ad attiva o a cestino, dal cestino a chiusa. Una trattativa si sposta fra le fasi solo se è aperta e non archiviata.',
+        'detail' => 'Lo stato chiesto non si raggiunge da quello in cui la risorsa sta ora: per una board, da attiva si passa a chiusa, da chiusa ad attiva o a cestino, dal cestino a chiusa. Una trattativa si sposta fra le fasi solo se è aperta e non archiviata. Un collegamento bancario si sincronizza solo se è attivo, e si rinnova solo se il consenso è da rinnovare.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursore scaduto',

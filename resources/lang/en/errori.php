@@ -591,7 +591,7 @@ return [
     ],
     'transizione_non_valida' => [
         'title' => 'Invalid state transition',
-        'detail' => 'The requested state cannot be reached from the state the resource is in now: for a board, active goes to closed, closed goes to active or to trash, and trash goes to closed. A deal moves between stages only while it is open and not archived.',
+        'detail' => 'The requested state cannot be reached from the state the resource is in now: for a board, active goes to closed, closed goes to active or to trash, and trash goes to closed. A deal moves between stages only while it is open and not archived. A bank connection can be synced only while it is active, and renewed only when its consent needs renewing.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor expired',
