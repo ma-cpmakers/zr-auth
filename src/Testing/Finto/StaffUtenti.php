@@ -325,6 +325,7 @@ trait StaffUtenti
                 return null;
             },
             true,
+            conTotale: true,
         );
     }
 
@@ -640,6 +641,7 @@ trait StaffUtenti
             ],
             'accessi_n' => count($accessi),
             'workspace' => $workspace,
+            'aziende' => $this->aziendeDellUtente($id),
             'sospensione' => isset($this->sospensioniStaff[$id]) ? $this->formaDellaSospensione($this->sospensioniStaff[$id]) : null,
             'eliminazione' => $eliminazione === null ? null : [
                 'prevista_il' => self::iso($eliminazione->addDays(30)),
@@ -652,6 +654,28 @@ trait StaffUtenti
                 'motivo' => $this->cambiEmailStaff[$id]['motivo'],
             ] : null,
         ];
+    }
+
+    /**
+     * Le aziende dei workspace di cui la persona è membro (#3774): `{id, nome}`, ognuna una volta, per nome e poi per id. Un workspace in eliminazione non conta, come nel backoffice uno archiviato.
+     *
+     * @return list<array{id: string, nome: string}>
+     */
+    private function aziendeDellUtente(string $id): array
+    {
+        $aziende = [];
+
+        foreach ($this->membri as $idWorkspace => $membri) {
+            $azienda = $this->workspace[$idWorkspace]['azienda_id'] ?? null;
+
+            if (isset($membri[$id]) && ! isset($this->eliminazioni[$idWorkspace]) && $azienda !== null && isset($this->aziende[$azienda])) {
+                $aziende[$azienda] = ['id' => (string) $azienda, 'nome' => $this->aziende[$azienda]];
+            }
+        }
+
+        usort($aziende, fn (array $una, array $altra) => [$una['nome'], $una['id']] <=> [$altra['nome'], $altra['id']]);
+
+        return array_values($aziende);
     }
 
     private function statoDellUtente(string $id): string

@@ -796,7 +796,83 @@ trait Staff
             },
             true,
             regole: $regole,
+            conTotale: true,
         );
+    }
+
+    /**
+     * staff.registro.ricerca.crea (#3773): la lista di staff.registro.elenca con `q` nel corpo (2-100 caratteri), i filtri dell'elenco, `limite` e `cursore`, e `totale`. `q` cerca solo nei campi che la
+     * riga mostra: il nome dell'azione, nome e cognome di chi ha agito e del bersaglio, nome e azienda di un workspace; mai l'email. Ogni parola, senza maiuscole né accenti, sta in uno di quei campi.
+     * Il cursore è di questo metodo e di questi filtri e `q` (422 su #/cursore); un campo estraneo è 422. Non scrive nel registro.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function cercaNelRegistroDelloStaff(Request $richiesta, array $corpo): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, self::RUOLI_DELLO_STAFF);
+        $this->contaLaLettura($chi);
+        $campi = array_filter($this->testi->validaStretta($corpo, ['q' => ['required', 'string', 'min:2', 'max:100']] + $this->regoleDelRegistro(true) + [
+            'limite' => ['sometimes', 'nullable', 'integer:strict', 'between:1,'.self::LIMITE_MASSIMO_DELLO_STAFF],
+            'cursore' => ['sometimes', 'nullable', 'string'],
+        ]), fn (mixed $valore) => $valore !== null);
+        $filtri = array_diff_key($campi, ['limite' => 1, 'cursore' => 1, 'q' => 1]);
+        $parole = array_values(array_filter(preg_split('/\s+/u', Str::lower(trim((string) $campi['q']))) ?: []));
+        // Il cursore è di questa ricerca, di questi filtri e di questo testo: con altri non vale (422 su #/cursore).
+        $lista = 'staff.registro.ricerca:'.sha1(json_encode([$parole, $filtri], JSON_THROW_ON_ERROR));
+
+        $voci = array_values(array_filter(
+            array_map(fn (array $riga) => $this->voceDelRegistro($riga), $this->righeDelRegistro($chi, $filtri)),
+            fn (array $voce) => $this->laVoceContiene($voce, $parole),
+        ));
+        $campi['limite'] ??= self::LIMITE_DELLO_STAFF;
+        $this->parametriDelCorpo = true;
+
+        try {
+            return $this->impagina(
+                $campi, $lista, 'id', $voci,
+                fn (array $voce) => [str_pad((string) $voce['posizione'], 12, '0', STR_PAD_LEFT)],
+                function (string $id) {
+                    foreach ($this->registroStaff as $riga) {
+                        if ($riga['id'] === $id) {
+                            return [str_pad((string) $riga['posizione'], 12, '0', STR_PAD_LEFT)];
+                        }
+                    }
+
+                    return null;
+                },
+                true,
+                conTotale: true,
+            );
+        } finally {
+            $this->parametriDelCorpo = false;
+        }
+    }
+
+    /**
+     * Ogni parola sta in un campo che la voce mostra: azione, nome e cognome di chi ha agito, nome e cognome del bersaglio, nome e azienda di un workspace. Mai l'email: la voce non l'ha.
+     *
+     * @param  array<string, mixed>  $voce
+     * @param  list<string>  $parole
+     */
+    private function laVoceContiene(array $voce, array $parole): bool
+    {
+        $campi = array_filter([
+            $voce['azione'],
+            $voce['staff']['nome'] ?? null, $voce['staff']['cognome'] ?? null,
+            $voce['bersaglio']['nome'] ?? null, $voce['bersaglio']['cognome'] ?? null, $voce['bersaglio']['azienda'] ?? null,
+        ], fn (mixed $campo) => is_string($campo) && $campo !== '');
+        $campi = array_map(fn (string $campo) => Str::lower(Str::ascii($campo)), $campi);
+
+        foreach ($parole as $parola) {
+            $parola = Str::lower(Str::ascii($parola));
+
+            if (array_filter($campi, fn (string $campo) => str_contains($campo, $parola)) === []) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -1289,6 +1365,7 @@ trait Staff
             'bersaglio' => match ($riga['bersaglio_tipo']) {
                 'staff' => $dellaPersona($riga['bersaglio_id']),
                 'utente' => isset($this->persone[$riga['bersaglio_id']]) ? ['nome' => $this->persone[$riga['bersaglio_id']]['nome'], 'cognome' => $this->persone[$riga['bersaglio_id']]['cognome']] : null,
+                'workspace' => isset($this->workspace[$riga['bersaglio_id']]) ? ['nome' => $this->workspace[$riga['bersaglio_id']]['nome'], 'azienda' => $this->aziende[$this->workspace[$riga['bersaglio_id']]['azienda_id']] ?? null] : null,
                 default => null,
             },
         ];
