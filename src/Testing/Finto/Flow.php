@@ -2160,8 +2160,9 @@ trait Flow
     }
 
     /**
-     * flow.futuro.calendario.elenca (FuturoController::calendarioElenca): le spese dei prossimi 60 giorni della vista chiesta, per data (le voci col solo periodo per l'inizio del periodo), poi per nome e
-     * `riferimento_id`, a cursore legato alla vista. Senza entrate. Ogni altro parametro che non è `limite`, `cursore` o `visibilita` è 422 `campo_estraneo`.
+     * flow.futuro.calendario.elenca (FuturoController::calendarioElenca): le spese dei prossimi `giorni` (da 1 a 60, 60 se manca) della vista chiesta, per data (le voci col solo periodo per l'inizio del periodo), poi per
+     * nome e `riferimento_id`, a cursore legato alla vista e ai `giorni`. Senza entrate. Un `giorni` che non è un intero da 1 a 60 è 422 sul parametro; ogni altro parametro che non è `limite`, `cursore`, `visibilita` o
+     * `giorni` è 422 `campo_estraneo`.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -2171,13 +2172,15 @@ trait Flow
         $grezzi = self::query($richiesta);
         $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
         $vista = is_string($grezzi['visibilita'] ?? null) ? $grezzi['visibilita'] : '';
+        $giorniChiesti = is_string($grezzi['giorni'] ?? null) ? $grezzi['giorni'] : '';
+        $giorni = ctype_digit($giorniChiesti) && (int) $giorniChiesti >= 1 && (int) $giorniChiesti <= 60 ? (int) $giorniChiesti : 60;
 
         [$stato, $corpo] = $this->pagina(
             $richiesta,
-            'flow.futuro.calendario.elenca:'.$vista,
+            'flow.futuro.calendario.elenca:'.$vista.':'.$giorniChiesti,
             'chiave',
-            function () use ($chi, $vista, $oggi) {
-                $fine = $oggi->addDays(60);
+            function () use ($chi, $vista, $oggi, $giorni) {
+                $fine = $oggi->addDays($giorni);
 
                 return array_map(
                     fn (array $voce) => $voce + ['chiave' => $voce['ordine'].'|'.$voce['nome']."\x1f".$voce['riferimento_id']],
@@ -2189,7 +2192,8 @@ trait Flow
             false,
             self::LIMITE_MASSIMO,
             null,
-            ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow($grezzi, ['limite', 'cursore', 'visibilita']),
+            ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)], 'giorni' => ['sometimes', 'integer', 'between:1,60']]
+                + $this->estraneiFlow($grezzi, ['limite', 'cursore', 'visibilita', 'giorni']),
         );
 
         $corpo['data'] = array_map(fn (array $voce) => [
