@@ -84,7 +84,17 @@ trait NotifichePreferenze
     /** I tipi che hanno anche il canale `email` (Notifica::ASSEGNATE). */
     private const NOTIFICHE_CON_EMAIL = ['crm.persona.assegnata', 'crm.organizzazione.assegnata', 'crm.trattativa.assegnata', 'crm.attivita.assegnata', 'board.scheda.assegnata', 'board.commento.menzione'];
 
-    private const NOTIFICHE_CANALI = ['app', 'email', 'spenta'];
+    private const NOTIFICHE_CANALI = ['app', 'email', 'riepilogo', 'spenta'];
+
+    /** Il riepilogo delle notifiche (#2734): le frequenze, la forma dell'ora e l'ora di chi non ha scelto (App\Notifiche\Riepilogo). */
+    private const RIEPILOGO_FREQUENZE = ['nessuno', 'giornaliero', 'settimanale'];
+
+    private const RIEPILOGO_FORMA_ORA = '/^([01]\d|2[0-3]):[0-5]\d$/D';
+
+    private const RIEPILOGO_ORA = '08:00';
+
+    /** Il «tipo» del token dell'email del riepilogo (TokenDiDisiscrizione::RIEPILOGO): non è un tipo del catalogo. */
+    private const RIEPILOGO_TIPO_DEL_TOKEN = 'notifiche.riepilogo.periodico';
 
     /** Le scelte che una chiamata cambia al più. */
     private const NOTIFICHE_SCELTE_AL_MASSIMO = 100;
@@ -95,8 +105,11 @@ trait NotifichePreferenze
     /** @var array<string, array<string, string>> il canale scelto, per persona e per tipo; chi non ha scelto ha `app` */
     private array $preferenzeDiNotifica = [];
 
+    /** @var array<string, array{frequenza: string, ora: string}> il riepilogo scelto, per persona; chi non ha scelto ha `nessuno` alle 08:00 */
+    private array $riepilogoDiNotifica = [];
+
     /**
-     * Il token di «Non voglio più questa email» di una persona e di un tipo: tre pezzi in base64url, `<persona>.<tipo>.<firma>`. Non scade e non si consuma.
+     * Il token di «Non voglio più questa email» di una persona e di un tipo (o `notifiche.riepilogo.periodico`, quello dell'email del riepilogo): tre pezzi in base64url, `<persona>.<tipo>.<firma>`. Non scade e non si consuma.
      * Il segreto è del finto: un token del backoffice vero non vale qui, e viceversa.
      */
     public function tokenDiDisiscrizione(string $persona, string $tipo): string
@@ -118,8 +131,10 @@ trait NotifichePreferenze
     }
 
     /**
-     * io.notifiche.preferenze.modifica: `{tipi: [{tipo, canale}]}`, tutto o niente. Un tipo fuori dal catalogo, ripetuto o un canale che il tipo non ha è 422
-     * `valore_non_ammesso` sul pointer dell'elemento (`#/tipi/2/tipo`), e non salva niente. Risponde con la forma di `mostra`.
+     * io.notifiche.preferenze.modifica: `{tipi: [{tipo, canale}], riepilogo: {frequenza, ora}}`, almeno una delle due parti, tutto o niente. Un tipo fuori dal
+     * catalogo, ripetuto o un canale che il tipo non ha è 422 `valore_non_ammesso` sul pointer dell'elemento (`#/tipi/2/tipo`), una frequenza fuori dall'elenco
+     * `valore_non_ammesso` su `#/riepilogo/frequenza` e un'ora che non è `HH:MM` `formato` su `#/riepilogo/ora`; non salva niente, nemmeno dell'altra parte.
+     * Risponde con la forma di `mostra`.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>}
@@ -128,7 +143,10 @@ trait NotifichePreferenze
     {
         $persona = $this->personaDelGettoneNotifiche($richiesta);
         $campi = $this->testi->valida($corpo, [
-            'tipi' => ['bail', 'required', 'array', 'list', 'min:1', 'max:'.self::NOTIFICHE_SCELTE_AL_MASSIMO],
+            'tipi' => ['bail', 'sometimes', 'array', 'list', 'min:1', 'max:'.self::NOTIFICHE_SCELTE_AL_MASSIMO],
+            'riepilogo' => ['bail', 'sometimes', 'array'],
+            'riepilogo.frequenza' => ['sometimes', 'string', Rule::in(self::RIEPILOGO_FREQUENZE)],
+            'riepilogo.ora' => ['sometimes', 'string', 'regex:'.self::RIEPILOGO_FORMA_ORA],
             'tipi.*.tipo' => ['required', 'string', 'distinct', function (string $attributo, mixed $valore, Closure $fail) {
                 if (! is_string($valore) || ! isset(self::NOTIFICHE_TIPI[$valore])) {
                     $this->testi->dichiara($attributo, 'valore_non_ammesso');
@@ -145,8 +163,23 @@ trait NotifichePreferenze
             }],
         ]);
 
-        foreach ($campi['tipi'] as $scelta) {
+        // `riepilogo: {}` non arriva fra i campi validati: la presenza si legge dal corpo.
+        $riepilogo = is_array($corpo['riepilogo'] ?? null) ? ($campi['riepilogo'] ?? []) : null;
+
+        if (! array_key_exists('tipi', $campi) && $riepilogo === null) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'tipi, riepilogo']), 'regola' => 'obbligatorio', 'pointer' => '#']]);
+        }
+
+        if ($riepilogo !== null && ! array_key_exists('frequenza', $riepilogo) && ! array_key_exists('ora', $riepilogo)) {
+            throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => 'riepilogo.frequenza, riepilogo.ora']), 'regola' => 'obbligatorio', 'pointer' => '#/riepilogo']]);
+        }
+
+        foreach ($campi['tipi'] ?? [] as $scelta) {
             $this->preferenzeDiNotifica[$persona][$scelta['tipo']] = $scelta['canale'];
+        }
+
+        if ($riepilogo !== null) {
+            $this->riepilogoDiNotifica[$persona] = [...$this->riepilogoDi($persona), ...$riepilogo];
         }
 
         return [200, ['data' => $this->preferenzeDiNotificaDi($persona)]];
@@ -162,6 +195,13 @@ trait NotifichePreferenze
     private function disiscrivitiDallEmail(array $corpo): array
     {
         $letto = $this->leggiIlTokenDiDisiscrizione($corpo, 'crea');
+
+        if ($letto['tipo'] === self::RIEPILOGO_TIPO_DEL_TOKEN) {
+            // Il riepilogo: la frequenza torna `nessuno` e i tipi restano su `riepilogo`.
+            $this->riepilogoDiNotifica[$letto['persona']] = [...$this->riepilogoDi($letto['persona']), 'frequenza' => 'nessuno'];
+
+            return [204, null];
+        }
 
         if (($this->preferenzeDiNotifica[$letto['persona']][$letto['tipo']] ?? null) === 'email') {
             $this->preferenzeDiNotifica[$letto['persona']][$letto['tipo']] = 'app';
@@ -179,6 +219,10 @@ trait NotifichePreferenze
     private function verificaLaDisiscrizione(array $corpo): array
     {
         $letto = $this->leggiIlTokenDiDisiscrizione($corpo, 'verifica');
+
+        if ($letto['tipo'] === self::RIEPILOGO_TIPO_DEL_TOKEN) {
+            return [200, ['data' => ['tipo' => 'riepilogo', 'canale' => 'riepilogo']]];
+        }
 
         return [200, ['data' => ['tipo' => $letto['tipo'], 'canale' => 'email']]];
     }
@@ -217,7 +261,7 @@ trait NotifichePreferenze
         $persona = base64_decode(strtr($persona, '-_', '+/'), true);
         $tipo = base64_decode(strtr($tipo, '-_', '+/'), true);
 
-        return is_string($persona) && is_string($tipo) && isset(self::NOTIFICHE_TIPI[$tipo]) ? ['persona' => $persona, 'tipo' => $tipo] : null;
+        return is_string($persona) && is_string($tipo) && (isset(self::NOTIFICHE_TIPI[$tipo]) || $tipo === self::RIEPILOGO_TIPO_DEL_TOKEN) ? ['persona' => $persona, 'tipo' => $tipo] : null;
     }
 
     private function personaDelGettoneNotifiche(Request $richiesta): string
@@ -225,7 +269,7 @@ trait NotifichePreferenze
         return $this->autentica($richiesta)['persona'] ?? throw new LogicException('Un gettone di una persona ha sempre la persona.');
     }
 
-    /** @return array{tipi: list<array{tipo: string, modulo: string, canale: string, canali: list<string>}>} */
+    /** @return array{tipi: list<array{tipo: string, modulo: string, canale: string, canali: list<string>}>, riepilogo: array{frequenza: string, ora: string}} */
     private function preferenzeDiNotificaDi(string $persona): array
     {
         $tipi = [];
@@ -234,13 +278,19 @@ trait NotifichePreferenze
             $tipi[] = ['tipo' => $tipo, 'modulo' => $modulo, 'canale' => $this->preferenzeDiNotifica[$persona][$tipo] ?? 'app', 'canali' => self::canaliDiNotifica($tipo)];
         }
 
-        return ['tipi' => $tipi];
+        return ['tipi' => $tipi, 'riepilogo' => $this->riepilogoDi($persona)];
+    }
+
+    /** @return array{frequenza: string, ora: string} */
+    private function riepilogoDi(string $persona): array
+    {
+        return $this->riepilogoDiNotifica[$persona] ?? ['frequenza' => 'nessuno', 'ora' => self::RIEPILOGO_ORA];
     }
 
     /** @return list<string> */
     private static function canaliDiNotifica(string $tipo): array
     {
-        return in_array($tipo, self::NOTIFICHE_CON_EMAIL, true) ? self::NOTIFICHE_CANALI : ['app', 'spenta'];
+        return in_array($tipo, self::NOTIFICHE_CON_EMAIL, true) ? self::NOTIFICHE_CANALI : ['app', 'riepilogo', 'spenta'];
     }
 
     /** base64url senza riempimento. */
