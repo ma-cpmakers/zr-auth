@@ -422,6 +422,53 @@ trait StaffWorkspace
         return [200, ['data' => $this->voceDelMembroPerLoStaff($id, $scelto)]];
     }
 
+    /**
+     * staff.workspace.eliminazione.crea (#3263, StaffWorkspaceEliminazioneController::crea): lo staff pianifica l'eliminazione del workspace fra 30 giorni, con un `motivo` dell'elenco chiuso del
+     * registro dello staff. Solo il superadmin. Nell'ordine del backoffice: il workspace (404), il corpo (422), il freno delle azioni sensibili (429). Già pianificata, anche dal proprietario: 202 con la
+     * stessa data, senza scrivere la riga né quella del registro. L'ultimo workspace di una persona si può eliminare. Nessun avviso a nessuno. Risponde 202 con `eliminazione_il`.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function pianificaLEliminazioneDelloStaff(Request $richiesta, array $corpo, string $workspace): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $dati = $this->testi->validaStretta($corpo, [
+            'motivo' => ['required', 'string', Rule::in(['assistenza', 'problema_tecnico', 'sicurezza', 'verifica_account'])],
+        ]);
+        $this->contaUnaAzioneSensibile($chi);
+
+        if (! isset($this->eliminazioni[$id])) {
+            $this->eliminazioni[$id] = now()->toImmutable()->startOfMillisecond()->addDays(30);
+            $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.eliminazione.crea', 'workspace', $id, null, (string) $dati['motivo']);
+        }
+
+        return [202, ['data' => ['eliminazione_il' => self::iso($this->eliminazioni[$id])]]];
+    }
+
+    /**
+     * staff.workspace.eliminazione.elimina (#3263, StaffWorkspaceEliminazioneController::elimina): annulla l'eliminazione pianificata (204), anche se l'aveva chiesta il proprietario. Solo il
+     * superadmin. Il workspace (404), il freno delle azioni sensibili (429), l'eliminazione (404 se non c'è, anche la seconda volta). Una riga nel registro dello staff; nessuna mail di ripristino.
+     *
+     * @return array{int, null}
+     */
+    private function annullaLEliminazioneDelloStaff(Request $richiesta, string $workspace): array
+    {
+        [, $chi] = $this->autenticaLoStaff($richiesta, ['superadmin']);
+        $id = $this->workspaceDelloStaff($chi, $workspace);
+        $this->contaUnaAzioneSensibile($chi);
+
+        if (! isset($this->eliminazioni[$id])) {
+            throw new Problema('non_trovato');
+        }
+
+        unset($this->eliminazioni[$id], $this->eliminatiDa[$id], $this->eliminazioniConAccount[$id]);
+        $this->scriviNelRegistroDelloStaff($chi, 'staff.workspace.eliminazione.elimina', 'workspace', $id);
+
+        return [204, null];
+    }
+
     /** L'id di una persona che è membro di quel workspace, o 404: di un altro workspace, tolta o inventata è lo stesso 404. */
     private function membroDelloStaff(string $workspace, string $utente): string
     {
