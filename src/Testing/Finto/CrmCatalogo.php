@@ -122,7 +122,7 @@ trait CrmCatalogo
 
     /**
      * crm.catalogo.elenca (CatalogoController::elenca): le voci a cursore. `tipo` e `stato` a virgole (di partenza `bozza,attiva`), `categoria`
-     * uguale senza maiuscole né accenti, `ordina` (`nome`, `aggiornata_il` o `prezzo`, con `-`; di partenza `nome`), `totale=true`. A parità
+     * uguale senza maiuscole né accenti, `id` (al più 100 id: le sole voci di quegli id, #2519), `ordina` (`nome`, `aggiornata_il` o `prezzo`, con `-`; di partenza `nome`), `totale=true`. A parità
      * decide l'id nello stesso verso; le voci senza prezzo vanno in fondo in tutti e due i versi.
      *
      * @return array{int, array<string, mixed>}
@@ -134,6 +134,7 @@ trait CrmCatalogo
             'tipo' => $this->regolaDelleVociCrm('tipo', self::CRM_CATALOGO_TIPI),
             'stato' => $this->regolaDelleVociCrm('stato', self::CRM_CATALOGO_STATI),
             'categoria' => ['bail', 'sometimes', 'nullable', 'string', 'max:60'],
+            'id' => $this->regolaDelFiltroPerId(),
             'ordina' => ['bail', 'sometimes', 'string', Rule::in(self::CRM_CATALOGO_ORDINI)],
             'totale' => ['sometimes', 'string', Rule::in(['true', 'false'])],
             'q' => ['prohibited'],
@@ -141,7 +142,7 @@ trait CrmCatalogo
         $voci = fn (string $parametro) => array_values(array_unique(array_filter(array_map('trim', explode(',', (string) ($query[$parametro] ?? ''))), fn (string $voce) => $voce !== '')));
         $categoria = isset($query['categoria']) && trim((string) $query['categoria']) !== '' ? self::chiaveCrm($query['categoria']) : null;
 
-        return $this->paginaCatalogoCrm($richiesta, $chi['workspace'], 'crm.catalogo.elenca', $voci('tipo'), $voci('stato') ?: ['bozza', 'attiva'], $categoria, null, (string) ($query['ordina'] ?? 'nome'), ($query['totale'] ?? null) === 'true', self::LIMITE_PREDEFINITO, null);
+        return $this->paginaCatalogoCrm($richiesta, $chi['workspace'], 'crm.catalogo.elenca', $voci('tipo'), $voci('stato') ?: ['bozza', 'attiva'], $categoria, null, (string) ($query['ordina'] ?? 'nome'), ($query['totale'] ?? null) === 'true', self::LIMITE_PREDEFINITO, null, self::idDelFiltroCrm(isset($query['id']) ? (string) $query['id'] : null));
     }
 
     /**
@@ -195,9 +196,10 @@ trait CrmCatalogo
      *
      * @param  list<string>  $tipi
      * @param  list<string>  $stati
+     * @param  list<string>  $id  gli id chiesti (filtro `id` di elenca), già in minuscolo e in ordine; vuota = nessun filtro
      * @return array{int, array<string, mixed>}
      */
-    private function paginaCatalogoCrm(?Request $richiesta, string $workspace, string $metodo, array $tipi, array $stati, ?string $categoria, ?string $ricerca, string $ordina, bool $totale, int $limite, ?string $cursore): array
+    private function paginaCatalogoCrm(?Request $richiesta, string $workspace, string $metodo, array $tipi, array $stati, ?string $categoria, ?string $ricerca, string $ordina, bool $totale, int $limite, ?string $cursore, array $id = []): array
     {
         sort($tipi);
         sort($stati);
@@ -205,10 +207,11 @@ trait CrmCatalogo
         $righe = array_values(array_filter(
             $this->righeCrm('catalogo', $workspace),
             fn (array $riga) => in_array($riga['stato'], $stati, true) && ($tipi === [] || in_array($riga['tipo'], $tipi, true))
+                && ($id === [] || in_array(strtolower((string) $riga['id']), $id, true))
                 && ($categoria === null || ($riga['categoria'] !== null && self::chiaveCrm($riga['categoria']) === $categoria))
                 && array_reduce($parole, fn (bool $tutte, string $parola) => $tutte && str_contains((string) self::chiaveCrm($riga['nome']), $parola), true),
         ));
-        $lista = $metodo.':'.substr(hash('sha256', json_encode([$ordina, $tipi, $stati, $categoria, $ricerca], JSON_THROW_ON_ERROR)), 0, 16);
+        $lista = $metodo.':'.substr(hash('sha256', json_encode([$ordina, $tipi, $stati, $categoria, $ricerca, $id], JSON_THROW_ON_ERROR)), 0, 16);
         $campo = ['nome' => 'nome', 'aggiornata_il' => 'aggiornata_il', 'prezzo' => 'prezzo_importo'][ltrim($ordina, '-')];
         $discendente = str_starts_with($ordina, '-');
         $ordine = function (array $una, array $altra) use ($campo, $discendente): int {

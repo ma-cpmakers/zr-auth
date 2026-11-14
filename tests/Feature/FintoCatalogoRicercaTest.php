@@ -62,3 +62,25 @@ it('q vuoto o non testo è 422 su #/q, e q nella query è 422 sul parametro senz
     expect($elenca->status())->toBe(422)->and($elenca->json('errors.0.parameter'))->toBe('q')->and($elenca->body())->not->toContain('Segretissimo')
         ->and($cerca->status())->toBe(422)->and($cerca->json('errors.0.parameter'))->toBe('q')->and($cerca->body())->not->toContain('Segretissimo');
 });
+
+// #2519: il filtro `id` di crm.catalogo.elenca nel finto (che le risposte e gli errori siano quelli del backoffice lo prova il suo FintoTest).
+
+it('id tiene le sole voci chieste, un id ripetuto conta una volta, uno sconosciuto non compare, e un valore che non è un id è 422 sul parametro (#2519)', function () {
+    [, $gettoni] = studioColCrm();
+    $id = [];
+    foreach (['Alfa', 'Beta', 'Gamma'] as $nome) {
+        $creata = alFinto('POST', '/v1/crm/catalogo', ['tipo' => 'servizio', 'nome' => $nome], $gettoni['anna']);
+        expect($creata->status())->toBe(201);
+        $id[$nome] = $creata->json('data.id');
+    }
+    $nomi = fn (string $query) => array_column(alFinto('GET', '/v1/crm/catalogo'.$query, null, $gettoni['carla'])->json('data'), 'nome');
+
+    expect($nomi("?id={$id['Gamma']},{$id['Alfa']}"))->toBe(['Alfa', 'Gamma'])
+        ->and($nomi("?id={$id['Beta']},{$id['Beta']},".strtoupper($id['Beta'])))->toBe(['Beta'])
+        ->and($nomi('?id=01k6w6a2c4e6g8j0m2p4r6t8v1'))->toBe([]);
+
+    foreach (['?id=x', "?id={$id['Alfa']},"] as $query) {
+        $risposta = alFinto('GET', '/v1/crm/catalogo'.$query, null, $gettoni['carla']);
+        expect($risposta->status())->toBe(422)->and($risposta->json('errors.0.parameter'))->toBe('id');
+    }
+});
