@@ -65,6 +65,9 @@ trait Flow
     /** @var array{avvisi: array<string, array<string, mixed>>, avvisiStati: array<string, array<string, string>>, avvisiSilenzi: array<string, true>, conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>, correzioni: array<string, int|null>} */
     private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'collegamenti' => [], 'correzioni' => [], 'nascoste' => [], 'avvisi' => [], 'avvisiStati' => [], 'avvisiSilenzi' => []];
 
+    /** Lo scenario di `bancaNonRaggiungibileFlow()`: Salt Edge non risponde alla revoca di una cancellazione di Finanze. */
+    private bool $bancaNonRaggiungibile = false;
+
     /** @var array<string, array<string, true>> chi è stato membro di un workspace e ne è uscito (workspace => persona => true): il diritto alla cancellazione dei dati di Finanze non finisce con l'uscita (#3597) */
     private array $flowEx = [];
 
@@ -1488,6 +1491,16 @@ trait Flow
     }
 
     /**
+     * Lo scenario «Salt Edge non risponde»: finché è acceso, `flow.cancellazioni.crea` e `io.finanze.cancellazione.crea` di una persona che ha un collegamento bancario in quel workspace (anche
+     * archiviato) sono `502` `banca_non_raggiungibile` e non cancellano niente, come nel backoffice, che revoca presso la banca prima di toccare i dati. Senza collegamenti la cancellazione riesce
+     * lo stesso. Si spegne con `bancaNonRaggiungibileFlow(false)`.
+     */
+    public function bancaNonRaggiungibileFlow(bool $acceso = true): void
+    {
+        $this->bancaNonRaggiungibile = $acceso;
+    }
+
+    /**
      * Il collegamento vivo di questa persona in questo workspace, o 404 `non_trovato` uguale a un id che non c'è.
      *
      * @param  array{persona: ?string, accesso: string, workspace: ?string}  $chi
@@ -2865,7 +2878,30 @@ trait Flow
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.in', ['attribute' => 'conferma']), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => '#/conferma']]);
         }
 
+        $this->revocaLeConnessioniFlow($workspace, $persona);
+
         return $this->cancellaIDatiDiFinanzeFlow($workspace, $persona);
+    }
+
+    /**
+     * Revoca presso la banca le connessioni della persona in questo workspace, anche archiviate (Revoche::dellaPersona), prima di cancellare: con lo scenario di `bancaNonRaggiungibileFlow()` acceso è
+     * `502` `banca_non_raggiungibile` e non è cambiato niente; altrimenti le connessioni se ne vanno, e una persona senza connessioni non vede differenza.
+     */
+    private function revocaLeConnessioniFlow(string $workspace, string $persona): void
+    {
+        $connessioni = array_keys(array_filter($this->flow['collegamenti'], fn (array $collegamento) => $collegamento['workspace'] === $workspace && $collegamento['persona'] === $persona));
+
+        if ($connessioni === []) {
+            return;
+        }
+
+        if ($this->bancaNonRaggiungibile) {
+            throw new Problema('banca_non_raggiungibile');
+        }
+
+        foreach ($connessioni as $id) {
+            unset($this->flow['collegamenti'][$id]);
+        }
     }
 
     /**
@@ -2882,6 +2918,12 @@ trait Flow
                 if ($riga[$colonna] === $persona) {
                     $trovati[$riga['workspace']] = true;
                 }
+            }
+        }
+
+        foreach ($this->flow['collegamenti'] as $collegamento) {
+            if ($collegamento['persona'] === $persona) {
+                $trovati[$collegamento['workspace']] = true;
             }
         }
 
