@@ -474,7 +474,7 @@ it('il conto del mese: le medie dei tre mesi interi, le fisse mensili, quanto me
     expect($comune->status())->toBe(200, $comune->body())
         ->and(array_keys($dati))->toBe(['visibilita', 'movimenti_fino_al', 'mesi_di_storico', 'nel_conto', 'entrate_al_mese', 'spese_ogni_mese', 'metti_da_parte', 'ti_restano'])
         ->and($dati['mesi_di_storico'])->toBe(3)
-        ->and($dati['nel_conto'])->toBe(['importo' => 100000, 'conti_senza_saldo' => 0])
+        ->and(Illuminate\Support\Arr::only($dati['nel_conto'], ['importo', 'conti_senza_saldo']))->toBe(['importo' => 100000, 'conti_senza_saldo' => 0])->and($dati['nel_conto']['andamento'])->toHaveCount(6)
         ->and($dati['entrate_al_mese'])->toBe(['importo' => 300000, 'origine' => 'rilevate', 'mesi' => 3])
         ->and($dati['spese_ogni_mese'])->toBe(['da_conti' => 10000, 'altre_spese_fisse' => 6000, 'totale' => 16000, 'mesi' => 3])
         ->and($dati['metti_da_parte']['importo'])->toBe(12000)->and($dati['metti_da_parte']['totale_scadenze'])->toBe(48000)
@@ -515,7 +515,32 @@ it('il conto del mese con meno di tre mesi di storico non ha medie (FL.19)', fun
     $dati = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data');
     expect($dati['mesi_di_storico'])->toBe(2)->and($dati['entrate_al_mese'])->toBe(['importo' => null, 'origine' => 'rilevate', 'mesi' => 2])
         ->and($dati['spese_ogni_mese'])->toBe(['da_conti' => null, 'altre_spese_fisse' => 0, 'totale' => null, 'mesi' => 2])
-        ->and($dati['nel_conto'])->toBe(['importo' => 0, 'conti_senza_saldo' => 1])->and($dati['ti_restano'])->toBeNull();
+        ->and(Illuminate\Support\Arr::only($dati['nel_conto'], ['importo', 'conti_senza_saldo']))->toBe(['importo' => 0, 'conti_senza_saldo' => 1])->and($dati['ti_restano'])->toBeNull();
+});
+
+it('il conto del mese: nel_conto.andamento ricostruisce il saldo di fine mese dai movimenti, null se un conto non si può ricostruire, 0 senza conti (#3817)', function () {
+    [, $gettoni] = studioConFinanze();
+    $oggi = Carbon\CarbonImmutable::now('Europe/Rome')->startOfDay();
+    $mese = fn (int $indietro) => $oggi->startOfMonth()->subMonthsNoOverflow($indietro);
+
+    $vuoto = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.nel_conto.andamento');
+    expect($vuoto)->toHaveCount(6)->and(array_column($vuoto, 'importo'))->toBe([0, 0, 0, 0, 0, 0])
+        ->and(array_column($vuoto, 'mese'))->toBe(array_map(fn (int $indietro) => $mese($indietro)->format('Y-m'), [5, 4, 3, 2, 1, 0]));
+
+    $conto = alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Uno', 'nome' => 'Casa', 'tipo' => 'corrente', 'visibilita' => 'comune', 'saldo' => 100000, 'saldo_il' => $mese(1)->endOfMonth()->format('Y-m-d')], $gettoni['anna'])->json('data');
+
+    foreach ([[5, 10000], [3, -2000], [1, -500]] as [$indietro, $importo]) {
+        alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => $mese($indietro)->addDays(4)->format('Y-m-d'), 'importo' => $importo, 'descrizione' => 'Prova'], $gettoni['anna']);
+    }
+
+    alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => $mese(0)->format('Y-m-d'), 'importo' => 700, 'descrizione' => 'Dopo il saldo'], $gettoni['anna']);
+
+    $andamento = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['bruno'])->json('data.nel_conto.andamento');
+    expect(array_column($andamento, 'importo'))->toBe([102500, 102500, 100500, 100500, 100000, 100700]);
+
+    // Un secondo conto senza saldo: ogni mese è null, mai la somma dei soli conti che ce l'hanno.
+    alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Due', 'nome' => 'Senza saldo', 'tipo' => 'corrente', 'visibilita' => 'comune'], $gettoni['anna']);
+    expect(array_column(alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.nel_conto.andamento'), 'importo'))->toBe([null, null, null, null, null, null]);
 });
 
 it('il conto dice il suo collegamento bancario: {id, stato} a chi l\'ha aperto, {stato} agli altri; il saldo di un conto collegato è 409 saldo_dalla_banca (#4127)', function () {
@@ -551,4 +576,16 @@ it('saldo e saldo_il si mandano in coppia e non nel futuro: uno solo è 422 sul 
 
     expect(alFinto('PATCH', "/v1/flow/conti/{$conto['id']}", ['saldo' => 7, 'saldo_il' => now('Europe/Rome')->toDateString()], $gettoni['anna'])->json('data.saldo'))->toBe(7)
         ->and(alFinto('PATCH', "/v1/flow/conti/{$conto['id']}", ['saldo' => null, 'saldo_il' => null], $gettoni['anna'])->json('data.saldo'))->toBeNull();
+});
+
+it('il conto del mese: l\'ultimo punto di andamento vale il saldo di un conto senza movimenti, i mesi prima sono null (#3817, zr-pm 22/11)', function () {
+    [, $gettoni] = studioConFinanze();
+    $oggi = Carbon\CarbonImmutable::now('Europe/Rome')->startOfDay();
+    alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Uno', 'nome' => 'Casa', 'tipo' => 'corrente', 'visibilita' => 'comune', 'saldo' => 5000, 'saldo_il' => $oggi->format('Y-m-d')], $gettoni['anna']);
+
+    $conto = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.nel_conto');
+    expect(array_column($conto['andamento'], 'importo'))->toBe([null, null, null, null, null, 5000])->and($conto['andamento'][5]['importo'])->toBe($conto['importo']);
+
+    alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Due', 'nome' => 'Senza saldo', 'tipo' => 'corrente', 'visibilita' => 'comune'], $gettoni['anna']);
+    expect(alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.nel_conto.andamento.5.importo'))->toBeNull();
 });

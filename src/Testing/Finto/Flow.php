@@ -1754,12 +1754,64 @@ trait Flow
             'nel_conto' => [
                 'importo' => (int) array_sum(array_filter(array_column($conti, 'saldo'), fn (mixed $saldo) => $saldo !== null)),
                 'conti_senza_saldo' => count(array_filter($conti, fn (array $conto) => $conto['saldo'] === null)),
+                'andamento' => $this->andamentoNelContoFlow($conti, $this->movimentiBilancioFlow($chi, $vista), $oggi),
             ],
             'entrate_al_mese' => $entrate,
             'spese_ogni_mese' => ['da_conti' => $daConti, 'altre_spese_fisse' => $mensili, 'totale' => $totale, 'mesi' => min(3, $mesi)],
             'metti_da_parte' => $daParte,
             'ti_restano' => $entrate['importo'] === null || $totale === null ? null : $entrate['importo'] - $totale - $daParte['importo'],
         ]]];
+    }
+
+    /**
+     * `nel_conto.andamento` (App\Flow\Bilancio::andamento, #3817): il saldo dei conti della vista a fine di ognuno degli ultimi sei mesi di Roma, dal più vecchio al mese in corso (a oggi). Si ricostruisce dal `saldo`
+     * di ogni conto, che vale alla sua `saldo_il`: si tolgono i movimenti dopo la fine del mese fino a `saldo_il`, o si aggiungono quelli dopo `saldo_il` fino alla fine del mese. Contano i movimenti vivi, esclusi
+     * compresi. `importo` è null se anche un solo conto non ha `saldo`, `saldo_il` o movimenti fino a quella data (il mese in corso vale il `saldo` per un conto che ne ha uno e non ha movimenti); 0 senza conti.
+     *
+     * @param  array<string, array<string, mixed>>  $conti
+     * @param  list<array<string, mixed>>  $movimenti
+     * @return list<array{mese: string, importo: int|null}>
+     */
+    private function andamentoNelContoFlow(array $conti, array $movimenti, CarbonImmutable $oggi): array
+    {
+        $andamento = [];
+
+        for ($indietro = 5; $indietro >= 0; $indietro--) {
+            $primo = $oggi->startOfMonth()->subMonthsNoOverflow($indietro);
+            $fine = $indietro === 0 ? $oggi->format('Y-m-d') : $primo->endOfMonth()->format('Y-m-d');
+            $somma = 0;
+
+            foreach ($conti as $id => $conto) {
+                $suoi = array_filter($movimenti, fn (array $movimento) => $movimento['conto'] === $id);
+
+                if ($conto['saldo'] === null) {
+                    $somma = null;
+
+                    break;
+                }
+
+                if ($conto['saldo_il'] === null || array_filter($suoi, fn (array $movimento) => $movimento['data'] <= $fine) === []) {
+                    if ($indietro !== 0) {
+                        $somma = null;
+
+                        break;
+                    }
+
+                    $somma += (int) $conto['saldo'];      // il mese in corso non contraddice il numero grande (zr-pm 22/11)
+
+                    continue;
+                }
+
+                $saldoIl = (string) $conto['saldo_il'];
+                $somma += $fine < $saldoIl
+                    ? (int) $conto['saldo'] - array_sum(array_column(array_filter($suoi, fn (array $movimento) => $movimento['data'] > $fine && $movimento['data'] <= $saldoIl), 'importo'))
+                    : (int) $conto['saldo'] + array_sum(array_column(array_filter($suoi, fn (array $movimento) => $movimento['data'] > $saldoIl && $movimento['data'] <= $fine), 'importo'));
+            }
+
+            $andamento[] = ['mese' => $primo->format('Y-m'), 'importo' => $somma];
+        }
+
+        return $andamento;
     }
 
     /**
