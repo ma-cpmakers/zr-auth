@@ -633,6 +633,46 @@ trait Flow
     }
 
     /**
+     * flow.movimenti.totali.mostra (MovimentiController::totaliMostra, Movimenti::totali): le entrate e le uscite di tutti i movimenti della vista che i filtri lasciano (`visibilita` obbligatoria, `conto`,
+     * `categoria`, `da`, `a`), senza pagina; `escluso`, `escluso_origine`, `limite`, `cursore` e ogni altro parametro sono 422 `campo_estraneo`. Un movimento escluso o di una categoria di trasferimento non
+     * entra in entrate e uscite ma in `esclusi`; gli importi sono in centesimi e tutti positivi. Un `conto` che chi chiama non vede è 404.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function totaliMovimentiFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $grezzi = self::query($richiesta);
+        $filtri = ['visibilita', 'conto', 'categoria', 'da', 'a'];
+        $this->testi->validaQuery($grezzi, array_diff_key($this->regoleDeiFiltriFlow(false), ['escluso' => 1, 'escluso_origine' => 1]) + $this->estraneiFlow($grezzi, $filtri));
+
+        $trasferimenti = array_column(array_filter(FlowCategorie::TUTTE, fn (array $categoria) => $categoria['tipo'] === 'trasferimento'), 'id');
+        $totali = ['entrate' => 0, 'uscite' => 0, 'esclusi' => ['numero' => 0, 'entrate' => 0, 'uscite' => 0]];
+
+        foreach ($this->movimentiDellaVistaFlow($chi, [
+            'visibilita' => (string) $grezzi['visibilita'], 'conto' => $grezzi['conto'] ?? null, 'categoria' => $grezzi['categoria'] ?? null, 'da' => $grezzi['da'] ?? null, 'a' => $grezzi['a'] ?? null,
+            'escluso' => null, 'escluso_origine' => null,
+        ], null) as $voce) {
+            $importo = (int) $voce['importo'];
+            $conta = ! $voce['escluso'] && ! in_array($voce['categoria_id'], $trasferimenti, true);
+
+            if ($conta) {
+                $totali[$importo > 0 ? 'entrate' : 'uscite'] += abs($importo);
+
+                continue;
+            }
+
+            $totali['esclusi']['numero']++;
+
+            if ($importo !== 0) {
+                $totali['esclusi'][$importo > 0 ? 'entrate' : 'uscite'] += abs($importo);
+            }
+        }
+
+        return [200, ['data' => $totali]];
+    }
+
+    /**
      * flow.movimenti.ricerca.crea (MovimentiController::ricercaCrea): lo stesso elenco con il testo cercato (`q`, da 2 a 100 caratteri) nel corpo di un POST, mai nell'URL. «Contiene», senza maiuscole né
      * accenti, nella descrizione e nella nota. Risponde 200, perché non crea niente. Un `q` nella query è 422 `campo_estraneo` sul parametro; un `q` che normalizzato è vuoto 422 su `#/q`.
      *
