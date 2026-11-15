@@ -105,6 +105,7 @@ final class Problema extends RuntimeException
         'personalizzazione_con_dati' => 409,
         'pacchetto_gia_installato' => 409,
         'conto_con_caricamenti_di_altri' => 409,
+        'conto_senza_titolare' => 409,
         'persona_anonimizzata' => 409,
         'annullamento_scaduto' => 409,
         'unione_non_valida' => 409,

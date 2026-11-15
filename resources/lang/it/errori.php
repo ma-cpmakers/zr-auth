@@ -525,6 +525,10 @@ return [
         'title' => 'Conto con caricamenti di altri',
         'detail' => 'Il conto è comune e ha dei caricamenti di altre persone: se diventasse personale sparirebbe alla vista di chi lo usa, e i loro dati resterebbero in un conto che non possono più aprire. Il conto non è cambiato. Lascialo comune, o crea un conto personale nuovo per i tuoi movimenti.',
     ],
+    'conto_senza_titolare' => [
+        'title' => 'Conto senza titolare',
+        'detail' => 'Il conto è comune e non ha un titolare (la persona che lo aveva ha chiesto la cancellazione dei suoi dati di Finanze): proprietario e amministratori lo gestiscono, ma non lo rendono personale, perché sparirebbe alla vista di chi lo usa. Il conto non è cambiato. Lascialo comune.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Accettazione richiesta',
         'detail' => 'Per usare Zeiras devi accettare l\'informativa sulla privacy e i termini d\'uso nella versione in vigore. Il problema porta accanto al codice `mancanti`, i documenti da accettare: accettali con legale.accettazioni.crea (li elenca legale.documenti.elenca) e ripeti la richiesta.',

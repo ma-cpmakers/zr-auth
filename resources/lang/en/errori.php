@@ -525,6 +525,10 @@ return [
         'title' => 'Account with uploads from others',
         'detail' => 'The account is shared and has uploads from other people: if it became personal it would disappear for the people who use it, and their data would stay in an account they can no longer open. The account has not changed. Leave it shared, or create a new personal account for your transactions.',
     ],
+    'conto_senza_titolare' => [
+        'title' => 'Account without an owner',
+        'detail' => 'The account is shared and has no owner (the person who had it asked for their Finance data to be deleted): the workspace owner and admins manage it, but they cannot make it personal, because it would disappear for the people who use it. The account has not changed. Leave it shared.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Acceptance required',
         'detail' => 'To use Zeiras you must accept the privacy notice and the terms of use in their current version. The problem carries `mancanti` next to the code, the documents still to accept: accept them with legale.accettazioni.crea (legale.documenti.elenca lists them) and repeat the request.',
