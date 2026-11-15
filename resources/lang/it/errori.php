@@ -521,6 +521,10 @@ return [
         'title' => 'Pacchetto già installato',
         'detail' => 'Nel CRM di questo workspace è già stato installato un pacchetto di personalizzazione, anche «generico», e non se ne installa un altro. Il metodo non ha scritto niente. `crm.personalizzazione.mostra` dice quale è e quando è stato installato.',
     ],
+    'conto_con_caricamenti_di_altri' => [
+        'title' => 'Conto con caricamenti di altri',
+        'detail' => 'Il conto è comune e ha dei caricamenti di altre persone: se diventasse personale sparirebbe alla vista di chi lo usa, e i loro dati resterebbero in un conto che non possono più aprire. Il conto non è cambiato. Lascialo comune, o crea un conto personale nuovo per i tuoi movimenti.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Accettazione richiesta',
         'detail' => 'Per usare Zeiras devi accettare l\'informativa sulla privacy e i termini d\'uso nella versione in vigore. Il problema porta accanto al codice `mancanti`, i documenti da accettare: accettali con legale.accettazioni.crea (li elenca legale.documenti.elenca) e ripeti la richiesta.',
