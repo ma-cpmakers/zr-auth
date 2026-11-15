@@ -2618,7 +2618,7 @@ trait Flow
     /**
      * io.finanze.cancellazione.crea (IoFinanzeController::cancellazioneCrea): la stessa cancellazione di `flow.cancellazioni.crea`, col gettone dell'accesso, in un workspace dove la persona è stata membro,
      * ora o in passato. Nell'ordine del backoffice: il gettone (403 `gettone_con_workspace`), il freno (5 all'ora), il corpo (422 su `#/conferma`), poi un workspace dove non è mai stata membro o che non c'è
-     * (404 `non_trovato`, lo stesso), poi la conferma. Accetta `Idempotency-Key`.
+     * (404 `non_trovato`, lo stesso) o dove non ha più dati di Finanze, poi la conferma. Accetta `Idempotency-Key`.
      *
      * @param  array<mixed>  $corpo
      * @return array{int, array<string, mixed>, array<string, string>}
@@ -2634,7 +2634,8 @@ trait Flow
             $this->frena('freni:io.finanze.cancellazione.crea:'.$persona, self::FRENI['io_finanze_cancellazione_per_persona'], self::ORA);
             $this->testi->validaCorpo($corpo, ['conferma' => ['bail', 'required', 'string', 'max:255']]);
 
-            if (! isset($this->workspace[$workspace]) || ! (isset($this->membri[$workspace][$persona]) || isset($this->flowEx[$workspace][$persona]))) {
+            // Dove è stata membro e dove ha ancora dati di Finanze (Cancellazione::workspaceDi): un ex membro senza più niente lì è 404, come un workspace che non c'è.
+            if (! isset($this->workspace[$workspace]) || ! (isset($this->membri[$workspace][$persona]) || isset($this->flowEx[$workspace][$persona])) || ! in_array($workspace, $this->workspaceConDatiFlow($persona), true)) {
                 throw new Problema('non_trovato');
             }
 
