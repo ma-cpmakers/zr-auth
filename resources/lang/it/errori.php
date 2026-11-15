@@ -522,8 +522,8 @@ return [
         'detail' => 'Nel CRM di questo workspace è già stato installato un pacchetto di personalizzazione, anche «generico», e non se ne installa un altro. Il metodo non ha scritto niente. `crm.personalizzazione.mostra` dice quale è e quando è stato installato.',
     ],
     'conto_con_caricamenti_di_altri' => [
-        'title' => 'Conto con caricamenti di altri',
-        'detail' => 'Il conto è comune e ha dei caricamenti di altre persone: se diventasse personale sparirebbe alla vista di chi lo usa, e i loro dati resterebbero in un conto che non possono più aprire. Il conto non è cambiato. Lascialo comune, o crea un conto personale nuovo per i tuoi movimenti.',
+        'title' => 'Conto con dati di altri',
+        'detail' => 'Il conto è comune e ha dei dati che non sono tuoi con certezza (caricamenti di altre persone, o movimenti scritti a mano, che non hanno un autore): se diventasse personale sparirebbe alla vista di chi lo usa, e i loro dati resterebbero in un conto che non possono più aprire. Il conto non è cambiato. Lascialo comune, o crea un conto personale nuovo per i tuoi movimenti.',
     ],
     'conto_senza_titolare' => [
         'title' => 'Conto senza titolare',
