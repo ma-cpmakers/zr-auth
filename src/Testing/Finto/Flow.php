@@ -36,7 +36,7 @@ trait Flow
     /** Il tetto dei collegamenti bancari vivi di una persona (Connessione::TETTO) e l'indirizzo che il finto dà alla banca. */
     private const FLOW_COLLEGAMENTI_TETTO = 5;
 
-    private const FLOW_COLLEGAMENTO_URL = 'https://www.saltedge.com/connect?token=finto';
+    private const FLOW_COLLEGAMENTO_URL = 'https://www.saltedge.com/connect?sessione=finto';
 
     private const FLOW_RICORRENTI_TIPI = ['fissa', 'bolletta', 'abitudine', 'stagionale'];
 
