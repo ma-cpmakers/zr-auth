@@ -33,6 +33,11 @@ trait Flow
 
     private const FLOW_FISSE_TETTO = 100;
 
+    /** Il tetto dei collegamenti bancari vivi di una persona (Connessione::TETTO) e l'indirizzo che il finto dà alla banca. */
+    private const FLOW_COLLEGAMENTI_TETTO = 5;
+
+    private const FLOW_COLLEGAMENTO_URL = 'https://www.saltedge.com/connect?sessione=finto';
+
     private const FLOW_RICORRENTI_TIPI = ['fissa', 'bolletta', 'abitudine', 'stagionale'];
 
     private const FLOW_RICORRENTI_STATI = ['attiva', 'nascosta'];
@@ -58,7 +63,10 @@ trait Flow
     private const FLOW_DESCRIZIONE = 500;
 
     /** @var array{avvisi: array<string, array<string, mixed>>, avvisiStati: array<string, array<string, string>>, avvisiSilenzi: array<string, true>, conti: array<string, array<string, mixed>>, importazioni: array<string, array<string, mixed>>, movimenti: array<string, array<string, mixed>>, regole: array<string, array<string, mixed>>, fisse: array<string, array<string, mixed>>, correzioni: array<string, int|null>} */
-    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'correzioni' => [], 'nascoste' => [], 'avvisi' => [], 'avvisiStati' => [], 'avvisiSilenzi' => []];
+    private array $flow = ['conti' => [], 'importazioni' => [], 'movimenti' => [], 'regole' => [], 'fisse' => [], 'collegamenti' => [], 'correzioni' => [], 'nascoste' => [], 'avvisi' => [], 'avvisiStati' => [], 'avvisiSilenzi' => []];
+
+    /** Lo scenario di `bancaNonRaggiungibileFlow()`: Salt Edge non risponde alla revoca di una cancellazione di Finanze. */
+    private bool $bancaNonRaggiungibile = false;
 
     /** @var array<string, array<string, true>> chi è stato membro di un workspace e ne è uscito (workspace => persona => true): il diritto alla cancellazione dei dati di Finanze non finisce con l'uscita (#3597) */
     private array $flowEx = [];
@@ -1336,6 +1344,197 @@ trait Flow
             'prima_data' => $fissa['prima_data'],
             'creata_da' => ['id' => $fissa['creata_da'], 'nome' => $this->nomeFlow($fissa['workspace'], $fissa['creata_da'])],
             'creata_il' => self::iso($fissa['creata_il']),
+        ];
+    }
+
+    // ———————————————————————————————————————— Il collegamento bancario
+
+    /**
+     * flow.collegamenti.elenca (CollegamentiController::elenca): i collegamenti vivi di chi chiama in questo workspace, dal più vecchio, senza cursore (al più cinque). Mai l'id di Salt Edge.
+     *
+     * @return array{int, array<string, mixed>}
+     */
+    private function elencaCollegamentiFlow(Request $richiesta): array
+    {
+        $chi = $this->conFlow($richiesta);
+
+        return [200, ['data' => array_values(array_map(
+            fn (array $collegamento) => $this->voceCollegamentoFlow($collegamento),
+            array_filter($this->flow['collegamenti'], fn (array $collegamento) => ! $collegamento['archiviato'] && $collegamento['workspace'] === $chi['workspace'] && $collegamento['persona'] === $chi['persona']),
+        ))], []];
+    }
+
+    /**
+     * flow.collegamenti.crea (CollegamentiController::crea): apre la sessione di collegamento. 201 con il collegamento `in_attesa`, l'`url` della banca e `url_scade_il`; niente nel corpo (422 `campo_estraneo` se c'è). Il sesto
+     * collegamento vivo della persona, in ogni suo workspace, è 409 `limite_raggiunto`. Il freno si conta prima del corpo. Accetta Idempotency-Key.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaCollegamentoFlow(Request $richiesta, array $corpo): array
+    {
+        $chi = $this->conFlow($richiesta);
+
+        return $this->conIdempotenza($richiesta, 'flow.collegamenti.crea', $chi, $corpo, function () use ($chi, $corpo) {
+            $this->frena('freni:flow.collegamenti.crea:'.$chi['persona'], self::FRENI['flow_collegamenti_persona'], self::ORA);
+            $this->testi->validaCorpo($corpo, []);
+
+            if (count(array_filter($this->flow['collegamenti'], fn (array $collegamento) => ! $collegamento['archiviato'] && $collegamento['persona'] === $chi['persona'])) >= self::FLOW_COLLEGAMENTI_TETTO) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_COLLEGAMENTI_TETTO]);
+            }
+
+            $id = self::id();
+            $this->flow['collegamenti'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'archiviato' => false, 'stato' => 'in_attesa', 'banca' => null,
+                'ultima_sincronizzazione' => null, 'sincronizzabile_dal' => null, 'consenso_scade_il' => null, 'conti' => []];
+
+            return [201, ['data' => $this->voceCollegamentoFlow($this->flow['collegamenti'][$id]) + [
+                'url' => self::FLOW_COLLEGAMENTO_URL,
+                'url_scade_il' => self::istanteFlow()->addMinutes(30)->startOfSecond()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            ]], []];
+        });
+    }
+
+    /**
+     * flow.collegamenti.elimina (CollegamentiController::elimina): toglie il collegamento archiviandolo (204). Solo il proprio: quello di un'altra persona, di un altro workspace o già tolto è 404.
+     *
+     * @return array{int, null}
+     */
+    private function eliminaCollegamentoFlow(Request $richiesta, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $collegamento = $this->flow['collegamenti'][strtolower($id)] ?? null;
+
+        if ($collegamento === null || $collegamento['archiviato'] || $collegamento['workspace'] !== $chi['workspace'] || $collegamento['persona'] !== $chi['persona']) {
+            throw new Problema('non_trovato');
+        }
+
+        $this->flow['collegamenti'][$collegamento['id']]['archiviato'] = true;
+
+        return [204, null];
+    }
+
+    /**
+     * flow.collegamenti.sincronizzazioni.crea (CollegamentiController::sincronizzazioniCrea): la richiesta a mano. 202 col collegamento e `sincronizzabile_dal` (15 minuti
+     * dopo); prima di quell'ora 429 `troppe_richieste` con `Retry-After` e il membro `sincronizzabile_dal`. Solo un collegamento `attivo` (409 `transizione_non_valida`);
+     * il collegamento di un'altra persona, di un altro workspace o già tolto è 404. Il freno per persona si conta prima del corpo (422 `campo_estraneo`).
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function creaSincronizzazioneFlow(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $collegamento = $this->collegamentoFlowDi($chi, $id);
+        $this->frena('freni:flow.collegamenti.sincronizzazioni.crea:'.$chi['persona'], self::FRENI['flow_sincronizzazioni_persona'], self::ORA);
+        $this->testi->validaCorpo($corpo, []);
+
+        if ($collegamento['stato'] !== 'attivo') {
+            throw new Problema('transizione_non_valida');
+        }
+
+        $adesso = self::istanteFlow()->startOfSecond();
+        $dal = $collegamento['sincronizzabile_dal'];
+
+        if ($dal !== null && $dal > $adesso) {
+            throw new Problema('troppe_richieste', header: ['Retry-After' => (string) max(1, (int) ceil($adesso->diffInSeconds($dal, true)))], estensioni: ['sincronizzabile_dal' => self::iso($dal)]);
+        }
+
+        $this->flow['collegamenti'][$collegamento['id']]['sincronizzabile_dal'] = $adesso->addMinutes(15);
+
+        return [202, ['data' => $this->voceCollegamentoFlow($this->flow['collegamenti'][$collegamento['id']])]];
+    }
+
+    /**
+     * flow.collegamenti.rinnovo.crea (CollegamentiController::rinnovoCrea): una nuova sessione per lo stesso collegamento. 201 col collegamento, l'`url` e `url_scade_il`; solo un
+     * collegamento `da_rinnovare` (409 `transizione_non_valida`); l'altrui o il tolto è 404. Accetta Idempotency-Key.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function creaRinnovoFlow(Request $richiesta, array $corpo, string $id): array
+    {
+        $chi = $this->conFlow($richiesta);
+        $collegamento = $this->collegamentoFlowDi($chi, $id);
+
+        return $this->conIdempotenza($richiesta, 'flow.collegamenti.rinnovo.crea', $chi, ['corpo' => $corpo, 'percorso' => ['collegamento' => $collegamento['id']]], function () use ($chi, $corpo, $collegamento) {
+            $this->frena('freni:flow.collegamenti.rinnovo.crea:'.$chi['persona'], self::FRENI['flow_rinnovi_persona'], self::ORA);
+            $this->testi->validaCorpo($corpo, []);
+
+            if ($collegamento['stato'] !== 'da_rinnovare') {
+                throw new Problema('transizione_non_valida');
+            }
+
+            return [201, ['data' => $this->voceCollegamentoFlow($collegamento) + [
+                'url' => self::FLOW_COLLEGAMENTO_URL,
+                'url_scade_il' => self::istanteFlow()->addMinutes(30)->startOfSecond()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            ]], []];
+        });
+    }
+
+    /**
+     * Cambia i campi di un collegamento perché una prova lo veda com'è dopo l'avviso di Salt Edge: `stato` (`in_attesa`, `attivo`, `da_rinnovare`, `errore`), `banca`,
+     * `ultima_sincronizzazione`, `sincronizzabile_dal`, `consenso_scade_il` (istanti) e `conti` (lista di `{id, nome}`). Nel backoffice li cambiano gli avvisi e la lettura.
+     *
+     * @param  array<string, mixed>  $campi
+     */
+    public function impostaCollegamentoFlow(string $id, array $campi): void
+    {
+        $id = strtolower($id);
+
+        if (! isset($this->flow['collegamenti'][$id])) {
+            throw new InvalidArgumentException("Nessun collegamento bancario {$id} nel finto.");
+        }
+
+        foreach (array_intersect_key($campi, array_flip(['stato', 'banca', 'ultima_sincronizzazione', 'sincronizzabile_dal', 'consenso_scade_il', 'conti'])) as $nome => $valore) {
+            $this->flow['collegamenti'][$id][$nome] = $valore;
+        }
+    }
+
+    /**
+     * Lo scenario «Salt Edge non risponde»: finché è acceso, `flow.cancellazioni.crea` e `io.finanze.cancellazione.crea` di una persona che ha un collegamento bancario in quel workspace (anche
+     * archiviato) sono `502` `banca_non_raggiungibile` e non cancellano niente, come nel backoffice, che revoca presso la banca prima di toccare i dati. Senza collegamenti la cancellazione riesce
+     * lo stesso. Si spegne con `bancaNonRaggiungibileFlow(false)`.
+     */
+    public function bancaNonRaggiungibileFlow(bool $acceso = true): void
+    {
+        $this->bancaNonRaggiungibile = $acceso;
+    }
+
+    /**
+     * Il collegamento vivo di questa persona in questo workspace, o 404 `non_trovato` uguale a un id che non c'è.
+     *
+     * @param  array{persona: ?string, accesso: string, workspace: ?string}  $chi
+     * @return array<string, mixed>
+     */
+    private function collegamentoFlowDi(array $chi, string $id): array
+    {
+        $collegamento = $this->flow['collegamenti'][strtolower($id)] ?? null;
+
+        if ($collegamento === null || $collegamento['archiviato'] || $collegamento['workspace'] !== $chi['workspace'] || $collegamento['persona'] !== $chi['persona']) {
+            throw new Problema('non_trovato');
+        }
+
+        return $collegamento;
+    }
+
+    /**
+     * Lo schema CollegamentoBancario (Collegamenti::forma): un collegamento nuovo è `in_attesa` e senza conti, finché una prova non lo cambia con impostaCollegamentoFlow().
+     *
+     * @param  array<string, mixed>  $collegamento
+     * @return array<string, mixed>
+     */
+    private function voceCollegamentoFlow(array $collegamento): array
+    {
+        $iso = fn (mixed $quando) => $quando === null ? null : self::iso($quando instanceof CarbonImmutable ? $quando : CarbonImmutable::parse($quando));
+
+        return [
+            'id' => $collegamento['id'],
+            'banca' => $collegamento['banca'],
+            'stato' => $collegamento['stato'],
+            'ultima_sincronizzazione' => $iso($collegamento['ultima_sincronizzazione']),
+            'sincronizzabile_dal' => $iso($collegamento['sincronizzabile_dal']),
+            'consenso_scade_il' => $iso($collegamento['consenso_scade_il']),
+            'conti' => $collegamento['conti'],
         ];
     }
 
@@ -2679,7 +2878,30 @@ trait Flow
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('validation.in', ['attribute' => 'conferma']), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => '#/conferma']]);
         }
 
+        $this->revocaLeConnessioniFlow($workspace, $persona);
+
         return $this->cancellaIDatiDiFinanzeFlow($workspace, $persona);
+    }
+
+    /**
+     * Revoca presso la banca le connessioni della persona in questo workspace, anche archiviate (Revoche::dellaPersona), prima di cancellare: con lo scenario di `bancaNonRaggiungibileFlow()` acceso è
+     * `502` `banca_non_raggiungibile` e non è cambiato niente; altrimenti le connessioni se ne vanno, e una persona senza connessioni non vede differenza.
+     */
+    private function revocaLeConnessioniFlow(string $workspace, string $persona): void
+    {
+        $connessioni = array_keys(array_filter($this->flow['collegamenti'], fn (array $collegamento) => $collegamento['workspace'] === $workspace && $collegamento['persona'] === $persona));
+
+        if ($connessioni === []) {
+            return;
+        }
+
+        if ($this->bancaNonRaggiungibile) {
+            throw new Problema('banca_non_raggiungibile');
+        }
+
+        foreach ($connessioni as $id) {
+            unset($this->flow['collegamenti'][$id]);
+        }
     }
 
     /**
@@ -2696,6 +2918,12 @@ trait Flow
                 if ($riga[$colonna] === $persona) {
                     $trovati[$riga['workspace']] = true;
                 }
+            }
+        }
+
+        foreach ($this->flow['collegamenti'] as $collegamento) {
+            if ($collegamento['persona'] === $persona) {
+                $trovati[$collegamento['workspace']] = true;
             }
         }
 

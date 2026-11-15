@@ -599,7 +599,7 @@ return [
     ],
     'transizione_non_valida' => [
         'title' => 'Transición de estado no válida',
-        'detail' => 'El estado pedido no se alcanza desde el estado en que está ahora el recurso: en un tablero, de activo se pasa a cerrado, de cerrado a activo o a papelera, y de la papelera a cerrado. Una negociación se mueve entre fases solo si está abierta y no archivada.',
+        'detail' => 'El estado pedido no se alcanza desde el estado en que está ahora el recurso: en un tablero, de activo se pasa a cerrado, de cerrado a activo o a papelera, y de la papelera a cerrado. Una negociación se mueve entre fases solo si está abierta y no archivada. Una conexión bancaria solo se sincroniza si está activa, y solo se renueva si su consentimiento está por renovar.',
     ],
     'cursore_scaduto' => [
         'title' => 'Cursor caducado',
@@ -653,6 +653,10 @@ return [
     'programma_non_raggiungibile' => [
         'title' => 'Programa de facturación no accesible',
         'detail' => 'El programa de facturación no responde o ha rechazado la solicitud: inténtalo de nuevo en breve. El método no ha escrito nada.',
+    ],
+    'banca_non_raggiungibile' => [
+        'title' => 'Conexión bancaria no accesible',
+        'detail' => 'El servicio que conecta el banco no responde o ha rechazado la solicitud: inténtalo de nuevo en breve. El método no ha escrito nada.',
     ],
     'fatturazione_non_collegata' => [
         'title' => 'Facturación no vinculada',
