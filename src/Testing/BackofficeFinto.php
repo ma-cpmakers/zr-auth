@@ -3818,7 +3818,7 @@ final class BackofficeFinto
 
     /**
      * io.foto.modifica (IoFotoController::modifica, #2870): la foto della persona del gettone, `multipart/form-data` col solo campo `file`. Il finto non
-     * ridisegna l'immagine: controlla il peso (2 MB), il formato (JPEG, PNG o WebP dai primi byte) e, per un PNG, il lato (4000 px), e tiene l'impronta
+     * ridisegna l'immagine: controlla il peso (2 MB), il formato (JPEG, PNG o WebP dai primi byte) e, per un PNG, il lato (6000 px) e i pixel totali (25 milioni, #3806), e tiene l'impronta
      * del file; `200` con `aggiornata_il`, che cresce di almeno un millisecondo a ogni sostituzione. Un campo di testo in più è `campo_estraneo`.
      *
      * @return array{int, array<string, mixed>}
@@ -3877,7 +3877,7 @@ final class BackofficeFinto
 
     /**
      * Il primo rifiuto di un file di foto (FotoDellaPersona::riduci): più grande di 2 MB, di un formato che non è JPEG, PNG o WebP, o con un lato
-     * oltre 4000 px (letto solo da un PNG: il finto non apre un JPEG).
+     * oltre 6000 px o più di 25 milioni di pixel in tutto (letti solo da un PNG: il finto non apre un JPEG).
      *
      * @return array{detail: string, regola: string, pointer: string}|null
      */
@@ -3898,8 +3898,12 @@ final class BackofficeFinto
             /** @var array{larghezza: int, altezza: int} $lati */
             $lati = unpack('Nlarghezza/Naltezza', substr($file, 16, 8));
 
-            if ($lati['larghezza'] > 4000 || $lati['altezza'] > 4000) {
-                return ['detail' => $this->testi->testo('regole.foto_lato', ['lato' => 4000]), 'regola' => 'fuori_intervallo', 'pointer' => '#/file'];
+            if ($lati['larghezza'] > 6000 || $lati['altezza'] > 6000) {
+                return ['detail' => $this->testi->testo('regole.foto_lato', ['lato' => 6000]), 'regola' => 'fuori_intervallo', 'pointer' => '#/file'];
+            }
+
+            if ($lati['larghezza'] * $lati['altezza'] > 25_000_000) {
+                return ['detail' => $this->testi->testo('regole.immagine_pixel', ['megapixel' => 25.0]), 'regola' => 'fuori_intervallo', 'pointer' => '#/file'];
             }
         }
 

@@ -67,3 +67,17 @@ it('privacy.cancellazioni: trappola e compilato in fretta sono 202 senza codice;
 
     expect($quarta->status())->toBe(429)->and($quarta->json('codice'))->toBe('troppe_richieste');
 });
+
+it('privacy.cancellazioni.crea: `lingua` è facoltativa (it|en|es o null), un\'altra lingua è 422 su #/lingua, come nel vero (#3762)', function () {
+    $finto = BackofficeFinto::attiva();
+    $finto->persona('anna@example.com', PASSWORD);
+
+    // Un'email diversa per richiesta: il freno è per email (la quarta della stessa è 429).
+    foreach (['en', 'es', 'it', null] as $i => $lingua) {
+        expect(alFinto('POST', '/v1/privacy/cancellazioni', richiestaAlFinto("bruno{$i}@example.com", ['lingua' => $lingua]))->status())->toBe(202);
+    }
+
+    $rifiutata = alFinto('POST', '/v1/privacy/cancellazioni', richiestaAlFinto('anna@example.com', ['lingua' => 'fr']));
+
+    expect($rifiutata->status())->toBe(422)->and($rifiutata->json('errors.0.pointer'))->toBe('#/lingua');
+});
