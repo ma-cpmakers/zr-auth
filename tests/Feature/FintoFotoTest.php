@@ -135,6 +135,22 @@ it('immagine() rifiuta un tipo che non è un\'immagine, un file oltre il tetto e
         ->and(fn () => Api::persona()->immagine('/v1/io/foto/file?x=1'))->toThrow(InvalidArgumentException::class);
 });
 
+it('immagine() legge una copertina pesante quanto il backoffice può mandarla, con un margine fino a IMMAGINE_MASSIMA (zr-bookings, 503 sulla pagina pubblica)', function (int $peso) {
+    apriSessione(false);
+    $percorso = '/v1/bookings/pubblico/pagine/'.str_repeat('a', 26).'/copertina';
+
+    Illuminate\Support\Facades\Http::fake([API.'/*' => Illuminate\Support\Facades\Http::response(str_repeat('a', $peso), 200, ['Content-Type' => 'image/webp', 'ETag' => '"copertina"'])]);
+    $esito = Api::persona()->immagine($percorso);
+
+    expect(Api::IMMAGINE_MASSIMA)->toBeGreaterThan(1024 * 1024)
+        ->and($esito['stato'])->toBe(200)
+        ->and(strlen((string) $esito['corpo']))->toBe($peso)
+        ->and($esito['tipo'])->toBe('image/webp');
+})->with([
+    'la copertina più grande del backoffice: 1 MiB' => [1024 * 1024],
+    'il tetto del client' => [Api::IMMAGINE_MASSIMA],
+]);
+
 it('workspace.membri.elenca porta foto_aggiornata_il di ogni membro, e workspace.membri.foto.mostra dà il file ai tre ruoli (#2983, F1-F3)', function () {
     $finto = BackofficeFinto::attiva();
     $anna = $finto->persona('anna@example.com', PASSWORD, nome: 'Anna');

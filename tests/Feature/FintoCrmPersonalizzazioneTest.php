@@ -255,7 +255,7 @@ it('il pacchetto personal_trainer: l\'anteprima dice i nomi e le chiavi, e l\'in
         ->and($anteprima['catalogo_bozza'])->toHaveCount(9)->and($anteprima['catalogo_bozza'][8])->toBe('Lezione di prova')
         ->and($anteprima['tipi_scadenza'])->toBe(['Certificato medico', 'Fine abbonamento', 'Tesseramento', 'Pacchetto in scadenza'])
         ->and($anteprima['funzioni_attive'])->toBe(['clienti', 'pipeline', 'attivita', 'lead', 'catalogo', 'acquisti', 'incassi', 'scadenze', 'documenti'])
-        ->and($anteprima['barra'])->toBe(['dashboard', 'potenziali_clienti', 'clienti', 'da_fare', 'catalogo'])
+        ->and($anteprima['barra'])->toBe(['dashboard', 'potenziali_clienti', 'clienti', 'da_fare', 'catalogo', 'incassi', 'scadenze'])
         ->and($anteprima['primi_passi'])->toBe(['primo_prodotto', 'primi_clienti', 'primo_potenziale_cliente', 'prima_attivita'])
         ->and($anteprima['pipeline_dettaglio'][0])->toBe(['pipeline' => 'Potenziali clienti', 'nome' => 'Lead', 'probabilita' => 10, 'esempio' => ['titolo' => 'Lead', 'riga' => '10%']])
         ->and(array_column($anteprima['catalogo_dettaglio'], 'nome'))->toBe($anteprima['catalogo_bozza'])
@@ -335,4 +335,18 @@ it('una pipeline di partenza toccata (una fase rinominata) blocca; lo stesso nom
 
     expect(alFinto('GET', '/v1/crm/personalizzazione', null, $gettoni['anna'])->json('data.installabile'))->toBeFalse()
         ->and($toccata->status())->toBe(409)->and($toccata->json('codice'))->toBe('personalizzazione_con_dati');
+});
+
+it('#3549 la barra ha una voce per ogni funzione accesa, in ogni pacchetto, e nessuna per una funzione spenta (come il backoffice)', function () {
+    [, $gettoni] = studioColCrm();
+    expect(alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'personal_trainer'], $gettoni['anna'])->status())->toBe(201);
+    $barra = fn () => alFinto('GET', '/v1/crm/personalizzazione', null, $gettoni['anna'])->json('data.barra');
+
+    expect($barra())->toBe(['dashboard', 'potenziali_clienti', 'clienti', 'da_fare', 'catalogo', 'incassi', 'scadenze']);
+
+    alFinto('PATCH', '/v1/crm/funzioni/preventivi', ['attivo' => true], $gettoni['anna']);
+    expect($barra())->toBe(['dashboard', 'potenziali_clienti', 'clienti', 'da_fare', 'catalogo', 'preventivi', 'incassi', 'scadenze']);
+
+    alFinto('PATCH', '/v1/crm/funzioni/incassi', ['attivo' => false], $gettoni['anna']);
+    expect($barra())->toBe(['dashboard', 'potenziali_clienti', 'clienti', 'da_fare', 'catalogo', 'preventivi', 'scadenze']);
 });

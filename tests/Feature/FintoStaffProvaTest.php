@@ -164,6 +164,9 @@ it('staff.elenca: escludi toglie le persone dello staff solo_uat e ogni riga por
 it('impersonificazioni: escludi toglie le assistenze su persone o workspace di prova; altro è 422 sul parametro', function () {
     $m = mondoDiProva($this->finto);
 
+    // #3713: ogni riga dice se è di prova.
+    $righe = array_column(Api::staff($m['sara'])->get('/v1/staff/impersonificazioni')['data'], null, 'id');
+    expect($righe[$m['assistenzaVera']]['di_prova'])->toBeFalse()->and($righe[$m['assistenzaDiProva']]['di_prova'])->toBeTrue();
     expect(array_column(Api::staff($m['sara'])->get('/v1/staff/impersonificazioni')['data'], 'id'))->toEqualCanonicalizing([$m['assistenzaVera'], $m['assistenzaDiProva']])
         ->and(array_column(Api::staff($m['sara'])->get('/v1/staff/impersonificazioni', ['prova' => 'escludi'])['data'], 'id'))->toBe([$m['assistenzaVera']])
         ->and(array_column(Api::staff($m['sara'])->get('/v1/staff/impersonificazioni', ['prova' => 'includi'])['data'], 'id'))->toContain($m['assistenzaDiProva'])

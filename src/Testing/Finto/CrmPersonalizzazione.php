@@ -148,7 +148,7 @@ trait CrmPersonalizzazione
             'catalogo_bozza' => array_map(fn (array $voce) => $voce['nome'][$lingua], $pack['catalogo'] ?? []),
             'tipi_scadenza' => array_map(fn (array $tipo) => $tipo['nome'][$lingua], $pack['tipi_scadenza'] ?? []),
             'funzioni_attive' => $accese,
-            'barra' => array_keys(array_filter($pack['barra'], fn (?string $funzione) => $funzione === null || in_array($funzione, $accese, true))),
+            'barra' => $this->vociDellaBarraCrm($pack, $accese),
             'primi_passi' => array_keys(array_filter($pack['passi'], fn (array $passo) => in_array($passo['funzione'], $accese, true))),
             'pipeline_dettaglio' => $this->dettaglioDellePipelineCrm($pack, $lingua),
             'catalogo_dettaglio' => array_map(fn (array $voce) => ['nome' => $voce['nome'][$lingua], 'sottotitolo' => $this->sottotitoloCrm($voce, $lingua)], $pack['catalogo'] ?? []),
@@ -543,12 +543,31 @@ trait CrmPersonalizzazione
         return array_column(array_filter($this->funzioniCrm($workspace), fn (array $funzione) => $funzione['attivo']), 'chiave');
     }
 
-    /** @return list<string> le chiavi della barra, nell'ordine del pack, solo delle voci le cui funzioni sono accese */
+    /** @return list<string> le chiavi della barra: una voce per ogni funzione accesa, in ogni pack, più le voci senza funzione che il pack tiene (#3549) */
     private function barraCrm(string $workspace): array
     {
-        $accese = $this->acceseCrm($workspace);
+        return $this->vociDellaBarraCrm($this->packCrm($workspace), $this->acceseCrm($workspace));
+    }
 
-        return array_keys(array_filter($this->packCrm($workspace)['barra'], fn (?string $funzione) => $funzione === null || in_array($funzione, $accese, true)));
+    /**
+     * Personalizzazione::voci del backoffice (#3549): l'ordine e il legame fra una voce e la sua funzione sono quelli di «generico»; una voce con
+     * funzione c'è se e solo se la funzione è accesa, qualunque pack sia; una voce senza funzione resta a scelta del pack.
+     *
+     * @param  array<string, mixed>  $pack
+     * @param  list<string>  $accese
+     * @return list<string>
+     */
+    private function vociDellaBarraCrm(array $pack, array $accese): array
+    {
+        $voci = [];
+
+        foreach ($this->packLetturaCrm('generico')['pack']['barra'] as $voce => $funzione) {
+            if ($funzione === null ? array_key_exists($voce, $pack['barra']) : in_array($funzione, $accese, true)) {
+                $voci[] = $voce;
+            }
+        }
+
+        return $voci;
     }
 
     /** Se «Benvenuto» si può ancora mostrare e il pack installare: nessuna installazione e nessun dato del CRM. */

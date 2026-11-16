@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 use RuntimeException;
 use Zeiras\Auth\Errori\SessioneNelBrowser;
+use Zeiras\Auth\Http\Middleware\RicordaLIdDellaSessione;
 
 /**
  * La sessione del frontend col gettone del backoffice. Il gettone sta solo qui, nella sessione lato server (il Redis del
@@ -453,7 +454,10 @@ final class Sessione
         $cache = Cache::store(config('session.block_store'));
         $richiesta = request();
 
-        if (! $cache->add($chiave, true, max(1, (int) config('zr-auth.sessione_chiusa_secondi', 300)))) {
+        // Il segno porta il solo booleano «la persona è un'identità di prova» (#3709): una richiesta che arriva a sessione già chiusa
+        // trova la sessione vuota, e senza questo la sua riga di log direbbe `prova: false` anche per un'identità di prova.
+        // Nessuna email, nessun id della persona.
+        if (! $cache->add($chiave, ['prova' => RicordaLIdDellaSessione::personaDiProva()], max(1, (int) config('zr-auth.sessione_chiusa_secondi', 300)))) {
             // `add` non scrive se il segno c'è già (chiusa da un'altra richiesta: questa è tardiva, e SessioneChiusa non lascerà
             // uscire il suo cookie, qualunque cosa faccia) e torna falso anche se la cache rifiuta la scrittura (il cambio non avviene).
             if (! $cache->has($chiave)) {
@@ -477,6 +481,17 @@ final class Sessione
     public static function eChiusa(string $id): bool
     {
         return Cache::store(config('session.block_store'))->has(self::chiave($id));
+    }
+
+    /**
+     * Vero se la sessione con questo id è stata chiusa mentre la sua persona era un'identità di prova (#3709). Un segno scritto da una
+     * versione precedente (il solo `true`) non lo dice: falso.
+     */
+    public static function chiusaDiProva(string $id): bool
+    {
+        $segno = Cache::store(config('session.block_store'))->get(self::chiave($id));
+
+        return is_array($segno) && ($segno['prova'] ?? false) === true;
     }
 
     /** @return array{accesso: ?string, gettoni: array<string, string>, scade_il: string, utente: ?array<string, mixed>, workspace: ?array<string, mixed>, ruolo: ?string, ospite?: array{prenotazione_id: string}, cliente?: true}|null */
