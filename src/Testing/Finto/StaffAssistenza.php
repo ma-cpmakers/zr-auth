@@ -146,10 +146,10 @@ trait StaffAssistenza
         foreach ($this->assistenze as $id => $assistenza) {
             $aperta = $assistenza['fine'] === null && $assistenza['scade']->gt($adesso);
 
-            // `prova=escludi` (#3574): via le assistenze su una persona o su un workspace di prova.
-            $diProva = $this->escludiLaProva($query) && ($this->personaDiProva($assistenza['utente']) || $this->workspaceDiProva($assistenza['workspace']));
+            // `di_prova` (#3713): la persona assistita o il workspace dell'assistenza è di prova. `prova=escludi` (#3574) toglie queste righe.
+            $diProva = $this->personaDiProva($assistenza['utente']) || $this->workspaceDiProva($assistenza['workspace']);
 
-            if (($stato === 'aperte' && ! $aperta) || ($stato === 'chiuse' && $aperta) || ($chi['solo_uat'] && ! $this->proprietarioDiProva($assistenza['workspace'])) || $diProva) {
+            if (($stato === 'aperte' && ! $aperta) || ($stato === 'chiuse' && $aperta) || ($chi['solo_uat'] && ! $this->proprietarioDiProva($assistenza['workspace'])) || ($diProva && $this->escludiLaProva($query))) {
                 continue;
             }
 
@@ -160,7 +160,11 @@ trait StaffAssistenza
                 'staff' => ['nome' => $staff === null ? null : ($this->persone[$staff['utente_id']]['nome'] ?? null), 'cognome' => $staff === null ? null : ($this->persone[$staff['utente_id']]['cognome'] ?? null)],
                 'utente' => ['id' => $assistenza['utente'], 'nome' => $persona['nome'] ?? null, 'cognome' => $persona['cognome'] ?? null],
                 'app' => $assistenza['app'],
+                // Inizio e fine (#3725): `fine` è null finché l'assistenza è aperta (anche una scaduta che il comando di chiusura non ha ancora chiusa, come nel vero).
+                'inizio' => self::iso($assistenza['inizio']),
+                'fine' => $assistenza['fine'] === null ? null : self::iso($assistenza['fine']),
                 'scade_il' => self::iso($assistenza['scade']),
+                'di_prova' => $diProva,
             ];
         }
 

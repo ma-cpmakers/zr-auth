@@ -46,8 +46,11 @@ final class Api
     /** I tipi di un'immagine di `immagine()` (#2870). */
     public const IMMAGINI = ['image/webp', 'image/jpeg', 'image/png'];
 
-    /** Il peso massimo di un'immagine di `immagine()`, in byte: sta in memoria, quindi un tetto (la foto della persona è al più 512 KB). */
-    public const IMMAGINE_MASSIMA = 512 * 1024;
+    /**
+     * Il peso massimo di un'immagine di `immagine()`, in byte: sta in memoria, quindi un tetto. Il backoffice dopo la riduzione manda al più 1 MiB per la copertina
+     * di una pagina, 512 KB per la foto della persona e 256 KB per il logo (#3360): il tetto è il doppio del più grande, con un margine.
+     */
+    public const IMMAGINE_MASSIMA = 2 * 1024 * 1024;
 
     /** I codici di un 401 che non dicono «il gettone non vale»: il client non chiude la sessione, li dà come ErroreApi. */
     private const UNAUTORIZZATI_CHE_NON_SONO_IL_GETTONE = ['cliente_non_riconosciuto', 'secondo_fattore_non_valido', 'invito_non_valido'];

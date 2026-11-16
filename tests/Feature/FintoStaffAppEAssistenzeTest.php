@@ -98,9 +98,12 @@ it('le assistenze: aperte di base, dal più recente, i soli campi dichiarati; ch
     $riga = $aperte['data'][0];
 
     expect(array_column($aperte['data'], 'id'))->toBe([$seconda])
-        ->and(array_keys($riga))->toBe(['id', 'staff', 'utente', 'app', 'scade_il'])
+        ->and(array_keys($riga))->toBe(['id', 'staff', 'utente', 'app', 'inizio', 'fine', 'scade_il', 'di_prova'])
         ->and($riga['staff'])->toBe(['nome' => 'Sara', 'cognome' => null])->and($riga['utente'])->toBe(['id' => $anna['id'], 'nome' => 'Anna', 'cognome' => null])
         ->and($riga['app'])->toBe('pm')->and($riga['scade_il'])->toBe('2026-11-06T14:05:00.000Z')
+        // Inizio e fine (#3725): aperta, `fine` null; chiusa, l'istante della chiusura.
+        ->and($riga['inizio'])->toBe('2026-11-06T10:05:00.000Z')->and($riga['fine'])->toBeNull()
+        ->and(Api::staff($gettone)->get('/v1/staff/impersonificazioni', ['stato' => 'chiuse'])['data'][0])->toMatchArray(['id' => $prima, 'inizio' => '2026-11-06T10:00:00.000Z', 'fine' => '2026-11-06T10:05:00.000Z'])
         ->and(array_column(Api::staff($gettone)->get('/v1/staff/impersonificazioni', ['stato' => 'chiuse'])['data'], 'id'))->toBe([$prima])
         ->and(array_column(Api::staff($gettone)->get('/v1/staff/impersonificazioni', ['stato' => 'tutte'])['data'], 'id'))->toBe([$seconda, $prima])
         ->and(esitoAppEAssistenze(fn () => Api::staff($gettone)->get('/v1/staff/impersonificazioni', ['stato' => 'altre'])))->toBe([422, 'dati_non_validi'])

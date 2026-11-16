@@ -378,3 +378,68 @@ it('il README e la config dicono `prova` e i prefissi; la riga di log ha i soli 
         ->and($readme)->toContain('ZR_AUTH_PROVA_EMAIL')->toContain('zr-auth.prova.email`')
         ->and($config)->toContain('ZR_AUTH_PROVA_EMAIL')->not->toContain('castroandpartners');
 });
+
+/**
+ * La riga della risposta scartata di una richiesta che arriva a sessione già chiusa (#3709): la persona con quell'email entra, esce
+ * (due richieste: la seconda chiude la sessione), poi la richiesta col suo cookie di prima è tardiva e trova la sessione vuota.
+ *
+ * @return array{0: array<string, mixed>, 1: string}
+ */
+function contestoDiUnaRichiestaACessioneChiusa(string $email): array
+{
+    $cookie = cookieDellaSessione(test()->post('/entra-persona-email', ['email' => $email]));
+    $id = test()->withUnencryptedCookie(config('session.cookie'), $cookie)->get('/apri-sessione')->json('id');
+    test()->withUnencryptedCookie(config('session.cookie'), $cookie)->post('/esci-persona')->assertOk();
+    expect(Sessione::eChiusa($id))->toBeTrue();
+
+    $gestore = Illuminate\Support\Facades\Log::channel('prova')->getLogger()->getHandlers()[0];
+    $gestore->clear();
+
+    test()->withUnencryptedCookie(config('session.cookie'), $cookie)->get('/apri-sessione')->assertOk();
+
+    $righe = array_values(array_filter($gestore->getRecords(), fn ($riga) => str_contains($riga->message, 'scartata la risposta tardiva')));
+
+    expect($righe)->toHaveCount(1);
+
+    return [$righe[0]->context, $id];
+}
+
+// T1.1, T1.2 (#3709)
+it('una richiesta che arriva a sessione già chiusa dice `prova: true` per un\'identità di prova e `false` per una persona vera', function (string $email, bool $prova) {
+    [$contesto] = contestoDiUnaRichiestaACessioneChiusa($email);
+
+    expect($contesto)->toBe(['metodo' => 'GET', 'rotta' => 'apri-sessione', 'prova' => $prova])
+        ->and(json_encode($contesto))->not->toContain($email)->not->toContain('@');
+})->with([
+    'uat+' => ['uat+zr-backoffice-37-1@castroandpartners.com', true],
+    'uat-' => ['uat-board-3@lucianocastro.com', true],
+    'persona vera' => ['anna@example.com', false],
+]);
+
+it('l\'account condiviso di `zr-auth.prova.email` è di prova anche a sessione chiusa', function () {
+    config(['zr-auth.prova.email' => ['prova.condivisa@esempio.test']]);
+
+    expect(contestoDiUnaRichiestaACessioneChiusa('Prova.Condivisa@Esempio.test')[0]['prova'])->toBeTrue();
+});
+
+// T1.3 (#3709)
+it('il segno della sessione chiusa porta il solo booleano di prova: né l\'email né la persona, e dura quanto prima', function (string $email, bool $prova) {
+    [, $id] = contestoDiUnaRichiestaACessioneChiusa($email);
+    $cache = Cache::store(config('session.block_store'));
+    $segno = $cache->get('zr-auth:sessione-chiusa:'.hash('sha256', $id));
+
+    expect($segno)->toBe(['prova' => $prova])
+        ->and(json_encode($segno))->not->toContain('@')->not->toContain('anna')->not->toContain('uat')
+        ->and(Sessione::chiusaDiProva($id))->toBe($prova);
+
+    $this->travel(config('zr-auth.sessione_chiusa_secondi', 300) + 1)->seconds();
+
+    expect(Sessione::eChiusa($id))->toBeFalse()->and(Sessione::chiusaDiProva($id))->toBeFalse();
+})->with(['di prova' => ['uat+ada@example.com', true], 'vera' => ['anna@example.com', false]]);
+
+it('un segno scritto dalla versione di prima (il solo `true`) tiene chiusa la sessione ma non dice «di prova»', function () {
+    $cache = Cache::store(config('session.block_store'));
+    $cache->put('zr-auth:sessione-chiusa:'.hash('sha256', 'vecchio'), true, 60);
+
+    expect(Sessione::eChiusa('vecchio'))->toBeTrue()->and(Sessione::chiusaDiProva('vecchio'))->toBeFalse();
+});
