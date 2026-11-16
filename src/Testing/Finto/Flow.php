@@ -1365,7 +1365,8 @@ trait Flow
     }
 
     /**
-     * flow.collegamenti.crea (CollegamentiController::crea): apre la sessione di collegamento. 201 con il collegamento `in_attesa`, l'`url` della banca e `url_scade_il`; niente nel corpo (422 `campo_estraneo` se c'è). Il sesto
+     * flow.collegamenti.crea (CollegamentiController::crea): apre la sessione di collegamento. 201 con il collegamento `in_attesa`, l'`url` della banca e `url_scade_il`. Il corpo è facoltativo: `visibilita` (`comune`|`personale`, anche `null`) e
+     * `tipo_di_conto` (`personale`|`aziendale`, anche `null`); senza `visibilita` un conto `aziendale` è `comune`, ogni altro `personale` (#3915, #3916); ogni altro campo è 422 `campo_estraneo`. Il sesto
      * collegamento vivo della persona, in ogni suo workspace, è 409 `limite_raggiunto`. Il freno si conta prima del corpo. Accetta Idempotency-Key.
      *
      * @param  array<mixed>  $corpo
@@ -1377,7 +1378,10 @@ trait Flow
 
         return $this->conIdempotenza($richiesta, 'flow.collegamenti.crea', $chi, $corpo, function () use ($chi, $corpo) {
             $this->frena('freni:flow.collegamenti.crea:'.$chi['persona'], self::FRENI['flow_collegamenti_persona'], self::ORA);
-            $this->testi->validaCorpo($corpo, []);
+            $campi = $this->testi->validaCorpo($corpo, [
+                'visibilita' => ['bail', 'nullable', 'string', Rule::in(self::FLOW_VISIBILITA)],
+                'tipo_di_conto' => ['bail', 'nullable', 'string', Rule::in(['personale', 'aziendale'])],
+            ]);
 
             if (count(array_filter($this->flow['collegamenti'], fn (array $collegamento) => ! $collegamento['archiviato'] && $collegamento['persona'] === $chi['persona'])) >= self::FLOW_COLLEGAMENTI_TETTO) {
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_COLLEGAMENTI_TETTO]);
@@ -1385,6 +1389,7 @@ trait Flow
 
             $id = self::id();
             $this->flow['collegamenti'][$id] = ['id' => $id, 'workspace' => $chi['workspace'], 'persona' => $chi['persona'], 'archiviato' => false, 'stato' => 'in_attesa', 'banca' => null,
+                'tipo_di_conto' => $campi['tipo_di_conto'] ?? null, 'visibilita' => $campi['visibilita'] ?? (($campi['tipo_di_conto'] ?? null) === 'aziendale' ? 'comune' : 'personale'),
                 'ultima_sincronizzazione' => null, 'sincronizzabile_dal' => null, 'consenso_scade_il' => null, 'conti' => []];
 
             return [201, ['data' => $this->voceCollegamentoFlow($this->flow['collegamenti'][$id]) + [
@@ -1530,6 +1535,8 @@ trait Flow
         return [
             'id' => $collegamento['id'],
             'banca' => $collegamento['banca'],
+            'visibilita' => $collegamento['visibilita'] ?? 'personale',
+            'tipo_di_conto' => $collegamento['tipo_di_conto'] ?? null,
             'stato' => $collegamento['stato'],
             'ultima_sincronizzazione' => $iso($collegamento['ultima_sincronizzazione']),
             'sincronizzabile_dal' => $iso($collegamento['sincronizzabile_dal']),
