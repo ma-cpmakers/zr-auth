@@ -3125,11 +3125,14 @@ trait Crm
         ];
     }
 
-    /** @return array<string, mixed> lo schema Fase (Forme::fase): le senza valore si contano alla lettura */
+    /** @return array<string, mixed> lo schema Fase (Forme::fase): le senza valore e il valore ponderato (#3902) si contano alla lettura */
     private function voceFase(array $fase): array
     {
-        $senzaValore = count(array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $fase['id']
-            && $trattativa['stato'] === 'aperta' && $trattativa['archiviata_il'] === null && $trattativa['importo'] === null));
+        $aperte = array_filter($this->crm['trattative'], fn (array $trattativa) => $trattativa['fase_id'] === $fase['id']
+            && $trattativa['stato'] === 'aperta' && $trattativa['archiviata_il'] === null);
+        $senzaValore = count(array_filter($aperte, fn (array $trattativa) => $trattativa['importo'] === null));
+        // Come il backoffice: si somma importo × probabilità (quella della trattativa, o della fase se è null: uno 0 detto vale 0) e si arrotonda una volta, al mezzo in su.
+        $ponderato = intdiv(array_sum(array_map(fn (array $trattativa) => $trattativa['importo'] * ($trattativa['probabilita'] ?? $fase['probabilita']), array_filter($aperte, fn (array $trattativa) => $trattativa['importo'] !== null))) + 50, 100);
 
         return [
             'id' => $fase['id'],
@@ -3138,6 +3141,7 @@ trait Crm
             'giorni_massimi' => $fase['giorni_massimi'],
             'trattative_aperte' => $fase['trattative_aperte'],
             'valore_aperto' => ['importo' => $fase['valore_aperto'], 'valuta' => $this->valutaCrm($fase['workspace'])],
+            'valore_ponderato' => ['importo' => $ponderato, 'valuta' => $this->valutaCrm($fase['workspace'])],
             'trattative_aperte_senza_valore' => $senzaValore,
         ];
     }
