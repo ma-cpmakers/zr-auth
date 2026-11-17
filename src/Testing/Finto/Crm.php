@@ -195,6 +195,9 @@ trait Crm
 
     private const CRM_STATI_TRATTATIVA = ['aperta', 'vinta', 'persa'];
 
+    /** I 12 toni della tavolozza «Colore della scheda» di zr-core, nell'ordine in cui li mostra (#3945): il nome, mai un esadecimale; `nessuno` solo nei filtri. */
+    private const CRM_COLORI_TRATTATIVA = ['rose', 'peach', 'sand', 'lemon', 'lime', 'mint', 'sage', 'aqua', 'azure', 'lavender', 'lilac', 'stone'];
+
     private const CRM_TIPI_ATTIVITA = ['chiamata', 'riunione', 'email', 'compito', 'messaggio'];
 
     /** I campi dell'indirizzo di un'azienda nell'ordine della risposta (Organizzazioni::INDIRIZZO). */
@@ -951,7 +954,7 @@ trait Crm
         $testo = fn (string $parametro) => isset($query[$parametro]) && is_string($query[$parametro]) && $query[$parametro] !== '' ? $query[$parametro] : null;
 
         return [
-            'pipeline' => self::idCrm($testo('pipeline_id')), 'fase' => self::idCrm($testo('fase_id')), 'stati' => self::vociCrm($testo('stato')),
+            'pipeline' => self::idCrm($testo('pipeline_id')), 'fase' => self::idCrm($testo('fase_id')), 'stati' => self::vociCrm($testo('stato')), 'colori' => self::vociCrm($testo('colore')),
             'responsabile' => self::idCrm($testo('responsabile_id')), 'persona' => self::idCrm($testo('persona_id')),
             'organizzazione' => self::idCrm($testo('organizzazione_id')), 'chiusa_dal' => $testo('chiusa_dal'),
             'ricerca' => null, 'id' => self::idDelFiltroCrm($testo('id')),
@@ -968,6 +971,7 @@ trait Crm
     {
         return [
             'id' => $this->regolaDelFiltroPerId(), 'stato' => $this->regolaDelleVociCrm('stato', self::CRM_STATI_TRATTATIVA),
+            'colore' => $this->regolaDelleVociCrm('colore', [...self::CRM_COLORI_TRATTATIVA, 'nessuno']),
             ...array_map(fn (array $regole) => ['sometimes', ...$regole], $this->regoleDegliIdDelleTrattative($workspace)),
             'chiusa_dal' => ['sometimes', 'string', 'date_format:Y-m-d'],
             ...array_fill_keys(self::CRM_VIETATI['trattative'], ['prohibited']),
@@ -1074,7 +1078,15 @@ trait Crm
             ...match ($tipo) {
                 'persone' => ['responsabile_id' => ['nullable', 'string', 'max:64'], 'organizzazione_id' => ['nullable', 'string', 'max:64'], 'archiviati' => ['nullable', 'boolean:strict']],
                 'organizzazioni' => ['responsabile_id' => ['nullable', 'string', 'max:64'], 'archiviate' => ['nullable', 'boolean:strict']],
-                default => [...$this->regoleDegliIdDelleTrattative($chi['workspace']), 'chiusa_dal' => ['nullable', 'string', 'date_format:Y-m-d'], 'archiviate' => ['nullable', 'boolean:strict']],
+                default => [...$this->regoleDegliIdDelleTrattative($chi['workspace']), 'chiusa_dal' => ['nullable', 'string', 'date_format:Y-m-d'], 'archiviate' => ['nullable', 'boolean:strict'],
+                    'colore' => ['nullable', 'array', 'list', 'max:'.(count(self::CRM_COLORI_TRATTATIVA) + 1)],
+                    'colore.*' => ['bail', 'string', Rule::in([...self::CRM_COLORI_TRATTATIVA, 'nessuno']), function (string $campo, mixed $colore, Closure $fail) use ($grezzi) {
+                        $prima = array_slice(array_values((array) ($grezzi['colore'] ?? [])), 0, (int) substr($campo, strlen('colore.')));
+
+                        if (in_array($colore, $prima, true)) {
+                            $this->rifiutaCrm($fail, $campo, Regola::DUPLICATO, 'validation.distinct', ['attribute' => 'colore']);
+                        }
+                    }]],
             },
             'ordina' => ['nullable', 'string', Rule::in(self::ordiniAmmessiCrm($tipo))],
             'limite' => ['nullable', 'integer:strict', 'between:1,'.self::LIMITE_MASSIMO],
@@ -1095,7 +1107,7 @@ trait Crm
                 'ricerca' => $ricerca, 'id' => [],
             ],
             default => [
-                'pipeline' => self::idCrm($testo('pipeline_id')), 'fase' => self::idCrm($testo('fase_id')), 'stati' => self::vociCrm($campi['stato'] ?? []),
+                'pipeline' => self::idCrm($testo('pipeline_id')), 'fase' => self::idCrm($testo('fase_id')), 'stati' => self::vociCrm($campi['stato'] ?? []), 'colori' => self::vociCrm($campi['colore'] ?? []),
                 'responsabile' => self::idCrm($testo('responsabile_id')), 'persona' => self::idCrm($testo('persona_id')),
                 'organizzazione' => self::idCrm($testo('organizzazione_id')), 'chiusa_dal' => $testo('chiusa_dal'), 'archiviate' => $campi['archiviate'] ?? false,
                 'ricerca' => $ricerca, 'id' => [],
@@ -1234,6 +1246,12 @@ trait Crm
         return $forme;
     }
 
+    /** Il filtro `colore` di una trattativa (#3945): nessun filtro tiene tutte; i nomi tengono quelle di uno di essi, e `nessuno` quelle senza colore, anche insieme ai nomi. */
+    private static function coloreTieneCrm(array $colori, ?string $colore): bool
+    {
+        return $colori === [] || ($colore === null ? in_array('nessuno', $colori, true) : in_array($colore, $colori, true));
+    }
+
     private function tieneCrm(string $tipo, string $workspace, array $filtri, array $riga): bool
     {
         $uguale = fn (string $filtro, string $campo) => ($filtri[$filtro] ?? null) === null || ($riga[$campo] ?? null) === $filtri[$filtro];
@@ -1256,6 +1274,7 @@ trait Crm
                 && array_filter(self::formeDelTermineCrm($parola), fn (string $forma) => $contiene($riga['partita_iva'] ?? null, $forma) || $contiene($riga['dominio'] ?? null, $forma)) === []) === [],
             'trattative' => $uguale('pipeline', 'pipeline_id') && $uguale('fase', 'fase_id') && $uguale('persona', 'persona_id') && $uguale('organizzazione', 'organizzazione_id')
                 && ($filtri['chiusa_dal'] === null || ($riga['chiusa_il'] !== null && $riga['chiusa_il']->greaterThanOrEqualTo(CarbonImmutable::parse($filtri['chiusa_dal'].' 00:00:00', 'UTC'))))
+                && self::coloreTieneCrm($filtri['colori'] ?? [], $riga['colore'] ?? null)
                 && array_filter($parole, fn (string $parola) => ! $contiene($riga['titolo'], $parola)) === [],
             default => $uguale('responsabile', 'responsabile_id') && $uguale('persona', 'persona_id') && $uguale('organizzazione', 'organizzazione_id')
                 && $uguale('trattativa', 'trattativa_id') && ($filtri['fatta'] === null || $riga['fatta'] === $filtri['fatta'])
@@ -3537,6 +3556,7 @@ trait Crm
         return [
             'id' => $riga['id'],
             'titolo' => $riga['titolo'],
+            'colore' => $riga['colore'] ?? null,
             'valore' => $riga['importo'] === null ? null : ['importo' => $riga['importo'], 'valuta' => $this->valutaCrm($riga['workspace'])],
             'pipeline_id' => $riga['pipeline_id'],
             'fase_id' => $riga['fase_id'],
@@ -3604,6 +3624,7 @@ trait Crm
             'probabilita' => ['nullable', 'integer:strict', 'between:0,100'],
             'responsabile_id' => $this->regolaDelResponsabile($workspace),
             'chiusura_prevista' => ['nullable', 'string', 'date_format:Y-m-d'],
+            'colore' => ['bail', 'nullable', 'string', Rule::in(self::CRM_COLORI_TRATTATIVA)],
         ] + ($nuova ? [] : [
             'stato' => ['bail', 'filled', 'string', Rule::in(self::CRM_STATI_TRATTATIVA)],
             'motivo_perdita' => ['nullable', 'string', 'max:500'],
@@ -3653,7 +3674,7 @@ trait Crm
             $id = self::id();
             $ora = self::adessoCrm();
             $this->crm['trattative'][$id] = [
-                'id' => $id, 'workspace' => $chi['workspace'], 'titolo' => $campi['titolo'], 'importo' => $campi['valore']['importo'] ?? null,
+                'id' => $id, 'workspace' => $chi['workspace'], 'titolo' => $campi['titolo'], 'colore' => $campi['colore'] ?? null, 'importo' => $campi['valore']['importo'] ?? null,
                 'pipeline_id' => $pipeline['id'], 'fase_id' => $fase, 'persona_id' => $persona,
                 'organizzazione_id' => isset($campi['organizzazione_id']) ? strtolower($campi['organizzazione_id']) : null,
                 'probabilita' => $campi['probabilita'] ?? null, 'in_fase_dal' => $ora, 'stato' => 'aperta', 'motivo_perdita' => null, 'motivo_perdita_id' => null, 'chiusa_il' => null,
@@ -3778,7 +3799,7 @@ trait Crm
         $cambi = [];
         $tipi = [];
 
-        foreach (['titolo' => 'titolo', 'valore' => 'importo', 'persona_id' => 'persona_id', 'organizzazione_id' => 'organizzazione_id', 'responsabile_id' => 'responsabile_id', 'probabilita' => 'probabilita', 'chiusura_prevista' => 'chiusura_prevista'] as $campo => $attributo) {
+        foreach (['titolo' => 'titolo', 'colore' => 'colore', 'valore' => 'importo', 'persona_id' => 'persona_id', 'organizzazione_id' => 'organizzazione_id', 'responsabile_id' => 'responsabile_id', 'probabilita' => 'probabilita', 'chiusura_prevista' => 'chiusura_prevista'] as $campo => $attributo) {
             if (array_key_exists($attributo, $campi) && $campi[$attributo] !== $riga[$attributo]) {
                 $cambi[$campo] = ['prima' => $riga[$attributo], 'dopo' => $campi[$attributo]];
                 $dopo[$attributo] = $campi[$attributo];
@@ -3854,10 +3875,10 @@ trait Crm
             $this->toccaPipelineCrm($dopo['pipeline_id']);
         }
 
-        $valori = ['valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita_id', 'pipeline_id', 'fase_id'];
+        $valori = ['colore', 'valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita_id', 'pipeline_id', 'fase_id'];
         $voci = [];
 
-        foreach (['titolo', 'valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita', 'motivo_perdita_id', 'pipeline_id', 'fase_id'] as $campo) {
+        foreach (['titolo', 'colore', 'valore', 'persona_id', 'organizzazione_id', 'responsabile_id', 'probabilita', 'chiusura_prevista', 'stato', 'motivo_perdita', 'motivo_perdita_id', 'pipeline_id', 'fase_id'] as $campo) {
             if (isset($cambi[$campo])) {
                 $voci[] = in_array($campo, $valori, true) ? ['campo' => $campo, ...$cambi[$campo]] : ['campo' => $campo];
             }
