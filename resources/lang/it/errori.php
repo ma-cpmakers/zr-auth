@@ -561,6 +561,18 @@ return [
         'title' => 'Gate già approvato',
         'detail' => 'Il Gate è approvato, che è lo stato finale: non si richiede di nuovo. Per un nuovo controllo si crea un altro Gate.',
     ],
+    'file_troppo_grande' => [
+        'title' => 'File troppo grande',
+        'detail' => 'Il file supera il tetto di dimensione (25 MB). Riduci il file e riprova.',
+    ],
+    'scansione_in_corso' => [
+        'title' => 'Scansione in corso',
+        'detail' => 'Il file non è ancora stato controllato: si scarica solo quando la scansione è finita e il file è pulito. Riprova fra poco.',
+    ],
+    'infetto' => [
+        'title' => 'File infetto',
+        'detail' => 'La scansione ha trovato un problema nel file: non si scarica.',
+    ],
     'gate_in_approvazione' => [
         'title' => 'Richiesta di approvazione in corso',
         'detail' => 'Il Gate è in approvazione e il suo approvatore è disponibile: non si cambia né si toglie l\'approvatore, né si cambia il tipo della scheda, finché la richiesta è aperta. Registra la decisione con board.schede.gate.decisione.crea, oppure annulla prima la richiesta.',

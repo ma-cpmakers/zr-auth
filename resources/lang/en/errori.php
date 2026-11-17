@@ -561,6 +561,18 @@ return [
         'title' => 'Gate already approved',
         'detail' => 'The Gate is approved, which is the final state: it cannot be requested again. Create another Gate for a new check.',
     ],
+    'file_troppo_grande' => [
+        'title' => 'File too large',
+        'detail' => 'The file exceeds the size limit (25 MB). Reduce the file and try again.',
+    ],
+    'scansione_in_corso' => [
+        'title' => 'Scan in progress',
+        'detail' => 'The file has not been checked yet: it can be downloaded only when the scan is finished and the file is clean. Try again shortly.',
+    ],
+    'infetto' => [
+        'title' => 'Infected file',
+        'detail' => 'The scan found a problem with the file: it cannot be downloaded.',
+    ],
     'gate_in_approvazione' => [
         'title' => 'Approval request pending',
         'detail' => 'The Gate is awaiting approval and its approver is available: the approver cannot be changed or removed, nor the card\'s type changed, while the request is open. Record the decision with board.schede.gate.decisione.crea, or cancel the request first.',

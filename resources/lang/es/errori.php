@@ -561,6 +561,18 @@ return [
         'title' => 'Gate ya aprobado',
         'detail' => 'El Gate está aprobado, que es el estado final: no se solicita de nuevo. Para un nuevo control se crea otro Gate.',
     ],
+    'file_troppo_grande' => [
+        'title' => 'Archivo demasiado grande',
+        'detail' => 'El archivo supera el límite de tamaño (25 MB). Reduce el archivo e inténtalo de nuevo.',
+    ],
+    'scansione_in_corso' => [
+        'title' => 'Análisis en curso',
+        'detail' => 'El archivo aún no se ha comprobado: solo se descarga cuando el análisis ha terminado y el archivo está limpio. Inténtalo de nuevo en breve.',
+    ],
+    'infetto' => [
+        'title' => 'Archivo infectado',
+        'detail' => 'El análisis ha encontrado un problema en el archivo: no se puede descargar.',
+    ],
     'gate_in_approvazione' => [
         'title' => 'Solicitud de aprobación en curso',
         'detail' => 'El Gate está en aprobación y su aprobador está disponible: no se cambia ni se quita el aprobador, ni se cambia el tipo de la tarjeta, mientras la solicitud esté abierta. Registra la decisión con board.schede.gate.decisione.crea, o anula primero la solicitud.',

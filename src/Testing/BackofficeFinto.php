@@ -32,6 +32,7 @@ use Zeiras\Auth\Testing\Finto\CrmElenchi;
 use Zeiras\Auth\Testing\Finto\CrmFatture;
 use Zeiras\Auth\Testing\Finto\CrmRate;
 use Zeiras\Auth\Testing\Finto\CrmEsiti;
+use Zeiras\Auth\Testing\Finto\Allegati;
 use Zeiras\Auth\Testing\Finto\BoardFunzioni;
 use Zeiras\Auth\Testing\Finto\BoardPadri;
 use Zeiras\Auth\Testing\Finto\BoardRuoliEpiche;
@@ -89,6 +90,7 @@ use Zeiras\Auth\Testing\Finto\UscitaAzienda;
 final class BackofficeFinto
 {
     use BoardFunzioni;
+    use Allegati;
     use BoardPadri;
     use BoardRuoliEpiche;
     use BookingsPrenotazioni;
@@ -284,6 +286,10 @@ final class BackofficeFinto
         ['DELETE', '#^/v1/board/schede/([^/]+)/completamento$#', 'board.schede.completamento.elimina'],
         ['GET', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.elenca'],
         ['POST', '#^/v1/board/schede/([^/]+)/collegamenti$#', 'board.schede.collegamenti.crea'],
+        ['GET', '#^/v1/board/schede/([^/]+)/allegati$#', 'board.schede.allegati.elenca'],
+        ['POST', '#^/v1/board/schede/([^/]+)/allegati$#', 'board.schede.allegati.crea'],
+        ['DELETE', '#^/v1/board/schede/([^/]+)/allegati/([^/]+)$#', 'board.schede.allegati.elimina'],
+        ['GET', '#^/v1/board/schede/([^/]+)/allegati/([^/]+)/contenuto$#', 'board.schede.allegati.contenuto.mostra'],
         ['DELETE', '#^/v1/board/schede/([^/]+)/collegamenti/([^/]+)$#', 'board.schede.collegamenti.elimina'],
         ['GET', '#^/v1/board/schede/([^/]+)/figlie$#', 'board.schede.figlie.elenca'],
         ['GET', '#^/v1/board/schede/([^/]+)/crm$#', 'board.schede.crm.elenca'],
@@ -799,6 +805,12 @@ final class BackofficeFinto
 
     /** @var array<string, array{id: string, workspace: string, board: string, numero: int, titolo: string, scadenza: ?string, tipo?: ?string, punti?: ?int, pronta?: bool, assegnatari: list<string>, completata_il: ?CarbonImmutable, archiviata_il: ?CarbonImmutable, creata_il: CarbonImmutable, aggiornata_il: CarbonImmutable, versione?: int}> le schede (scheda()), per id */
     private array $schede = [];
+
+    /** @var array<string, array<string, mixed>> i file delle schede (Allegati), per id: `{id, scheda, workspace, nome, dimensione, mime, byte, autore, creato_il, stato, visibilita, tolto}` */
+    private array $allegati = [];
+
+    /** La persona del gettone della richiesta in corso: chi legge, per i file `riservati` (n_allegati). */
+    private ?string $personaInCorso = null;
 
     /** @var array<string, int> il numero della versione di ogni board (#1941), che sale a ogni scrittura che cambia delle sue schede */
     private array $versioni = [];
@@ -1593,6 +1605,7 @@ final class BackofficeFinto
         $corpo = is_array($corpo) ? $corpo : [];
 
         $this->ipFirmato = null;
+        $this->personaInCorso = null;
         $this->clienteFirmato = null;
         $this->operazioneInCorso = $operazione;
 
@@ -1687,6 +1700,10 @@ final class BackofficeFinto
                 'board.schede.completamento.elimina' => $this->completaScheda($richiesta, $parametri[0], false),
                 'board.schede.collegamenti.elenca' => $this->elencaCollegamenti($richiesta, $parametri[0]),
                 'board.schede.collegamenti.crea' => $this->creaCollegamento($richiesta, $corpo, $parametri[0]),
+                'board.schede.allegati.elenca' => $this->elencaAllegati($richiesta, $parametri[0]),
+                'board.schede.allegati.crea' => $this->creaAllegato($richiesta, $corpo, $parametri[0]),
+                'board.schede.allegati.elimina' => $this->eliminaAllegato($richiesta, $parametri[0], $parametri[1]),
+                'board.schede.allegati.contenuto.mostra' => $this->mostraContenutoAllegato($richiesta, $parametri[0], $parametri[1]),
                 'board.schede.collegamenti.elimina' => $this->eliminaCollegamento($richiesta, $parametri[0], $parametri[1]),
                 'board.schede.figlie.elenca' => $this->elencaFigliePerScheda($richiesta, $parametri[0]),
                 'board.board.ruoli.elenca' => $this->elencaRuoliBoard($richiesta, $parametri[0]),
@@ -2012,6 +2029,7 @@ final class BackofficeFinto
             'numero_voci' => 0,
             'numero_voci_spuntate' => 0,
             'numero_commenti' => 0,
+            'n_allegati' => $this->nAllegatiDellaScheda($scheda),
             'attese_aperte' => $this->atteseAperte($scheda['id']),
             'figlie' => $this->contoDelleFiglie($scheda),
             ...$this->contiDelPadre($scheda),
@@ -6047,6 +6065,8 @@ final class BackofficeFinto
         if ($ruoli === []) {
             $this->rifiutaLOspite($richiesta, $ruolo);
         }
+
+        $this->personaInCorso = $chi['persona'];
 
         return ['persona' => $chi['persona'], 'accesso' => $chi['accesso'], 'workspace' => $workspace];
     }
