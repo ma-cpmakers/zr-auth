@@ -47,7 +47,7 @@ trait CrmEsiti
             $this->seminaEsitiCrm($chi['workspace']);
 
             if (count($this->esitiDelTipoCrm($chi['workspace'], $campi['tipo'])) >= self::CRM_ESITI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ESITI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ESITI_TETTO], limite: 'esiti_per_tipo');
             }
 
             $this->esitoUnicoCrm($chi['workspace'], $campi['tipo'], $campi['nome'], null);

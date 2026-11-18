@@ -331,7 +331,7 @@ trait Sprint
             $this->sprintScrum($this->sprintBoardAperta($board));
 
             if ($this->sprintDellaBoardInStato($board['id'], 'pianificato') !== null) {
-                throw new Problema('limite_raggiunto');
+                throw new Problema('limite_raggiunto', limite: 'sprint_pianificati_per_board', tetto: 1);
             }
 
             $ora = now()->toImmutable()->startOfMillisecond();

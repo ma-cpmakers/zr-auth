@@ -2844,11 +2844,11 @@ final class BackofficeFinto
             }
 
             if (count(array_filter($this->collegamenti, fn (array $c) => $c['scheda'] === $mia['id'])) >= self::ATTESE_IN_USCITA) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ATTESE_IN_USCITA, 'direzione' => 'in_uscita']);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ATTESE_IN_USCITA, 'direzione' => 'in_uscita'], limite: 'attese_in_uscita_per_scheda');
             }
 
             if (count(array_filter($this->collegamenti, fn (array $c) => $c['aspettata'] === $aspettata['id'])) >= self::ATTESE_IN_ENTRATA) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ATTESE_IN_ENTRATA, 'direzione' => 'in_entrata']);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ATTESE_IN_ENTRATA, 'direzione' => 'in_entrata'], limite: 'attese_in_entrata_per_scheda');
             }
 
             $this->controllaLaCatena($mia['id'], $aspettata['id']);
@@ -2979,7 +2979,7 @@ final class BackofficeFinto
             : count(array_filter($viste, fn (array $vista) => ! $vista['condivisa'] && $vista['creata_da'] === $autore)) >= self::VISTE_PERSONALI;
 
         if ($pieno) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => $condivisa ? self::VISTE_CONDIVISE : self::VISTE_PERSONALI, 'ambito' => $condivisa ? 'condivisa' : 'personale']);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => $condivisa ? self::VISTE_CONDIVISE : self::VISTE_PERSONALI, 'ambito' => $condivisa ? 'condivisa' : 'personale'], limite: 'viste_per_board');
         }
     }
 
@@ -3790,7 +3790,7 @@ final class BackofficeFinto
         $nuova = ! isset($this->moduliInteresse[$chi['persona']][$modulo]);
 
         if ($nuova && count($this->moduliInteresse[$chi['persona']] ?? []) >= self::MODULI_INTERESSE_TETTO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::MODULI_INTERESSE_TETTO]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::MODULI_INTERESSE_TETTO], limite: 'moduli_interesse_per_persona');
         }
 
         $this->moduliInteresse[$chi['persona']][$modulo] ??= ['id' => sprintf('%010d', ++$this->ordineInteresse), 'modulo' => $modulo, 'richiesto_il' => self::iso(now())];
@@ -6570,7 +6570,7 @@ final class BackofficeFinto
             $vivi = array_filter($this->inviti, fn (array $invito) => $invito['workspace'] === $workspace && $invito['scade']->gt(now()));
 
             if (count($this->membri[$workspace] ?? []) + count($vivi) >= self::MEMBRI) {
-                throw new Problema('limite_raggiunto');
+                throw new Problema('limite_raggiunto', limite: 'membri_per_workspace', tetto: self::MEMBRI);
             }
 
             $persona = $this->conEmail($email);
@@ -6669,7 +6669,7 @@ final class BackofficeFinto
 
             // Il tetto prima dei freni, come il backoffice: il quarto reinvio è 409 e non consuma i conti.
             if ($this->inviti[$invito]['reinvii'] >= self::REINVII_DELL_INVITO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::REINVII_DELL_INVITO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::REINVII_DELL_INVITO], limite: 'reinvii_per_invito');
             }
 
             $email = $this->inviti[$invito]['email'];
@@ -6718,7 +6718,7 @@ final class BackofficeFinto
     private function tettoDeiMembri(string $workspace): void
     {
         if (count($this->membri[$workspace] ?? []) >= self::MEMBRI) {
-            throw new Problema('limite_raggiunto');
+            throw new Problema('limite_raggiunto', limite: 'membri_per_workspace', tetto: self::MEMBRI);
         }
     }
 

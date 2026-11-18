@@ -105,7 +105,7 @@ trait SchedeCrm
             }
 
             if (count($vivi) >= self::SCHEDE_CRM_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::SCHEDE_CRM_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::SCHEDE_CRM_TETTO], limite: 'collegamenti_crm_per_scheda');
             }
 
             $id = self::id();

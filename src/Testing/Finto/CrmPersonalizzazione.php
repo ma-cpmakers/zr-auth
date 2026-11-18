@@ -388,7 +388,7 @@ trait CrmPersonalizzazione
             }
 
             if (count($this->righeCrm('motivi', $workspace)) >= self::CRM_TETTI['motivi']) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['motivi']]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['motivi']], limite: 'motivi_per_workspace');
             }
 
             $vivi = $this->motiviViviCrm($workspace);
@@ -410,7 +410,7 @@ trait CrmPersonalizzazione
             }
 
             if (count($this->righeCrm('scadenzeTipi', $workspace)) >= self::CRM_SCADENZE_TIPI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_TIPI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_TIPI_TETTO], limite: 'tipi_scadenza_per_workspace');
             }
 
             $id = self::id();
@@ -457,7 +457,7 @@ trait CrmPersonalizzazione
         $this->coerenzaDellaVoceCrm($this->completaLaVoceCrm($campi, null));
 
         if (count($this->righeCrm('catalogo', $chi['workspace'])) >= self::CRM_CATALOGO_TETTO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_CATALOGO_TETTO]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_CATALOGO_TETTO], limite: 'voci_catalogo_per_workspace');
         }
 
         $id = self::id();

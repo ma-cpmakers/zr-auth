@@ -157,6 +157,8 @@ final class Problema extends RuntimeException
      * @param  array<string, mixed>  $estensioni  i membri estesi del problema: `limite` e `direzione` di `limite_raggiunto`, `mancanti` di `accettazione_richiesta`, `accordo` del 422 su `accordo_trattamento_dati_accettato`
      * @param  ?string  $verifica  per `verifica_non_riuscita`, e solo per lui: l'operazione di cui il `detail` dice il caso
      *                             (`email`, `password`, `ingresso`, `invito`, `registrazione`, `provider`)
+     * @param  ?string  $limite  per `limite_raggiunto`, e solo per lui: il nome del limite (`errori.limite_raggiunto.varianti.<nome>`, gli stessi dell'enum `Limite` del backoffice) di cui il `detail` dice il caso
+     * @param  ?int  $tetto  il numero che il `detail` dice, se non è quello dell'estensione `limite` (un limite senza il membro `limite` nella risposta)
      */
     public function __construct(
         public readonly string $codice,
@@ -164,6 +166,8 @@ final class Problema extends RuntimeException
         public readonly array $header = [],
         public readonly array $estensioni = [],
         public readonly ?string $verifica = null,
+        public readonly ?string $limite = null,
+        public readonly ?int $tetto = null,
     ) {
         parent::__construct($codice);
     }
@@ -175,7 +179,7 @@ final class Problema extends RuntimeException
      */
     public function conHeader(array $header): self
     {
-        return new self($this->codice, $this->errori, [...$this->header, ...$header], $this->estensioni, $this->verifica);
+        return new self($this->codice, $this->errori, [...$this->header, ...$header], $this->estensioni, $this->verifica, $this->limite, $this->tetto);
     }
 
     public function stato(): int

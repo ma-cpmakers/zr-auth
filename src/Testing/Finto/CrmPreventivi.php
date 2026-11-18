@@ -108,7 +108,7 @@ trait CrmPreventivi
             $tutti = array_filter($this->crm['preventivi'], fn (array $riga) => $riga['workspace'] === $chi['workspace']);
 
             if (count($tutti) >= self::CRM_PREVENTIVI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_PREVENTIVI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_PREVENTIVI_TETTO], limite: 'preventivi_per_workspace');
             }
 
             $oggi = self::oggiAcquistoCrm();
@@ -517,7 +517,7 @@ trait CrmPreventivi
         }
 
         if (count($this->righeCrm('acquisti', $workspace)) + count($riga['righe']) > self::CRM_ACQUISTI_TETTO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ACQUISTI_TETTO]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ACQUISTI_TETTO], limite: 'acquisti_per_workspace');
         }
 
         $primo = array_filter($this->crm['acquisti'], fn (array $acquisto) => $acquisto['persona_id'] === $compratore['id']) === [];
@@ -640,7 +640,7 @@ trait CrmPreventivi
             $tutti = array_filter($this->crm['preventivi'], fn (array $una) => $una['workspace'] === $chi['workspace']);
 
             if (count($tutti) >= self::CRM_PREVENTIVI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_PREVENTIVI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_PREVENTIVI_TETTO], limite: 'preventivi_per_workspace');
             }
 
             $revisione = 1 + (int) max(array_map(fn (array $una) => $una['anno'] === $riga['anno'] && $una['progressivo'] === $riga['progressivo'] ? ($una['revisione'] ?? 1) : 0, array_values($tutti)));

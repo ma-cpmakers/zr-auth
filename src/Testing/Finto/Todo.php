@@ -133,7 +133,7 @@ trait Todo
                     throw new Problema('lista_gia_esistente', estensioni: ['lista_id' => $esistente['id']]);
                 }
             } elseif (count($this->listeDellaPersonaTodo($chi)) >= self::TODO_LISTE_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::TODO_LISTE_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::TODO_LISTE_TETTO], limite: 'todo_liste_personali_per_persona');
             }
 
             $id = self::id();
@@ -893,7 +893,7 @@ trait Todo
         $aperti = array_filter($this->todoElementi, fn (array $e) => $e['lista'] === $lista && ! $e['archiviato'] && $e['fatto_il'] === null);
 
         if (count($aperti) >= self::TODO_APERTI_TETTO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::TODO_APERTI_TETTO]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::TODO_APERTI_TETTO], limite: 'todo_aperti_per_lista');
         }
     }
 

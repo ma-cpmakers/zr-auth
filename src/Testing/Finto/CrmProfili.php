@@ -231,7 +231,7 @@ trait CrmProfili
             $cliente = $this->clienteDelCorpoCrm($campi);
             $vivi = $this->viviDelClienteCrm('profili', $chi['workspace'], $cliente['colonna'], $cliente['id']);
 
-            $this->tettoDelClienteCrm($vivi);
+            $this->tettoDelClienteCrm($vivi, 'profili_fatturazione_per_cliente');
 
             $predefinito = ($campi['predefinito'] ?? false) === true || $vivi === [];
             $this->liberaIlPredefinitoCrm('profili', $predefinito ? $vivi : [], null);
@@ -610,7 +610,7 @@ trait CrmProfili
             $cliente = $this->clienteDelCorpoCrm($campi);
             $vivi = $this->viviDelClienteCrm('indirizzi', $chi['workspace'], $cliente['colonna'], $cliente['id']);
 
-            $this->tettoDelClienteCrm($vivi);
+            $this->tettoDelClienteCrm($vivi, 'indirizzi_spedizione_per_cliente');
 
             $predefinito = ($campi['predefinito'] ?? false) === true || $vivi === [];
             $this->liberaIlPredefinitoCrm('indirizzi', $predefinito ? $vivi : [], null);
@@ -792,10 +792,10 @@ trait CrmProfili
      *
      * @param  list<array<string, mixed>>  $vivi
      */
-    private function tettoDelClienteCrm(array $vivi): void
+    private function tettoDelClienteCrm(array $vivi, string $limite): void
     {
         if (count($vivi) >= self::CRM_PROFILI_TETTO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_PROFILI_TETTO]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_PROFILI_TETTO], limite: $limite);
         }
     }
 
@@ -824,7 +824,7 @@ trait CrmProfili
      * @param  list<array<string, mixed>>  $vivi  i non archiviati del cliente, prima della modifica
      * @return array{predefinito: bool, archiviata: bool, promuovi: bool}
      */
-    private function statoDelClienteCrm(array $riga, array $campi, array $vivi): array
+    private function statoDelClienteCrm(string $tipo, array $riga, array $campi, array $vivi): array
     {
         $eraArchiviato = $riga['archiviata_il'] !== null;
         $eraPredefinito = $riga['predefinito'] === true;
@@ -840,7 +840,7 @@ trait CrmProfili
         }
 
         if ($eraArchiviato && ! $archiviata) {
-            $this->tettoDelClienteCrm($vivi);
+            $this->tettoDelClienteCrm($vivi, $tipo === 'profili' ? 'profili_fatturazione_per_cliente' : 'indirizzi_spedizione_per_cliente');
         }
 
         $predefinito = match (true) {
@@ -865,7 +865,7 @@ trait CrmProfili
     {
         $colonna = $riga['persona_id'] !== null ? 'persona_id' : 'organizzazione_id';
         $vivi = $this->viviDelClienteCrm($tipo, $workspace, $colonna, $riga[$colonna]);
-        $stato = $this->statoDelClienteCrm($riga, $campi, $vivi);
+        $stato = $this->statoDelClienteCrm($tipo, $riga, $campi, $vivi);
 
         if ($stato['predefinito'] === $riga['predefinito'] && $stato['archiviata'] === ($riga['archiviata_il'] !== null) && array_filter($dopo, fn (mixed $valore, string $campo) => $riga[$campo] !== $valore, ARRAY_FILTER_USE_BOTH) === []) {
             return;
