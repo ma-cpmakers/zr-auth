@@ -340,6 +340,7 @@ final class BackofficeFinto
         ['GET', '#^/v1/accessi/provider$#', 'accessi.provider.elenca'],
         ['POST', '#^/v1/accessi/provider/([^/]+)/autorizzazioni$#', 'accessi.provider.autorizzazioni.crea'],
         ['POST', '#^/v1/accessi/provider/([^/]+)$#', 'accessi.provider.crea'],
+        ['POST', '#^/v1/accessi/provider/([^/]+)/conferme$#', 'accessi.provider.conferme.crea'],
         ['GET', '#^/v1/io/provider$#', 'io.provider.elenca'],
         ['POST', '#^/v1/io/provider/([^/]+)/autorizzazioni$#', 'io.provider.autorizzazioni.crea'],
         ['POST', '#^/v1/io/provider/([^/]+)$#', 'io.provider.crea'],
@@ -630,6 +631,9 @@ final class BackofficeFinto
     private const VISTE_PER_BOARD_ALL_ORA = 600;
 
     /** I freni degli invii dei codici di una persona, contando quello della nascita: invii, secondi (VerificaEmail). */
+    /** Quanto vale un arrivo sospeso di Facebook, e il codice che lo chiude (#1587): 10 minuti. */
+    private const SECONDI_DEL_SOSPESO = 600;
+
     private const INVII = ['invio' => [1, 60], 'ora' => [5, 3600], 'giorno' => [10, 86400]];
 
     /** Quanto vale un codice, e quanti errori ammette (VerificaEmail::MINUTI, TENTATIVI, ERRORI_AL_GIORNO). */
@@ -764,6 +768,9 @@ final class BackofficeFinto
 
     /** @var array<string, array{codice: string, tentativi: int, scade: int}> i codici di accesso (accessi.codici.crea) in attesa, per email: la persona può non esserci */
     private array $codiciDiAccesso = [];
+
+    /** @var array<string, array{provider: string, id: string, email: string, nome: ?string, termini: bool, invito: ?string, scade: int}> gli arrivi da Facebook in sospeso (#1587), per `sospeso`: aspettano il codice alla posta */
+    private array $sospesi = [];
 
     /** @var array<string, array{persona: ?string, prenotazione: string, scade: int, usato: bool}> i link monouso di Bookings (accessi.link.crea), per codice */
     private array $linkDiAccesso = [];
@@ -1215,7 +1222,8 @@ final class BackofficeFinto
     /**
      * Dice che cosa risponde il provider quando la pagina gli porta il `codice` del ritorno: la persona che ha autorizzato.
      * Un codice che il test non ha detto è un codice che il provider rifiuta. `$verificata: false` è un'email che il
-     * provider non garantisce: l'accesso non riesce con `email_del_provider_non_verificata`. Senza `$id` l'id opaco del provider lo fa il finto, uguale per la
+     * provider non garantisce: l'accesso non riesce con `email_del_provider_non_verificata` (non vale per Facebook, la cui email non vale mai verificata e
+     * si prova col codice alla posta, #1587). Senza `$id` l'id opaco del provider lo fa il finto, uguale per la
      * stessa email.
      */
     public function identitaDelProvider(string $provider, string $codice, string $email, ?string $nome = null, bool $verificata = true, ?string $id = null): self
@@ -1521,7 +1529,7 @@ final class BackofficeFinto
     /** I metodi che chi non ha accettato i documenti legali può chiamare (Accettazione::ESENTI del backoffice, #1699). */
     private const APERTI_SENZA_ACCETTAZIONE = ['legale.documenti.elenca', 'legale.accettazioni.crea', 'io.mostra', 'accessi.corrente.elimina', 'accessi.elimina'];
 
-    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.link.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'documenti.pubblici.lettura.crea', 'documenti.pubblici.firma.crea', 'password.recupero.crea', 'password.reimpostazione.crea', 'notifiche.disiscrizione.crea', 'notifiche.disiscrizione.verifica.crea', 'contatti.crea', 'privacy.cancellazioni.crea', 'privacy.cancellazioni.mostra', 'privacy.cancellazioni.conferma.crea'];
+    private const SENZA_GETTONE = ['accessi.crea', 'accessi.codici.crea', 'accessi.codici.verifica.crea', 'accessi.link.crea', 'accessi.provider.elenca', 'accessi.provider.autorizzazioni.crea', 'accessi.provider.crea', 'accessi.provider.conferme.crea', 'utenti.crea', 'io.email.codice.crea', 'io.email.verifica.crea', 'ingressi.scambio.crea', 'link.verifica.crea', 'inviti.verifica.crea', 'preventivi.pubblici.lettura.crea', 'preventivi.pubblici.accettazione.crea', 'preventivi.pubblici.richieste.crea', 'documenti.pubblici.lettura.crea', 'documenti.pubblici.firma.crea', 'password.recupero.crea', 'password.reimpostazione.crea', 'notifiche.disiscrizione.crea', 'notifiche.disiscrizione.verifica.crea', 'contatti.crea', 'privacy.cancellazioni.crea', 'privacy.cancellazioni.mostra', 'privacy.cancellazioni.conferma.crea'];
 
     /**
      * Come Cliente::riconosci del backoffice: nessuno dei quattro header è una richiesta anonima; una firma che non torna (client
@@ -1695,6 +1703,7 @@ final class BackofficeFinto
                 'accessi.provider.elenca' => $this->elencaProvider($richiesta),
                 'accessi.provider.autorizzazioni.crea' => $this->creaAutorizzazione($corpo, $parametri[0]),
                 'accessi.provider.crea' => $this->creaAccessoDalProvider($corpo, $parametri[0]),
+                'accessi.provider.conferme.crea' => $this->confermaAccessoDalProvider($corpo, $parametri[0]),
                 'io.provider.elenca' => $this->elencaProviderCollegati($richiesta),
                 'io.provider.autorizzazioni.crea' => $this->creaAutorizzazioneCollegamento($richiesta, $corpo, $parametri[0]),
                 'io.provider.crea' => $this->collegaProvider($richiesta, $corpo, $parametri[0]),
@@ -3319,11 +3328,104 @@ final class BackofficeFinto
             throw new Problema('verifica_non_riuscita', verifica: 'provider');
         }
 
-        // Un'email che il provider dà ma non garantisce (#1555): un codice suo, uguale con e senza un account.
-        if (! $profilo['verificata']) {
+        // Facebook non garantisce mai l'email (#1587): un'identità già collegata, o scollegata, segue la strada di sempre (l'id è la prova);
+        // una nuova resta in sospeso e il codice parte alla casella. Ogni altro provider: un'email che non garantisce è un codice suo (#1555),
+        // uguale con e senza un account.
+        if ($provider === 'facebook') {
+            $chiave = $provider.'|'.$profilo['id'];
+
+            if (! isset($this->identita[$chiave]) && ! isset($this->identitaScollegate[$chiave])) {
+                return $this->sospendiArrivo($provider, $profilo, ($dati['termini_accettati'] ?? false) === true, $invito);
+            }
+        } elseif (! $profilo['verificata']) {
             throw new Problema('email_del_provider_non_verificata');
         }
 
+        return $this->collegaDalProvider($provider, $profilo, ($dati['termini_accettati'] ?? false) === true, $invito, false);
+    }
+
+    /**
+     * L'arrivo da Facebook che aspetta il codice (AccessoConProvider::sospendi): 202 col `sospeso`, un testo che da solo non fa entrare nessuno, e
+     * il codice alla posta del finto (`ultimoCodice`). Non nasce né si collega nessuno, e la risposta non dipende da un account.
+     *
+     * @param  array{id: string, email: string, verificata: bool, nome: ?string}  $profilo
+     * @return array{int, array<string, mixed>}
+     */
+    private function sospendiArrivo(string $provider, array $profilo, bool $termini, ?string $invito): array
+    {
+        $sospeso = self::base64url(random_bytes(32));
+        $scade = now()->toImmutable()->addSeconds(self::SECONDI_DEL_SOSPESO);
+        $email = self::normalizza($profilo['email']);
+        $this->sospesi[$sospeso] = ['provider' => $provider, 'id' => $profilo['id'], 'email' => $profilo['email'], 'nome' => $profilo['nome'], 'termini' => $termini, 'invito' => $invito, 'scade' => $scade->getTimestamp()];
+        $this->mandaCodiceDiAccesso($email);
+
+        return [202, ['data' => ['sospeso' => $sospeso, 'scade_il' => self::iso($scade)]]];
+    }
+
+    /**
+     * accessi.provider.conferme.crea (AccessiProviderController::confermeCrea, AccessoConProvider::conferma), senza gettone: il codice alla posta
+     * chiude l'arrivo sospeso di Facebook. L'ordine del backoffice: il provider (404 se spento), il corpo, i freni (del sospeso, del provider), il
+     * sospeso (sconosciuto, scaduto o di un altro provider: 422 verifica_non_riuscita), il codice (sbagliato, scaduto o esaurito: la stessa 422;
+     * un tentativo sbagliato si conta), e solo a codice giusto la persona nasce o si collega come nell'arrivo di un provider che garantisce l'email.
+     * Un rifiuto di quel passo (403, 422 sui termini) lascia il codice e il sospeso. Chi ha già un'identità Facebook viva con un altro id la
+     * sostituisce: la vecchia è archiviata.
+     *
+     * @param  array<mixed>  $corpo
+     * @return array{int, array<string, mixed>}
+     */
+    private function confermaAccessoDalProvider(array $corpo, string $provider): array
+    {
+        if (! isset($this->provider[$provider])) {
+            throw new Problema('non_trovato');
+        }
+
+        $dati = $this->testi->validaStretta($corpo, [
+            'sospeso' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
+            'codice' => ['required', 'string', 'digits:6'],
+        ]);
+        $this->frena('provider.conferme:sospeso:'.hash('sha256', (string) $dati['sospeso']), self::FRENI['provider_stato'], self::MINUTO);
+        $this->frena('provider.conferme:'.$provider, self::FRENI['provider_arrivo'], self::MINUTO);
+
+        $sospeso = $this->sospesi[$dati['sospeso']] ?? null;
+
+        if ($sospeso === null || $sospeso['scade'] <= now()->getTimestamp() || $sospeso['provider'] !== $provider) {
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
+
+        $email = self::normalizza($sospeso['email']);
+        $stato = $this->codiciDiAccesso[$email] ?? null;
+        $errori = "errori-accesso-codice:{$email}";
+
+        if ($stato === null || $stato['scade'] - now()->getTimestamp() <= 0 || $stato['tentativi'] >= self::TENTATIVI
+            || $this->freni->tooManyAttempts($errori, self::ERRORI_AL_GIORNO)) {
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
+
+        if (! hash_equals($stato['codice'], $dati['codice'])) {
+            $this->codiciDiAccesso[$email]['tentativi']++;
+            $this->freni->hit($errori, 86400);
+
+            throw new Problema('verifica_non_riuscita', verifica: 'provider');
+        }
+
+        $profilo = ['id' => $sospeso['id'], 'email' => $sospeso['email'], 'verificata' => true, 'nome' => $sospeso['nome']];
+        $risposta = $this->collegaDalProvider($provider, $profilo, $sospeso['termini'], $sospeso['invito'], true);
+        unset($this->codiciDiAccesso[$email], $this->sospesi[$dati['sospeso']]);
+
+        return $risposta;
+    }
+
+    /**
+     * Il resto dell'arrivo dal provider, quando l'email è garantita (dal provider o dal codice alla posta): l'identità già collegata entra, un'email
+     * che ha un account lo collega, una nuova fa nascere la persona. `$sostituisci` (solo dopo il codice di Facebook, #1587): l'identità viva
+     * della stessa persona con un altro id si archivia e al suo posto va la nuova.
+     *
+     * @param  array{id: string, email: string, verificata: bool, nome: ?string}  $profilo
+     * @return array{int, array<string, mixed>}
+     */
+    private function collegaDalProvider(string $provider, array $profilo, bool $terminiAccettati, ?string $invito, bool $sostituisci): array
+    {
+        $dati = ['termini_accettati' => $terminiAccettati];
         $email = self::normalizza($profilo['email']);
         $persona = $this->identita[$provider.'|'.$profilo['id']] ?? null;
         $this->rifiutaSeSospeso($persona);
@@ -3378,9 +3480,17 @@ final class BackofficeFinto
                 }
             }
 
-            // Un'identità per provider e persona, anche scollegata: chi arriva con un altro id dello stesso provider non è chi si era collegato.
-            if (array_filter($this->identitaScollegate, fn (string $chi, string $chiave) => $chi === $persona && str_starts_with($chiave, $provider.'|'), ARRAY_FILTER_USE_BOTH) !== []) {
+            // Un'identità per provider e persona, anche scollegata: chi arriva con un altro id dello stesso provider non è chi si era collegato, salvo che
+            // il codice alla posta l'abbia provato (`$sostituisci`): allora la viva si archivia e va la nuova.
+            $viva = $sostituisci ? ($this->providerCollegati[$persona][$provider] ?? null) : null;
+
+            if ($viva === null && array_filter($this->identitaScollegate, fn (string $chi, string $chiave) => $chi === $persona && str_starts_with($chiave, $provider.'|'), ARRAY_FILTER_USE_BOTH) !== []) {
                 throw new Problema('verifica_non_riuscita', verifica: 'provider');
+            }
+
+            if ($viva !== null) {
+                unset($this->identita[$viva['chiave']], $this->providerCollegati[$persona][$provider]);
+                $this->identitaScollegate[$viva['chiave']] = $persona;
             }
 
             $this->registraIdentita($persona, $provider, $profilo['id']);
@@ -7290,9 +7400,20 @@ final class BackofficeFinto
         $this->frena('accessi-codici:'.$email, self::FRENI['accessi_codici'], self::MINUTO);
         $this->controllaTurnstile($dati['turnstile'] ?? null);
 
+        $this->mandaCodiceDiAccesso($email);
+
+        return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
+    }
+
+    /**
+     * Il codice di accesso che parte per un'email (AccessoConCodice::chiedi): se i freni degli invii dell'email lo ammettono si contano e il codice
+     * nasce nella casella del finto; se no non parte niente, in silenzio. Lo chiedono `accessi.codici.crea` e l'arrivo sospeso di Facebook (#1587).
+     */
+    private function mandaCodiceDiAccesso(string $email): void
+    {
         foreach (self::INVII as $freno => [$invii]) {
             if ($this->freni->tooManyAttempts("accesso-codice-{$freno}:{$email}", $invii)) {
-                return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
+                return;
             }
         }
 
@@ -7303,8 +7424,6 @@ final class BackofficeFinto
         $codice = $this->codiceNuovo($email);
         $this->codiciDiAccesso[$email] = ['codice' => $codice, 'tentativi' => 0, 'scade' => now()->getTimestamp() + self::MINUTI_DEL_CODICE * 60];
         $this->posta[$email] = $codice;
-
-        return [202, ['data' => ['email' => $email, ...$this->tempiDeiCodici()]]];
     }
 
     /**

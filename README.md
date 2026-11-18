@@ -380,7 +380,11 @@ $workspace = $accesso['data']['workspace_id'];                   // l'id del wor
 ```
 
 Lo `stato` vale 10 minuti e una volta sola, anche se l'arrivo non riesce. Un'email che il provider non garantisce non
-entra. Una persona che ha già un account con quell'email lo collega (e se l'email era da verificare diventa verificata, e la
+entra (`email_del_provider_non_verificata`), tranne con Facebook, che non la garantisce mai (#1587): per un'identità non ancora
+collegata il passo 3 risponde `202` con `data.sospeso` e `data.scade_il` (nessun gettone) e alla casella dell'email parte un codice di
+6 cifre. La pagina lo chiede alla persona e chiama `POST /v1/accessi/provider/facebook/conferme` con `{sospeso, codice}`, che risponde
+come il passo 3 (`201`, accesso e gettone); `termini_accettati` e `invito` si mandano al passo 3 e il sospeso li ricorda. Chi ha già
+l'identità Facebook collegata entra subito, senza codice. Nel finto il codice si legge con `$finto->ultimoCodice($email)`. Una persona che ha già un account con quell'email lo collega (e se l'email era da verificare diventa verificata, e la
 sua vecchia password non vale più); una nuova nasce con l'email verificata, se la registrazione la ammette. Con un
 `invito` la persona entra anche nel workspace dell'invito, e la risposta dice quale con `workspace_id` (sempre presente,
 `null` senza invito; mai l'ultimo workspace della persona): il gettone resta quello dell'accesso, senza workspace, e quello

@@ -30,7 +30,7 @@ it('provider(), identitaDelProvider() rifiutano un provider che il backoffice no
         ->and(fn () => $finto->identitaDelProvider('github', 'codice', 'anna@example.com'))->toThrow(InvalidArgumentException::class, 'github');
 });
 
-it("accessi.provider.elenca dà solo i provider accesi, in ordine di slug, a pagine, senza gettone, col Link (#1429)", function () {
+it('accessi.provider.elenca dà solo i provider accesi, in ordine di slug, a pagine, senza gettone, col Link (#1429)', function () {
     $finto = BackofficeFinto::attiva();
 
     $vuoto = alFinto('GET', '/v1/accessi/provider');
@@ -185,16 +185,74 @@ it('accessi.provider.crea: Google e LinkedIn fanno nascere la persona anche a re
     expect($aperta->status())->toBe(201)->and($aperta->json('data.gettone.utente.email'))->toBe('anna@altro.it');
 })->with(['google', 'linkedin-openid']);
 
-it('accessi.provider.crea: con Facebook la registrazione chiusa resta 403 registrazione_non_aperta, e la lista la apre (#1554)', function () {
+/** La conferma di un arrivo sospeso di Facebook (#1587): il sospeso dell'arrivo e il codice che il finto ha messo in posta. */
+function conferma(BackofficeFinto $finto, array $arrivo, string $email, ?string $codice = null)
+{
+    return alFinto('POST', '/v1/accessi/provider/facebook/conferme', ['sospeso' => $arrivo['sospeso'], 'codice' => $codice ?? $finto->ultimoCodice($email)]);
+}
+
+it('accessi.provider.crea: con Facebook un\'identità nuova è sospesa (202) e la registrazione chiusa è 403 alla conferma, che la lista apre (#1587)', function () {
     [$finto, $stato] = fintoConPartenza('facebook');
     $finto->identitaDelProvider('facebook', 'codice', 'anna@example.com');
 
-    $chiusa = arrivo('facebook', 'codice', $stato, ['termini_accettati' => true]);
+    $arrivo = arrivo('facebook', 'codice', $stato, ['termini_accettati' => true]);
+    expect($arrivo->status())->toBe(202)
+        ->and(array_keys($arrivo->json('data')))->toBe(['sospeso', 'scade_il'])
+        ->and($finto->ultimoCodice('anna@example.com'))->toMatch('/^\d{6}$/');
+
+    $chiusa = conferma($finto, $arrivo->json('data'), 'anna@example.com');
     expect($chiusa->status())->toBe(403)->and($chiusa->json('codice'))->toBe('registrazione_non_aperta');
 
     $finto->consenti('anna@example.com');
+    $aperta = conferma($finto, $arrivo->json('data'), 'anna@example.com');
+    expect($aperta->status())->toBe(201)->and($aperta->json('data.gettone.utente.email'))->toBe('anna@example.com');
+
+    // Il sospeso e il codice sono consumati; chi è collegato ora entra senza codice.
+    expect(conferma($finto, $arrivo->json('data'), 'anna@example.com', '000000')->json('codice'))->toBe('verifica_non_riuscita');
     $stato = alFinto('POST', '/v1/accessi/provider/facebook/autorizzazioni')->json('data.stato');
-    expect(arrivo('facebook', 'codice', $stato, ['termini_accettati' => true])->status())->toBe(201);
+    expect(arrivo('facebook', 'codice', $stato)->status())->toBe(201);
+});
+
+it('accessi.provider.conferme.crea: un codice sbagliato, un sospeso sconosciuto o di un altro provider è 422 verifica_non_riuscita; il freno del sospeso è cinque al minuto (#1587)', function () {
+    [$finto, $stato] = fintoConPartenza('facebook');
+    $finto->provider('google')->consenti('@example.com')->identitaDelProvider('facebook', 'codice', 'anna@example.com');
+    $arrivo = arrivo('facebook', 'codice', $stato, ['termini_accettati' => true])->json('data');
+    $giusto = $finto->ultimoCodice('anna@example.com');
+    $sbagliato = $giusto === '000000' ? '000001' : '000000';
+
+    expect(alFinto('POST', '/v1/accessi/provider/facebook/conferme', ['sospeso' => str_repeat('a', 43), 'codice' => $giusto])->json('codice'))->toBe('verifica_non_riuscita')
+        ->and(alFinto('POST', '/v1/accessi/provider/google/conferme', ['sospeso' => $arrivo['sospeso'], 'codice' => $giusto])->json('codice'))->toBe('verifica_non_riuscita')
+        ->and(alFinto('POST', '/v1/accessi/provider/facebook/conferme', ['sospeso' => 'corto', 'codice' => $giusto])->json('codice'))->toBe('dati_non_validi');
+
+    foreach (range(1, 3) as $_) {
+        expect(conferma($finto, $arrivo, 'anna@example.com', $sbagliato)->json('codice'))->toBe('verifica_non_riuscita');
+    }
+
+    // Il freno del sospeso è di cinque al minuto (con quello di un altro provider fanno quattro): il quinto passa, il sesto è 429.
+    expect(conferma($finto, $arrivo, 'anna@example.com', $giusto)->status())->toBe(201)
+        ->and(conferma($finto, $arrivo, 'anna@example.com', $giusto)->status())->toBe(429);
+});
+
+it('accessi.provider.conferme.crea: l\'id di Facebook cambia con l\'app, e col codice la persona ritrovata per email sostituisce l\'identità vecchia (#1587)', function () {
+    $this->travelTo(Carbon::parse('2026-12-03 10:00:00'));
+    $finto = BackofficeFinto::attiva()->provider('facebook')->consenti('@example.com');
+    $finto->identitaDelProvider('facebook', 'vecchia', 'anna@example.com', id: 'id-app-vecchia')->identitaDelProvider('facebook', 'nuova', 'anna@example.com', id: 'id-app-nuova');
+    $parte = fn () => alFinto('POST', '/v1/accessi/provider/facebook/autorizzazioni')->json('data.stato');
+
+    $primo = arrivo('facebook', 'vecchia', $parte(), ['termini_accettati' => true])->json('data');
+    $nata = conferma($finto, $primo, 'anna@example.com');
+    expect($nata->status())->toBe(201);
+
+    $this->travel(2)->minutes();
+    $secondo = arrivo('facebook', 'nuova', $parte());
+    expect($secondo->status())->toBe(202);
+
+    $sostituita = conferma($finto, $secondo->json('data'), 'anna@example.com');
+    expect($sostituita->status())->toBe(201)->and($sostituita->json('data.gettone.utente.id'))->toBe($nata->json('data.gettone.utente.id'));
+
+    // La vecchia è archiviata: non rientra da sola.
+    expect(arrivo('facebook', 'vecchia', $parte())->json('codice'))->toBe('verifica_non_riuscita')
+        ->and(arrivo('facebook', 'nuova', $parte())->status())->toBe(201);
 });
 
 it("accessi.provider.crea: una persona che c'è già si collega senza termini, e dalla seconda volta entra per l'identità, anche se ha cambiato l'email (#1429)", function () {
