@@ -58,12 +58,12 @@ it('caricaFile con verbo PATCH e campi li manda accanto a _method; un verbo che 
     expect(fn () => Api::workspace()->caricaFile('/v1/x', 'file', 'B', 'n.pdf', [], 'DELETE'))->toThrow(InvalidArgumentException::class);
 });
 
-it('un 409 (scansione in corso o infetto) o un 422 di un caricamento arriva come ErroreApi', function () {
-    Http::fake([API.'/*' => Http::response(['type' => 'https://docs.zeiras.com/v1/errori/file_infetto', 'title' => 'T', 'status' => 409, 'detail' => 'D', 'codice' => 'file_infetto'], 409, ['Content-Type' => 'application/problem+json'])]);
+it('un 409 limite_raggiunto o richiesta_in_corso di un caricamento arriva come ErroreApi', function () {
+    Http::fake([API.'/*' => Http::response(['type' => 'https://docs.zeiras.com/v1/errori/limite_raggiunto', 'title' => 'T', 'status' => 409, 'detail' => 'D', 'codice' => 'limite_raggiunto'], 409, ['Content-Type' => 'application/problem+json'])]);
     apriSessione();
 
     expect(fn () => Api::workspace()->caricaFile('/v1/bookings/vetrine/abc/materiale', 'file', 'X', 'a.pdf', ['titolo' => 'A'], 'POST'))
-        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(409)->and($e->codice)->toBe('file_infetto'));
+        ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(409)->and($e->codice)->toBe('limite_raggiunto'));
 });
 
 it('Scaricamento ammette png, jpeg, gif, webp e octet-stream: tipo, nome predefinito con la sua estensione (deve fallire se un\'immagine è BackofficeNonRisponde)', function (string $tipo, string $predefinito) {

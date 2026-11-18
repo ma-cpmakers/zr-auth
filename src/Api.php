@@ -184,8 +184,8 @@ final class Api
     /**
      * Un invio `multipart/form-data` con un solo file (la foto della persona, `io.foto.modifica`, #2870; la copertina e il materiale di una vetrina di
      * Bookings): `$campo` è il nome del campo (`file`), `$contenuto` i byte e `$nome` il nome che il browser aveva. Il backoffice rilegge il file e non si
-     * fida del nome né del tipo. Gli errori sono quelli di ogni chiamata: il 422 sul pointer `#/file`, il 409 di un file in scansione o infetto, sono un
-     * `ErroreApi`, prima di qualunque altro byte di lavoro.
+     * fida del nome né del tipo. Gli errori sono quelli di ogni chiamata: il 422 sul pointer `#/file`, il 409 `limite_raggiunto` o `richiesta_in_corso`, il 429, sono un
+     * `ErroreApi`.
      *
      * `$campi` sono i campi di testo accanto al file (`titolo`, `visibilita` di una voce del materiale). `$verbo` è `PATCH` (il default: una modifica) o
      * `POST` (una creazione, come `bookings.vetrine.materiale.crea`). Una modifica va come `POST` con `_method=PATCH` nel corpo (il method override di

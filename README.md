@@ -514,7 +514,7 @@ Api::workspace()->caricaFile("/v1/bookings/vetrine/{$id}/materiale", 'file', $pd
 - `$campi` sono i campi di testo accanto al file. `$verbo` è `PATCH` (il default: va come `POST` con `_method=PATCH`, perché PHP riempie `$_FILES` solo per un POST) o `POST`
   (una creazione: niente `_method`); un altro verbo è `InvalidArgumentException`.
 - `$chiave` è la `Idempotency-Key`: una nuova per ogni invio voluto dalla persona, la stessa per un suo rinvio.
-- Gli errori sono quelli di ogni chiamata: un 422 sul pointer `#/file`, un 409 di un file in scansione o infetto, un 429, arrivano come `ErroreApi` prima di ogni altro lavoro.
+- Gli errori sono quelli di ogni chiamata: un 422 sul pointer `#/file`, un 409 `limite_raggiunto` o `richiesta_in_corso`, un 429, arrivano come `ErroreApi`.
 - Il finto (`BackofficeFinto`) risponde ai due metodi con il CSV dei suoi contatti e delle sue aziende, a proprietario e amministratore.
 
 ## Lo staff di Zeiras: `Api::staff()` (da #2911, F1)
