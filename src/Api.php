@@ -182,18 +182,39 @@ final class Api
     }
 
     /**
-     * Una modifica `multipart/form-data` con un solo file (la foto della persona, `io.foto.modifica`, #2870): `$campo` è il nome del campo (`file`), `$contenuto` i
-     * byte e `$nome` il nome che il browser aveva. Il backoffice rilegge il file e non si fida del nome né del tipo. Gli errori sono quelli di ogni chiamata:
-     * il 422 sul pointer `#/file` è un `ErroreApi`. Va come `POST` con `_method=PATCH` nel corpo (il method override di Laravel): PHP riempie `$_FILES` solo per
-     * un POST, e un `PATCH` multipart arriva al backoffice senza il file (422 `obbligatorio` su `#/file`).
+     * Un invio `multipart/form-data` con un solo file (la foto della persona, `io.foto.modifica`, #2870; la copertina e il materiale di una vetrina di
+     * Bookings): `$campo` è il nome del campo (`file`), `$contenuto` i byte e `$nome` il nome che il browser aveva. Il backoffice rilegge il file e non si
+     * fida del nome né del tipo. Gli errori sono quelli di ogni chiamata: il 422 sul pointer `#/file`, il 409 di un file in scansione o infetto, sono un
+     * `ErroreApi`, prima di qualunque altro byte di lavoro.
+     *
+     * `$campi` sono i campi di testo accanto al file (`titolo`, `visibilita` di una voce del materiale). `$verbo` è `PATCH` (il default: una modifica) o
+     * `POST` (una creazione, come `bookings.vetrine.materiale.crea`). Una modifica va come `POST` con `_method=PATCH` nel corpo (il method override di
+     * Laravel): PHP riempie `$_FILES` solo per un POST, e un `PATCH` multipart arriva al backoffice senza il file (422 `obbligatorio` su `#/file`);
+     * una creazione è già una POST e non porta `_method`. `$chiave` è la `Idempotency-Key` (una nuova per ogni invio voluto dalla persona: un
+     * rinvio dello stesso invio la riusa).
      *
      *     Api::persona()->caricaFile('/v1/io/foto', 'file', $contenuto, 'foto.jpg');
+     *     Api::workspace()->caricaFile("/v1/bookings/vetrine/{$id}/materiale", 'file', $pdf, 'scheda.pdf', ['titolo' => 'Scheda'], 'POST', $chiave);
      *
+     * @param  array<string, scalar>  $campi
      * @return array<mixed>
+     *
+     * @throws InvalidArgumentException se `$verbo` non è `POST` né `PATCH`
      */
-    public function caricaFile(string $percorso, string $campo, string $contenuto, string $nome): array
+    public function caricaFile(string $percorso, string $campo, string $contenuto, string $nome, array $campi = [], string $verbo = 'PATCH', ?string $chiave = null): array
     {
-        return $this->chiama(fn (PendingRequest $richiesta) => $richiesta->attach($campo, $contenuto, $nome)->post($percorso, ['_method' => 'PATCH']), $percorso);
+        if (! in_array($verbo, ['POST', 'PATCH'], true)) {
+            throw new InvalidArgumentException('Un caricamento è una POST o una PATCH (con _method).');
+        }
+
+        $parti = array_map(strval(...), $campi);
+
+        if ($verbo === 'PATCH') {
+            $parti = ['_method' => 'PATCH'] + $parti;
+        }
+
+        return $this->chiama(fn (PendingRequest $richiesta) => ($chiave === null ? $richiesta : $richiesta->withHeaders(['Idempotency-Key' => $chiave]))
+            ->attach($campo, $contenuto, $nome)->post($percorso, $parti), $percorso);
     }
 
     /**

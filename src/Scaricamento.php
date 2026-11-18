@@ -12,7 +12,7 @@ use Zeiras\Auth\Errori\BackofficeNonRisponde;
 /**
  * Un file che il backoffice manda a flusso (`Api::scarica`, #1906): l'esportazione CSV del CRM. Il corpo non è mai tutto in memoria:
  * `blocchi()` lo legge a pezzi, entro `zr-auth.scarico` secondi, e `comeRisposta()` lo passa al browser a pezzi, con le intestazioni
- * che un file da salvare vuole. Il tipo è uno di `TIPI` (un elenco chiuso: `text/csv`, `application/zip` e `application/pdf`) e il nome del file è ripulito: mai un
+ * che un file da salvare vuole. Il tipo è uno di `TIPI` (un elenco chiuso: `text/csv`, `application/zip`, `application/pdf`, le immagini `image/png`, `image/jpeg`, `image/gif`, `image/webp` e `application/octet-stream`) e il nome del file è ripulito: mai un
  * percorso, un carattere di controllo, un a capo.
  *
  *     return Api::workspace()->scarica('/v1/crm/persone/esportazione', ['stato' => 'lead'])->comeRisposta();
@@ -20,16 +20,26 @@ use Zeiras\Auth\Errori\BackofficeNonRisponde;
 final class Scaricamento
 {
     /** I tipi che si scaricano. Crescere questo elenco è una decisione: ogni tipo è un file che il browser potrebbe eseguire. */
-    public const TIPI = ['text/csv', 'application/zip', 'application/pdf'];
+    public const TIPI = ['text/csv', 'application/zip', 'application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/octet-stream'];
+
+    /** I tipi che il browser mostra nella pagina (`inLinea()`): le immagini. Un PDF, un CSV, uno ZIP e un `octet-stream` si salvano sempre. */
+    public const IMMAGINI = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 
     /** Il nome che resta se il backoffice non ne dà uno che vale (per un CSV; vedi `NOMI_PREDEFINITI` per gli altri tipi). */
     public const NOME_PREDEFINITO = 'scaricamento.csv';
 
     /** Il nome che resta, per tipo, se il backoffice non ne dà uno che vale. */
-    public const NOMI_PREDEFINITI = ['text/csv' => 'scaricamento.csv', 'application/zip' => 'zeiras-i-miei-dati.zip', 'application/pdf' => 'zeiras-preventivo.pdf'];
+    public const NOMI_PREDEFINITI = [
+        'text/csv' => 'scaricamento.csv', 'application/zip' => 'zeiras-i-miei-dati.zip', 'application/pdf' => 'zeiras-preventivo.pdf',
+        'image/png' => 'immagine.png', 'image/jpeg' => 'immagine.jpg', 'image/gif' => 'immagine.gif', 'image/webp' => 'immagine.webp',
+        'application/octet-stream' => 'file.bin',
+    ];
 
     /** L'estensione che un nome di file ha sempre, per tipo. */
-    private const ESTENSIONI = ['text/csv' => 'csv', 'application/zip' => 'zip', 'application/pdf' => 'pdf'];
+    private const ESTENSIONI = [
+        'text/csv' => 'csv', 'application/zip' => 'zip', 'application/pdf' => 'pdf',
+        'image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp', 'application/octet-stream' => 'bin',
+    ];
 
     /** Le lettere di un nome di file: il resto diventa un trattino. */
     private const NOME_MASSIMO = 100;
@@ -130,9 +140,15 @@ final class Scaricamento
         }
     }
 
+    /** Il file si mostra nella pagina (un'immagine) invece di salvarsi: mai un PDF, un CSV, uno ZIP né un `octet-stream`. */
+    public function inLinea(): bool
+    {
+        return in_array($this->tipo, self::IMMAGINI, true);
+    }
+
     /**
-     * Le intestazioni che il browser vuole per salvare il file: il tipo con la sua codifica, il nome ripulito, `nosniff` (il browser non
-     * indovina un altro tipo) e `no-store` (sono dati personali in blocco).
+     * Le intestazioni che il browser vuole per salvare il file (`attachment`) o, per un'immagine (`inLinea()`), per mostrarlo (`inline`): il tipo con la
+     * sua codifica, il nome ripulito, `nosniff` (il browser non indovina un altro tipo) e `no-store` (sono dati personali in blocco).
      *
      * @return array<string, string>
      */
@@ -140,7 +156,7 @@ final class Scaricamento
     {
         return [
             'Content-Type' => str_starts_with($this->tipo, 'text/') ? $this->tipo.'; charset=utf-8' : $this->tipo,
-            'Content-Disposition' => 'attachment; filename="'.$this->nome.'"',
+            'Content-Disposition' => ($this->inLinea() ? 'inline' : 'attachment').'; filename="'.$this->nome.'"',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'no-store',
         ];
