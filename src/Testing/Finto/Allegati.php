@@ -9,8 +9,10 @@ use Illuminate\Validation\Rule;
  * I file di una scheda nel backoffice finto (#2793): `board.schede.allegati.elenca`, `.crea`, `.elimina` e `.contenuto.mostra` (AllegatiController). I byte
  * stanno in memoria, per id.
  *
- * Come il vero: un file nasce `in_scansione` (la scansione parte in coda) e si scarica solo da `pulito` (409 `scansione_in_corso` prima, 409 `infetto`
- * per un infetto). Il finto non ha la coda: la scansione la chiude chi prova, con `scansiona($id)` (o `scansionaTutti()`), `pulito` o `infetto`. Il tipo lo
+ * Come il vero di produzione, che non ha un antivirus (zr-pm 18/11, regola di Luciano): un file nasce `non_scansionato` e si scarica subito; nessuno lo ha controllato, e la
+ * pagina non deve dire il contrario. Con `conAntivirus()` il finto fa come il vero con uno scanner configurato: il file nasce `in_scansione` (la scansione parte in coda) e si
+ * scarica solo da `pulito` (409 `scansione_in_corso` prima, 409 `infetto` per un infetto). Il finto non ha la coda: la scansione la chiude chi prova, con `scansiona($id)` (o
+ * `scansionaTutti()`), `pulito` o `infetto`. Il tipo lo
  * dicono i byte, non il nome (un eseguibile o uno script è 422 su `#/file`), 25 MB al più (413 `file_troppo_grande`), 50 file per scheda (409
  * `limite_raggiunto`). Un file `riservato` lo vedono solo l'autore, il proprietario e gli amministratori: per gli altri è assente dall'elenco e da
  * `n_allegati` e il suo contenuto è 404. `elimina` toglie il file dall'API (il vero lo archivia). Non ci sono la quota del workspace, i freni né il cifrario dei
@@ -22,8 +24,19 @@ trait Allegati
 
     private const ALLEGATI_PER_SCHEDA = 50;
 
+    /** C'è uno scanner? Senza (di serie, come in produzione) un file nasce `non_scansionato`. */
+    private bool $allegatiConAntivirus = false;
+
     /** I tipi che si vedono in linea nel browser (Allegati::IN_LINEA del backoffice): ogni altro è sempre `attachment`. */
     private const ALLEGATI_IN_LINEA = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+    /** Come il backoffice con ZR_ALLEGATI_SCANNER_INDIRIZZO o _SOCKET: i file nuovi nascono `in_scansione` e si scaricano solo da `pulito`. */
+    public function conAntivirus(): self
+    {
+        $this->allegatiConAntivirus = true;
+
+        return $this;
+    }
 
     /**
      * Lo stato della scansione di un file, come se la coda l'avesse finita: `pulito` (si scarica) o `infetto` (409 `infetto`). Il file deve esserci e
@@ -33,6 +46,10 @@ trait Allegati
     {
         if (! isset($this->allegati[$allegato]) || $this->allegati[$allegato]['tolto']) {
             throw new \InvalidArgumentException('Il file '.$allegato.' non c\'è nel backoffice finto.');
+        }
+
+        if ($this->allegati[$allegato]['stato'] === 'non_scansionato') {
+            throw new \InvalidArgumentException('Senza antivirus un file non si scansiona: il file '.$allegato.' è `non_scansionato`; per provare la scansione chiama `conAntivirus()` prima di caricarlo.');
         }
 
         if (! in_array($esito, ['pulito', 'infetto'], true)) {
@@ -149,7 +166,7 @@ trait Allegati
 
     /**
      * board.schede.allegati.crea (AllegatiController::crea): un file per chiamata, `multipart/form-data` col campo `file` e, facoltativo, `visibilita`;
-     * 201 col file `in_scansione`. Nell'ordine del backoffice: il ruolo e l'app `pm` (403), la scheda (404), la Idempotency-Key, i 409 di stato
+     * 201 col file `non_scansionato` (`in_scansione` con `conAntivirus()`). Nell'ordine del backoffice: il ruolo e l'app `pm` (403), la scheda (404), la Idempotency-Key, i 409 di stato
      * (`board_chiusa`, `scheda_archiviata`), il corpo (413 `file_troppo_grande`, poi 422 sul file e su `visibilita`), il tipo dai byte (422 su `#/file`),
      * 409 `limite_raggiunto` (50 file per scheda).
      *
@@ -196,7 +213,7 @@ trait Allegati
                 'byte' => $file['byte'] ?? '',
                 'autore' => $chi['persona'],
                 'creato_il' => now(),
-                'stato' => 'in_scansione',
+                'stato' => $this->allegatiConAntivirus ? 'in_scansione' : 'non_scansionato',
                 'visibilita' => $dati['visibilita'] ?? 'workspace',
                 'tolto' => false,
             ];

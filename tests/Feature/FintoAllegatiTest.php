@@ -10,13 +10,14 @@ use Zeiras\Auth\Testing\BackofficeFinto;
 const PNG_FINTO = "\x89PNG\r\n\x1a\n";
 
 /**
- * Un workspace con `pm`, una fase, la proprietaria e un membro: [finto, workspace, fase, gettone della proprietaria, gettone del membro].
+ * Un workspace con `pm`, una fase, la proprietaria e un membro (di serie con l'antivirus: i file nascono `in_scansione`; senza è come in produzione): [finto, workspace, fase, gettone della proprietaria, gettone del membro].
  *
  * @return array{BackofficeFinto, array<string, mixed>, array<string, mixed>, string, string}
  */
-function conUnaSchedaDaAllegare(): array
+function conUnaSchedaDaAllegare(bool $antivirus = true): array
 {
     $finto = BackofficeFinto::attiva();
+    $antivirus && $finto->conAntivirus();
     $anna = $finto->persona('anna@example.com', PASSWORD, 'Anna Bianchi');
     $luca = $finto->persona('luca@example.com', PASSWORD, 'Luca Verdi');
     $studio = $finto->workspace('Studio', $anna);
@@ -149,4 +150,18 @@ it('la Idempotency-Key ripetuta con lo stesso file non ne carica un secondo; con
     expect([$primo->status(), $ripetuto->status(), $ripetuto->json('data.id')])->toBe([201, 201, $primo->json('data.id')])
         ->and(count(alFinto('GET', "/v1/board/schede/{$fase['id']}/allegati", null, $gettone)->json('data')))->toBe(1)
         ->and([$altro->status(), $altro->json('codice')])->toBe([422, 'chiave_idempotenza_riusata']);
+});
+
+it('senza antivirus, come in produzione, un file nasce non_scansionato e si scarica subito; la scansione non si chiude su un file che nessuno scansiona', function () {
+    [$finto, , $fase, $gettone] = conUnaSchedaDaAllegare(antivirus: false);
+
+    $nuovo = caricaNelFinto($gettone, $fase['id'], "%PDF-1.4\n...", 'relazione.pdf');
+    $id = $nuovo->json('data.id');
+    $contenuto = alFinto('GET', "/v1/board/schede/{$fase['id']}/allegati/{$id}/contenuto", null, $gettone);
+    $elenco = alFinto('GET', "/v1/board/schede/{$fase['id']}/allegati", null, $gettone);
+
+    expect([$nuovo->status(), $nuovo->json('data.stato')])->toBe([201, 'non_scansionato'])
+        ->and([$contenuto->status(), $contenuto->body()])->toBe([200, "%PDF-1.4\n..."])
+        ->and(array_column($elenco->json('data'), 'stato'))->toBe(['non_scansionato'])
+        ->and(fn () => $finto->scansiona($id))->toThrow(InvalidArgumentException::class, 'non si scansiona');
 });
