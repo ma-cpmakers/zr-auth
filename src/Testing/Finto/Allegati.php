@@ -27,6 +27,12 @@ trait Allegati
     /** C'è uno scanner? Senza (di serie, come in produzione) un file nasce `non_scansionato`. */
     private bool $allegatiConAntivirus = false;
 
+    /** La quota del workspace nel backoffice (1 GiB, il piano gratuito, per tutti: Luciano via zr-pm 18/11): è il `limite` dell'errore. */
+    private const ALLEGATI_QUOTA_WORKSPACE = 1073741824;
+
+    /** Il tetto che il finto fa valere al posto di 1 GiB, per provare il messaggio senza caricare un GiB: null = nessuno (di serie). */
+    private ?int $allegatiTettoDiProva = null;
+
     /** I tipi che si vedono in linea nel browser (Allegati::IN_LINEA del backoffice): ogni altro è sempre `attachment`. */
     private const ALLEGATI_IN_LINEA = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 
@@ -34,6 +40,18 @@ trait Allegati
     public function conAntivirus(): self
     {
         $this->allegatiConAntivirus = true;
+
+        return $this;
+    }
+
+    /**
+     * La quota di spazio del workspace con un tetto basso, per provare il messaggio dell'utente: oltre `$byte` (la somma dei file del workspace, anche
+     * di quelli tolti, più il nuovo) il caricamento è 409 `limite_raggiunto`, e il `limite` dell'errore è sempre quello vero, 1073741824. Di serie il
+     * finto non ha quota.
+     */
+    public function conSpazioDegliAllegatiPieno(int $byte = 1): self
+    {
+        $this->allegatiTettoDiProva = $byte;
 
         return $this;
     }
@@ -168,7 +186,7 @@ trait Allegati
      * board.schede.allegati.crea (AllegatiController::crea): un file per chiamata, `multipart/form-data` col campo `file` e, facoltativo, `visibilita`;
      * 201 col file `non_scansionato` (`in_scansione` con `conAntivirus()`). Nell'ordine del backoffice: il ruolo e l'app `pm` (403), la scheda (404), la Idempotency-Key, i 409 di stato
      * (`board_chiusa`, `scheda_archiviata`), il corpo (413 `file_troppo_grande`, poi 422 sul file e su `visibilita`), il tipo dai byte (422 su `#/file`),
-     * 409 `limite_raggiunto` (50 file per scheda).
+     * 409 `limite_raggiunto` (50 file per scheda; con `conSpazioDegliAllegatiPieno()` anche la quota del workspace).
      *
      * @param  array<mixed>  $corpo  le parti del multipart, come le dà Http::fake
      * @return array{int, array<string, mixed>, array<string, string>}
@@ -200,6 +218,12 @@ trait Allegati
 
             if (count(array_filter($this->allegati, fn (array $allegato) => $allegato['scheda'] === $mia['id'] && ! $allegato['tolto'])) >= self::ALLEGATI_PER_SCHEDA) {
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ALLEGATI_PER_SCHEDA]);
+            }
+
+            // La quota del workspace (come il backoffice: conta anche i file tolti, restano sul disco); solo con un tetto di prova.
+            if ($this->allegatiTettoDiProva !== null
+                && array_sum(array_column(array_filter($this->allegati, fn (array $allegato) => $allegato['workspace'] === $chi['workspace']), 'dimensione')) + strlen($file['byte'] ?? '') > $this->allegatiTettoDiProva) {
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ALLEGATI_QUOTA_WORKSPACE]);
             }
 
             $id = self::id();

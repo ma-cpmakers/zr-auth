@@ -104,6 +104,18 @@ it('più grande di 25 MB è 413 file_troppo_grande; la 51ª file di una scheda �
         ->and([$oltre->status(), $oltre->json('codice')])->toBe([409, 'limite_raggiunto'])->and($oltre->json('limite'))->toBe(50);
 });
 
+it('con conSpazioDegliAllegatiPieno() il caricamento che supera il tetto è 409 limite_raggiunto col limite vero della quota (1 GiB); di serie il finto non ha quota (#2793)', function () {
+    [$finto, , $fase, $gettone] = conUnaSchedaDaAllegare();
+
+    $primo = caricaNelFinto($gettone, $fase['id'], "%PDF-1.4\nuno", 'a.pdf');
+    $finto->conSpazioDegliAllegatiPieno(20);
+    $secondo = caricaNelFinto($gettone, $fase['id'], "%PDF-1.4\n".str_repeat('b', 30), 'b.pdf');
+
+    expect($primo->status())->toBe(201)
+        ->and([$secondo->status(), $secondo->json('codice')])->toBe([409, 'limite_raggiunto'])
+        ->and($secondo->json('limite'))->toBe(1073741824);
+});
+
 it('un riservato lo vedono solo l\'autore, il proprietario e gli amministratori: per un membro è assente dall\'elenco e da n_allegati, e il contenuto è 404', function () {
     [$finto, , $fase, $anna, $luca] = conUnaSchedaDaAllegare();
 
