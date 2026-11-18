@@ -52,16 +52,18 @@ it('carica la foto, io.mostra dice quando, e immagine() dà il file con l\'ETag 
         ->and($api->immagine('/v1/io/foto/file', $file['etag'])['stato'])->toBe(200);
 });
 
-it('rifiuta peso, formato e lato con 422 sul file, un campo in più, e il file mancante (#2870, D.1)', function () {
+it('rifiuta peso, formato, lato e pixel totali con 422 sul file, un campo in più, e il file mancante (#2870, D.1)', function () {
     $finto = BackofficeFinto::attiva();
     [$api, $gettone] = personaConSessione($finto);
-    $png = "\x89PNG\r\n\x1a\n".pack('N', 13).'IHDR'.pack('NN', 4001, 10).str_repeat("\0", 16);
+    $png = "\x89PNG\r\n\x1a\n".pack('N', 13).'IHDR'.pack('NN', 6001, 10).str_repeat("\0", 16);
+    $pixel = "\x89PNG\r\n\x1a\n".pack('N', 13).'IHDR'.pack('NN', 5001, 5000).str_repeat("\0", 16);
 
     foreach ([
-        'troppo_lungo' => str_repeat('a', 2 * 1024 * 1024 + 1),
-        'formato' => 'non sono un\'immagine',
-        'fuori_intervallo' => $png,
-    ] as $regola => $contenuto) {
+        ['troppo_lungo', str_repeat('a', 2 * 1024 * 1024 + 1)],
+        ['formato', 'non sono un\'immagine'],
+        ['fuori_intervallo', $png],
+        ['fuori_intervallo', $pixel],
+    ] as [$regola, $contenuto]) {
         expect(fn () => $api->caricaFile('/v1/io/foto', 'file', $contenuto, 'foto.jpg'))
             ->toThrow(fn (ErroreApi $e) => expect($e->stato)->toBe(422)->and($e->codice)->toBe('dati_non_validi')
                 ->and($e->errori[0]['pointer'])->toBe('#/file')->and($e->errori[0]['regola'])->toBe($regola));

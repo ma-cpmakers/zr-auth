@@ -13,7 +13,7 @@ use Closure;
  */
 trait PrivacyCancellazioni
 {
-    /** @var array<string, array{persona: string, richiesta_il: \Carbon\CarbonImmutable, confermata: bool}> per codice */
+    /** @var array<string, array{persona: string, richiesta_il: \Carbon\CarbonImmutable, confermata: bool, lingua: ?string}> per codice */
     private array $cancellazioniPrivacy = [];
 
     /** @var array<string, string> l'ultimo codice emesso per un'email (normalizzata), come l'avrebbe letto la persona nell'email */
@@ -33,6 +33,8 @@ trait PrivacyCancellazioni
     {
         $regole = [
             'email' => ['bail', 'required', 'string', 'max:254', 'email:rfc,filter'],
+            // La lingua dell'email e del suo link (#3762): facoltativa, come nel vero; il finto non manda email, la tiene con la richiesta.
+            'lingua' => ['bail', 'sometimes', 'nullable', 'string', 'in:it,en,es'],
             'sito_web' => ['bail', 'sometimes', 'nullable', 'string', 'max:1000'],
             'compilato_in_ms' => ['bail', 'required', 'integer:strict', 'min:0'],
         ];
@@ -50,7 +52,7 @@ trait PrivacyCancellazioni
 
         if ($persona !== null && ! isset($this->eliminazioniPersona[$persona]) && $this->proprietaDaTrasferire($persona) === []) {
             $codice = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-            $this->cancellazioniPrivacy[$codice] = ['persona' => $persona, 'richiesta_il' => now()->toImmutable()->startOfMillisecond(), 'confermata' => false];
+            $this->cancellazioniPrivacy[$codice] = ['persona' => $persona, 'richiesta_il' => now()->toImmutable()->startOfMillisecond(), 'confermata' => false, 'lingua' => $campi['lingua'] ?? null];
             $this->codiciDiCancellazione[$email] = $codice;
         }
 
