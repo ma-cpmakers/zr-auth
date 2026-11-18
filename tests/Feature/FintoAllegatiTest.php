@@ -101,7 +101,7 @@ it('più grande di 25 MB è 413 file_troppo_grande; la 51ª file di una scheda �
     $oltre = caricaNelFinto($gettone, $fase['id'], "%PDF-1.4\n", 'uno-di-troppo.pdf');
 
     expect([$grande->status(), $grande->json('codice')])->toBe([413, 'file_troppo_grande'])
-        ->and([$oltre->status(), $oltre->json('codice')])->toBe([409, 'limite_raggiunto']);
+        ->and([$oltre->status(), $oltre->json('codice')])->toBe([409, 'limite_raggiunto'])->and($oltre->json('limite'))->toBe(50);
 });
 
 it('un riservato lo vedono solo l\'autore, il proprietario e gli amministratori: per un membro è assente dall\'elenco e da n_allegati, e il contenuto è 404', function () {

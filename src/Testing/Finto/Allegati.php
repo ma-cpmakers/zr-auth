@@ -15,7 +15,7 @@ use Illuminate\Validation\Rule;
  * `scansionaTutti()`), `pulito` o `infetto`. Il tipo lo
  * dicono i byte, non il nome (un eseguibile o uno script è 422 su `#/file`), 25 MB al più (413 `file_troppo_grande`), 50 file per scheda (409
  * `limite_raggiunto`). Un file `riservato` lo vedono solo l'autore, il proprietario e gli amministratori: per gli altri è assente dall'elenco e da
- * `n_allegati` e il suo contenuto è 404. `elimina` toglie il file dall'API (il vero lo archivia). Non ci sono la quota del workspace, i freni né il cifrario dei
+ * `n_allegati` e il suo contenuto è 404. `elimina` toglie il file dall'API (il vero lo archivia). Non c'è la quota del workspace (1 GiB: 409 `limite_raggiunto` col suo `limite` in byte), né i freni né il cifrario dei
  * riservati.
  */
 trait Allegati
@@ -199,7 +199,7 @@ trait Allegati
             }
 
             if (count(array_filter($this->allegati, fn (array $allegato) => $allegato['scheda'] === $mia['id'] && ! $allegato['tolto'])) >= self::ALLEGATI_PER_SCHEDA) {
-                throw new Problema('limite_raggiunto');
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::ALLEGATI_PER_SCHEDA]);
             }
 
             $id = self::id();
