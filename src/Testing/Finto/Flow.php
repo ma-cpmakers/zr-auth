@@ -1258,7 +1258,7 @@ trait Flow
     }
 
     /**
-     * flow.fisse.crea (FisseController::crea): una spesa fissa di chi chiama (dal gettone). 201 con la spesa, senza `Location`. `prima_data` è obbligatoria se la frequenza è 3 o 12; il tetto di 100 per
+     * flow.fisse.crea (FisseController::crea): una spesa fissa di chi chiama (dal gettone). 201 con la spesa, senza `Location`. `prima_data` (dal 2000-01-01 al 2100-12-31, #4016) è obbligatoria se la frequenza è 3 o 12; il tetto di 100 per
      * vista (409 `limite_raggiunto`) si conta dopo il corpo. Il freno si conta prima del corpo. Accetta Idempotency-Key.
      *
      * @param  array<mixed>  $corpo
@@ -1275,7 +1275,7 @@ trait Flow
                 'nome' => ['bail', 'required', 'string', 'max:'.self::FLOW_FISSA_NOME, new NomeScritto],
                 'importo' => ['bail', 'required', 'integer:strict', 'between:1,'.self::FLOW_IMPORTO],
                 'frequenza_mesi' => ['bail', 'required', 'integer:strict', Rule::in(self::FLOW_FISSE_FREQUENZE)],
-                'prima_data' => ['bail', 'nullable', Rule::requiredIf(fn () => in_array($corpo['frequenza_mesi'] ?? null, [3, 12], true)), 'string', 'date_format:Y-m-d'],
+                'prima_data' => ['bail', 'nullable', Rule::requiredIf(fn () => in_array($corpo['frequenza_mesi'] ?? null, [3, 12], true)), 'string', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:2100-12-31'],
             ]);
 
             if (count(array_filter($this->flow['fisse'], fn (array $fissa) => ! $fissa['archiviato'] && $this->fissaDellaVistaFlow($fissa, $chi, $campi['visibilita']))) >= self::FLOW_FISSE_TETTO) {
