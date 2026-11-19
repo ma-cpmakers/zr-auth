@@ -33,6 +33,11 @@ trait Flow
 
     private const FLOW_FISSE_TETTO = 100;
 
+    /** Il tetto dei movimenti vivi di un conto e di una vista (#4018, zr-pm-74 19/11) e le date ammesse di un movimento (#4019). */
+    private const FLOW_MOVIMENTI_TETTO_CONTO = 50000;
+
+    private const FLOW_MOVIMENTI_TETTO_VISTA = 150000;
+
     /** Il tetto dei collegamenti bancari vivi di una persona (Connessione::TETTO) e l'indirizzo che il finto dà alla banca. */
     private const FLOW_COLLEGAMENTI_TETTO = 5;
 
@@ -411,18 +416,19 @@ trait Flow
         $chi = $this->conFlow($richiesta);
         $esegue = function () use ($chi, $corpo, $conto) {
             $conto = $this->contoFlow($chi, $conto);
+            // Il freno si conta prima di validare il corpo (#4017).
+            $this->frena('freni:flow.conti.importazioni.crea:'.(($corpo['prova'] ?? null) === true ? 'prova:' : '').$chi['persona'], self::FRENI[($corpo['prova'] ?? null) === true ? 'flow_importazioni_prova_persona' : 'flow_importazioni_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, [
                 'file_nome' => ['required', 'string', 'max:200'],
                 'prova' => ['nullable', 'boolean:strict'],
                 'righe' => ['required', 'array', 'list', 'min:1', 'max:'.self::FLOW_RIGHE],
                 'righe.*' => ['array'],
-                'righe.*.data' => ['required', 'string', 'date_format:Y-m-d'],
+                'righe.*.data' => ['required', 'string', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:2100-12-31'],
                 'righe.*.importo' => ['required', 'integer:strict', 'between:'.-self::FLOW_IMPORTO.','.self::FLOW_IMPORTO],
                 'righe.*.descrizione' => ['required', 'string', 'max:'.self::FLOW_DESCRIZIONE],
                 'righe.*.saldo' => ['nullable', 'integer:strict', 'between:'.-self::FLOW_IMPORTO.','.self::FLOW_IMPORTO],
             ]);
             $prova = (bool) ($campi['prova'] ?? false);
-            $this->frena('freni:flow.conti.importazioni.crea:'.($prova ? 'prova:' : '').$chi['persona'], self::FRENI[$prova ? 'flow_importazioni_prova_persona' : 'flow_importazioni_persona'], self::ORA);
             $lette = $this->analizzaLeRigheFlow($conto, $campi['righe']);
 
             if ($prova) {
@@ -430,6 +436,7 @@ trait Flow
             }
 
             $nuove = array_values(array_filter($lette, fn (array $riga) => ! $riga['doppione']));
+            $this->tettoMovimentiFlow($conto, count($nuove));
             $date = array_column($lette, 'data');
             $id = self::id();
             $ora = self::istanteFlow();
@@ -757,6 +764,7 @@ trait Flow
             $this->frena('freni:flow.movimenti.crea:'.$chi['persona'], self::FRENI['flow_movimenti_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, $this->regoleMovimentoFlow(true));
             $conto = $this->contoFlow($chi, $campi['conto_id']);
+            $this->tettoMovimentiFlow($conto, 1);
             [$categoria, $fonte, $regola] = isset($campi['categoria_id']) ? [$campi['categoria_id'], 'utente', null] : $this->categoriaDiUnaRigaFlow($this->regoleDelContoFlow($conto), $campi['descrizione']);
             $id = self::id();
             $this->flow['movimenti'][$id] = [
@@ -767,6 +775,28 @@ trait Flow
 
             return [201, ['data' => $voce], ['Location' => "/v1/flow/movimenti/{$id}", 'ETag' => self::etagCrm($voce)]];
         });
+    }
+
+    /**
+     * Il tetto dei movimenti vivi (#4018): `$nuovi` in più sul conto o nella sua vista (i conti comuni, o i personali del titolare) non superano 50.000 per conto e
+     * 150.000 per vista. Oltre, 409 `limite_raggiunto` con `limite` e `ambito` (`conto` o `vista`).
+     *
+     * @param  array<string, mixed>  $conto
+     */
+    private function tettoMovimentiFlow(array $conto, int $nuovi): void
+    {
+        $vivi = array_filter($this->flow['movimenti'], fn (array $movimento) => ! $movimento['archiviato']);
+
+        if (count(array_filter($vivi, fn (array $movimento) => $movimento['conto'] === $conto['id'])) + $nuovi > self::FLOW_MOVIMENTI_TETTO_CONTO) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_MOVIMENTI_TETTO_CONTO, 'ambito' => 'conto']);
+        }
+
+        $dellaVista = array_column(array_filter($this->flow['conti'], fn (array $altro) => $altro['workspace'] === $conto['workspace'] && ! $altro['archiviato'] && $altro['visibilita'] === $conto['visibilita']
+            && ($conto['visibilita'] === 'comune' || $altro['titolare'] === $conto['titolare'])), 'id');
+
+        if (count(array_filter($vivi, fn (array $movimento) => in_array($movimento['conto'], $dellaVista, true))) + $nuovi > self::FLOW_MOVIMENTI_TETTO_VISTA) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_MOVIMENTI_TETTO_VISTA, 'ambito' => 'vista']);
+        }
     }
 
     /**
@@ -884,7 +914,7 @@ trait Flow
                 'escluso' => ['bail', 'filled', 'boolean:strict'],
                 'escluso_motivo' => ['bail', 'nullable', 'string', Rule::in(self::FLOW_MOTIVI)],
             ]),
-            'data' => ['bail', ...$presente, 'string', 'date_format:Y-m-d'],
+            'data' => ['bail', ...$presente, 'string', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:2100-12-31'],
             'importo' => ['bail', ...$presente, 'integer:strict', 'between:'.-self::FLOW_IMPORTO.','.self::FLOW_IMPORTO, 'not_in:0'],
             'valuta' => ['bail', 'string', Rule::in(['EUR'])],
             'descrizione' => ['bail', ...$presente, 'string', 'max:'.self::FLOW_DESCRIZIONE],
