@@ -274,6 +274,7 @@ final class Api
         $query['limite'] ??= self::LIMITE;
         $elementi = [];
         $cursore = null;
+        $totale = null;
         // Il cursore da cui chi chiama riparte è già dato: se il backoffice lo ripete, si scopre alla prima risposta.
         $visti = isset($query['cursore']) && is_string($query['cursore']) ? [$query['cursore'] => true] : [];
 
@@ -287,9 +288,11 @@ final class Api
 
             array_push($elementi, ...$risposta['data']);
             $cursore = $risposta['successivo'];
+            // Il `totale` che la risposta ha (un intero ≥ 0), dell'ultima pagina letta; altrimenti nessuno.
+            $totale = isset($risposta['totale']) && is_int($risposta['totale']) && $risposta['totale'] >= 0 ? $risposta['totale'] : null;
 
             if ($cursore === null) {
-                return new Elenco($elementi, false, null);
+                return new Elenco($elementi, false, null, $totale);
             }
 
             if (! is_string($cursore) || $cursore === '') {
@@ -303,7 +306,7 @@ final class Api
             $visti[$cursore] = true;
         }
 
-        return new Elenco($elementi, true, $cursore);
+        return new Elenco($elementi, true, $cursore, $totale);
     }
 
     /**

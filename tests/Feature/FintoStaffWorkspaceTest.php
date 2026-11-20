@@ -79,8 +79,8 @@ it('in_eliminazione è lo stato dell\'eliminazione viva, e il filtro stato lo se
     expect($stati())->toBe([$parte['id'] => 'in_eliminazione', $resta['id'] => 'attivo'])
         ->and($stati(['stato' => 'in_eliminazione']))->toBe([$parte['id'] => 'in_eliminazione'])
         ->and($stati(['stato' => 'attivo']))->toBe([$resta['id'] => 'attivo'])
-        ->and(esitoWorkspaceStaff(fn () => Api::staff($gettone)->get('/v1/staff/workspace', ['stato' => 'sospeso'])))->toBe([422, 'dati_non_validi'])
-        ->and(esitoWorkspaceStaff(fn () => Api::staff($gettone)->post('/v1/staff/workspace/ricerca', ['stato' => 'sospeso'])))->toBe([422, 'dati_non_validi']);
+        ->and(esitoWorkspaceStaff(fn () => Api::staff($gettone)->get('/v1/staff/workspace', ['stato' => 'chiuso'])))->toBe([422, 'dati_non_validi'])
+        ->and(esitoWorkspaceStaff(fn () => Api::staff($gettone)->post('/v1/staff/workspace/ricerca', ['stato' => 'chiuso'])))->toBe([422, 'dati_non_validi']);
 });
 
 it('la ricerca cerca nel nome e nell\'indirizzo con il termine nel corpo; nell\'URL è 422; il cursore è della ricerca che l\'ha dato (F3.1)', function () {
@@ -145,7 +145,7 @@ it('la scheda: la riga dell\'elenco più consumi, eliminazione e fatturazione, e
 
     $scheda = Api::staff($gettone)->get('/v1/staff/workspace/'.$uno['id'])['data'];
 
-    expect(array_keys($scheda))->toBe(['id', 'nome', 'indirizzo', 'azienda', 'proprietario', 'membri_n', 'app_attive_n', 'stato', 'di_prova', 'creato_il', 'consumi', 'eliminazione', 'fatturazione'])
+    expect(array_keys($scheda))->toBe(['id', 'nome', 'indirizzo', 'azienda', 'proprietario', 'membri_n', 'app_attive_n', 'stato', 'di_prova', 'creato_il', 'consumi', 'sospensione', 'eliminazione', 'fatturazione'])
         ->and($scheda)->toMatchArray(['id' => $uno['id'], 'nome' => 'Studio uno', 'membri_n' => 2, 'stato' => 'attivo', 'eliminazione' => null])
         ->and($scheda['consumi'])->toBe(['membri_n' => 2, 'board_n' => 0, 'schede_n' => 0, 'contatti_n' => 0, 'prenotazioni_n' => 0])
         ->and($scheda['fatturazione'])->toBe(['partita_iva' => null, 'paese' => null, 'valuta' => null])

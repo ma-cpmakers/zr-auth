@@ -198,10 +198,11 @@ it('io.notifiche.preferenze.mostra: ogni tipo del catalogo con `app` se non si �
     $tipi = array_column($risposta->json('data.tipi'), null, 'tipo');
 
     expect($risposta->status())->toBe(200)
-        ->and(array_keys($risposta->json('data')))->toBe(['tipi'])
+        ->and(array_keys($risposta->json('data')))->toBe(['tipi', 'riepilogo'])
+        ->and($risposta->json('data.riepilogo'))->toBe(['frequenza' => 'nessuno', 'ora' => '08:00'])
         ->and(array_keys($risposta->json('data.tipi.0')))->toBe(['tipo', 'modulo', 'canale', 'canali'])
-        ->and($risposta->json('data.tipi.0'))->toBe(['tipo' => 'com.zeiras.app.modificata', 'modulo' => 'workspace', 'canale' => 'app', 'canali' => ['app', 'spenta']])
-        ->and($tipi['board.commento.menzione']['canali'])->toBe(['app', 'email', 'spenta'])
+        ->and($risposta->json('data.tipi.0'))->toBe(['tipo' => 'com.zeiras.app.modificata', 'modulo' => 'workspace', 'canale' => 'app', 'canali' => ['app', 'riepilogo', 'spenta']])
+        ->and($tipi['board.commento.menzione']['canali'])->toBe(['app', 'email', 'riepilogo', 'spenta'])
         ->and(array_unique(array_column($tipi, 'canale')))->toBe(['app'])
         // Della persona, non del workspace: vale anche il gettone dell'accesso.
         ->and(alFinto('GET', '/v1/io/notifiche/preferenze', null, $dellAccesso)->json('data'))->toBe($risposta->json('data'))
@@ -235,6 +236,46 @@ it('io.notifiche.preferenze.modifica: cambia i canali dei tipi mandati, tutti o 
     expect($rifiutata->status())->toBe(422)
         ->and(array_column($rifiutata->json('errors'), 'pointer'))->toContain('#/tipi/1/tipo', '#/tipi/3/canale')
         ->and(array_column(alFinto('GET', '/v1/io/notifiche/preferenze', null, $gettone)->json('data.tipi'), 'canale', 'tipo')['board.commento.menzione'])->toBe('app');
+});
+
+it('io.notifiche.preferenze.modifica: il riepilogo (#2734) si sceglie da solo o coi tipi, per campo, e un errore non salva niente', function () {
+    [$finto, , $anna, , $gettone] = conLeNotifiche();
+    $riepilogo = fn () => alFinto('GET', '/v1/io/notifiche/preferenze', null, $gettone)->json('data.riepilogo');
+
+    $scelto = alFinto('PATCH', '/v1/io/notifiche/preferenze', ['riepilogo' => ['frequenza' => 'giornaliero']], $gettone);
+    expect($scelto->status())->toBe(200)
+        ->and($scelto->json('data.riepilogo'))->toBe(['frequenza' => 'giornaliero', 'ora' => '08:00']);
+
+    // Solo i campi mandati cambiano; con i tipi nella stessa chiamata.
+    $insieme = alFinto('PATCH', '/v1/io/notifiche/preferenze', ['tipi' => [['tipo' => 'board.scheda.scade_oggi', 'canale' => 'riepilogo']], 'riepilogo' => ['ora' => '17:30']], $gettone);
+    expect($insieme->json('data.riepilogo'))->toBe(['frequenza' => 'giornaliero', 'ora' => '17:30'])
+        ->and(array_column($insieme->json('data.tipi'), 'canale', 'tipo')['board.scheda.scade_oggi'])->toBe('riepilogo');
+
+    // Un'ora o una frequenza fuori forma, o un corpo senza nessuna delle due parti: 422, e nemmeno l'altra parte si salva.
+    $oraSbagliata = alFinto('PATCH', '/v1/io/notifiche/preferenze', ['tipi' => [['tipo' => 'board.scheda.scade_oggi', 'canale' => 'spenta']], 'riepilogo' => ['ora' => '25:00']], $gettone);
+    $frequenzaSbagliata = alFinto('PATCH', '/v1/io/notifiche/preferenze', ['riepilogo' => ['frequenza' => 'mensile']], $gettone);
+    $vuoto = alFinto('PATCH', '/v1/io/notifiche/preferenze', ['riepilogo' => []], $gettone);
+    $senzaParti = alFinto('PATCH', '/v1/io/notifiche/preferenze', [], $gettone);
+
+    expect($oraSbagliata->status())->toBe(422)
+        ->and(array_column($oraSbagliata->json('errors'), 'pointer'))->toBe(['#/riepilogo/ora'])
+        ->and($oraSbagliata->json('errors.0.regola'))->toBe('formato')
+        ->and($frequenzaSbagliata->status())->toBe(422)
+        ->and(array_column($frequenzaSbagliata->json('errors'), 'pointer'))->toBe(['#/riepilogo/frequenza'])
+        ->and($vuoto->status())->toBe(422)
+        ->and(array_column($vuoto->json('errors'), 'pointer'))->toBe(['#/riepilogo'])
+        ->and($senzaParti->status())->toBe(422)
+        ->and(array_column($senzaParti->json('errors'), 'pointer'))->toBe(['#'])
+        ->and($riepilogo())->toBe(['frequenza' => 'giornaliero', 'ora' => '17:30'])
+        ->and(array_column(alFinto('GET', '/v1/io/notifiche/preferenze', null, $gettone)->json('data.tipi'), 'canale', 'tipo')['board.scheda.scade_oggi'])->toBe('riepilogo');
+
+    // Il «Non voglio più» dell'email del riepilogo: la frequenza torna `nessuno`, i tipi restano su `riepilogo`.
+    $token = $finto->tokenDiDisiscrizione($anna['id'], 'notifiche.riepilogo.periodico');
+    expect(alFinto('POST', '/v1/notifiche/disiscrizione/verifica', ['token' => $token])->json('data'))->toBe(['tipo' => 'riepilogo', 'canale' => 'riepilogo'])
+        ->and($riepilogo()['frequenza'])->toBe('giornaliero')
+        ->and(alFinto('POST', '/v1/notifiche/disiscrizione', ['token' => $token])->status())->toBe(204)
+        ->and($riepilogo())->toBe(['frequenza' => 'nessuno', 'ora' => '17:30'])
+        ->and(array_column(alFinto('GET', '/v1/io/notifiche/preferenze', null, $gettone)->json('data.tipi'), 'canale', 'tipo')['board.scheda.scade_oggi'])->toBe('riepilogo');
 });
 
 it('notifiche.disiscrizione: il token del finto spegne solo l\'email del suo tipo, senza gettone, e non si consuma (#2733)', function () {

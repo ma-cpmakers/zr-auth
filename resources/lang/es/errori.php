@@ -413,9 +413,13 @@ return [
         'title' => 'Cuenta suspendida',
         'detail' => 'La cuenta de esta persona está suspendida por Zeiras: las credenciales son correctas, pero no se permite el acceso. El método no escribió nada.',
     ],
+    'workspace_sospeso' => [
+        'title' => 'Workspace suspendido',
+        'detail' => 'Este workspace está suspendido por Zeiras: ningún miembro puede entrar mientras lo esté, y el token que tienes no vale por ahora. El método no escribió nada.',
+    ],
     'gia_sospeso' => [
         'title' => 'Ya suspendida',
-        'detail' => 'Esta persona ya está suspendida, y la solicitud no cambió nada.',
+        'detail' => 'Esta persona o este workspace ya está suspendido, y la solicitud no cambió nada.',
     ],
     'utente_mai_acceduto' => [
         'title' => 'Persona que nunca ha entrado',

@@ -227,6 +227,10 @@ final class BackofficeFinto
         ['PATCH', '#^/v1/staff/workspace/([^/]+)/membri/([^/]+)$#', 'staff.workspace.membri.modifica'],
         ['DELETE', '#^/v1/staff/workspace/([^/]+)/membri/([^/]+)$#', 'staff.workspace.membri.elimina'],
         ['PATCH', '#^/v1/staff/workspace/([^/]+)/proprietario$#', 'staff.workspace.proprietario.modifica'],
+        ['POST', '#^/v1/staff/workspace/([^/]+)/sospensione$#', 'staff.workspace.sospensione.crea'],
+        ['DELETE', '#^/v1/staff/workspace/([^/]+)/sospensione$#', 'staff.workspace.sospensione.elimina'],
+        ['POST', '#^/v1/staff/workspace/([^/]+)/eliminazione$#', 'staff.workspace.eliminazione.crea'],
+        ['DELETE', '#^/v1/staff/workspace/([^/]+)/eliminazione$#', 'staff.workspace.eliminazione.elimina'],
         ['GET', '#^/v1/staff/workspace/([^/]+)$#', 'staff.workspace.mostra'],
         ['PATCH', '#^/v1/staff/workspace/([^/]+)$#', 'staff.workspace.modifica'],
         ['GET', '#^/v1/staff/utenti$#', 'staff.utenti.elenca'],
@@ -244,6 +248,7 @@ final class BackofficeFinto
         ['GET', '#^/v1/staff/esportazioni/([^/]+)$#', 'staff.esportazioni.mostra'],
         ['POST', '#^/v1/staff/esportazioni/([^/]+)/scaricamento$#', 'staff.esportazioni.scaricamento.crea'],
         ['GET', '#^/v1/staff/registro$#', 'staff.registro.elenca'],
+        ['POST', '#^/v1/staff/registro/ricerca$#', 'staff.registro.ricerca.crea'],
         ['POST', '#^/v1/staff/registro/esportazioni$#', 'staff.registro.esportazioni.crea'],
         ['GET', '#^/v1/staff$#', 'staff.elenca'],
         ['POST', '#^/v1/staff$#', 'staff.crea'],
@@ -1624,6 +1629,10 @@ final class BackofficeFinto
                 'staff.workspace.membri.elenca' => $this->elencaIMembriDelWorkspaceDelloStaff($richiesta, $parametri[0]),
                 'staff.workspace.membri.modifica' => $this->modificaIlRuoloDiUnMembroDelloStaff($richiesta, $corpo, $parametri[0], $parametri[1]),
                 'staff.workspace.proprietario.modifica' => $this->passaLaProprietaDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.workspace.sospensione.crea' => $this->sospendiUnWorkspaceDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.workspace.sospensione.elimina' => $this->riattivaUnWorkspaceDelloStaff($richiesta, $parametri[0]),
+                'staff.workspace.eliminazione.crea' => $this->pianificaLEliminazioneDelloStaff($richiesta, $corpo, $parametri[0]),
+                'staff.workspace.eliminazione.elimina' => $this->annullaLEliminazioneDelloStaff($richiesta, $parametri[0]),
                 'staff.workspace.membri.elimina' => $this->eliminaUnMembroDelloStaff($richiesta, $parametri[0], $parametri[1]),
                 'staff.workspace.app.modifica' => $this->modificaLeAppDelWorkspaceDelloStaff($richiesta, $corpo, $parametri[0], $parametri[1]),
                 'staff.workspace.mostra' => $this->mostraUnWorkspaceDelloStaff($richiesta, $parametri[0]),
@@ -1643,6 +1652,7 @@ final class BackofficeFinto
                 'staff.esportazioni.mostra' => $this->mostraUnaEsportazioneDelloStaff($richiesta, $parametri[0]),
                 'staff.esportazioni.scaricamento.crea' => $this->scaricaUnaEsportazioneDelloStaff($richiesta, $parametri[0]),
                 'staff.registro.elenca' => $this->elencaIlRegistroDelloStaff($richiesta),
+                'staff.registro.ricerca.crea' => $this->cercaNelRegistroDelloStaff($richiesta, $corpo),
                 'staff.registro.esportazioni.crea' => $this->esportaIlRegistroDelloStaff($richiesta, $corpo),
                 'accessi.crea' => $this->creaAccesso($corpo),
                 'accessi.codici.crea' => $this->creaCodiceDiAccesso($corpo),
@@ -4284,6 +4294,11 @@ final class BackofficeFinto
             throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.workspace_non_tuo'), 'regola' => 'non_trovato', 'pointer' => '#/workspace_id']]);
         }
 
+        // Un workspace sospeso dallo staff (#3261) non fa nascere gettoni.
+        if (isset($this->sospensioniWorkspace[$workspace])) {
+            throw new Problema('workspace_sospeso');
+        }
+
         // Il freno è della persona, con qualunque suo gettone, e si conta dopo il controllo del membro.
         $this->frena('gettoni:'.$chi['persona'], self::FRENI['gettoni'], self::ORA);
 
@@ -6864,7 +6879,7 @@ final class BackofficeFinto
      * @param  array<string, mixed>  $regole  altri parametri da validare con `limite` e `cursore`, in un solo 422 (`ordina` degli elenchi della board)
      * @return array{int, array<string, mixed>}
      */
-    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, int $limiteMassimo = self::LIMITE_MASSIMO, ?string $versione = null, array $regole = []): array
+    private function pagina(Request $richiesta, string $lista, string $chiave, array|Closure $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, int $limiteMassimo = self::LIMITE_MASSIMO, ?string $versione = null, array $regole = [], bool $conTotale = false): array
     {
         $query = $this->testi->validaQuery(self::query($richiesta), [
             'limite' => ['sometimes', 'integer', 'between:1,'.$limiteMassimo],
@@ -6876,7 +6891,7 @@ final class BackofficeFinto
             }],
         ] + $regole);
 
-        return $this->impagina($query, $lista, $chiave, $voci instanceof Closure ? $voci() : $voci, $posizione, $posizioneDelCursore, $dalPiuRecente, $versione);
+        return $this->impagina($query, $lista, $chiave, $voci instanceof Closure ? $voci() : $voci, $posizione, $posizioneDelCursore, $dalPiuRecente, $versione, $conTotale);
     }
 
     /**
@@ -6888,11 +6903,13 @@ final class BackofficeFinto
      * @param  Closure(string): (list<string>|null)  $posizioneDelCursore
      * @return array{int, array<string, mixed>}
      */
-    private function impagina(array $query, string $lista, string $chiave, array $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, ?string $versione = null): array
+    private function impagina(array $query, string $lista, string $chiave, array $voci, Closure $posizione, Closure $posizioneDelCursore, bool $dalPiuRecente = false, ?string $versione = null, bool $conTotale = false): array
     {
         $limite = (int) ($query['limite'] ?? self::LIMITE_PREDEFINITO);
         $verso = $dalPiuRecente ? -1 : 1;
         usort($voci, fn (array $una, array $altra) => $verso * self::confronta($posizione($una), $posizione($altra)));
+        // `totale` (#3773): tutte le voci che i filtri lasciano, non quelle della pagina né solo quelle dopo il cursore.
+        $totale = count($voci);
 
         if (isset($query['cursore'])) {
             $dopo = $posizioneDelCursore((string) ($this->leggiPosizione($lista, $versione === null ? [$chiave] : [$chiave, 'versione'], $query['cursore'])[$chiave] ?? ''))
@@ -6905,7 +6922,7 @@ final class BackofficeFinto
         return [200, [
             'data' => $pagina,
             'successivo' => count($voci) > $limite ? $this->firmaCursore($lista, [$chiave => $pagina[$limite - 1][$chiave]] + ($versione === null ? [] : ['versione' => $versione])) : null,
-        ]];
+        ] + ($conTotale ? ['totale' => $totale] : [])];
     }
 
     /**

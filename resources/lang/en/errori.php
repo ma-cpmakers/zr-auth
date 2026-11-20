@@ -413,9 +413,13 @@ return [
         'title' => 'Account suspended',
         'detail' => 'This person\'s account is suspended by Zeiras: the credentials are right, but access is not allowed. The method wrote nothing.',
     ],
+    'workspace_sospeso' => [
+        'title' => 'Workspace suspended',
+        'detail' => 'This workspace is suspended by Zeiras: no member can enter while it is, and the token you hold is not valid for now. The method wrote nothing.',
+    ],
     'gia_sospeso' => [
         'title' => 'Already suspended',
-        'detail' => 'This person is already suspended, and the request changed nothing.',
+        'detail' => 'This person or this workspace is already suspended, and the request changed nothing.',
     ],
     'utente_mai_acceduto' => [
         'title' => 'Person never signed in',
