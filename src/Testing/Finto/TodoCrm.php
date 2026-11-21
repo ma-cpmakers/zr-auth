@@ -84,7 +84,7 @@ trait TodoCrm
             }
 
             if (count($vivi) >= self::TODO_CRM_TETTI[$ruolo]) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::TODO_CRM_TETTI[$ruolo]]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::TODO_CRM_TETTI[$ruolo]], limite: 'todo_collegamenti_crm_per_ruolo');
             }
 
             $id = self::id();

@@ -2482,7 +2482,7 @@ trait Crm
             }
 
             if ($nuove !== [] && count($this->righeCrm($tipo, $chi['workspace'])) + count($nuove) > self::CRM_TETTI[$tipo]) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI[$tipo]]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI[$tipo]], limite: ['persone' => 'contatti_per_workspace', 'organizzazioni' => 'aziende_per_workspace'][$tipo]);
             }
 
             $importazione = null;
@@ -2982,7 +2982,7 @@ trait Crm
             $campi = $this->testi->validaCorpo($corpo, ['nome' => ['bail', 'required', 'string', 'max:60', new NomeScritto]]);
 
             if (count($this->righeCrm('motivi', $chi['workspace'])) >= self::CRM_TETTI['motivi']) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['motivi']]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['motivi']], limite: 'motivi_per_workspace');
             }
 
             $this->motivoUnicoCrm($chi['workspace'], $campi['nome'], null, 'nome');
@@ -3301,7 +3301,7 @@ trait Crm
     private function nascePipelineCrm(array $chi, array $campi, bool $diPartenza = false): string
     {
         if (count($this->righeCrm('pipeline', $chi['workspace'])) >= self::CRM_TETTI['pipeline']) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['pipeline']]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['pipeline']], limite: 'pipeline_per_workspace');
         }
 
         $id = self::id();
@@ -3398,7 +3398,7 @@ trait Crm
             $fasi = $this->fasiCrm($pipeline);
 
             if (count($fasi) >= self::CRM_TETTI['fasi_per_pipeline']) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['fasi_per_pipeline']]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['fasi_per_pipeline']], limite: 'fasi_per_pipeline');
             }
 
             $id = $this->nasceFaseCrm($chi['workspace'], $pipeline, $campi, self::inCodaCrm($fasi));
@@ -4102,13 +4102,13 @@ trait Crm
         $tutte = array_filter($this->crm['attivita'], fn (array $attivita) => $attivita['workspace'] === $chi['workspace']);
 
         if (count($tutte) >= self::CRM_TETTI['attivita']) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['attivita']]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['attivita']], limite: 'attivita_per_workspace');
         }
 
         $fatta = $campi['fatta'] ?? false;
 
         if (! $fatta && count(array_filter($tutte, fn (array $attivita) => ! $attivita['fatta'] && ! ($attivita['eliminata'] ?? false))) >= self::CRM_TETTI['attivita_non_fatte']) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['attivita_non_fatte']]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['attivita_non_fatte']], limite: 'attivita_non_fatte_per_workspace');
         }
 
         $persona = isset($campi['persona_id']) ? strtolower($campi['persona_id']) : null;
@@ -4265,7 +4265,7 @@ trait Crm
         $riapre = ($campi['fatta'] ?? null) === false && $riga['fatta'];
 
         if ($riapre && count(array_filter($this->righeCrm('attivita', $chi['workspace']), fn (array $attivita) => ! $attivita['fatta'])) >= self::CRM_TETTI['attivita_non_fatte']) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['attivita_non_fatte']]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['attivita_non_fatte']], limite: 'attivita_non_fatte_per_workspace');
         }
 
         if (($campi['persona_id'] ?? null) !== null && $campi['persona_id'] !== $riga['persona_id']) {
@@ -4384,7 +4384,7 @@ trait Crm
             ]);
 
             if (count(array_filter($this->crm['note'], fn (array $nota) => $nota['workspace'] === $chi['workspace'] && ! ($nota['eliminata'] ?? false))) >= self::CRM_TETTI['note']) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['note']]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTI['note']], limite: 'note_per_workspace');
             }
 
             $legami = array_map(fn (string $campo) => isset($campi[$campo]) ? strtolower($campi[$campo]) : null, ['persona_id' => 'persona_id', 'organizzazione_id' => 'organizzazione_id', 'trattativa_id' => 'trattativa_id']);

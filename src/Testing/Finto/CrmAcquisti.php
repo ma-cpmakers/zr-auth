@@ -62,7 +62,7 @@ trait CrmAcquisti
             $campi = $this->testi->validaCorpo($corpo, $this->regoleDellAcquistoCrm($chi['workspace']));
 
             if (count($this->righeCrm('acquisti', $chi['workspace'])) >= self::CRM_ACQUISTI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ACQUISTI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ACQUISTI_TETTO], limite: 'acquisti_per_workspace');
             }
 
             $persona = $this->crm['persone'][strtolower((string) $campi['persona_id'])] ?? null;

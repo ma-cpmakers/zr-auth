@@ -193,7 +193,7 @@ trait Flow
             $campi = $this->testi->validaCorpo($corpo, $this->regoleContoFlow(true));
 
             if (count(array_filter($this->flow['conti'], fn (array $conto) => $conto['workspace'] === $chi['workspace'] && ! $conto['archiviato'])) >= self::FLOW_CONTI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_CONTI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_CONTI_TETTO], limite: 'conti_visibili_per_persona');
             }
 
             $id = self::id();
@@ -1056,7 +1056,7 @@ trait Flow
             }
 
             if (count($stesse) >= self::FLOW_REGOLE_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_REGOLE_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_REGOLE_TETTO], limite: 'regole_per_vista');
             }
 
             $id = self::id();
@@ -1138,7 +1138,7 @@ trait Flow
         }
 
         if (count($da) > self::FLOW_REGOLE_APPLICAZIONE_MASSIMO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_REGOLE_APPLICAZIONE_MASSIMO]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_REGOLE_APPLICAZIONE_MASSIMO], limite: 'movimenti_per_applicazione_regola');
         }
 
         foreach ($da as $movimento) {
@@ -1279,7 +1279,7 @@ trait Flow
             ]);
 
             if (count(array_filter($this->flow['fisse'], fn (array $fissa) => ! $fissa['archiviato'] && $this->fissaDellaVistaFlow($fissa, $chi, $campi['visibilita']))) >= self::FLOW_FISSE_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_FISSE_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_FISSE_TETTO], limite: 'fisse_per_vista');
             }
 
             $id = self::id();
@@ -1384,7 +1384,7 @@ trait Flow
             ]);
 
             if (count(array_filter($this->flow['collegamenti'], fn (array $collegamento) => ! $collegamento['archiviato'] && $collegamento['persona'] === $chi['persona'])) >= self::FLOW_COLLEGAMENTI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_COLLEGAMENTI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_COLLEGAMENTI_TETTO], limite: 'collegamenti_bancari_per_persona');
             }
 
             $id = self::id();

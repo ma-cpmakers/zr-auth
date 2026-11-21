@@ -263,14 +263,28 @@ final class Testi
         return (string) $this->traduttore->get($chiave, $sostituzioni);
     }
 
-    /** Il `detail` di un codice; per `verifica_non_riuscita` quello della sua operazione, se la lingua ne ha uno (RendeProblemi). */
-    private function detail(string $codice, ?string $verifica): string
+    /**
+     * Il `detail` di un codice; per `verifica_non_riuscita` quello della sua operazione, per `limite_raggiunto` quello del suo
+     * limite col numero del tetto (#3958), se la lingua ne ha uno (RendeProblemi).
+     */
+    private function detail(Problema $problema): string
     {
-        if ($verifica !== null && $this->traduttore->has("errori.{$codice}.varianti.{$verifica}")) {
-            return $this->testo("errori.{$codice}.varianti.{$verifica}");
+        $codice = $problema->codice;
+        $variante = $problema->verifica ?? $problema->limite;
+
+        if ($variante !== null && $this->traduttore->has("errori.{$codice}.varianti.{$variante}")) {
+            $tetto = $problema->limite !== null ? ($problema->tetto ?? $problema->estensioni['limite'] ?? null) : null;
+
+            return $this->testo("errori.{$codice}.varianti.{$variante}", is_int($tetto) ? ['tetto' => $this->nelTesto($problema->limite, $tetto)] : []);
         }
 
         return $this->testo("errori.{$codice}.detail");
+    }
+
+    /** Il numero che il `detail` di un limite dice: il tetto, o i megabyte se il tetto è in byte (Limite::nelTesto). */
+    private function nelTesto(?string $limite, int $tetto): int
+    {
+        return in_array($limite, ['peso_file_per_workspace', 'peso_scritto_per_workspace'], true) ? intdiv($tetto, 1024 * 1024) : $tetto;
     }
 
     /**
@@ -290,7 +304,7 @@ final class Testi
             'status' => $problema->stato(),
             'detail' => $codice === 'troppe_richieste'
                 ? $this->traduttore->choice("errori.{$codice}.detail", $secondi, ['secondi' => $secondi])
-                : $this->detail($codice, $problema->verifica),
+                : $this->detail($problema),
             'codice' => $codice,
         ] + $problema->estensioni;
 

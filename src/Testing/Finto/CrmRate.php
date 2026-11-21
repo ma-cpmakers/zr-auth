@@ -169,7 +169,7 @@ trait CrmRate
             }
 
             if (count(array_filter($this->crm['pagamenti'], fn (array $pagamento) => $pagamento['rata_id'] === $rata['id'])) >= self::CRM_RATE_PAGAMENTI_PER_RATA) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_RATE_PAGAMENTI_PER_RATA]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_RATE_PAGAMENTI_PER_RATA], limite: 'pagamenti_per_rata');
             }
 
             $oggi = self::oggiAcquistoCrm();

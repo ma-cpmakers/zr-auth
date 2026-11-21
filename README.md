@@ -494,9 +494,27 @@ cartelle, caratteri di controllo né a capo); senza, quello del tipo (`Scaricame
   `zr-auth.scarico` (60 secondi) e ogni lettura non aspetta più di `zr-auth.letture` (10 secondi): oltre, o se la connessione cade a
   metà, `BackofficeNonRisponde`. `comeRisposta()` non rilancia un errore dopo il primo byte (accoderebbe la pagina d'errore al file): lo
   scrive nel log e il file finisce lì, troncato.
-- Il tipo è uno di `Scaricamento::TIPI` (oggi `text/csv`, `application/zip` e `application/pdf`); un `text/html`, un JSON o una risposta senza tipo non sono un file.
-- Il nome del file è ripulito (niente cartelle, caratteri di controllo, a capo; con l'estensione del tipo: `.csv`, `.zip`, `.pdf`), e `comeRisposta()` aggiunge
-  `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.
+- Il tipo è uno di `Scaricamento::TIPI` (oggi `text/csv`, `application/zip`, `application/pdf`, le immagini `image/png`, `image/jpeg`, `image/gif`, `image/webp` e
+  `application/octet-stream`); un `text/html`, un SVG, un JSON o una risposta senza tipo non sono un file. Un'immagine si mostra nella pagina (`inLinea()` è vero,
+  `Content-Disposition: inline`, per la copertina e il materiale di una vetrina di Bookings); un PDF, un CSV, uno ZIP e un `octet-stream` si salvano sempre (`attachment`).
+- Il nome del file è ripulito (niente cartelle, caratteri di controllo, a capo; con l'estensione del tipo: `.csv`, `.zip`, `.pdf`, `.png`, `.jpg`, `.gif`, `.webp`, `.bin`),
+  e `comeRisposta()` aggiunge `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.
+
+### Caricare un file: `Api::caricaFile`
+
+Un invio `multipart/form-data` con un solo file: la foto della persona (`io.foto.modifica`), la copertina e il materiale di una vetrina di Bookings.
+
+```php
+Api::persona()->caricaFile('/v1/io/foto', 'file', $byte, 'foto.jpg');                                              // una modifica (PATCH)
+Api::workspace()->caricaFile("/v1/bookings/vetrine/{$id}/copertina", 'file', $byte, 'copertina.webp');             // una modifica
+Api::workspace()->caricaFile("/v1/bookings/vetrine/{$id}/materiale", 'file', $pdf, 'scheda.pdf',
+    ['titolo' => 'Scheda', 'visibilita' => 'prenotati'], 'POST', $chiave);                                          // una creazione, coi campi di testo
+```
+
+- `$campi` sono i campi di testo accanto al file. `$verbo` è `PATCH` (il default: va come `POST` con `_method=PATCH`, perché PHP riempie `$_FILES` solo per un POST) o `POST`
+  (una creazione: niente `_method`); un altro verbo è `InvalidArgumentException`.
+- `$chiave` è la `Idempotency-Key`: una nuova per ogni invio voluto dalla persona, la stessa per un suo rinvio.
+- Gli errori sono quelli di ogni chiamata: un 422 sul pointer `#/file`, un 409 `limite_raggiunto` o `richiesta_in_corso`, un 429, arrivano come `ErroreApi`.
 - Il finto (`BackofficeFinto`) risponde ai due metodi con il CSV dei suoi contatti e delle sue aziende, a proprietario e amministratore.
 
 ## Lo staff di Zeiras: `Api::staff()` (da #2911, F1)

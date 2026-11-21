@@ -202,7 +202,7 @@ trait CrmCampi
             $vive = $this->sezioniViveCrm($chi['workspace'], $campi['oggetto']);
 
             if (count($vive) >= self::CRM_TETTO_DELLE_SEZIONI) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_DELLE_SEZIONI]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_DELLE_SEZIONI], limite: 'sezioni_per_oggetto');
             }
 
             $this->sezioneUnicaCrm($vive, $campi['nome']['it'], null);
@@ -360,7 +360,7 @@ trait CrmCampi
             $lista = $this->campiDiUnOggettoCrm($chi['workspace'], $oggetto);
 
             if (count($lista) + count($this->campiEliminatiCrm($chi['workspace'], $oggetto)) >= self::CRM_TETTO_DEI_CAMPI) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_DEI_CAMPI]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_DEI_CAMPI], limite: 'campi_per_oggetto');
             }
 
             if (($avanzate['in_elenco'] ?? false) === true) {
@@ -730,11 +730,11 @@ trait CrmCampi
             $vive = array_values(array_filter($riga['opzioni'], fn (array $opzione) => ($opzione['archiviato_il'] ?? null) === null));
 
             if (count($vive) >= self::CRM_OPZIONI_MASSIME) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_OPZIONI_MASSIME]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_OPZIONI_MASSIME], limite: 'opzioni_per_campo');
             }
 
             if (count($riga['opzioni']) >= self::CRM_OPZIONI_TOTALI) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_OPZIONI_TOTALI]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_OPZIONI_TOTALI], limite: 'opzioni_totali_per_campo');
             }
 
             $this->opzioneUnicaCrm($vive, $campi['nome']['it'], null);
@@ -968,7 +968,7 @@ trait CrmCampi
         $presenti = count(array_filter($this->campiTuoiCrm($workspace, $oggetto), fn (array $campo) => ($campo['in_elenco'] ?? false) === true));
 
         if ($presenti >= self::CRM_TETTO_IN_ELENCO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_IN_ELENCO]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_TETTO_IN_ELENCO], limite: 'campi_in_elenco_per_oggetto');
         }
     }
 

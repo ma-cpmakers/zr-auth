@@ -56,7 +56,8 @@ it('crea uno sprint pianificato: 201 senza Location, la forma del backoffice con
         ]);
 
     $secondo = alFinto('POST', '/v1/board/sprint', corpoDelloSprint($board, ['nome' => 'Sprint 2']), $gettone);
-    expect($secondo->status())->toBe(409)->and($secondo->json('codice'))->toBe('limite_raggiunto');
+    expect($secondo->status())->toBe(409)->and($secondo->json('codice'))->toBe('limite_raggiunto')
+        ->and($secondo->json('detail'))->toContain('1 sprint pianificato');
 });
 
 it('crea: il corpo sbagliato è 422 sul suo campo, una board che non è del workspace è 422 su #/board_id, il campo in più è rifiutato', function () {

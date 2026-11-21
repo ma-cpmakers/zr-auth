@@ -52,7 +52,7 @@ trait CrmElenchi
             ]);
 
             if (count($this->righeCrm('elenchi', $chi['workspace'])) >= self::CRM_ELENCHI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ELENCHI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ELENCHI_TETTO], limite: 'elenchi_per_workspace');
             }
 
             $date = $campi['valori'] ?? [];
@@ -353,7 +353,7 @@ trait CrmElenchi
         }
 
         if (count($vive) + count($tolte) > self::CRM_ELENCHI_VALORI) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ELENCHI_VALORI]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_ELENCHI_VALORI], limite: 'valori_per_elenco');
         }
 
         return array_map(fn (string $id) => $tutti[$id], [...$vive, ...$tolte]);

@@ -42,7 +42,7 @@ it('scarica un file dello stesso host, col gettone del workspace e Accept dei ti
     Http::assertSent(fn (Request $r) => $r->url() === API.SCARICA_CSV.'?stato=lead'
         && $r->method() === 'GET'
         && $r->header('Authorization') === ['Bearer '.GETTONE_WORKSPACE]
-        && $r->header('Accept') === ['text/csv, application/zip, application/pdf']);
+        && $r->header('Accept') === ['text/csv, application/zip, application/pdf, image/png, image/jpeg, image/gif, image/webp, application/octet-stream']);
 });
 
 it('accetta solo un percorso dentro /v1 senza query: un indirizzo intero, un percorso fuori da /v1, una query nel percorso non partono (S.1)', function (string $percorso) {
@@ -121,7 +121,7 @@ it('un tipo che non è nell\'elenco chiuso non passa: text/html, application/jso
     Http::fake(['*' => Http::response('<script>alert(1)</script>', 200, $tipo === null ? [] : ['Content-Type' => $tipo])]);
 
     expect(fn () => Api::workspace()->scarica(SCARICA_CSV))->toThrow(BackofficeNonRisponde::class);
-})->with(['text/html', 'text/html; charset=utf-8', 'application/json', 'application/octet-stream', 'text/csv-con-altro', null]);
+})->with(['text/html', 'text/html; charset=utf-8', 'application/json', 'text/csv-con-altro', null]);
 
 it('il nome del file è ripulito: niente percorsi, caratteri di controllo, a capo (S.5)', function (string $disposizione, string $atteso) {
     expect(Scaricamento::nomeDi($disposizione))->toBe($atteso);
@@ -453,7 +453,7 @@ it('scaricaConPost: una POST senza query, col gettone e Accept dei tipi ammessi,
     Http::assertSent(fn (Request $r) => $r->url() === API.SCARICA_ZIP_POST
         && $r->method() === 'POST'
         && $r->header('Authorization') === ['Bearer '.GETTONE_WORKSPACE]
-        && $r->header('Accept') === ['text/csv, application/zip, application/pdf']);
+        && $r->header('Accept') === ['text/csv, application/zip, application/pdf, image/png, image/jpeg, image/gif, image/webp, application/octet-stream']);
 });
 
 it('scaricaConPost: un percorso fuori da /v1, con una query o con un segmento .. non parte', function (string $percorso) {

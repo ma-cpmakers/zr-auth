@@ -49,7 +49,7 @@ trait CrmCatalogo
             $this->coerenzaDellaVoceCrm($this->completaLaVoceCrm($campi, null));
 
             if (count($this->righeCrm('catalogo', $chi['workspace'])) >= self::CRM_CATALOGO_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_CATALOGO_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_CATALOGO_TETTO], limite: 'voci_catalogo_per_workspace');
             }
 
             $id = self::id();

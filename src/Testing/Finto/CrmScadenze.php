@@ -79,7 +79,7 @@ trait CrmScadenze
             $campi = $this->testi->validaCorpo($corpo, $this->regoleDelTipoDiScadenzaCrm(true));
 
             if (count($this->righeCrm('scadenzeTipi', $chi['workspace'])) >= self::CRM_SCADENZE_TIPI_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_TIPI_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_TIPI_TETTO], limite: 'tipi_scadenza_per_workspace');
             }
 
             $this->nomeDelTipoUnicoCrm($chi['workspace'], $campi['nome'], null);
@@ -330,7 +330,7 @@ trait CrmScadenze
             $aperte = array_filter($this->righeCrm('scadenze', $workspace), fn (array $riga) => $riga['stato'] === 'attiva');
 
             if (count($aperte) >= self::CRM_SCADENZE_APERTE_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_APERTE_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_APERTE_TETTO], limite: 'scadenze_aperte_per_workspace');
             }
 
             $tipo = $this->crm['scadenzeTipi'][strtolower($campi['tipo_id'])];
@@ -677,7 +677,7 @@ trait CrmScadenze
             $aperte = array_filter($this->righeCrm('scadenze', $workspace), fn (array $riga) => $riga['stato'] === 'attiva');
 
             if (count($aperte) >= self::CRM_SCADENZE_APERTE_TETTO) {
-                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_APERTE_TETTO]);
+                throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_SCADENZE_APERTE_TETTO], limite: 'scadenze_aperte_per_workspace');
             }
 
             $id = self::id();

@@ -114,7 +114,7 @@ trait CrmPreventiviPubblici
 
         // Al più 50 richieste per preventivo (RichiestaDelPreventivo::TETTO): oltre, 409 limite_raggiunto.
         if (count(array_filter($this->crm['richieste_preventivo'] ?? [], fn (array $richiesta) => $richiesta['preventivo_id'] === $riga['id'])) >= self::CRM_RICHIESTE_PREVENTIVO_TETTO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_RICHIESTE_PREVENTIVO_TETTO]);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::CRM_RICHIESTE_PREVENTIVO_TETTO], limite: 'richieste_per_preventivo');
         }
 
         $ora = self::adessoCrm();
