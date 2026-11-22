@@ -1752,7 +1752,7 @@ trait Flow
             'movimenti_fino_al' => $date === [] ? null : max($date),
             'mesi_di_storico' => $mesi,
             'nel_conto' => [
-                'importo' => (int) array_sum(array_filter(array_column($conti, 'saldo'), fn (mixed $saldo) => $saldo !== null)),
+                'importo' => $this->oggiNeiContiFlow($conti, $this->movimentiBilancioFlow($chi, $vista), $oggi),
                 'conti_senza_saldo' => count(array_filter($conti, fn (array $conto) => $conto['saldo'] === null)),
                 'andamento' => $this->andamentoNelContoFlow($conti, $this->movimentiBilancioFlow($chi, $vista), $oggi),
             ],
@@ -1761,6 +1761,34 @@ trait Flow
             'metti_da_parte' => $daParte,
             'ti_restano' => $entrate['importo'] === null || $totale === null ? null : $entrate['importo'] - $totale - $daParte['importo'],
         ]]];
+    }
+
+    /**
+     * `nel_conto.importo` (App\Flow\Bilancio::nelConto, #3817, zr-pm 22/11): quanto c'è oggi nei conti della vista che hanno un saldo, cioè il `saldo` più i movimenti dopo la sua
+     * `saldo_il` fino a oggi (esclusi compresi): lo stesso calcolo dell'ultimo punto di `andamento`.
+     *
+     * @param  array<string, array<string, mixed>>  $conti
+     * @param  list<array<string, mixed>>  $movimenti
+     */
+    private function oggiNeiContiFlow(array $conti, array $movimenti, CarbonImmutable $oggi): int
+    {
+        $fine = $oggi->format('Y-m-d');
+        $somma = 0;
+
+        foreach ($conti as $id => $conto) {
+            if ($conto['saldo'] === null) {
+                continue;
+            }
+
+            $somma += (int) $conto['saldo'];
+
+            if ($conto['saldo_il'] !== null) {
+                $dopo = array_filter($movimenti, fn (array $movimento) => $movimento['conto'] === $id && $movimento['data'] > (string) $conto['saldo_il'] && $movimento['data'] <= $fine);
+                $somma += (int) array_sum(array_column($dopo, 'importo'));
+            }
+        }
+
+        return $somma;
     }
 
     /**

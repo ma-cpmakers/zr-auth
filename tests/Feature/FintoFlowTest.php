@@ -589,3 +589,14 @@ it('il conto del mese: l\'ultimo punto di andamento vale il saldo di un conto se
     alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Due', 'nome' => 'Senza saldo', 'tipo' => 'corrente', 'visibilita' => 'comune'], $gettoni['anna']);
     expect(alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.nel_conto.andamento.5.importo'))->toBeNull();
 });
+
+it('il conto del mese: con movimenti dopo la saldo_il nel_conto.importo e l\'ultimo punto di andamento sono lo stesso numero (#3817, zr-pm 22/11)', function () {
+    [, $gettoni] = studioConFinanze();
+    $oggi = Carbon\CarbonImmutable::now('Europe/Rome')->startOfDay();
+    $conto = alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Uno', 'nome' => 'Casa', 'tipo' => 'corrente', 'visibilita' => 'comune', 'saldo' => 5000, 'saldo_il' => $oggi->subDays(3)->format('Y-m-d')], $gettoni['anna'])->json('data');
+    alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => $oggi->subDay()->format('Y-m-d'), 'importo' => 700, 'descrizione' => 'Dopo il saldo'], $gettoni['anna']);
+    alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => $oggi->subDays(5)->format('Y-m-d'), 'importo' => 90, 'descrizione' => 'Prima del saldo'], $gettoni['anna']);
+
+    $nelConto = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.nel_conto');
+    expect($nelConto['importo'])->toBe(5700)->and($nelConto['andamento'][5]['importo'])->toBe(5700);
+});
