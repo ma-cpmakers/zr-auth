@@ -505,7 +505,7 @@ trait Flow
             $lette = $this->analizzaLeRigheFlow($conto, $campi['righe']);
 
             if ($prova) {
-                return [200, ['data' => $this->riepilogoFlow(null, $campi['righe'], $lette)], []];
+                return [200, ['data' => $this->riepilogoFlow(null, $campi['righe'], $lette, $this->saldoPerIlContoFlow($conto, $campi['righe']) !== null)], []];
             }
 
             $nuove = array_values(array_filter($lette, fn (array $riga) => ! $riga['doppione']));
@@ -527,7 +527,14 @@ trait Flow
                 ];
             }
 
-            return [201, ['data' => $this->riepilogoFlow($id, $campi['righe'], $lette)], []];
+            // Il saldo dell'ultima riga del file diventa quello del conto se è più recente e una banca non lo scrive già (Caricamento::saldoPerIlConto, #4125).
+            $saldo = $this->saldoPerIlContoFlow($conto, $campi['righe']);
+
+            if ($saldo !== null) {
+                $this->flow['conti'][$conto['id']] = $saldo + $this->flow['conti'][$conto['id']];
+            }
+
+            return [201, ['data' => $this->riepilogoFlow($id, $campi['righe'], $lette, $saldo !== null)], []];
         };
 
         // Solo il caricamento vero accetta Idempotency-Key (IdempotenzaTranneLaProva): una prova gira ogni volta.
@@ -607,7 +614,7 @@ trait Flow
      * @param  list<array<string, mixed>>  $lette
      * @return array<string, mixed>
      */
-    private function riepilogoFlow(?string $id, array $righe, array $lette): array
+    private function riepilogoFlow(?string $id, array $righe, array $lette, bool $saldoAggiornato): array
     {
         $date = array_column($lette, 'data');
         $doppioni = count(array_filter($lette, fn (array $riga) => $riga['doppione']));
@@ -628,6 +635,7 @@ trait Flow
             'periodo_da' => min($date),
             'periodo_a' => max($date),
             'saldo' => $this->saldoDelFileFlow($righe),
+            'saldo_aggiornato' => $saldoAggiornato,
             'campione' => $campione,
         ];
     }
@@ -646,6 +654,19 @@ trait Flow
             }
         }
 
+        [$dalPiuVecchio, $dalPiuRecente] = $this->versiDelFileFlow($righe);
+
+        return $dalPiuVecchio || $dalPiuRecente ? 'ok' : 'non_torna';
+    }
+
+    /**
+     * In quale verso quadrano i saldi del file: [dal più vecchio, dal più recente] (Caricamento::versi).
+     *
+     * @param  list<array<string, mixed>>  $righe
+     * @return array{bool, bool}
+     */
+    private function versiDelFileFlow(array $righe): array
+    {
         $dalPiuVecchio = true;
         $dalPiuRecente = true;
 
@@ -654,7 +675,46 @@ trait Flow
             $dalPiuRecente = $dalPiuRecente && $righe[$i]['saldo'] === $righe[$i - 1]['saldo'] - $righe[$i - 1]['importo'];
         }
 
-        return $dalPiuVecchio || $dalPiuRecente ? 'ok' : 'non_torna';
+        return [$dalPiuVecchio, $dalPiuRecente];
+    }
+
+    /**
+     * Cosa il file cambia nel conto (Caricamento::saldoPerIlConto, #4125): `{saldo, saldo_il}` se il saldo del file è `ok` e quello dell'ultima riga fino a oggi (a Roma) è più recente di `saldo_il`,
+     * e il conto non ha una banca collegata; `null` se il conto resta com'è. Più righe nell'ultimo giorno si distinguono col verso del file; se quadrano in tutti e due i versi con saldi diversi, niente.
+     *
+     * @param  array<string, mixed>  $conto
+     * @param  list<array<string, mixed>>  $righe
+     * @return array{saldo: int, saldo_il: string}|null
+     */
+    private function saldoPerIlContoFlow(array $conto, array $righe): ?array
+    {
+        if ($this->saldoDelFileFlow($righe) !== 'ok' || $this->collegamentoDelContoFlow($conto) !== null) {
+            return null;
+        }
+
+        $oggi = CarbonImmutable::now('Europe/Rome')->toDateString();
+        $fino = array_filter($righe, fn (array $riga) => $riga['data'] <= $oggi);
+
+        if ($fino === []) {
+            return null;
+        }
+
+        $data = max(array_column($fino, 'data'));
+
+        if ($conto['saldo_il'] !== null && $data <= $conto['saldo_il']) {
+            return null;
+        }
+
+        $indici = array_keys(array_filter($fino, fn (array $riga) => $riga['data'] === $data));
+        $saldi = array_unique(array_map(fn (int $i) => $righe[$i]['saldo'], $indici));
+
+        if (count($saldi) === 1) {
+            return ['saldo' => (int) $righe[$indici[0]]['saldo'], 'saldo_il' => $data];
+        }
+
+        [$dalPiuVecchio, $dalPiuRecente] = $this->versiDelFileFlow($righe);
+
+        return $dalPiuVecchio === $dalPiuRecente ? null : ['saldo' => (int) $righe[$dalPiuVecchio ? max($indici) : min($indici)]['saldo'], 'saldo_il' => $data];
     }
 
     /**

@@ -267,7 +267,8 @@ it('il caricamento: la prova non scrive, il vero dà 201, i doppioni si riconosc
 
     $prova = alFinto('POST', "/v1/flow/conti/{$conto['id']}/importazioni", ['file_nome' => 'o.csv', 'prova' => true, 'righe' => $righe], $gettoni['carla']);
     expect($prova->status())->toBe(200, $prova->body())
-        ->and($prova->json('data'))->toMatchArray(['id' => null, 'righe_lette' => 3, 'inserite' => 3, 'doppioni' => 0, 'periodo_da' => '2026-10-01', 'periodo_a' => '2026-10-02', 'saldo' => 'ok'])
+        ->and($prova->json('data'))->toMatchArray(['id' => null, 'righe_lette' => 3, 'inserite' => 3, 'doppioni' => 0, 'periodo_da' => '2026-10-01', 'periodo_a' => '2026-10-02', 'saldo' => 'ok', 'saldo_aggiornato' => true])
+        ->and(alFinto('GET', "/v1/flow/conti/{$conto['id']}", null, $gettoni['anna'])->json('data'))->toMatchArray(['saldo' => null, 'saldo_il' => null])
         ->and($prova->json('data.campione.1'))->toMatchArray(['indice' => 1, 'esito' => 'nuova', 'categoria_fonte' => 'sistema'])
         ->and(alFinto('GET', '/v1/flow/movimenti?visibilita=comune', null, $gettoni['anna'])->json('data'))->toBe([])
         ->and(alFinto('GET', "/v1/flow/conti/{$conto['id']}/importazioni", null, $gettoni['anna'])->json('data'))->toBe([]);
@@ -278,7 +279,10 @@ it('il caricamento: la prova non scrive, il vero dà 201, i doppioni si riconosc
     expect($vero->status())->toBe(201)
         ->and($vero->json('data.id'))->toBeString()
         ->and($vero->json('data.inserite'))->toBe(3)
-        ->and($ancora->json('data'))->toMatchArray(['righe_lette' => 2, 'inserite' => 1, 'doppioni' => 1, 'saldo' => 'assente'])
+        // #4125: il saldo dell'ultima riga del file (l'ultima dell'ultimo giorno, dal più vecchio) diventa quello del conto.
+        ->and($vero->json('data.saldo_aggiornato'))->toBeTrue()
+        ->and(alFinto('GET', "/v1/flow/conti/{$conto['id']}", null, $gettoni['anna'])->json('data'))->toMatchArray(['saldo' => 6000, 'saldo_il' => '2026-10-02'])
+        ->and($ancora->json('data'))->toMatchArray(['righe_lette' => 2, 'inserite' => 1, 'doppioni' => 1, 'saldo' => 'assente', 'saldo_aggiornato' => false])
         ->and($ancora->json('data.campione.0.esito'))->toBe('doppione')
         ->and(alFinto('GET', "/v1/flow/conti/{$conto['id']}", null, $gettoni['anna'])->json('data.movimenti_fino_al'))->toBe('2026-10-05');
 
