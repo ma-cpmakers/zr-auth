@@ -181,6 +181,14 @@ return [
         'title' => 'Lista non trasferibile',
         'detail' => "La lista delle azioni di una retrospettiva resta nella sua board: non si porta in un'altra. Non ripetere la richiesta.",
     ],
+    'modificato_dopo' => [
+        'title' => 'Modificato dopo',
+        'detail' => "Qualcun altro ha cambiato la stessa cosa dopo l'azione dell'assistente: l'Annulla non ha toccato niente. Rileggi lo stato attuale prima di decidere.",
+    ],
+    'non_annullabile' => [
+        'title' => 'Niente da annullare',
+        'detail' => "Le azioni di questa riga non si annullano: un commento resta dov'è. Non ripetere la richiesta.",
+    ],
     'board_chiusa' => [
         'title' => 'Board non attiva',
         'detail' => 'Questa board è chiusa o nel cestino: riportala allo stato attivo prima di cambiare le sue liste, le sue schede o le sue etichette.',

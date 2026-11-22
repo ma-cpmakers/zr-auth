@@ -181,6 +181,14 @@ return [
         'title' => 'List cannot be transferred',
         'detail' => 'The actions list of a retrospective stays in its board: it cannot be moved to another one. Do not repeat the request.',
     ],
+    'modificato_dopo' => [
+        'title' => 'Changed afterwards',
+        'detail' => "Someone else changed the same thing after the assistant's action: Undo touched nothing. Read the current state before deciding.",
+    ],
+    'non_annullabile' => [
+        'title' => 'Nothing to undo',
+        'detail' => 'The actions in this entry cannot be undone: a comment stays where it is. Do not repeat the request.',
+    ],
     'board_chiusa' => [
         'title' => 'Board not active',
         'detail' => 'This board is closed or in the trash: make it active again before changing its lists, cards or labels.',

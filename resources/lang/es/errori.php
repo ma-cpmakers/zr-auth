@@ -181,6 +181,14 @@ return [
         'title' => 'Lista no transferible',
         'detail' => 'La lista de acciones de una retrospectiva se queda en su tablero: no se puede llevar a otro. No repitas la solicitud.',
     ],
+    'modificato_dopo' => [
+        'title' => 'Modificado después',
+        'detail' => 'Otra persona cambió lo mismo después de la acción del asistente: Deshacer no ha tocado nada. Vuelve a leer el estado actual antes de decidir.',
+    ],
+    'non_annullabile' => [
+        'title' => 'Nada que deshacer',
+        'detail' => 'Las acciones de esta entrada no se pueden deshacer: un comentario se queda donde está. No repitas la solicitud.',
+    ],
     'board_chiusa' => [
         'title' => 'Tablero no activo',
         'detail' => 'Este tablero está cerrado o en la papelera: vuelve a activarlo antes de modificar sus listas, sus tarjetas o sus etiquetas.',
