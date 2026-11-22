@@ -33,6 +33,11 @@ trait Flow
 
     private const FLOW_FISSE_TETTO = 100;
 
+    /** Il tetto dei movimenti vivi di un conto e di una vista (#4018, zr-pm-74 19/11) e le date ammesse di un movimento (#4019). */
+    private const FLOW_MOVIMENTI_TETTO_CONTO = 50000;
+
+    private const FLOW_MOVIMENTI_TETTO_VISTA = 150000;
+
     /** Il tetto dei collegamenti bancari vivi di una persona (Connessione::TETTO) e l'indirizzo che il finto dà alla banca. */
     private const FLOW_COLLEGAMENTI_TETTO = 5;
 
@@ -411,18 +416,19 @@ trait Flow
         $chi = $this->conFlow($richiesta);
         $esegue = function () use ($chi, $corpo, $conto) {
             $conto = $this->contoFlow($chi, $conto);
+            // Il freno si conta prima di validare il corpo (#4017).
+            $this->frena('freni:flow.conti.importazioni.crea:'.(($corpo['prova'] ?? null) === true ? 'prova:' : '').$chi['persona'], self::FRENI[($corpo['prova'] ?? null) === true ? 'flow_importazioni_prova_persona' : 'flow_importazioni_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, [
                 'file_nome' => ['required', 'string', 'max:200'],
                 'prova' => ['nullable', 'boolean:strict'],
                 'righe' => ['required', 'array', 'list', 'min:1', 'max:'.self::FLOW_RIGHE],
                 'righe.*' => ['array'],
-                'righe.*.data' => ['required', 'string', 'date_format:Y-m-d'],
+                'righe.*.data' => ['required', 'string', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:2100-12-31'],
                 'righe.*.importo' => ['required', 'integer:strict', 'between:'.-self::FLOW_IMPORTO.','.self::FLOW_IMPORTO],
                 'righe.*.descrizione' => ['required', 'string', 'max:'.self::FLOW_DESCRIZIONE],
                 'righe.*.saldo' => ['nullable', 'integer:strict', 'between:'.-self::FLOW_IMPORTO.','.self::FLOW_IMPORTO],
             ]);
             $prova = (bool) ($campi['prova'] ?? false);
-            $this->frena('freni:flow.conti.importazioni.crea:'.($prova ? 'prova:' : '').$chi['persona'], self::FRENI[$prova ? 'flow_importazioni_prova_persona' : 'flow_importazioni_persona'], self::ORA);
             $lette = $this->analizzaLeRigheFlow($conto, $campi['righe']);
 
             if ($prova) {
@@ -430,6 +436,7 @@ trait Flow
             }
 
             $nuove = array_values(array_filter($lette, fn (array $riga) => ! $riga['doppione']));
+            $this->tettoMovimentiFlow($conto, count($nuove));
             $date = array_column($lette, 'data');
             $id = self::id();
             $ora = self::istanteFlow();
@@ -757,6 +764,7 @@ trait Flow
             $this->frena('freni:flow.movimenti.crea:'.$chi['persona'], self::FRENI['flow_movimenti_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, $this->regoleMovimentoFlow(true));
             $conto = $this->contoFlow($chi, $campi['conto_id']);
+            $this->tettoMovimentiFlow($conto, 1);
             [$categoria, $fonte, $regola] = isset($campi['categoria_id']) ? [$campi['categoria_id'], 'utente', null] : $this->categoriaDiUnaRigaFlow($this->regoleDelContoFlow($conto), $campi['descrizione']);
             $id = self::id();
             $this->flow['movimenti'][$id] = [
@@ -767,6 +775,28 @@ trait Flow
 
             return [201, ['data' => $voce], ['Location' => "/v1/flow/movimenti/{$id}", 'ETag' => self::etagCrm($voce)]];
         });
+    }
+
+    /**
+     * Il tetto dei movimenti vivi (#4018): `$nuovi` in più sul conto o nella sua vista (i conti comuni, o i personali del titolare) non superano 50.000 per conto e
+     * 150.000 per vista. Oltre, 409 `limite_raggiunto` con `limite` e `ambito` (`conto` o `vista`).
+     *
+     * @param  array<string, mixed>  $conto
+     */
+    private function tettoMovimentiFlow(array $conto, int $nuovi): void
+    {
+        $vivi = array_filter($this->flow['movimenti'], fn (array $movimento) => ! $movimento['archiviato']);
+
+        if (count(array_filter($vivi, fn (array $movimento) => $movimento['conto'] === $conto['id'])) + $nuovi > self::FLOW_MOVIMENTI_TETTO_CONTO) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_MOVIMENTI_TETTO_CONTO, 'ambito' => 'conto'], limite: 'movimenti_per_conto');
+        }
+
+        $dellaVista = array_column(array_filter($this->flow['conti'], fn (array $altro) => $altro['workspace'] === $conto['workspace'] && ! $altro['archiviato'] && $altro['visibilita'] === $conto['visibilita']
+            && ($conto['visibilita'] === 'comune' || $altro['titolare'] === $conto['titolare'])), 'id');
+
+        if (count(array_filter($vivi, fn (array $movimento) => in_array($movimento['conto'], $dellaVista, true))) + $nuovi > self::FLOW_MOVIMENTI_TETTO_VISTA) {
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_MOVIMENTI_TETTO_VISTA, 'ambito' => 'vista'], limite: 'movimenti_per_vista');
+        }
     }
 
     /**
@@ -884,7 +914,7 @@ trait Flow
                 'escluso' => ['bail', 'filled', 'boolean:strict'],
                 'escluso_motivo' => ['bail', 'nullable', 'string', Rule::in(self::FLOW_MOTIVI)],
             ]),
-            'data' => ['bail', ...$presente, 'string', 'date_format:Y-m-d'],
+            'data' => ['bail', ...$presente, 'string', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:2100-12-31'],
             'importo' => ['bail', ...$presente, 'integer:strict', 'between:'.-self::FLOW_IMPORTO.','.self::FLOW_IMPORTO, 'not_in:0'],
             'valuta' => ['bail', 'string', Rule::in(['EUR'])],
             'descrizione' => ['bail', ...$presente, 'string', 'max:'.self::FLOW_DESCRIZIONE],
@@ -1258,7 +1288,7 @@ trait Flow
     }
 
     /**
-     * flow.fisse.crea (FisseController::crea): una spesa fissa di chi chiama (dal gettone). 201 con la spesa, senza `Location`. `prima_data` è obbligatoria se la frequenza è 3 o 12; il tetto di 100 per
+     * flow.fisse.crea (FisseController::crea): una spesa fissa di chi chiama (dal gettone). 201 con la spesa, senza `Location`. `prima_data` (dal 2000-01-01 al 2100-12-31, #4016) è obbligatoria se la frequenza è 3 o 12; il tetto di 100 per
      * vista (409 `limite_raggiunto`) si conta dopo il corpo. Il freno si conta prima del corpo. Accetta Idempotency-Key.
      *
      * @param  array<mixed>  $corpo
@@ -1275,7 +1305,7 @@ trait Flow
                 'nome' => ['bail', 'required', 'string', 'max:'.self::FLOW_FISSA_NOME, new NomeScritto],
                 'importo' => ['bail', 'required', 'integer:strict', 'between:1,'.self::FLOW_IMPORTO],
                 'frequenza_mesi' => ['bail', 'required', 'integer:strict', Rule::in(self::FLOW_FISSE_FREQUENZE)],
-                'prima_data' => ['bail', 'nullable', Rule::requiredIf(fn () => in_array($corpo['frequenza_mesi'] ?? null, [3, 12], true)), 'string', 'date_format:Y-m-d'],
+                'prima_data' => ['bail', 'nullable', Rule::requiredIf(fn () => in_array($corpo['frequenza_mesi'] ?? null, [3, 12], true)), 'string', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:2100-12-31'],
             ]);
 
             if (count(array_filter($this->flow['fisse'], fn (array $fissa) => ! $fissa['archiviato'] && $this->fissaDellaVistaFlow($fissa, $chi, $campi['visibilita']))) >= self::FLOW_FISSE_TETTO) {
@@ -2160,8 +2190,36 @@ trait Flow
     }
 
     /**
-     * flow.futuro.calendario.elenca (FuturoController::calendarioElenca): le spese dei prossimi 60 giorni della vista chiesta, per data (le voci col solo periodo per l'inizio del periodo), poi per nome e
-     * `riferimento_id`, a cursore legato alla vista. Senza entrate. Ogni altro parametro che non è `limite`, `cursore` o `visibilita` è 422 `campo_estraneo`.
+     * La regola di `mese` (FlowFuturoCalendarioElencaRequest::regolaDelMese): AAAA-MM, dal mese in corso a Roma a undici mesi dopo, e non insieme a `giorni`.
+     *
+     * @param  array<string, mixed>  $grezzi
+     */
+    private function regolaDelMeseFlow(array $grezzi, CarbonImmutable $oggi): Closure
+    {
+        return function (string $campo, mixed $valore, Closure $fail) use ($grezzi, $oggi) {
+            $primo = $oggi->startOfMonth();
+            $ultimo = $primo->addMonthsNoOverflow(11);
+            $rifiuta = function (string $regola, string $chiave, array $parametri) use ($campo, $fail) {
+                $this->testi->dichiara($campo, $regola);
+                $fail($chiave)->translate(['attribute' => $this->testi->nome($campo)] + $parametri);
+            };
+
+            if (array_key_exists('giorni', $grezzi)) {
+                $rifiuta(Regola::CAMPO_VIETATO, 'validation.prohibits', ['other' => 'giorni']);
+            } elseif (! is_string($valore) || preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $valore) !== 1) {
+                $rifiuta(Regola::FORMATO, 'validation.date_format', ['format' => 'AAAA-MM']);
+            } elseif ($valore < $primo->format('Y-m')) {
+                $rifiuta(Regola::FUORI_INTERVALLO, 'validation.after_or_equal', ['date' => $primo->format('Y-m')]);
+            } elseif ($valore > $ultimo->format('Y-m')) {
+                $rifiuta(Regola::FUORI_INTERVALLO, 'validation.before_or_equal', ['date' => $ultimo->format('Y-m')]);
+            }
+        };
+    }
+
+    /**
+     * flow.futuro.calendario.elenca (FuturoController::calendarioElenca): le spese dei prossimi `giorni` (da 1 a 60, 60 se manca) della vista chiesta, per data (le voci col solo periodo per l'inizio del periodo), poi per
+     * nome e `riferimento_id`, a cursore legato alla vista e ai `giorni` o al `mese`. Senza entrate. Un `giorni` che non è un intero da 1 a 60 è 422 sul parametro; ogni altro parametro che non è `limite`, `cursore`, `visibilita` o
+     * `giorni` è 422 `campo_estraneo`.
      *
      * @return array{int, array<string, mixed>}
      */
@@ -2171,17 +2229,22 @@ trait Flow
         $grezzi = self::query($richiesta);
         $oggi = CarbonImmutable::now('Europe/Rome')->startOfDay();
         $vista = is_string($grezzi['visibilita'] ?? null) ? $grezzi['visibilita'] : '';
+        $giorniChiesti = is_string($grezzi['giorni'] ?? null) ? $grezzi['giorni'] : '';
+        $giorni = ctype_digit($giorniChiesti) && (int) $giorniChiesti >= 1 && (int) $giorniChiesti <= 60 ? (int) $giorniChiesti : 60;
+        $meseChiesto = is_string($grezzi['mese'] ?? null) ? $grezzi['mese'] : '';
+        $primoDelMese = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $meseChiesto) === 1 ? CarbonImmutable::parse("{$meseChiesto}-01", 'Europe/Rome')->startOfDay() : null;
 
         [$stato, $corpo] = $this->pagina(
             $richiesta,
-            'flow.futuro.calendario.elenca:'.$vista,
+            'flow.futuro.calendario.elenca:'.$vista.':'.$giorniChiesti.':'.$meseChiesto,
             'chiave',
-            function () use ($chi, $vista, $oggi) {
-                $fine = $oggi->addDays(60);
+            function () use ($chi, $vista, $oggi, $giorni, $primoDelMese) {
+                $fine = $primoDelMese?->addMonthNoOverflow() ?? $oggi->addDays($giorni);
+                $dal = $primoDelMese?->format('Y-m-d');
 
                 return array_map(
                     fn (array $voce) => $voce + ['chiave' => $voce['ordine'].'|'.$voce['nome']."\x1f".$voce['riferimento_id']],
-                    array_values(array_filter($this->vociFuturoFlow($chi, $vista, $oggi, $fine), fn (array $voce) => $voce['importo'] < 0 && $voce['ordine'] < $fine->format('Y-m-d'))),
+                    array_values(array_filter($this->vociFuturoFlow($chi, $vista, $oggi, $fine), fn (array $voce) => $voce['importo'] < 0 && $voce['ordine'] < $fine->format('Y-m-d') && ($dal === null || $voce['fine'] >= $dal))),
                 );
             },
             fn (array $voce) => [$voce['chiave']],
@@ -2189,7 +2252,8 @@ trait Flow
             false,
             self::LIMITE_MASSIMO,
             null,
-            ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)]] + $this->estraneiFlow($grezzi, ['limite', 'cursore', 'visibilita']),
+            ['visibilita' => ['bail', 'required', 'string', Rule::in(self::FLOW_VISIBILITA)], 'giorni' => ['sometimes', 'integer', 'between:1,60'], 'mese' => ['bail', 'sometimes', 'string', $this->regolaDelMeseFlow($grezzi, $oggi)]]
+                + $this->estraneiFlow($grezzi, ['limite', 'cursore', 'visibilita', 'giorni', 'mese']),
         );
 
         $corpo['data'] = array_map(fn (array $voce) => [
