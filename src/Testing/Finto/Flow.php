@@ -788,14 +788,14 @@ trait Flow
         $vivi = array_filter($this->flow['movimenti'], fn (array $movimento) => ! $movimento['archiviato']);
 
         if (count(array_filter($vivi, fn (array $movimento) => $movimento['conto'] === $conto['id'])) + $nuovi > self::FLOW_MOVIMENTI_TETTO_CONTO) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_MOVIMENTI_TETTO_CONTO, 'ambito' => 'conto']);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_MOVIMENTI_TETTO_CONTO, 'ambito' => 'conto'], limite: 'movimenti_per_conto');
         }
 
         $dellaVista = array_column(array_filter($this->flow['conti'], fn (array $altro) => $altro['workspace'] === $conto['workspace'] && ! $altro['archiviato'] && $altro['visibilita'] === $conto['visibilita']
             && ($conto['visibilita'] === 'comune' || $altro['titolare'] === $conto['titolare'])), 'id');
 
         if (count(array_filter($vivi, fn (array $movimento) => in_array($movimento['conto'], $dellaVista, true))) + $nuovi > self::FLOW_MOVIMENTI_TETTO_VISTA) {
-            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_MOVIMENTI_TETTO_VISTA, 'ambito' => 'vista']);
+            throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_MOVIMENTI_TETTO_VISTA, 'ambito' => 'vista'], limite: 'movimenti_per_vista');
         }
     }
 
