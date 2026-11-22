@@ -106,6 +106,7 @@ final class Problema extends RuntimeException
         'pacchetto_gia_installato' => 409,
         'conto_con_caricamenti_di_altri' => 409,
         'conto_senza_titolare' => 409,
+        'saldo_dalla_banca' => 409,
         'persona_anonimizzata' => 409,
         'annullamento_scaduto' => 409,
         'unione_non_valida' => 409,

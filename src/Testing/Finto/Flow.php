@@ -153,7 +153,7 @@ trait Flow
             'flow.conti.elenca:'.(is_string($vista) ? $vista : ''),
             'id',
             fn () => array_map(
-                fn (array $conto) => $this->voceContoFlow($conto),
+                fn (array $conto) => $this->voceContoFlow($conto, $chi),
                 array_values(array_filter($this->flow['conti'], fn (array $conto) => $this->contoVisibileFlow($conto, $chi) && ($vista === null || $conto['visibilita'] === $vista))),
             ),
             fn (array $voce) => [$voce['banca'], $voce['nome'], $voce['id']],
@@ -177,7 +177,7 @@ trait Flow
     private function mostraContoFlow(Request $richiesta, string $id): array
     {
         $chi = $this->conFlow($richiesta);
-        $voce = $this->voceContoFlow($this->contoFlow($chi, $id));
+        $voce = $this->voceContoFlow($this->contoFlow($chi, $id), $chi);
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
     }
@@ -196,6 +196,7 @@ trait Flow
         return $this->conIdempotenza($richiesta, 'flow.conti.crea', $chi, $corpo, function () use ($chi, $corpo) {
             $this->frena('freni:flow.conti.crea:'.$chi['persona'], self::FRENI['flow_conti_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, $this->regoleContoFlow(true));
+            $this->coppiaDelSaldoFlow($campi);
 
             if (count(array_filter($this->flow['conti'], fn (array $conto) => $conto['workspace'] === $chi['workspace'] && ! $conto['archiviato'])) >= self::FLOW_CONTI_TETTO) {
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_CONTI_TETTO], limite: 'conti_visibili_per_persona');
@@ -207,7 +208,7 @@ trait Flow
                 'iban_ultime4' => $campi['iban_ultime4'] ?? null, 'saldo' => $campi['saldo'] ?? null, 'saldo_il' => $campi['saldo_il'] ?? null, 'formato_importazione' => $campi['formato_importazione'] ?? null,
                 'creato_il' => self::istanteFlow(), 'archiviato' => false,
             ];
-            $voce = $this->voceContoFlow($this->flow['conti'][$id]);
+            $voce = $this->voceContoFlow($this->flow['conti'][$id], $chi);
 
             return [201, ['data' => $voce], ['Location' => "/v1/flow/conti/{$id}", 'ETag' => self::etagCrm($voce)]];
         });
@@ -224,8 +225,16 @@ trait Flow
     {
         $chi = $this->conFlow($richiesta);
         $conto = $this->contoFlow($chi, $id, true);
-        $this->pretendiLaVersioneCrm($richiesta, $this->voceContoFlow($conto));
+        $this->pretendiLaVersioneCrm($richiesta, $this->voceContoFlow($conto, $chi));
         $campi = $this->modificaCrm($corpo, $this->regoleContoFlow(false));
+        $this->coppiaDelSaldoFlow($campi);
+
+        // Il saldo di un conto collegato a una banca lo scrive la banca: un valore diverso dall'attuale è 409 `saldo_dalla_banca`, e non si scrive niente (ContiController::modifica).
+        foreach (['saldo', 'saldo_il'] as $campo) {
+            if (array_key_exists($campo, $campi) && json_encode($campi[$campo]) !== json_encode($conto[$campo]) && $this->collegamentoDelContoFlow($conto) !== null) {
+                throw new Problema('saldo_dalla_banca');
+            }
+        }
 
         foreach (['banca', 'nome', 'tipo', 'visibilita', 'iban_ultime4', 'saldo', 'saldo_il', 'formato_importazione'] as $campo) {
             if (array_key_exists($campo, $campi) && json_encode(self::ordinato($campi[$campo])) !== json_encode(self::ordinato($conto[$campo]))) {
@@ -238,7 +247,7 @@ trait Flow
             $this->flow['conti'][$conto['id']]['titolare'] = $chi['persona'];
         }
 
-        $voce = $this->voceContoFlow($this->flow['conti'][$conto['id']]);
+        $voce = $this->voceContoFlow($this->flow['conti'][$conto['id']], $chi);
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
     }
@@ -282,7 +291,13 @@ trait Flow
             'iban_ultime4' => ['bail', 'nullable', 'string', 'regex:/^[0-9]{4}$/D'],
             'valuta' => ['bail', 'string', Rule::in(['EUR'])],
             'saldo' => ['bail', 'nullable', 'integer:strict', 'between:-100000000000000,100000000000000'],
-            'saldo_il' => ['bail', 'nullable', 'string', 'date_format:Y-m-d'],
+            'saldo_il' => ['bail', 'nullable', 'string', 'date_format:Y-m-d', function (string $attributo, mixed $valore, Closure $fail) {
+                $oggi = CarbonImmutable::now('Europe/Rome')->toDateString();
+
+                if (is_string($valore) && $valore > $oggi) {
+                    $this->rifiutaCrm($fail, $attributo, Regola::FUORI_INTERVALLO, 'validation.before_or_equal', ['attribute' => $attributo, 'date' => $oggi]);
+                }
+            }],
             'formato_importazione' => ['bail', 'nullable', 'array', function (string $attributo, mixed $valore, Closure $fail) {
                 if ($valore !== [] && array_is_list($valore)) {
                     $this->rifiutaCrm($fail, $attributo, Regola::TIPO, 'validation.array', ['attribute' => $attributo]);
@@ -343,7 +358,7 @@ trait Flow
      * @param  array<string, mixed>  $conto
      * @return array<string, mixed>
      */
-    private function voceContoFlow(array $conto): array
+    private function voceContoFlow(array $conto, array $chi): array
     {
         $date = array_column(array_filter($this->flow['movimenti'], fn (array $movimento) => $movimento['conto'] === $conto['id'] && ! $movimento['archiviato']), 'data');
 
@@ -360,8 +375,66 @@ trait Flow
             'saldo_il' => $conto['saldo_il'],
             'movimenti_fino_al' => $date === [] ? null : max($date),
             'formato_importazione' => $conto['formato_importazione'] === null ? null : (object) $conto['formato_importazione'],
+            'collegamento' => $this->formaDelCollegamentoFlow($conto, $chi),
             'creato_il' => self::iso($conto['creato_il']),
         ];
+    }
+
+    /**
+     * Il collegamento bancario vivo da cui nasce un conto (nel finto: quello che elenca il conto fra i suoi `conti`, vedi `impostaCollegamentoFlow`), `null` se non c'è.
+     *
+     * @param  array<string, mixed>  $conto
+     * @return array<string, mixed>|null
+     */
+    private function collegamentoDelContoFlow(array $conto): ?array
+    {
+        foreach ($this->flow['collegamenti'] as $collegamento) {
+            if (! $collegamento['archiviato'] && $collegamento['workspace'] === $conto['workspace'] && in_array($conto['id'], array_column($collegamento['conti'] ?? [], 'id'), true)) {
+                return $collegamento;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * `collegamento` dello schema Conto (Conti::collegamenti): `{stato}`, e `id` solo per la persona che ha aperto il collegamento; `null` senza un collegamento vivo.
+     *
+     * @param  array<string, mixed>  $conto
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return array<string, string>|null
+     */
+    private function formaDelCollegamentoFlow(array $conto, array $chi): ?array
+    {
+        $collegamento = $this->collegamentoDelContoFlow($conto);
+
+        if ($collegamento === null) {
+            return null;
+        }
+
+        return $collegamento['persona'] === $chi['persona'] ? ['id' => $collegamento['id'], 'stato' => $collegamento['stato']] : ['stato' => $collegamento['stato']];
+    }
+
+    /**
+     * `saldo` e `saldo_il` si mandano in coppia (Conti::coppiaDelSaldo): con uno solo, o con uno `null` e l'altro no, è 422 `obbligatorio` sul campo che manca. Entrambi `null` tolgono il saldo.
+     *
+     * @param  array<string, mixed>  $campi
+     */
+    private function coppiaDelSaldoFlow(array $campi): void
+    {
+        $saldo = array_key_exists('saldo', $campi);
+        $data = array_key_exists('saldo_il', $campi);
+
+        $manca = match (true) {
+            $saldo && ! $data => 'saldo_il',
+            $data && ! $saldo => 'saldo',
+            $saldo && $data && ($campi['saldo'] === null) !== ($campi['saldo_il'] === null) => $campi['saldo'] === null ? 'saldo' : 'saldo_il',
+            default => null,
+        };
+
+        if ($manca !== null) {
+            throw $this->erroreCrm($manca, 'validation.required', 'obbligatorio', ['attribute' => $this->testi->nome($manca)]);
+        }
     }
 
     // ———————————————————————————————————————— Categorie

@@ -607,6 +607,10 @@ return [
         'title' => 'Account without an owner',
         'detail' => 'The account is shared and has no owner (the person who had it asked for their Finance data to be deleted): the workspace owner and admins manage it, but they cannot make it personal, because it would disappear for the people who use it. The account has not changed. Leave it shared.',
     ],
+    'saldo_dalla_banca' => [
+        'title' => 'Balance written by the bank',
+        'detail' => 'The account comes from a bank connection and its balance is written by the bank on every read: it cannot be changed from here. The account has not changed. Do not send `saldo` or `saldo_il` for this account; the other fields can be changed as usual.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Acceptance required',
         'detail' => 'To use Zeiras you must accept the privacy notice and the terms of use in their current version. The problem carries `mancanti` next to the code, the documents still to accept: accept them with legale.accettazioni.crea (legale.documenti.elenca lists them) and repeat the request.',

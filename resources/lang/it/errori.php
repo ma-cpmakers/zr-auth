@@ -607,6 +607,10 @@ return [
         'title' => 'Conto senza titolare',
         'detail' => 'Il conto è comune e non ha un titolare (la persona che lo aveva ha chiesto la cancellazione dei suoi dati di Finanze): proprietario e amministratori lo gestiscono, ma non lo rendono personale, perché sparirebbe alla vista di chi lo usa. Il conto non è cambiato. Lascialo comune.',
     ],
+    'saldo_dalla_banca' => [
+        'title' => 'Saldo scritto dalla banca',
+        'detail' => 'Il conto nasce da un collegamento bancario e il suo saldo lo scrive la banca a ogni lettura: non si cambia da qui. Il conto non è cambiato. Non mandare `saldo` né `saldo_il` per questo conto; gli altri campi si cambiano come sempre.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Accettazione richiesta',
         'detail' => 'Per usare Zeiras devi accettare l\'informativa sulla privacy e i termini d\'uso nella versione in vigore. Il problema porta accanto al codice `mancanti`, i documenti da accettare: accettali con legale.accettazioni.crea (li elenca legale.documenti.elenca) e ripeti la richiesta.',

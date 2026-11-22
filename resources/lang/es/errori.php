@@ -607,6 +607,10 @@ return [
         'title' => 'Cuenta sin titular',
         'detail' => 'La cuenta es común y no tiene titular (la persona que la tenía pidió borrar sus datos de Finanzas): el propietario y los administradores la gestionan, pero no la pasan a personal, porque desaparecería para quienes la usan. La cuenta no ha cambiado. Déjala común.',
     ],
+    'saldo_dalla_banca' => [
+        'title' => 'Saldo escrito por el banco',
+        'detail' => 'La cuenta nace de una conexión bancaria y su saldo lo escribe el banco en cada lectura: no se cambia desde aquí. La cuenta no ha cambiado. No envíes `saldo` ni `saldo_il` para esta cuenta; los demás campos se cambian como siempre.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Aceptación requerida',
         'detail' => 'Para usar Zeiras debes aceptar el aviso de privacidad y las condiciones de uso en su versión vigente. El problema lleva junto al código `mancanti`, los documentos por aceptar: acéptalos con legale.accettazioni.crea (los lista legale.documenti.elenca) y repite la solicitud.',
