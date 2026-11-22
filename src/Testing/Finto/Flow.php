@@ -2394,8 +2394,9 @@ trait Flow
         }
 
         $somma = array_sum(array_column($mesi, 'totale'));
-        $saldi = array_filter(array_column(array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista)), 'saldo'), fn (mixed $saldo) => $saldo !== null);
-        $disponibile = $saldi === [] ? null : (int) array_sum($saldi) + $entrate30;
+        $contiDellaVista = array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista));
+        $conSaldo = array_filter($contiDellaVista, fn (array $conto) => $conto['saldo'] !== null);
+        $disponibile = $conSaldo === [] ? null : $this->oggiNeiContiFlow($contiDellaVista, $this->movimentiBilancioFlow($chi, $vista), $oggi) + $entrate30;
         $mancano = $disponibile === null ? null : max(0, -$spese30 - $disponibile);
         $elenco = [];
 

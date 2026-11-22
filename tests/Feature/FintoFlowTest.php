@@ -600,3 +600,15 @@ it('il conto del mese: con movimenti dopo la saldo_il nel_conto.importo e l\'ult
     $nelConto = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.nel_conto');
     expect($nelConto['importo'])->toBe(5700)->and($nelConto['andamento'][5]['importo'])->toBe(5700);
 });
+
+it('il futuro: disponibile parte dallo stesso saldo di nel_conto.importo, il saldo più i movimenti dopo la saldo_il (#3817, zr-pm 22/11)', function () {
+    [, $gettoni] = studioConFinanze();
+    $oggi = Carbon\CarbonImmutable::now('Europe/Rome')->startOfDay();
+    $conto = alFinto('POST', '/v1/flow/conti', ['banca' => 'Banca Uno', 'nome' => 'Casa', 'tipo' => 'corrente', 'visibilita' => 'comune', 'saldo' => 5000, 'saldo_il' => $oggi->subDays(3)->format('Y-m-d')], $gettoni['anna'])->json('data');
+    alFinto('POST', '/v1/flow/movimenti', ['conto_id' => $conto['id'], 'data' => $oggi->subDay()->format('Y-m-d'), 'importo' => 700, 'descrizione' => 'Dopo il saldo'], $gettoni['anna']);
+
+    $importo = alFinto('GET', '/v1/flow/bilancio?visibilita=comune', null, $gettoni['anna'])->json('data.nel_conto.importo');
+    $futuro = alFinto('GET', '/v1/flow/futuro?visibilita=comune', null, $gettoni['anna'])->json('data.prossimi_30_giorni');
+
+    expect($importo)->toBe(5700)->and($futuro['disponibile'])->toBe(5700);
+});
