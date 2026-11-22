@@ -302,7 +302,7 @@ final class Testi
             'type' => self::ERRORI.$codice,
             'title' => $this->testo("errori.{$codice}.title"),
             'status' => $problema->stato(),
-            'detail' => $codice === 'troppe_richieste'
+            'detail' => in_array($codice, ['troppe_richieste', 'troppi_codici_invito'], true)
                 ? $this->traduttore->choice("errori.{$codice}.detail", $secondi, ['secondi' => $secondi])
                 : $this->detail($problema),
             'codice' => $codice,

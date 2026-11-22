@@ -676,6 +676,14 @@ final class BackofficeFinto
     /** Utente::REGOLE_EMAIL del backoffice. */
     private const REGOLE_EMAIL = ['bail', 'required', 'string', 'max:254', 'email:rfc,filter'];
 
+    /** Il codice che le porte d'invito accettano (Invito::REGEX_CODICE, #4166): 8 cifre con al più uno spazio nel mezzo, o i 43 caratteri degli inviti di prima. */
+    private const REGEX_CODICE_INVITO = '/^(?:\d{4}[\s\p{Z}]?\d{4}|[A-Za-z0-9_-]{43})$/Du';
+
+    /** Il freno dei codici d'invito sbagliati (CodiciDInvito, #4166): quanti per la stessa email o lo stesso IP prima del blocco, e quanto dura (15 minuti). */
+    private const CODICI_SBAGLIATI = 5;
+
+    private const BLOCCO_DEI_CODICI = 900;
+
     /** Quanti caratteri può avere la risposta del widget (Turnstile::LUNGHEZZA). */
     private const LUNGHEZZA_TURNSTILE = 2048;
 
@@ -744,6 +752,13 @@ final class BackofficeFinto
 
     /** @var array<string, string> gli inviti accettati: l'HMAC del codice => il workspace. Il backoffice li tiene archiviati e li legge solo io.inviti.verifica.crea */
     private array $invitiAccettati = [];
+
+    /**
+     * L'email dell'invito accettato, per impronta del codice: un codice di 8 cifre accettato vale ancora, per la sola email dell'invito, a io.inviti.verifica.crea (Inviti::trova con gli archiviati).
+     *
+     * @var array<string, string>
+     */
+    private array $emailInvitiAccettati = [];
 
     /** @var array<string, array{codice: string, tentativi: int, scade: int}> i codici di accesso (accessi.codici.crea) in attesa, per email: la persona può non esserci */
     private array $codiciDiAccesso = [];
@@ -3277,7 +3292,7 @@ final class BackofficeFinto
             'codice' => ['required', 'string', 'max:2048'],
             'stato' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
             'termini_accettati' => ['sometimes', 'nullable', 'boolean'],
-            'invito' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
+            'invito' => ['sometimes', 'nullable', 'string', 'regex:'.self::REGEX_CODICE_INVITO],
         ]);
         $invito = $dati['invito'] ?? null;
         $this->frena('provider.crea:stato:'.hash('sha256', (string) $dati['stato']), self::FRENI['provider_stato'], self::MINUTO);
@@ -3546,9 +3561,13 @@ final class BackofficeFinto
             return;
         }
 
+        // Il blocco dei codici sbagliati viene prima di ogni lettura (#4166), e un codice che non vale conta una volta sola: uno sbagliato, un conto (Inviti::valido con `conta: false`, poi accetta).
+        $this->controllaCodiciDiInvito($email);
         $id = $this->invitoVivo($invito, $email);
 
         if ($id === null) {
+            $this->codiceDiInvitoSbagliato($email);
+
             throw new Problema('verifica_non_riuscita', verifica: 'provider');
         }
 
@@ -4064,14 +4083,30 @@ final class BackofficeFinto
      */
     private function verificaInvito(array $corpo): array
     {
-        $codice = (string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'bail', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/']])['codice'];
+        // Il codice di 8 cifre (anche «4827 1950») vuole l'email dell'invito: da solo sarebbe indovinabile (#4166). Il codice lungo di prima la lascia facoltativa.
+        $numerico = fn (): bool => is_string($corpo['codice'] ?? null) && self::eNumerico($corpo['codice']);
+        $dati = $this->testi->validaStretta($corpo, [
+            'codice' => ['required', 'bail', 'string', 'regex:'.self::REGEX_CODICE_INVITO],
+            'email' => ['bail', Rule::requiredIf($numerico), 'nullable', 'string', 'max:254', 'email:rfc,filter'],
+        ]);
+        $codice = self::senzaSpazi((string) $dati['codice']);
+        $email = isset($dati['email']) ? self::normalizza((string) $dati['email']) : null;
         $this->frena('inviti-verifica:'.hash('sha256', $codice), self::FRENI['inviti_verifiche_per_codice'], self::MINUTO);
+        $this->controllaCodiciDiInvito($email);
 
-        $invito = collect($this->inviti)->first(fn (array $uno) => hash_equals($uno['codice'], $codice) && $uno['scade']->gt(now()));
+        $id = $this->invitoDelCodice($codice, $email);
+        $uno = $id === null ? null : $this->inviti[$id];
+        $vivo = $uno !== null && $uno['scade']->gt(now());
+        $invito = $vivo ? $uno : null;
         $workspace = $invito === null ? null : ($this->workspace[$invito['workspace']] ?? null);
 
         if ($invito === null || $workspace === null) {
-            return [200, ['data' => ['valido' => false]]];
+            $this->codiceDiInvitoSbagliato($email);
+
+            // Solo chi porta il codice di 8 cifre e l'email dell'invito scaduto, e non accettato, sa che è scaduto: a chiunque altro non si dice niente (G11).
+            $scaduto = $uno !== null && ! $vivo && self::eNumerico($codice);
+
+            return [200, ['data' => $scaduto ? ['valido' => false, 'motivo' => 'scaduto'] : ['valido' => false]]];
         }
 
         $azienda = $this->aziende[$workspace['azienda_id']] ?? null;
@@ -4098,15 +4133,28 @@ final class BackofficeFinto
     private function verificaInvitoIo(Request $richiesta, array $corpo): array
     {
         $persona = $this->autentica($richiesta)['persona'];
-        $codice = (string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'bail', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/']])['codice'];
+        $codice = self::senzaSpazi((string) $this->testi->validaStretta($corpo, ['codice' => ['required', 'bail', 'string', 'regex:'.self::REGEX_CODICE_INVITO]])['codice']);
         $this->frena('inviti-verifica:'.hash('sha256', $codice), self::FRENI['inviti_verifiche_per_codice'], self::MINUTO);
         $this->frena('io-inviti-verifica:'.$persona, self::FRENI['io_inviti_verifiche_per_persona'], self::MINUTO);
 
-        $id = $this->invitoDelCodice($codice);
+        // Il blocco dei codici sbagliati (#4166): l'email è quella del gettone, mai una dichiarata dal corpo; un codice di 8 cifre vale solo per l'email dell'invito.
+        $email = $this->persone[$persona]['email'];
+        $this->controllaCodiciDiInvito($email);
+
+        $id = $this->invitoDelCodice($codice, $email);
         $vivo = $id !== null && $this->inviti[$id]['scade']->gt(now());
-        $workspace = $id !== null ? $this->inviti[$id]['workspace'] : ($this->invitiAccettati[hash('sha256', $codice)] ?? null);
+        $impronta = hash('sha256', $codice);
+        $accettato = $this->invitiAccettati[$impronta] ?? null;
+
+        if ($accettato !== null && self::eNumerico($codice) && ($this->emailInvitiAccettati[$impronta] ?? null) !== $email) {
+            $accettato = null;
+        }
+
+        $workspace = $id !== null ? $this->inviti[$id]['workspace'] : $accettato;
 
         if ($workspace === null || ! isset($this->workspace[$workspace])) {
+            $this->codiceDiInvitoSbagliato($email);
+
             return [200, ['data' => ['valido' => false]]];
         }
 
@@ -4119,6 +4167,8 @@ final class BackofficeFinto
         }
 
         if (! $vivo) {
+            $this->codiceDiInvitoSbagliato($email);
+
             return [200, ['data' => ['valido' => false]]];
         }
 
@@ -4337,8 +4387,15 @@ final class BackofficeFinto
         }
 
         // Un invito per un'altra email, scaduto, revocato o sconosciuto è la stessa 422.
-        if ($invito !== null && $this->invitoVivo($invito, $email) === null) {
-            throw new Problema('verifica_non_riuscita', verifica: 'registrazione');
+        if ($invito !== null) {
+            // Prima il blocco dei codici sbagliati (429 troppi_codici_invito), poi un codice che non vale conta fra i 5 della sua email e del suo IP (#4166, Inviti::valido).
+            $this->controllaCodiciDiInvito($email);
+
+            if ($this->invitoVivo($invito, $email) === null) {
+                $this->codiceDiInvitoSbagliato($email);
+
+                throw new Problema('verifica_non_riuscita', verifica: 'registrazione');
+            }
         }
 
         // L'invito sostituisce la lista dei consentiti: chi ha il codice è stato scelto.
@@ -4372,7 +4429,7 @@ final class BackofficeFinto
         if ($this->conEmail($email) === null) {
             // Nel backoffice è una transazione: un workspace al tetto dà 409 e la persona non nasce.
             if ($invito !== null) {
-                $workspace = $this->inviti[$this->invitoDelCodice($invito) ?? '']['workspace'] ?? '';
+                $workspace = $this->inviti[$this->invitoDelCodice($invito, $email) ?? '']['workspace'] ?? '';
                 // Un workspace in eliminazione non accoglie nessuno (#2259), nemmeno una persona che nasce con l'invito (#2044).
                 $this->rifiutaSeInEliminazione($workspace);
                 $this->tettoDeiMembri($workspace);
@@ -5657,7 +5714,7 @@ final class BackofficeFinto
                     'ruolo' => $ruolo,
                     'reinvii' => 0,
                     'invitante' => $persona,
-                    'codice' => self::base64url(random_bytes(32)),
+                    'codice' => $this->nuovoCodiceDiOttoCifre(),
                     'scade' => $adesso->addDays(self::GIORNI_DELL_INVITO),
                     'creato_il' => $adesso,
                 ];
@@ -6599,7 +6656,7 @@ final class BackofficeFinto
                 'ruolo' => $campi['ruolo'],
                 'reinvii' => 0,
                 'invitante' => $chi['persona'],
-                'codice' => self::base64url(random_bytes(32)),
+                'codice' => $this->nuovoCodiceDiOttoCifre(),
                 'scade' => $adesso->addDays(self::GIORNI_DELL_INVITO),
                 'creato_il' => $adesso,
             ];
@@ -6678,7 +6735,7 @@ final class BackofficeFinto
             $this->frena('inviti-workspace:'.$workspace, self::FRENI['inviti_per_workspace'], self::ORA);
 
             $this->inviti[$invito]['reinvii']++;
-            $this->inviti[$invito]['codice'] = self::base64url(random_bytes(32));
+            $this->inviti[$invito]['codice'] = $this->nuovoCodiceDiOttoCifre();
             $this->inviti[$invito]['scade'] = now()->toImmutable()->startOfMillisecond()->addDays(self::GIORNI_DELL_INVITO);
             $this->postaInviti[$email] = $this->inviti[$invito]['codice'];
 
@@ -6722,22 +6779,88 @@ final class BackofficeFinto
         }
     }
 
-    /** L'id dell'invito che ha questo codice, se è ancora un invito (non revocato né accettato): null se no. */
-    private function invitoDelCodice(#[SensitiveParameter] string $codice): ?string
+    /**
+     * L'id dell'invito che ha questo codice, se è ancora un invito (non revocato né accettato): null se no. Un codice di 8 cifre vale solo per l'email dell'invito (da solo sarebbe
+     * indovinabile, #4166): per un'altra, o senza email, è come se non ci fosse (Inviti::trova). Gli spazi del codice non contano.
+     */
+    private function invitoDelCodice(#[SensitiveParameter] string $codice, ?string $email = null): ?string
     {
+        $codice = self::senzaSpazi($codice);
+
         foreach ($this->inviti as $id => $invito) {
             if (hash_equals($invito['codice'], $codice)) {
-                return $id;
+                return self::eNumerico($codice) && ($email === null || $invito['email'] !== $email) ? null : $id;
             }
         }
 
         return null;
     }
 
+    /** Il codice com'è scritto dalla persona, senza spazi (anche quelli stretti o a larghezza piena): «4827 1950» e «48271950» sono lo stesso codice (Invito::normalizza). */
+    private static function senzaSpazi(#[SensitiveParameter] string $codice): string
+    {
+        return (string) preg_replace('/[\s\p{Z}]+/u', '', $codice);
+    }
+
+    /** Un codice di 8 cifre (quello nuovo), e non un codice lungo di prima (Invito::eNumerico). */
+    private static function eNumerico(#[SensitiveParameter] string $codice): bool
+    {
+        return preg_match('/^\d{8}$/D', self::senzaSpazi($codice)) === 1;
+    }
+
+    /** Un codice nuovo di 8 cifre, con gli zeri davanti, che nessun invito (anche accettato) ha già (Invito::nuovoCodiceNumerico). */
+    private function nuovoCodiceDiOttoCifre(): string
+    {
+        do {
+            $codice = str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
+            $inUso = isset($this->invitiAccettati[hash('sha256', $codice)]) || array_filter($this->inviti, fn (array $invito) => $invito['codice'] === $codice) !== [];
+        } while ($inUso);
+
+        return $codice;
+    }
+
+    /**
+     * Le coppie (conto degli errori, blocco): una per l'email, se c'è, e una per l'IP firmato della richiesta (quello della connessione, in 127.0.0.1, se è anonima).
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function chiaviDeiCodiciDiInvito(?string $email): array
+    {
+        $ip = $this->ipFirmato ?? '127.0.0.1';
+        $coppie = [['codici-invito-errori:ip:'.$ip, 'codici-invito-blocco:ip:'.$ip]];
+
+        if ($email !== null && $email !== '') {
+            array_unshift($coppie, ['codici-invito-errori:email:'.$email, 'codici-invito-blocco:email:'.$email]);
+        }
+
+        return $coppie;
+    }
+
+    /** Respinge con 429 troppi_codici_invito (Retry-After in secondi) se l'email o l'IP sono bloccati. Non conta niente (CodiciDInvito::controlla). */
+    private function controllaCodiciDiInvito(?string $email): void
+    {
+        foreach ($this->chiaviDeiCodiciDiInvito($email) as [, $blocco]) {
+            if ($this->freni->tooManyAttempts($blocco, 1)) {
+                throw new Problema('troppi_codici_invito', header: ['Retry-After' => (string) max(1, $this->freni->availableIn($blocco))]);
+            }
+        }
+    }
+
+    /** Conta un codice sbagliato per l'email e per l'IP; al quinto la chiave si blocca 15 minuti, dal quinto errore, e il conto riparte da zero (CodiciDInvito::sbagliato). */
+    private function codiceDiInvitoSbagliato(?string $email): void
+    {
+        foreach ($this->chiaviDeiCodiciDiInvito($email) as [$errori, $blocco]) {
+            if ($this->freni->hit($errori, self::BLOCCO_DEI_CODICI) >= self::CODICI_SBAGLIATI) {
+                $this->freni->clear($errori);
+                $this->freni->hit($blocco, self::BLOCCO_DEI_CODICI);
+            }
+        }
+    }
+
     /** Dice se il codice è di un invito vivo per questa email, senza consumarlo (Inviti::valido): l'id dell'invito, o null. */
     private function invitoVivo(#[SensitiveParameter] string $codice, string $email): ?string
     {
-        $id = $this->invitoDelCodice($codice);
+        $id = $this->invitoDelCodice($codice, $email);
 
         return $id !== null && $this->inviti[$id]['scade']->gt(now()) && $this->inviti[$id]['email'] === $email ? $id : null;
     }
@@ -6759,10 +6882,20 @@ final class BackofficeFinto
 
     private function accettaCodice(#[SensitiveParameter] string $codice, string $persona, string $verifica = 'invito'): string
     {
-        $id = $this->invitoDelCodice($codice);
+        $email = $this->persone[$persona]['email'];
 
-        if ($id === null || ! $this->inviti[$id]['scade']->gt(now()) || $this->inviti[$id]['email'] !== $this->persone[$persona]['email']
-            || $this->persone[$persona]['email_verificata_il'] === null) {
+        // Il blocco dei codici sbagliati viene prima di ogni lettura (#4166): anche il codice giusto, durante il blocco, è 429.
+        $this->controllaCodiciDiInvito($email);
+        $id = $this->invitoDelCodice($codice, $email);
+
+        // Un codice che non è di quest'email conta fra i sbagliati; l'email non verificata non è un codice sbagliato.
+        if ($id === null || ! $this->inviti[$id]['scade']->gt(now()) || $this->inviti[$id]['email'] !== $email) {
+            $this->codiceDiInvitoSbagliato($email);
+
+            throw new Problema('verifica_non_riuscita', verifica: $verifica);
+        }
+
+        if ($this->persone[$persona]['email_verificata_il'] === null) {
             throw new Problema('verifica_non_riuscita', verifica: $verifica);
         }
 
@@ -6777,7 +6910,8 @@ final class BackofficeFinto
         $this->tettoDeiMembri($invito['workspace']);
 
         $this->entra($invito['workspace'], $persona, $invito['ruolo']);
-        $this->invitiAccettati[hash('sha256', $codice)] = $invito['workspace'];
+        $this->invitiAccettati[hash('sha256', self::senzaSpazi($codice))] = $invito['workspace'];
+        $this->emailInvitiAccettati[hash('sha256', self::senzaSpazi($codice))] = $invito['email'];
         unset($this->inviti[$id]);
 
         return $invito['workspace'];

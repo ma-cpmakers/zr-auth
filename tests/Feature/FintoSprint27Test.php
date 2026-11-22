@@ -51,14 +51,14 @@ it('inviti.verifica.crea: un invito vivo dice workspace, ruolo e invitante; uno 
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'amministratore'], $gettone('anna@example.com'));
     $codice = $finto->ultimoInvito('dora@example.com');
 
-    $vivo = alFinto('POST', '/v1/inviti/verifica', ['codice' => $codice]);
+    $vivo = alFinto('POST', '/v1/inviti/verifica', ['codice' => $codice, 'email' => 'dora@example.com']);
     $sconosciuto = alFinto('POST', '/v1/inviti/verifica', ['codice' => str_repeat('a', 43)]);
 
     expect($vivo->status())->toBe(200)
         ->and($vivo->json('data'))->toBe(['valido' => true, 'workspace_nome' => 'Studio', 'invitante_nome' => 'Anna', 'ruolo' => 'amministratore'])
         ->and($sconosciuto->json())->toBe(['data' => ['valido' => false]])
         ->and(esito(alFinto('POST', '/v1/inviti/verifica', ['codice' => 'corto'])))->toBe([422, 'dati_non_validi'])
-        ->and(esito(alFinto('POST', '/v1/inviti/verifica', ['codice' => $codice, 'extra' => 1])))->toBe([422, 'dati_non_validi']);
+        ->and(esito(alFinto('POST', '/v1/inviti/verifica', ['codice' => $codice, 'email' => 'dora@example.com', 'extra' => 1])))->toBe([422, 'dati_non_validi']);
 });
 
 it('inviti.verifica.crea: un invito revocato o scaduto non vale; il freno è per codice (#1731)', function () {
@@ -72,19 +72,57 @@ it('inviti.verifica.crea: un invito revocato o scaduto non vale; il freno è per
     $scaduto = $finto->ultimoInvito('eva@example.com');
 
     // Il revocato si prova prima di far scadere il tempo: dopo 8 giorni sarebbe comunque scaduto, e il test passerebbe anche se la revoca fosse ignorata.
-    expect(alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato])->json('data'))->toBe(['valido' => false])
-        ->and(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto])->json('data.valido'))->toBeTrue();
+    expect(alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato, 'email' => 'dora@example.com'])->json('data'))->toBe(['valido' => false])
+        ->and(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto, 'email' => 'eva@example.com'])->json('data.valido'))->toBeTrue();
 
     $this->travel(8)->days();
 
-    expect(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto])->json('data'))->toBe(['valido' => false]);
+    // Scaduto lo sa solo chi porta il codice di 8 cifre e l'email dell'invito (#4166).
+    expect(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto, 'email' => 'eva@example.com'])->json('data'))->toBe(['valido' => false, 'motivo' => 'scaduto']);
 
     foreach (range(1, 30) as $i) {
-        alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato]);
+        alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato, 'email' => 'dora@example.com']);
     }
 
-    expect(esito(alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato])))->toBe([429, 'troppe_richieste'])
-        ->and(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto])->status())->toBe(200);
+    // Il freno è per codice (30 al minuto, `troppe_richieste`); i codici che non valgono hanno anche bloccato l'IP, per ogni email (`troppi_codici_invito`).
+    expect(esito(alFinto('POST', '/v1/inviti/verifica', ['codice' => $revocato, 'email' => 'dora@example.com'])))->toBe([429, 'troppe_richieste'])
+        ->and(esito(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto, 'email' => 'eva@example.com'])))->toBe([429, 'troppi_codici_invito']);
+
+    $this->travel(16)->minutes();
+
+    expect(alFinto('POST', '/v1/inviti/verifica', ['codice' => $scaduto, 'email' => 'eva@example.com'])->status())->toBe(200);
+});
+
+it('inviti.verifica.crea col codice di 8 cifre: vuole l\'email, vale per la sola email dell\'invito, e dopo 5 codici che non valgono il blocco è 429 troppi_codici_invito (#4166)', function () {
+    [$finto, , , $gettone] = squadra();
+    $this->freezeTime();
+    alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $gettone('anna@example.com'));
+    $codice = $finto->ultimoInvito('dora@example.com');
+    $conSpazio = substr($codice, 0, 4).' '.substr($codice, 4);
+    $verifica = fn (string $dato, ?string $email) => alFinto('POST', '/v1/inviti/verifica', array_filter(['codice' => $dato, 'email' => $email]));
+
+    expect($codice)->toMatch('/^\d{8}$/')
+        ->and($verifica($codice, 'dora@example.com')->json('data.valido'))->toBeTrue()
+        ->and($verifica($conSpazio, 'Dora@Example.com')->json('data.valido'))->toBeTrue()
+        ->and($verifica($codice, null)->json('errors.0.pointer'))->toBe('#/email')
+        ->and($verifica($codice, 'altra@example.com')->json())->toBe(['data' => ['valido' => false]]);
+
+    foreach (range(1, 4) as $n) {
+        $verifica(sprintf('%08d', $n), 'dora@example.com');
+    }
+
+    $bloccato = $verifica($codice, 'dora@example.com');
+
+    expect(esito($bloccato))->toBe([429, 'troppi_codici_invito'])->and($bloccato->header('Retry-After'))->toBe('900');
+
+    $this->travel(16)->minutes();
+
+    expect($verifica($codice, 'dora@example.com')->json('data.valido'))->toBeTrue();
+
+    $this->travel(8)->days();
+
+    expect($verifica($codice, 'dora@example.com')->json('data'))->toBe(['valido' => false, 'motivo' => 'scaduto'])
+        ->and($verifica($codice, 'altra@example.com')->json('data'))->toBe(['valido' => false]);
 });
 
 it('accordo: spento il campo è ammesso e ignorato; acceso, una nuova azienda lo vuole a true, con documento e versione accanto (#1700)', function () {
@@ -165,26 +203,33 @@ it('accordo: aziende.mostra dice se l\'azienda deve ancora accettare, e aziende.
 
 it('io.inviti.verifica.crea: chi è già membro ha gia_membro e il workspace, chi no ha quello di inviti.verifica.crea, ogni altro caso è {"valido": false} (#2177)', function () {
     [$finto, $studio, , $gettone] = squadra();
-    $finto->persona('dora@example.com', PASSWORD, nome: 'Dora');
+    $dora = $finto->persona('dora@example.com', PASSWORD, nome: 'Dora');
     $finto->persona('elio@example.com', PASSWORD, nome: 'Elio');
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $gettone('anna@example.com'));
-    $codice = $finto->ultimoInvito('dora@example.com');
+    alFinto('POST', '/v1/workspace/inviti', ['email' => 'elio@example.com', 'ruolo' => 'membro'], $gettone('anna@example.com'));
+    $perDora = $finto->ultimoInvito('dora@example.com');
+    $perElio = $finto->ultimoInvito('elio@example.com');
+    // Dora entra nel workspace per un'altra via mentre il suo invito vive.
+    $finto->membro($studio, $dora, 'membro');
     $carla = entraNelFinto('carla@example.com')['gettone']['gettone'];
     $elio = entraNelFinto('elio@example.com')['gettone']['gettone'];
 
-    $membro = alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $codice], $carla);
-    $fuori = alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $codice], $elio);
-    $conWorkspace = alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $codice], $gettone('carla@example.com'));
-    $anonimo = alFinto('POST', '/v1/inviti/verifica', ['codice' => $codice]);
+    $membro = alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $perDora], entraNelFinto('dora@example.com')['gettone']['gettone']);
+    $fuori = alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $perElio], $elio);
+    $conWorkspace = alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $perDora], $gettone('dora@example.com'));
+    $anonimo = alFinto('POST', '/v1/inviti/verifica', ['codice' => $perElio, 'email' => 'elio@example.com']);
 
+    // Un codice di 8 cifre vale solo per l'email dell'invito (#4166): per chiunque altro, membro o no, è un codice che non c'è.
     expect($membro->status())->toBe(200)
         ->and($membro->json('data'))->toBe(['valido' => false, 'gia_membro' => true, 'workspace' => ['id' => $studio['id'], 'slug' => $studio['slug'], 'nome' => 'Studio']])
         ->and($conWorkspace->json('data'))->toBe($membro->json('data'))
         ->and($fuori->json('data'))->toBe($anonimo->json('data'))->and($fuori->json('data.valido'))->toBeTrue()
+        ->and(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $perDora], $elio)->json())->toBe(['data' => ['valido' => false]])
+        ->and(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $perDora], $carla)->json())->toBe(['data' => ['valido' => false]])
         ->and(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => str_repeat('a', 43)], $carla)->json())->toBe(['data' => ['valido' => false]]);
 });
 
-it('io.inviti.verifica.crea: l\'invito accettato, da chiunque, è gia_membro per un membro; il revocato e lo scaduto no (#2177)', function () {
+it('io.inviti.verifica.crea: l\'invito accettato è gia_membro per chi lo ha accettato, e niente per un altro; il revocato no (#2177, #4166)', function () {
     [$finto, $studio, , $gettone] = squadra();
     $finto->persona('dora@example.com', PASSWORD, nome: 'Dora');
     $finto->persona('elio@example.com', PASSWORD, nome: 'Elio');
@@ -193,17 +238,19 @@ it('io.inviti.verifica.crea: l\'invito accettato, da chiunque, è gia_membro per
 
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'dora@example.com', 'ruolo' => 'membro'], $anna);
     $accettato = $finto->ultimoInvito('dora@example.com');
-    alFinto('POST', '/v1/inviti/accettazione', ['codice' => $accettato], entraNelFinto('dora@example.com')['gettone']['gettone']);
+    $dora = entraNelFinto('dora@example.com')['gettone']['gettone'];
+    alFinto('POST', '/v1/inviti/accettazione', ['codice' => $accettato], $dora);
 
     alFinto('POST', '/v1/workspace/inviti', ['email' => 'elio@example.com', 'ruolo' => 'membro'], $anna);
     $revocato = $finto->ultimoInvito('elio@example.com');
     alFinto('DELETE', '/v1/workspace/inviti/'.alFinto('GET', '/v1/workspace/inviti', gettone: $anna)->json('data.0.id'), gettone: $anna);
 
-    expect(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $accettato], $carla)->json('data'))->toBe(['valido' => false, 'gia_membro' => true, 'workspace' => ['id' => $studio['id'], 'slug' => $studio['slug'], 'nome' => 'Studio']])
-        ->and(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $revocato], $carla)->json())->toBe(['data' => ['valido' => false]]);
+    expect(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $accettato], $dora)->json('data'))->toBe(['valido' => false, 'gia_membro' => true, 'workspace' => ['id' => $studio['id'], 'slug' => $studio['slug'], 'nome' => 'Studio']])
+        ->and(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $accettato], $carla)->json())->toBe(['data' => ['valido' => false]])
+        ->and(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => $revocato], entraNelFinto('elio@example.com')['gettone']['gettone'])->json())->toBe(['data' => ['valido' => false]]);
 });
 
-it('io.inviti.verifica.crea: senza gettone 401, un codice fuori forma 422 sul pointer, il freno è per codice e per persona (#2177)', function () {
+it('io.inviti.verifica.crea: senza gettone 401, un codice fuori forma 422 sul pointer, il freno è per persona e il blocco dei codici sbagliati per IP (#2177, #4166)', function () {
     [, , , $gettone] = squadra();
     $carla = entraNelFinto('carla@example.com')['gettone']['gettone'];
 
@@ -215,6 +262,11 @@ it('io.inviti.verifica.crea: senza gettone 401, un codice fuori forma 422 sul po
         alFinto('POST', '/v1/io/inviti/verifica', ['codice' => substr(hash('sha256', (string) $n), 0, 43)], $carla);
     }
 
+    // Il freno è della persona (`troppe_richieste`); i trenta codici che non valgono hanno anche bloccato l'IP, e con lui ogni altra persona per 15 minuti (`troppi_codici_invito`).
     expect(esito(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => str_repeat('b', 43)], $carla)))->toBe([429, 'troppe_richieste'])
-        ->and(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => str_repeat('b', 43)], $gettone('anna@example.com'))->status())->toBe(200);
+        ->and(esito(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => str_repeat('b', 43)], $gettone('anna@example.com'))))->toBe([429, 'troppi_codici_invito']);
+
+    $this->travel(16)->minutes();
+
+    expect(alFinto('POST', '/v1/io/inviti/verifica', ['codice' => str_repeat('b', 43)], $gettone('anna@example.com'))->status())->toBe(200);
 });

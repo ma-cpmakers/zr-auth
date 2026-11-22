@@ -720,6 +720,11 @@ return [
         // Una scelta plurale sui secondi di Retry-After, che RendeProblemi riempie (T7.1, D19).
         'detail' => '{0} Demasiadas solicitudes en poco tiempo: vuelve a intentarlo ahora.|{1} Demasiadas solicitudes en poco tiempo: vuelve a intentarlo en :secondi segundo.|[2,*] Demasiadas solicitudes en poco tiempo: vuelve a intentarlo en :secondi segundos.',
     ],
+    'troppi_codici_invito' => [
+        'title' => 'Demasiados códigos de invitación',
+        // Retry-After in secondi come troppe_richieste (#4166): il blocco dura 15 minuti dal quinto codice sbagliato.
+        'detail' => '{0} Demasiados códigos de invitación incorrectos: inténtalo ahora.|{1} Demasiados códigos de invitación incorrectos para este correo o desde esta red: inténtalo de nuevo en :secondi segundo.|[2,*] Demasiados códigos de invitación incorrectos para este correo o desde esta red: inténtalo de nuevo en :secondi segundos.',
+    ],
     'errore_interno' => [
         'title' => 'Error interno',
         'detail' => 'Se ha producido un error inesperado y la solicitud no se ha completado: vuelve a intentarlo más tarde.',

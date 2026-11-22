@@ -720,6 +720,11 @@ return [
         // Una scelta plurale sui secondi di Retry-After, che RendeProblemi riempie (T7.1, D19).
         'detail' => '{0} Troppe richieste in poco tempo: riprova adesso.|{1} Troppe richieste in poco tempo: riprova fra :secondi secondo.|[2,*] Troppe richieste in poco tempo: riprova fra :secondi secondi.',
     ],
+    'troppi_codici_invito' => [
+        'title' => "Troppi codici d'invito",
+        // Retry-After in secondi come troppe_richieste (#4166): il blocco dura 15 minuti dal quinto codice sbagliato.
+        'detail' => "{0} Troppi codici d'invito sbagliati: riprova adesso.|{1} Troppi codici d'invito sbagliati per questa email o da questa rete: riprova fra :secondi secondo.|[2,*] Troppi codici d'invito sbagliati per questa email o da questa rete: riprova fra :secondi secondi.",
+    ],
     'errore_interno' => [
         'title' => 'Errore interno',
         'detail' => 'Si è verificato un errore inatteso e la richiesta non è stata completata: riprova più tardi.',

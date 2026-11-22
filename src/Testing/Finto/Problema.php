@@ -146,6 +146,7 @@ final class Problema extends RuntimeException
         'turnstile_non_valido' => 422,
         'cursore_scaduto' => 410,
         'troppe_richieste' => 429,
+        'troppi_codici_invito' => 429,
         'programma_non_raggiungibile' => 502,
         'banca_non_raggiungibile' => 502,
         'servizio_non_disponibile' => 503,
