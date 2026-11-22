@@ -692,6 +692,20 @@ trait Flow
             return null;
         }
 
+        // Le date vanno nel verso dei saldi (Caricamento::saldoDelFile): se no non si sa quale riga è l'ultima.
+        [$dalPiuVecchio, $dalPiuRecente] = $this->versiDelFileFlow($righe);
+        $date = array_column($righe, 'data');
+        $ordinate = function (array $d): bool {
+            $ordinate = $d;
+            sort($ordinate);
+
+            return $d === $ordinate;
+        };
+
+        if (! ($dalPiuVecchio && $ordinate($date)) && ! ($dalPiuRecente && $ordinate(array_reverse($date)))) {
+            return null;
+        }
+
         $oggi = CarbonImmutable::now('Europe/Rome')->toDateString();
         $fino = array_filter($righe, fn (array $riga) => $riga['data'] <= $oggi);
 
@@ -711,8 +725,6 @@ trait Flow
         if (count($saldi) === 1) {
             return ['saldo' => (int) $righe[$indici[0]]['saldo'], 'saldo_il' => $data];
         }
-
-        [$dalPiuVecchio, $dalPiuRecente] = $this->versiDelFileFlow($righe);
 
         return $dalPiuVecchio === $dalPiuRecente ? null : ['saldo' => (int) $righe[$dalPiuVecchio ? max($indici) : min($indici)]['saldo'], 'saldo_il' => $data];
     }
