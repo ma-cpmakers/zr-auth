@@ -173,6 +173,10 @@ return [
         'title' => 'Scheda archiviata',
         'detail' => 'Questa scheda è archiviata: ripristinala prima di cambiarla.',
     ],
+    'todo_archiviato' => [
+        'title' => 'To-do archiviato',
+        'detail' => 'Questo to-do è archiviato: ripristinalo prima di cambiarlo.',
+    ],
     'lista_archiviata' => [
         'title' => 'Lista archiviata',
         'detail' => 'Questa lista è archiviata: ripristinala prima di cambiarla o di cambiare le sue schede.',

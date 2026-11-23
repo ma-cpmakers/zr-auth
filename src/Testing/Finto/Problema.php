@@ -46,6 +46,7 @@ final class Problema extends RuntimeException
         'identita_gia_collegata' => 409,
         'provider_gia_collegato' => 409,
         'scheda_archiviata' => 409,
+        'todo_archiviato' => 409,
         'lista_non_trasferibile' => 409,
         'lista_gia_esistente' => 409,
         'board_chiusa' => 409,
