@@ -257,9 +257,12 @@ it('il pacchetto personal_trainer: l\'anteprima dice i nomi e le chiavi, e l\'in
         ->and($anteprima['funzioni_attive'])->toBe(['clienti', 'pipeline', 'attivita', 'lead', 'catalogo', 'acquisti', 'incassi', 'scadenze', 'documenti'])
         ->and($anteprima['barra'])->toBe(['dashboard', 'potenziali_clienti', 'clienti', 'da_fare', 'catalogo', 'incassi', 'scadenze'])
         ->and($anteprima['primi_passi'])->toBe(['primo_prodotto', 'primi_clienti', 'primo_potenziale_cliente', 'prima_attivita'])
-        ->and($anteprima['pipeline_dettaglio'][0])->toBe(['pipeline' => 'Potenziali clienti', 'nome' => 'Lead', 'probabilita' => 10, 'esempio' => ['titolo' => 'Lead', 'riga' => '10%']])
+        ->and($anteprima['pipeline_dettaglio'][0])->toBe(['pipeline' => 'Potenziali clienti', 'nome' => 'Lead', 'probabilita' => 10, 'esempio' => ['titolo' => 'Lead', 'riga' => '10%', 'probabilita' => 10]])
         ->and(array_column($anteprima['catalogo_dettaglio'], 'nome'))->toBe($anteprima['catalogo_bozza'])
-        ->and(array_column($anteprima['catalogo_dettaglio'], 'sottotitolo'))->toContain('Abbonamento')->toContain('Servizio · 60 minuti');
+        ->and(array_column($anteprima['catalogo_dettaglio'], 'sottotitolo'))->toContain('Abbonamento')->toContain('Servizio · 60 minuti')
+        ->and(array_keys($anteprima['catalogo_dettaglio'][0]))->toBe(['nome', 'sottotitolo', 'tipo', 'durata_minuti'])
+        ->and(array_column($anteprima['catalogo_dettaglio'], 'tipo'))->toContain('servizio')->toContain('abbonamento')
+        ->and(array_column($anteprima['catalogo_dettaglio'], 'durata_minuti'))->toContain(60)->toContain(null);
 
     $fatta = alFinto('POST', '/v1/crm/personalizzazione/installazione', ['pack' => 'personal_trainer'], $gettoni['anna']);
     expect($fatta->status())->toBe(201)->and($fatta->json('data.pack.chiave'))->toBe('personal_trainer');

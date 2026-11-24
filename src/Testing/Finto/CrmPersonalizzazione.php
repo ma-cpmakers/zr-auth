@@ -151,7 +151,12 @@ trait CrmPersonalizzazione
             'barra' => $this->vociDellaBarraCrm($pack, $accese),
             'primi_passi' => array_keys(array_filter($pack['passi'], fn (array $passo) => in_array($passo['funzione'], $accese, true))),
             'pipeline_dettaglio' => $this->dettaglioDellePipelineCrm($pack, $lingua),
-            'catalogo_dettaglio' => array_map(fn (array $voce) => ['nome' => $voce['nome'][$lingua], 'sottotitolo' => $this->sottotitoloCrm($voce, $lingua)], $pack['catalogo'] ?? []),
+            'catalogo_dettaglio' => array_map(fn (array $voce) => [
+                'nome' => $voce['nome'][$lingua],
+                'sottotitolo' => $this->sottotitoloCrm($voce, $lingua),
+                'tipo' => (string) $voce['tipo'],
+                'durata_minuti' => is_int($voce['durata_minuti'] ?? null) && $voce['durata_minuti'] > 0 ? $voce['durata_minuti'] : null,
+            ], $pack['catalogo'] ?? []),
         ]]]];
     }
 
@@ -169,7 +174,7 @@ trait CrmPersonalizzazione
      * Una riga per fase di tutte le pipeline del pack, nell'ordine del pack, con la carta d'esempio derivata (#3387).
      *
      * @param  array<string, mixed>  $pack
-     * @return list<array{pipeline: string, nome: string, probabilita: int, esempio: array{titolo: string, riga: string}}>
+     * @return list<array{pipeline: string, nome: string, probabilita: int, esempio: array{titolo: string, riga: string, probabilita: int}}>
      */
     private function dettaglioDellePipelineCrm(array $pack, string $lingua): array
     {
@@ -178,7 +183,7 @@ trait CrmPersonalizzazione
         foreach ($pack['pipeline'] ?? [] as $pipeline) {
             foreach ($pipeline['fasi'] as $fase) {
                 $nome = $fase['nome'][$lingua];
-                $righe[] = ['pipeline' => $pipeline['nome'][$lingua], 'nome' => $nome, 'probabilita' => (int) $fase['probabilita'], 'esempio' => ['titolo' => $nome, 'riga' => $fase['probabilita'].'%']];
+                $righe[] = ['pipeline' => $pipeline['nome'][$lingua], 'nome' => $nome, 'probabilita' => (int) $fase['probabilita'], 'esempio' => ['titolo' => $nome, 'riga' => $fase['probabilita'].'%', 'probabilita' => (int) $fase['probabilita']]];
             }
         }
 
