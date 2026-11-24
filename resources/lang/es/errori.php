@@ -173,6 +173,10 @@ return [
         'title' => 'Tarjeta archivada',
         'detail' => 'Esta tarjeta está archivada: restáurala antes de modificarla.',
     ],
+    'todo_archiviato' => [
+        'title' => 'Tarea archivada',
+        'detail' => 'Esta tarea está archivada: restáurala antes de modificarla.',
+    ],
     'lista_archiviata' => [
         'title' => 'Lista archivada',
         'detail' => 'Esta lista está archivada: restáurala antes de modificarla o de modificar sus tarjetas.',

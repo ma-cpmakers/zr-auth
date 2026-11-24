@@ -173,6 +173,10 @@ return [
         'title' => 'Card archived',
         'detail' => 'This card is archived: restore it before changing it.',
     ],
+    'todo_archiviato' => [
+        'title' => 'To-do archived',
+        'detail' => 'This to-do is archived: restore it before changing it.',
+    ],
     'lista_archiviata' => [
         'title' => 'List archived',
         'detail' => 'This list is archived: restore it before changing it or its cards.',

@@ -358,7 +358,7 @@ trait Todo
                 'titolo' => trim((string) $campi['titolo']), 'note' => $campi['note'] ?? null, 'giorno' => $campi['giorno'] ?? null, 'ora' => $campi['ora'] ?? null,
                 'ripetizione' => $campi['ripetizione'] ?? null, 'indirizzo' => $campi['indirizzo'] ?? null, 'generato_da' => null, 'giorno_origine' => null,
                 'tag' => $this->tagSenzaDoppioniTodo($campi['tag'] ?? []), 'colore' => $campi['colore'] ?? 'neutral',
-                'posizione' => $this->posizioneTodo($lista['id'], null, null, false), 'fatto_il' => null, 'archiviato' => false,
+                'posizione' => $this->posizioneTodo($lista['id'], null, null, false), 'fatto_il' => null, 'archiviazione' => null, 'archiviato' => false,
                 'creato_il' => $ora, 'aggiornato_il' => $ora,
             ];
             $voce = $this->voceElementoTodo($this->todoElementi[$id]);
@@ -376,7 +376,7 @@ trait Todo
     private function mostraElementoTodo(Request $richiesta, string $id): array
     {
         $chi = $this->conPm($richiesta);
-        $voce = $this->voceElementoTodo($this->elementoDelPercorsoTodo($chi, $id));
+        $voce = $this->voceElementoTodo($this->elementoDelPercorsoTodo($chi, $id, true));
 
         // Titolo e contesto dei collegamenti al CRM non entrano nell'ETag: con un collegamento il 304 non c'è (#2609).
         if ($voce['crm'] === [] && self::trovaEtagCrm($richiesta->toPsrRequest()->getHeaderLine('If-None-Match'), $voce['etag'], true)) {
@@ -500,6 +500,54 @@ trait Todo
         $this->todoElementi[$id]['archiviato'] = true;
 
         return [204, null];
+    }
+
+    /**
+     * board.todo.elementi.archiviazione.crea (TodoElementiController::archiviazioneCrea, #4189): `archiviato_il` all'istante della prima chiamata, 200
+     * con il to-do intero; su uno già archiviato non cambia niente, `aggiornato_il` compreso. Da lì il to-do esce da elenco, riepilogo e tetto, si legge con
+     * `mostra` e ogni altro metodo su di lui è 409 `todo_archiviato`. In una lista `progetto` serve la scheda aperta.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function archiviazioneCreaTodo(Request $richiesta, string $id): array
+    {
+        $chi = $this->conPm($richiesta);
+        $corrente = $this->elementoDelPercorsoTodo($chi, $id, true);
+        $this->scrivibileTodo($this->todoListe[$corrente['lista']]);
+
+        if (($corrente['archiviazione'] ?? null) === null) {
+            $ora = $this->dopoTodo($corrente['aggiornato_il']);
+            $this->todoElementi[$id] = [...$corrente, 'archiviazione' => $ora, 'aggiornato_il' => $ora];
+        }
+
+        $voce = $this->voceElementoTodo($this->todoElementi[$id]);
+
+        return [200, ['data' => $voce], ['ETag' => $voce['etag']]];
+    }
+
+    /**
+     * board.todo.elementi.archiviazione.elimina (TodoElementiController::archiviazioneElimina, #4189): ripristina il to-do con la posizione e i valori che
+     * aveva; su uno non archiviato non cambia niente. Un aperto che torna conta fra gli aperti della lista: con mille già dentro 409 `limite_raggiunto`.
+     *
+     * @return array{int, array<string, mixed>, array<string, string>}
+     */
+    private function archiviazioneEliminaTodo(Request $richiesta, string $id): array
+    {
+        $chi = $this->conPm($richiesta);
+        $corrente = $this->elementoDelPercorsoTodo($chi, $id, true);
+        $this->scrivibileTodo($this->todoListe[$corrente['lista']]);
+
+        if (($corrente['archiviazione'] ?? null) !== null) {
+            if ($corrente['fatto_il'] === null) {
+                $this->tettoDegliApertiTodo($corrente['lista']);
+            }
+
+            $this->todoElementi[$id] = [...$corrente, 'archiviazione' => null, 'aggiornato_il' => $this->dopoTodo($corrente['aggiornato_il'])];
+        }
+
+        $voce = $this->voceElementoTodo($this->todoElementi[$id]);
+
+        return [200, ['data' => $voce], ['ETag' => $voce['etag']]];
     }
 
     /**
@@ -669,7 +717,7 @@ trait Todo
 
             if ($campi['dopo_id'] !== null) {
                 $trovato = $this->todoElementi[strtolower((string) $campi['dopo_id'])] ?? null;
-                $ancora = $trovato !== null && $trovato['workspace'] === $chi['workspace'] && ! $trovato['archiviato']
+                $ancora = $trovato !== null && $trovato['workspace'] === $chi['workspace'] && ! $trovato['archiviato'] && ($trovato['archiviazione'] ?? null) === null
                     && $trovato['lista'] === $destinazione && $trovato['id'] !== $corrente['id']
                     ? $trovato
                     : throw new Problema('dati_non_validi', [['detail' => $this->testi->testo('regole.todo_dopo_id', ['attribute' => 'dopo_id']), 'regola' => Regola::VALORE_NON_AMMESSO, 'pointer' => '#/dopo_id']]);
@@ -732,7 +780,9 @@ trait Todo
         return [
             'id' => $e['id'], 'lista_id' => $e['lista'], 'scheda_id' => $e['scheda'] ?? null, 'assegnato_a' => $e['assegnato'] ?? null, 'titolo' => $e['titolo'],
             ...($intero ? ['note' => $e['note'] ?? ''] : []),
-            'fatto_il' => $e['fatto_il'] === null ? null : self::iso($e['fatto_il']), 'giorno' => $e['giorno'], 'ora' => $e['ora'],
+            'fatto_il' => $e['fatto_il'] === null ? null : self::iso($e['fatto_il']),
+            ...($intero ? ['archiviato_il' => ($e['archiviazione'] ?? null) === null ? null : self::iso($e['archiviazione'])] : []),
+            'giorno' => $e['giorno'], 'ora' => $e['ora'],
             'ripetizione' => $e['ripetizione'] ?? null,
             'tag' => $e['tag'], 'colore' => $e['colore'],
             'indirizzo' => $e['indirizzo'] ?? null,
@@ -890,7 +940,7 @@ trait Todo
     /** Se la lista ha già mille aperti (i fatti non contano): 409 `limite_raggiunto` con `limite`. */
     private function tettoDegliApertiTodo(string $lista): void
     {
-        $aperti = array_filter($this->todoElementi, fn (array $e) => $e['lista'] === $lista && ! $e['archiviato'] && $e['fatto_il'] === null);
+        $aperti = array_filter($this->todoElementi, fn (array $e) => $e['lista'] === $lista && ! $e['archiviato'] && ($e['archiviazione'] ?? null) === null && $e['fatto_il'] === null);
 
         if (count($aperti) >= self::TODO_APERTI_TETTO) {
             throw new Problema('limite_raggiunto', estensioni: ['limite' => self::TODO_APERTI_TETTO], limite: 'todo_aperti_per_lista');
@@ -1026,13 +1076,21 @@ trait Todo
      * @param  array{persona: string, workspace: string, accesso: string}  $chi
      * @return array<string, mixed>
      */
-    private function elementoDelPercorsoTodo(array $chi, string $id): array
+    private function elementoDelPercorsoTodo(array $chi, string $id, bool $ancheArchiviato = false): array
     {
         $elemento = $this->todoElementi[strtolower($id)] ?? null;
+        $trovato = $elemento !== null && $elemento['workspace'] === $chi['workspace'] && ! $elemento['archiviato'] && $this->haListaTodo($chi, $elemento['lista']);
 
-        return $elemento !== null && $elemento['workspace'] === $chi['workspace'] && ! $elemento['archiviato'] && $this->haListaTodo($chi, $elemento['lista'])
-            ? $elemento
-            : throw new Problema('non_trovato');
+        if (! $trovato) {
+            throw new Problema('non_trovato');
+        }
+
+        // Un to-do archiviato (#4189) si legge con `mostra` e si ripristina; ogni altro metodo su di lui è 409 `todo_archiviato`.
+        if (! $ancheArchiviato && ($elemento['archiviazione'] ?? null) !== null) {
+            throw new Problema('todo_archiviato');
+        }
+
+        return $elemento;
     }
 
     /**
@@ -1045,7 +1103,7 @@ trait Todo
     {
         return array_values(array_filter(
             $this->todoElementi,
-            fn (array $e) => $e['workspace'] === $chi['workspace'] && $e['persona'] === $chi['persona'] && ! $e['archiviato'] && ! ($this->todoListe[$e['lista']]['archiviata'] ?? false),
+            fn (array $e) => $e['workspace'] === $chi['workspace'] && $e['persona'] === $chi['persona'] && ! $e['archiviato'] && ($e['archiviazione'] ?? null) === null && ! ($this->todoListe[$e['lista']]['archiviata'] ?? false),
         ));
     }
 
@@ -1075,7 +1133,7 @@ trait Todo
     {
         return array_values(array_filter(
             $this->todoElementi,
-            fn (array $e) => $e['workspace'] === $chi['workspace'] && ! $e['archiviato'] && $this->haListaTodo($chi, $e['lista']),
+            fn (array $e) => $e['workspace'] === $chi['workspace'] && ! $e['archiviato'] && ($e['archiviazione'] ?? null) === null && $this->haListaTodo($chi, $e['lista']),
         ));
     }
 
@@ -1301,7 +1359,7 @@ trait Todo
      */
     private function precedenteTodo(array $e): ?array
     {
-        $prima = array_filter($this->todoElementi, fn (array $altro) => $altro['lista'] === $e['lista'] && ! $altro['archiviato'] && $altro['id'] !== $e['id'] && $altro['posizione'] < $e['posizione']);
+        $prima = array_filter($this->todoElementi, fn (array $altro) => $altro['lista'] === $e['lista'] && ! $altro['archiviato'] && ($altro['archiviazione'] ?? null) === null && $altro['id'] !== $e['id'] && $altro['posizione'] < $e['posizione']);
         usort($prima, fn (array $una, array $altra) => $altra['posizione'] <=> $una['posizione']);
 
         return $prima[0] ?? null;
