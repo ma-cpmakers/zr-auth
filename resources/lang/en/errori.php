@@ -672,6 +672,10 @@ return [
         'title' => 'Infected file',
         'detail' => 'The scan found a problem with the file: it cannot be downloaded.',
     ],
+    'non_scansionabile' => [
+        'title' => 'File that cannot be scanned',
+        'detail' => 'The scan could not check the file within the allowed time: it cannot be downloaded.',
+    ],
     'gate_in_approvazione' => [
         'title' => 'Approval request pending',
         'detail' => 'The Gate is awaiting approval and its approver is available: the approver cannot be changed or removed, nor the card\'s type changed, while the request is open. Record the decision with board.schede.gate.decisione.crea, or cancel the request first.',

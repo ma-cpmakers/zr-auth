@@ -672,6 +672,10 @@ return [
         'title' => 'File infetto',
         'detail' => 'La scansione ha trovato un problema nel file: non si scarica.',
     ],
+    'non_scansionabile' => [
+        'title' => 'File non scansionabile',
+        'detail' => 'La scansione non è riuscita a controllare il file entro il tempo previsto: non si scarica.',
+    ],
     'gate_in_approvazione' => [
         'title' => 'Richiesta di approvazione in corso',
         'detail' => 'Il Gate è in approvazione e il suo approvatore è disponibile: non si cambia né si toglie l\'approvatore, né si cambia il tipo della scheda, finché la richiesta è aperta. Registra la decisione con board.schede.gate.decisione.crea, oppure annulla prima la richiesta.',

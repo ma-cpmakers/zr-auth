@@ -672,6 +672,10 @@ return [
         'title' => 'Archivo infectado',
         'detail' => 'El análisis ha encontrado un problema en el archivo: no se puede descargar.',
     ],
+    'non_scansionabile' => [
+        'title' => 'Archivo no escaneable',
+        'detail' => 'El análisis no pudo comprobar el archivo en el tiempo previsto: no se descarga.',
+    ],
     'gate_in_approvazione' => [
         'title' => 'Solicitud de aprobación en curso',
         'detail' => 'El Gate está en aprobación y su aprobador está disponible: no se cambia ni se quita el aprobador, ni se cambia el tipo de la tarjeta, mientras la solicitud esté abierta. Registra la decisión con board.schede.gate.decisione.crea, o anula primero la solicitud.',

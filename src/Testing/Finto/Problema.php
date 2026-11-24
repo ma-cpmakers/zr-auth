@@ -49,6 +49,7 @@ final class Problema extends RuntimeException
         'todo_archiviato' => 409,
         'scansione_in_corso' => 409,
         'infetto' => 409,
+        'non_scansionabile' => 409,
         'file_troppo_grande' => 413,
         'lista_non_trasferibile' => 409,
         'lista_gia_esistente' => 409,
