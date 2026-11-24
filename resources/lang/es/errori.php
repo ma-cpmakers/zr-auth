@@ -235,7 +235,7 @@ return [
             'persone_per_struttura' => 'Esta estructura ya tiene el máximo de :tetto personas. Quita una persona y repite.',
             'rimandi_per_persona' => 'Ya tienes el máximo de :tetto aplazamientos activos en este workspace. Espera a que uno venza y repite.',
             'vetrine_per_pagina' => 'Esta página ya tiene el máximo de :tetto vitrinas. Elimina una vitrina y repite.',
-            'file_per_vetrina' => 'Esta vitrina ya tiene el máximo de :tetto archivos (la portada cuenta). Los archivos eliminados siguen ocupando espacio: para liberar espacio o subir el límite, contacta con el soporte de Zeiras.',
+            'file_per_vetrina' => 'Esta vitrina ya tiene el máximo de :tetto archivos (la portada cuenta). Elimina un archivo y repite.',
             'peso_file_per_workspace' => 'Los archivos de las vitrinas del workspace ya pesan el máximo de :tetto MB. Elimina un archivo y repite.',
             'peso_scritto_per_workspace' => 'El workspace ya escribió el máximo de :tetto MB de archivos de vitrinas, contando también los archivados o descartados. Eliminar un archivo no libera espacio: escribe a quien gestiona Zeiras.',
             'link_per_vetrina' => 'Esta vitrina ya tiene el máximo de :tetto enlaces. Elimina un enlace y repite.',
@@ -277,7 +277,7 @@ return [
             'movimenti_per_vista' => 'Ya tienes el máximo de :tetto movimientos en las cuentas de esta vista. Elimina algunos movimientos y repite.',
             'collegamenti_bancari_per_persona' => 'Ya tienes el máximo de :tetto conexiones bancarias activas (en todos los workspaces). Desconecta un banco y repite.',
             'allegati_per_scheda' => 'Esta tarjeta ya tiene el máximo de :tetto archivos. Elimina un archivo y repite.',
-            'allegati_quota_per_workspace' => 'Los archivos de las tarjetas del workspace ya ocupan el máximo de :tetto MB. Elimina un archivo y repite.',
+            'allegati_quota_per_workspace' => 'Los archivos de las tarjetas del workspace ya ocupan el máximo de :tetto MB. Los archivos eliminados siguen ocupando espacio: para liberar espacio o subir el límite, contacta con el soporte de Zeiras.',
         ],
     ],
     'esportazione_in_corso' => [

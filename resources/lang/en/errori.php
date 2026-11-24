@@ -235,7 +235,7 @@ return [
             'persone_per_struttura' => 'This structure already has the maximum of :tetto people. Remove a person and try again.',
             'rimandi_per_persona' => 'You already have the maximum of :tetto active snoozes in this workspace. Wait for one to expire and try again.',
             'vetrine_per_pagina' => 'This page already has the maximum of :tetto showcases. Delete a showcase and try again.',
-            'file_per_vetrina' => 'This showcase already has the maximum of :tetto files (the cover counts). Deleted files still take up space: to free some or raise the limit, contact Zeiras support.',
+            'file_per_vetrina' => 'This showcase already has the maximum of :tetto files (the cover counts). Delete a file and try again.',
             'peso_file_per_workspace' => 'The showcase files of the workspace already weigh the maximum of :tetto MB. Delete a file and try again.',
             'peso_scritto_per_workspace' => 'The workspace has already written the maximum of :tetto MB of showcase files, counting archived or discarded ones too. Deleting a file does not free space: write to whoever runs Zeiras.',
             'link_per_vetrina' => 'This showcase already has the maximum of :tetto links. Delete a link and try again.',
@@ -277,7 +277,7 @@ return [
             'movimenti_per_vista' => 'You already have the maximum of :tetto transactions in the accounts of this view. Delete some transactions and try again.',
             'collegamenti_bancari_per_persona' => 'You already have the maximum of :tetto active bank connections (across all workspaces). Disconnect a bank and try again.',
             'allegati_per_scheda' => 'This card already has the maximum of :tetto files. Delete a file and try again.',
-            'allegati_quota_per_workspace' => 'The files on the workspace\'s cards already take up the maximum of :tetto MB. Delete a file and try again.',
+            'allegati_quota_per_workspace' => 'The files on the workspace\'s cards already take up the maximum of :tetto MB. Deleted files still take up space: to free some or raise the limit, contact Zeiras support.',
         ],
     ],
     'esportazione_in_corso' => [
