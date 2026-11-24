@@ -2041,6 +2041,7 @@ final class BackofficeFinto
             'numero_voci' => 0,
             'numero_voci_spuntate' => 0,
             'numero_commenti' => 0,
+            'n_allegati' => 0,
             'attese_aperte' => $this->atteseAperte($scheda['id']),
             'figlie' => $this->contoDelleFiglie($scheda),
             ...$this->contiDelPadre($scheda),

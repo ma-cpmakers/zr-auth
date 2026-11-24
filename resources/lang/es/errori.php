@@ -276,6 +276,8 @@ return [
             'movimenti_per_conto' => 'Esta cuenta ya tiene el máximo de :tetto movimientos. Elimina algunos movimientos y repite.',
             'movimenti_per_vista' => 'Ya tienes el máximo de :tetto movimientos en las cuentas de esta vista. Elimina algunos movimientos y repite.',
             'collegamenti_bancari_per_persona' => 'Ya tienes el máximo de :tetto conexiones bancarias activas (en todos los workspaces). Desconecta un banco y repite.',
+            'allegati_per_scheda' => 'Esta tarjeta ya tiene el máximo de :tetto archivos. Elimina un archivo y repite.',
+            'allegati_quota_per_workspace' => 'Los archivos de las tarjetas del workspace ya ocupan el máximo de :tetto MB. Elimina un archivo y repite.',
         ],
     ],
     'esportazione_in_corso' => [
@@ -657,6 +659,18 @@ return [
     'gate_deciso' => [
         'title' => 'Gate ya aprobado',
         'detail' => 'El Gate está aprobado, que es el estado final: no se solicita de nuevo. Para un nuevo control se crea otro Gate.',
+    ],
+    'file_troppo_grande' => [
+        'title' => 'Archivo demasiado grande',
+        'detail' => 'El archivo supera el límite de tamaño (25 MB). Reduce el archivo e inténtalo de nuevo.',
+    ],
+    'scansione_in_corso' => [
+        'title' => 'Análisis en curso',
+        'detail' => 'El archivo aún no se ha comprobado: solo se descarga cuando el análisis ha terminado y el archivo está limpio. Inténtalo de nuevo en breve.',
+    ],
+    'infetto' => [
+        'title' => 'Archivo infectado',
+        'detail' => 'El análisis ha encontrado un problema en el archivo: no se puede descargar.',
     ],
     'gate_in_approvazione' => [
         'title' => 'Solicitud de aprobación en curso',

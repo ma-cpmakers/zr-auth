@@ -276,6 +276,8 @@ return [
             'movimenti_per_conto' => 'This account already has the maximum of :tetto transactions. Delete some transactions and try again.',
             'movimenti_per_vista' => 'You already have the maximum of :tetto transactions in the accounts of this view. Delete some transactions and try again.',
             'collegamenti_bancari_per_persona' => 'You already have the maximum of :tetto active bank connections (across all workspaces). Disconnect a bank and try again.',
+            'allegati_per_scheda' => 'This card already has the maximum of :tetto files. Delete a file and try again.',
+            'allegati_quota_per_workspace' => 'The files on the workspace\'s cards already take up the maximum of :tetto MB. Delete a file and try again.',
         ],
     ],
     'esportazione_in_corso' => [
@@ -657,6 +659,18 @@ return [
     'gate_deciso' => [
         'title' => 'Gate already approved',
         'detail' => 'The Gate is approved, which is the final state: it cannot be requested again. Create another Gate for a new check.',
+    ],
+    'file_troppo_grande' => [
+        'title' => 'File too large',
+        'detail' => 'The file exceeds the size limit (25 MB). Reduce the file and try again.',
+    ],
+    'scansione_in_corso' => [
+        'title' => 'Scan in progress',
+        'detail' => 'The file has not been checked yet: it can be downloaded only when the scan is finished and the file is clean. Try again shortly.',
+    ],
+    'infetto' => [
+        'title' => 'Infected file',
+        'detail' => 'The scan found a problem with the file: it cannot be downloaded.',
     ],
     'gate_in_approvazione' => [
         'title' => 'Approval request pending',

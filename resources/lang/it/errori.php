@@ -276,6 +276,8 @@ return [
             'movimenti_per_conto' => 'Questo conto ha già il massimo di :tetto movimenti. Elimina alcuni movimenti e ripeti.',
             'movimenti_per_vista' => 'Hai già il massimo di :tetto movimenti nei conti di questa vista. Elimina alcuni movimenti e ripeti.',
             'collegamenti_bancari_per_persona' => 'Hai già il massimo di :tetto collegamenti bancari attivi (in tutti i workspace). Scollega una banca e ripeti.',
+            'allegati_per_scheda' => 'Questa scheda ha già il massimo di :tetto file. Elimina un file e ripeti.',
+            'allegati_quota_per_workspace' => 'I file delle schede del workspace occupano già il massimo di :tetto MB. Elimina un file e ripeti.',
         ],
     ],
     'esportazione_in_corso' => [
@@ -657,6 +659,18 @@ return [
     'gate_deciso' => [
         'title' => 'Gate già approvato',
         'detail' => 'Il Gate è approvato, che è lo stato finale: non si richiede di nuovo. Per un nuovo controllo si crea un altro Gate.',
+    ],
+    'file_troppo_grande' => [
+        'title' => 'File troppo grande',
+        'detail' => 'Il file supera il tetto di dimensione (25 MB). Riduci il file e riprova.',
+    ],
+    'scansione_in_corso' => [
+        'title' => 'Scansione in corso',
+        'detail' => 'Il file non è ancora stato controllato: si scarica solo quando la scansione è finita e il file è pulito. Riprova fra poco.',
+    ],
+    'infetto' => [
+        'title' => 'File infetto',
+        'detail' => 'La scansione ha trovato un problema nel file: non si scarica.',
     ],
     'gate_in_approvazione' => [
         'title' => 'Richiesta di approvazione in corso',
