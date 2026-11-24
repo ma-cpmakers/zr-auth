@@ -181,6 +181,14 @@ return [
         'title' => 'List cannot be transferred',
         'detail' => 'The actions list of a retrospective stays in its board: it cannot be moved to another one. Do not repeat the request.',
     ],
+    'modificato_dopo' => [
+        'title' => 'Changed afterwards',
+        'detail' => "Someone else changed the same thing after the assistant's action: Undo touched nothing. Read the current state before deciding.",
+    ],
+    'non_annullabile' => [
+        'title' => 'Nothing to undo',
+        'detail' => 'The actions in this entry cannot be undone: a comment stays where it is. Do not repeat the request.',
+    ],
     'board_chiusa' => [
         'title' => 'Board not active',
         'detail' => 'This board is closed or in the trash: make it active again before changing its lists, cards or labels.',
@@ -607,6 +615,10 @@ return [
         'title' => 'Account without an owner',
         'detail' => 'The account is shared and has no owner (the person who had it asked for their Finance data to be deleted): the workspace owner and admins manage it, but they cannot make it personal, because it would disappear for the people who use it. The account has not changed. Leave it shared.',
     ],
+    'saldo_dalla_banca' => [
+        'title' => 'Balance written by the bank',
+        'detail' => 'The account comes from a bank connection and its balance is written by the bank on every read: it cannot be changed from here. The account has not changed. Do not send `saldo` or `saldo_il` for this account; the other fields can be changed as usual.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Acceptance required',
         'detail' => 'To use Zeiras you must accept the privacy notice and the terms of use in their current version. The problem carries `mancanti` next to the code, the documents still to accept: accept them with legale.accettazioni.crea (legale.documenti.elenca lists them) and repeat the request.',
@@ -707,6 +719,11 @@ return [
         'title' => 'Too many requests',
         // Una scelta plurale sui secondi di Retry-After, che RendeProblemi riempie (T7.1, D19).
         'detail' => '{0} Too many requests in a short time: try again now.|{1} Too many requests in a short time: try again in :secondi second.|[2,*] Too many requests in a short time: try again in :secondi seconds.',
+    ],
+    'troppi_codici_invito' => [
+        'title' => 'Too many invitation codes',
+        // Retry-After in secondi come troppe_richieste (#4166): il blocco dura 15 minuti dal quinto codice sbagliato.
+        'detail' => '{0} Too many wrong invitation codes: try again now.|{1} Too many wrong invitation codes for this email or from this network: try again in :secondi second.|[2,*] Too many wrong invitation codes for this email or from this network: try again in :secondi seconds.',
     ],
     'errore_interno' => [
         'title' => 'Internal error',

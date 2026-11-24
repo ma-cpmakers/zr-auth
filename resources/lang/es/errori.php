@@ -181,6 +181,14 @@ return [
         'title' => 'Lista no transferible',
         'detail' => 'La lista de acciones de una retrospectiva se queda en su tablero: no se puede llevar a otro. No repitas la solicitud.',
     ],
+    'modificato_dopo' => [
+        'title' => 'Modificado después',
+        'detail' => 'Otra persona cambió lo mismo después de la acción del asistente: Deshacer no ha tocado nada. Vuelve a leer el estado actual antes de decidir.',
+    ],
+    'non_annullabile' => [
+        'title' => 'Nada que deshacer',
+        'detail' => 'Las acciones de esta entrada no se pueden deshacer: un comentario se queda donde está. No repitas la solicitud.',
+    ],
     'board_chiusa' => [
         'title' => 'Tablero no activo',
         'detail' => 'Este tablero está cerrado o en la papelera: vuelve a activarlo antes de modificar sus listas, sus tarjetas o sus etiquetas.',
@@ -607,6 +615,10 @@ return [
         'title' => 'Cuenta sin titular',
         'detail' => 'La cuenta es común y no tiene titular (la persona que la tenía pidió borrar sus datos de Finanzas): el propietario y los administradores la gestionan, pero no la pasan a personal, porque desaparecería para quienes la usan. La cuenta no ha cambiado. Déjala común.',
     ],
+    'saldo_dalla_banca' => [
+        'title' => 'Saldo escrito por el banco',
+        'detail' => 'La cuenta nace de una conexión bancaria y su saldo lo escribe el banco en cada lectura: no se cambia desde aquí. La cuenta no ha cambiado. No envíes `saldo` ni `saldo_il` para esta cuenta; los demás campos se cambian como siempre.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Aceptación requerida',
         'detail' => 'Para usar Zeiras debes aceptar el aviso de privacidad y las condiciones de uso en su versión vigente. El problema lleva junto al código `mancanti`, los documentos por aceptar: acéptalos con legale.accettazioni.crea (los lista legale.documenti.elenca) y repite la solicitud.',
@@ -707,6 +719,11 @@ return [
         'title' => 'Demasiadas solicitudes',
         // Una scelta plurale sui secondi di Retry-After, che RendeProblemi riempie (T7.1, D19).
         'detail' => '{0} Demasiadas solicitudes en poco tiempo: vuelve a intentarlo ahora.|{1} Demasiadas solicitudes en poco tiempo: vuelve a intentarlo en :secondi segundo.|[2,*] Demasiadas solicitudes en poco tiempo: vuelve a intentarlo en :secondi segundos.',
+    ],
+    'troppi_codici_invito' => [
+        'title' => 'Demasiados códigos de invitación',
+        // Retry-After in secondi come troppe_richieste (#4166): il blocco dura 15 minuti dal quinto codice sbagliato.
+        'detail' => '{0} Demasiados códigos de invitación incorrectos: inténtalo ahora.|{1} Demasiados códigos de invitación incorrectos para este correo o desde esta red: inténtalo de nuevo en :secondi segundo.|[2,*] Demasiados códigos de invitación incorrectos para este correo o desde esta red: inténtalo de nuevo en :secondi segundos.',
     ],
     'errore_interno' => [
         'title' => 'Error interno',

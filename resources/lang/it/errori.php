@@ -181,6 +181,14 @@ return [
         'title' => 'Lista non trasferibile',
         'detail' => "La lista delle azioni di una retrospettiva resta nella sua board: non si porta in un'altra. Non ripetere la richiesta.",
     ],
+    'modificato_dopo' => [
+        'title' => 'Modificato dopo',
+        'detail' => "Qualcun altro ha cambiato la stessa cosa dopo l'azione dell'assistente: l'Annulla non ha toccato niente. Rileggi lo stato attuale prima di decidere.",
+    ],
+    'non_annullabile' => [
+        'title' => 'Niente da annullare',
+        'detail' => "Le azioni di questa riga non si annullano: un commento resta dov'è. Non ripetere la richiesta.",
+    ],
     'board_chiusa' => [
         'title' => 'Board non attiva',
         'detail' => 'Questa board è chiusa o nel cestino: riportala allo stato attivo prima di cambiare le sue liste, le sue schede o le sue etichette.',
@@ -607,6 +615,10 @@ return [
         'title' => 'Conto senza titolare',
         'detail' => 'Il conto è comune e non ha un titolare (la persona che lo aveva ha chiesto la cancellazione dei suoi dati di Finanze): proprietario e amministratori lo gestiscono, ma non lo rendono personale, perché sparirebbe alla vista di chi lo usa. Il conto non è cambiato. Lascialo comune.',
     ],
+    'saldo_dalla_banca' => [
+        'title' => 'Saldo scritto dalla banca',
+        'detail' => 'Il conto nasce da un collegamento bancario e il suo saldo lo scrive la banca a ogni lettura: non si cambia da qui. Il conto non è cambiato. Non mandare `saldo` né `saldo_il` per questo conto; gli altri campi si cambiano come sempre.',
+    ],
     'accettazione_richiesta' => [
         'title' => 'Accettazione richiesta',
         'detail' => 'Per usare Zeiras devi accettare l\'informativa sulla privacy e i termini d\'uso nella versione in vigore. Il problema porta accanto al codice `mancanti`, i documenti da accettare: accettali con legale.accettazioni.crea (li elenca legale.documenti.elenca) e ripeti la richiesta.',
@@ -707,6 +719,11 @@ return [
         'title' => 'Troppe richieste',
         // Una scelta plurale sui secondi di Retry-After, che RendeProblemi riempie (T7.1, D19).
         'detail' => '{0} Troppe richieste in poco tempo: riprova adesso.|{1} Troppe richieste in poco tempo: riprova fra :secondi secondo.|[2,*] Troppe richieste in poco tempo: riprova fra :secondi secondi.',
+    ],
+    'troppi_codici_invito' => [
+        'title' => "Troppi codici d'invito",
+        // Retry-After in secondi come troppe_richieste (#4166): il blocco dura 15 minuti dal quinto codice sbagliato.
+        'detail' => "{0} Troppi codici d'invito sbagliati: riprova adesso.|{1} Troppi codici d'invito sbagliati per questa email o da questa rete: riprova fra :secondi secondo.|[2,*] Troppi codici d'invito sbagliati per questa email o da questa rete: riprova fra :secondi secondi.",
     ],
     'errore_interno' => [
         'title' => 'Errore interno',

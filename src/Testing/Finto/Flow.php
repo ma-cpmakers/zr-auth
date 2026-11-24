@@ -153,7 +153,7 @@ trait Flow
             'flow.conti.elenca:'.(is_string($vista) ? $vista : ''),
             'id',
             fn () => array_map(
-                fn (array $conto) => $this->voceContoFlow($conto),
+                fn (array $conto) => $this->voceContoFlow($conto, $chi),
                 array_values(array_filter($this->flow['conti'], fn (array $conto) => $this->contoVisibileFlow($conto, $chi) && ($vista === null || $conto['visibilita'] === $vista))),
             ),
             fn (array $voce) => [$voce['banca'], $voce['nome'], $voce['id']],
@@ -177,7 +177,7 @@ trait Flow
     private function mostraContoFlow(Request $richiesta, string $id): array
     {
         $chi = $this->conFlow($richiesta);
-        $voce = $this->voceContoFlow($this->contoFlow($chi, $id));
+        $voce = $this->voceContoFlow($this->contoFlow($chi, $id), $chi);
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
     }
@@ -196,6 +196,7 @@ trait Flow
         return $this->conIdempotenza($richiesta, 'flow.conti.crea', $chi, $corpo, function () use ($chi, $corpo) {
             $this->frena('freni:flow.conti.crea:'.$chi['persona'], self::FRENI['flow_conti_persona'], self::ORA);
             $campi = $this->testi->validaCorpo($corpo, $this->regoleContoFlow(true));
+            $this->coppiaDelSaldoFlow($campi);
 
             if (count(array_filter($this->flow['conti'], fn (array $conto) => $conto['workspace'] === $chi['workspace'] && ! $conto['archiviato'])) >= self::FLOW_CONTI_TETTO) {
                 throw new Problema('limite_raggiunto', estensioni: ['limite' => self::FLOW_CONTI_TETTO], limite: 'conti_visibili_per_persona');
@@ -207,7 +208,7 @@ trait Flow
                 'iban_ultime4' => $campi['iban_ultime4'] ?? null, 'saldo' => $campi['saldo'] ?? null, 'saldo_il' => $campi['saldo_il'] ?? null, 'formato_importazione' => $campi['formato_importazione'] ?? null,
                 'creato_il' => self::istanteFlow(), 'archiviato' => false,
             ];
-            $voce = $this->voceContoFlow($this->flow['conti'][$id]);
+            $voce = $this->voceContoFlow($this->flow['conti'][$id], $chi);
 
             return [201, ['data' => $voce], ['Location' => "/v1/flow/conti/{$id}", 'ETag' => self::etagCrm($voce)]];
         });
@@ -224,8 +225,16 @@ trait Flow
     {
         $chi = $this->conFlow($richiesta);
         $conto = $this->contoFlow($chi, $id, true);
-        $this->pretendiLaVersioneCrm($richiesta, $this->voceContoFlow($conto));
+        $this->pretendiLaVersioneCrm($richiesta, $this->voceContoFlow($conto, $chi));
         $campi = $this->modificaCrm($corpo, $this->regoleContoFlow(false));
+        $this->coppiaDelSaldoFlow($campi);
+
+        // Il saldo di un conto collegato a una banca lo scrive la banca: un valore diverso dall'attuale è 409 `saldo_dalla_banca`, e non si scrive niente (ContiController::modifica).
+        foreach (['saldo', 'saldo_il'] as $campo) {
+            if (array_key_exists($campo, $campi) && json_encode($campi[$campo]) !== json_encode($conto[$campo]) && $this->collegamentoDelContoFlow($conto) !== null) {
+                throw new Problema('saldo_dalla_banca');
+            }
+        }
 
         foreach (['banca', 'nome', 'tipo', 'visibilita', 'iban_ultime4', 'saldo', 'saldo_il', 'formato_importazione'] as $campo) {
             if (array_key_exists($campo, $campi) && json_encode(self::ordinato($campi[$campo])) !== json_encode(self::ordinato($conto[$campo]))) {
@@ -238,7 +247,7 @@ trait Flow
             $this->flow['conti'][$conto['id']]['titolare'] = $chi['persona'];
         }
 
-        $voce = $this->voceContoFlow($this->flow['conti'][$conto['id']]);
+        $voce = $this->voceContoFlow($this->flow['conti'][$conto['id']], $chi);
 
         return [200, ['data' => $voce], ['ETag' => self::etagCrm($voce)]];
     }
@@ -282,7 +291,13 @@ trait Flow
             'iban_ultime4' => ['bail', 'nullable', 'string', 'regex:/^[0-9]{4}$/D'],
             'valuta' => ['bail', 'string', Rule::in(['EUR'])],
             'saldo' => ['bail', 'nullable', 'integer:strict', 'between:-100000000000000,100000000000000'],
-            'saldo_il' => ['bail', 'nullable', 'string', 'date_format:Y-m-d'],
+            'saldo_il' => ['bail', 'nullable', 'string', 'date_format:Y-m-d', function (string $attributo, mixed $valore, Closure $fail) {
+                $oggi = CarbonImmutable::now('Europe/Rome')->toDateString();
+
+                if (is_string($valore) && $valore > $oggi) {
+                    $this->rifiutaCrm($fail, $attributo, Regola::FUORI_INTERVALLO, 'validation.before_or_equal', ['attribute' => $attributo, 'date' => $oggi]);
+                }
+            }],
             'formato_importazione' => ['bail', 'nullable', 'array', function (string $attributo, mixed $valore, Closure $fail) {
                 if ($valore !== [] && array_is_list($valore)) {
                     $this->rifiutaCrm($fail, $attributo, Regola::TIPO, 'validation.array', ['attribute' => $attributo]);
@@ -343,7 +358,7 @@ trait Flow
      * @param  array<string, mixed>  $conto
      * @return array<string, mixed>
      */
-    private function voceContoFlow(array $conto): array
+    private function voceContoFlow(array $conto, array $chi): array
     {
         $date = array_column(array_filter($this->flow['movimenti'], fn (array $movimento) => $movimento['conto'] === $conto['id'] && ! $movimento['archiviato']), 'data');
 
@@ -360,8 +375,66 @@ trait Flow
             'saldo_il' => $conto['saldo_il'],
             'movimenti_fino_al' => $date === [] ? null : max($date),
             'formato_importazione' => $conto['formato_importazione'] === null ? null : (object) $conto['formato_importazione'],
+            'collegamento' => $this->formaDelCollegamentoFlow($conto, $chi),
             'creato_il' => self::iso($conto['creato_il']),
         ];
+    }
+
+    /**
+     * Il collegamento bancario vivo da cui nasce un conto (nel finto: quello che elenca il conto fra i suoi `conti`, vedi `impostaCollegamentoFlow`), `null` se non c'è.
+     *
+     * @param  array<string, mixed>  $conto
+     * @return array<string, mixed>|null
+     */
+    private function collegamentoDelContoFlow(array $conto): ?array
+    {
+        foreach ($this->flow['collegamenti'] as $collegamento) {
+            if (! $collegamento['archiviato'] && $collegamento['workspace'] === $conto['workspace'] && in_array($conto['id'], array_column($collegamento['conti'] ?? [], 'id'), true)) {
+                return $collegamento;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * `collegamento` dello schema Conto (Conti::collegamenti): `{stato}`, e `id` solo per la persona che ha aperto il collegamento; `null` senza un collegamento vivo.
+     *
+     * @param  array<string, mixed>  $conto
+     * @param  array{persona: string, workspace: string}  $chi
+     * @return array<string, string>|null
+     */
+    private function formaDelCollegamentoFlow(array $conto, array $chi): ?array
+    {
+        $collegamento = $this->collegamentoDelContoFlow($conto);
+
+        if ($collegamento === null) {
+            return null;
+        }
+
+        return $collegamento['persona'] === $chi['persona'] ? ['id' => $collegamento['id'], 'stato' => $collegamento['stato']] : ['stato' => $collegamento['stato']];
+    }
+
+    /**
+     * `saldo` e `saldo_il` si mandano in coppia (Conti::coppiaDelSaldo): con uno solo, o con uno `null` e l'altro no, è 422 `obbligatorio` sul campo che manca. Entrambi `null` tolgono il saldo.
+     *
+     * @param  array<string, mixed>  $campi
+     */
+    private function coppiaDelSaldoFlow(array $campi): void
+    {
+        $saldo = array_key_exists('saldo', $campi);
+        $data = array_key_exists('saldo_il', $campi);
+
+        $manca = match (true) {
+            $saldo && ! $data => 'saldo_il',
+            $data && ! $saldo => 'saldo',
+            $saldo && $data && ($campi['saldo'] === null) !== ($campi['saldo_il'] === null) => $campi['saldo'] === null ? 'saldo' : 'saldo_il',
+            default => null,
+        };
+
+        if ($manca !== null) {
+            throw $this->erroreCrm($manca, 'validation.required', 'obbligatorio', ['attribute' => $this->testi->nome($manca)]);
+        }
     }
 
     // ———————————————————————————————————————— Categorie
@@ -432,7 +505,7 @@ trait Flow
             $lette = $this->analizzaLeRigheFlow($conto, $campi['righe']);
 
             if ($prova) {
-                return [200, ['data' => $this->riepilogoFlow(null, $campi['righe'], $lette)], []];
+                return [200, ['data' => $this->riepilogoFlow(null, $campi['righe'], $lette, $this->saldoPerIlContoFlow($conto, $campi['righe']) !== null)], []];
             }
 
             $nuove = array_values(array_filter($lette, fn (array $riga) => ! $riga['doppione']));
@@ -454,7 +527,14 @@ trait Flow
                 ];
             }
 
-            return [201, ['data' => $this->riepilogoFlow($id, $campi['righe'], $lette)], []];
+            // Il saldo dell'ultima riga del file diventa quello del conto se è più recente e una banca non lo scrive già (Caricamento::saldoPerIlConto, #4125).
+            $saldo = $this->saldoPerIlContoFlow($conto, $campi['righe']);
+
+            if ($saldo !== null) {
+                $this->flow['conti'][$conto['id']] = $saldo + $this->flow['conti'][$conto['id']];
+            }
+
+            return [201, ['data' => $this->riepilogoFlow($id, $campi['righe'], $lette, $saldo !== null)], []];
         };
 
         // Solo il caricamento vero accetta Idempotency-Key (IdempotenzaTranneLaProva): una prova gira ogni volta.
@@ -534,7 +614,7 @@ trait Flow
      * @param  list<array<string, mixed>>  $lette
      * @return array<string, mixed>
      */
-    private function riepilogoFlow(?string $id, array $righe, array $lette): array
+    private function riepilogoFlow(?string $id, array $righe, array $lette, bool $saldoAggiornato): array
     {
         $date = array_column($lette, 'data');
         $doppioni = count(array_filter($lette, fn (array $riga) => $riga['doppione']));
@@ -555,6 +635,7 @@ trait Flow
             'periodo_da' => min($date),
             'periodo_a' => max($date),
             'saldo' => $this->saldoDelFileFlow($righe),
+            'saldo_aggiornato' => $saldoAggiornato,
             'campione' => $campione,
         ];
     }
@@ -573,6 +654,19 @@ trait Flow
             }
         }
 
+        [$dalPiuVecchio, $dalPiuRecente] = $this->versiDelFileFlow($righe);
+
+        return $dalPiuVecchio || $dalPiuRecente ? 'ok' : 'non_torna';
+    }
+
+    /**
+     * In quale verso quadrano i saldi del file: [dal più vecchio, dal più recente] (Caricamento::versi).
+     *
+     * @param  list<array<string, mixed>>  $righe
+     * @return array{bool, bool}
+     */
+    private function versiDelFileFlow(array $righe): array
+    {
         $dalPiuVecchio = true;
         $dalPiuRecente = true;
 
@@ -581,7 +675,58 @@ trait Flow
             $dalPiuRecente = $dalPiuRecente && $righe[$i]['saldo'] === $righe[$i - 1]['saldo'] - $righe[$i - 1]['importo'];
         }
 
-        return $dalPiuVecchio || $dalPiuRecente ? 'ok' : 'non_torna';
+        return [$dalPiuVecchio, $dalPiuRecente];
+    }
+
+    /**
+     * Cosa il file cambia nel conto (Caricamento::saldoPerIlConto, #4125): `{saldo, saldo_il}` se il saldo del file è `ok` e quello dell'ultima riga fino a oggi (a Roma) è più recente di `saldo_il`,
+     * e il conto non ha una banca collegata; `null` se il conto resta com'è. Più righe nell'ultimo giorno si distinguono col verso del file; se quadrano in tutti e due i versi con saldi diversi, niente.
+     *
+     * @param  array<string, mixed>  $conto
+     * @param  list<array<string, mixed>>  $righe
+     * @return array{saldo: int, saldo_il: string}|null
+     */
+    private function saldoPerIlContoFlow(array $conto, array $righe): ?array
+    {
+        if ($this->saldoDelFileFlow($righe) !== 'ok' || $this->collegamentoDelContoFlow($conto) !== null) {
+            return null;
+        }
+
+        // Le date vanno nel verso dei saldi (Caricamento::saldoDelFile): se no non si sa quale riga è l'ultima.
+        [$dalPiuVecchio, $dalPiuRecente] = $this->versiDelFileFlow($righe);
+        $date = array_column($righe, 'data');
+        $ordinate = function (array $d): bool {
+            $ordinate = $d;
+            sort($ordinate);
+
+            return $d === $ordinate;
+        };
+
+        if (! ($dalPiuVecchio && $ordinate($date)) && ! ($dalPiuRecente && $ordinate(array_reverse($date)))) {
+            return null;
+        }
+
+        $oggi = CarbonImmutable::now('Europe/Rome')->toDateString();
+        $fino = array_filter($righe, fn (array $riga) => $riga['data'] <= $oggi);
+
+        if ($fino === []) {
+            return null;
+        }
+
+        $data = max(array_column($fino, 'data'));
+
+        if ($conto['saldo_il'] !== null && $data <= $conto['saldo_il']) {
+            return null;
+        }
+
+        $indici = array_keys(array_filter($fino, fn (array $riga) => $riga['data'] === $data));
+        $saldi = array_unique(array_map(fn (int $i) => $righe[$i]['saldo'], $indici));
+
+        if (count($saldi) === 1) {
+            return ['saldo' => (int) $righe[$indici[0]]['saldo'], 'saldo_il' => $data];
+        }
+
+        return $dalPiuVecchio === $dalPiuRecente ? null : ['saldo' => (int) $righe[$dalPiuVecchio ? max($indici) : min($indici)]['saldo'], 'saldo_il' => $data];
     }
 
     /**
@@ -1607,14 +1752,94 @@ trait Flow
             'movimenti_fino_al' => $date === [] ? null : max($date),
             'mesi_di_storico' => $mesi,
             'nel_conto' => [
-                'importo' => (int) array_sum(array_filter(array_column($conti, 'saldo'), fn (mixed $saldo) => $saldo !== null)),
+                'importo' => $this->oggiNeiContiFlow($conti, $this->movimentiBilancioFlow($chi, $vista), $oggi),
                 'conti_senza_saldo' => count(array_filter($conti, fn (array $conto) => $conto['saldo'] === null)),
+                'andamento' => $this->andamentoNelContoFlow($conti, $this->movimentiBilancioFlow($chi, $vista), $oggi),
             ],
             'entrate_al_mese' => $entrate,
             'spese_ogni_mese' => ['da_conti' => $daConti, 'altre_spese_fisse' => $mensili, 'totale' => $totale, 'mesi' => min(3, $mesi)],
             'metti_da_parte' => $daParte,
             'ti_restano' => $entrate['importo'] === null || $totale === null ? null : $entrate['importo'] - $totale - $daParte['importo'],
         ]]];
+    }
+
+    /**
+     * `nel_conto.importo` (App\Flow\Bilancio::nelConto, #3817, zr-pm 22/11): quanto c'è oggi nei conti della vista che hanno un saldo, cioè il `saldo` più i movimenti dopo la sua
+     * `saldo_il` fino a oggi (esclusi compresi): lo stesso calcolo dell'ultimo punto di `andamento`.
+     *
+     * @param  array<string, array<string, mixed>>  $conti
+     * @param  list<array<string, mixed>>  $movimenti
+     */
+    private function oggiNeiContiFlow(array $conti, array $movimenti, CarbonImmutable $oggi): int
+    {
+        $fine = $oggi->format('Y-m-d');
+        $somma = 0;
+
+        foreach ($conti as $id => $conto) {
+            if ($conto['saldo'] === null) {
+                continue;
+            }
+
+            $somma += (int) $conto['saldo'];
+
+            if ($conto['saldo_il'] !== null) {
+                $dopo = array_filter($movimenti, fn (array $movimento) => $movimento['conto'] === $id && $movimento['data'] > (string) $conto['saldo_il'] && $movimento['data'] <= $fine);
+                $somma += (int) array_sum(array_column($dopo, 'importo'));
+            }
+        }
+
+        return $somma;
+    }
+
+    /**
+     * `nel_conto.andamento` (App\Flow\Bilancio::andamento, #3817): il saldo dei conti della vista a fine di ognuno degli ultimi sei mesi di Roma, dal più vecchio al mese in corso (a oggi). Si ricostruisce dal `saldo`
+     * di ogni conto, che vale alla sua `saldo_il`: si tolgono i movimenti dopo la fine del mese fino a `saldo_il`, o si aggiungono quelli dopo `saldo_il` fino alla fine del mese. Contano i movimenti vivi, esclusi
+     * compresi. `importo` è null se anche un solo conto non ha `saldo`, `saldo_il` o movimenti fino a quella data (il mese in corso vale il `saldo` per un conto che ne ha uno e non ha movimenti); 0 senza conti.
+     *
+     * @param  array<string, array<string, mixed>>  $conti
+     * @param  list<array<string, mixed>>  $movimenti
+     * @return list<array{mese: string, importo: int|null}>
+     */
+    private function andamentoNelContoFlow(array $conti, array $movimenti, CarbonImmutable $oggi): array
+    {
+        $andamento = [];
+
+        for ($indietro = 5; $indietro >= 0; $indietro--) {
+            $primo = $oggi->startOfMonth()->subMonthsNoOverflow($indietro);
+            $fine = $indietro === 0 ? $oggi->format('Y-m-d') : $primo->endOfMonth()->format('Y-m-d');
+            $somma = 0;
+
+            foreach ($conti as $id => $conto) {
+                $suoi = array_filter($movimenti, fn (array $movimento) => $movimento['conto'] === $id);
+
+                if ($conto['saldo'] === null) {
+                    $somma = null;
+
+                    break;
+                }
+
+                if ($conto['saldo_il'] === null || array_filter($suoi, fn (array $movimento) => $movimento['data'] <= $fine) === []) {
+                    if ($indietro !== 0) {
+                        $somma = null;
+
+                        break;
+                    }
+
+                    $somma += (int) $conto['saldo'];      // il mese in corso non contraddice il numero grande (zr-pm 22/11)
+
+                    continue;
+                }
+
+                $saldoIl = (string) $conto['saldo_il'];
+                $somma += $fine < $saldoIl
+                    ? (int) $conto['saldo'] - array_sum(array_column(array_filter($suoi, fn (array $movimento) => $movimento['data'] > $fine && $movimento['data'] <= $saldoIl), 'importo'))
+                    : (int) $conto['saldo'] + array_sum(array_column(array_filter($suoi, fn (array $movimento) => $movimento['data'] > $saldoIl && $movimento['data'] <= $fine), 'importo'));
+            }
+
+            $andamento[] = ['mese' => $primo->format('Y-m'), 'importo' => $somma];
+        }
+
+        return $andamento;
     }
 
     /**
@@ -2169,8 +2394,9 @@ trait Flow
         }
 
         $somma = array_sum(array_column($mesi, 'totale'));
-        $saldi = array_filter(array_column(array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista)), 'saldo'), fn (mixed $saldo) => $saldo !== null);
-        $disponibile = $saldi === [] ? null : (int) array_sum($saldi) + $entrate30;
+        $contiDellaVista = array_filter($this->flow['conti'], fn (array $conto) => $this->contoDellaVistaFlow($conto, $chi, $vista));
+        $conSaldo = array_filter($contiDellaVista, fn (array $conto) => $conto['saldo'] !== null);
+        $disponibile = $conSaldo === [] ? null : $this->oggiNeiContiFlow($contiDellaVista, $this->movimentiBilancioFlow($chi, $vista), $oggi) + $entrate30;
         $mancano = $disponibile === null ? null : max(0, -$spese30 - $disponibile);
         $elenco = [];
 

@@ -253,7 +253,7 @@ it('workspace.inviti.crea dà 201 con l\'invito, senza il codice, che si legge s
         ->and($invito['scade_il'])->toBe(iso(now()->addDays(7)->startOfMillisecond()))
         ->and($invito['creato_il'])->toBe(iso(now()->startOfMillisecond()))
         ->and($risposta->header('Location'))->toBe("/v1/workspace/inviti/{$invito['id']}")
-        ->and($codice)->toMatch('/^[A-Za-z0-9_-]{43}$/')
+        ->and($codice)->toMatch('/^\d{8}$/')
         // Il codice non esce da nessuna risposta.
         ->and($risposta->body())->not->toContain($codice)
         ->and(alFinto('GET', '/v1/workspace/inviti', gettone: $anna)->body())->not->toContain($codice);
