@@ -200,6 +200,8 @@ return [
     'prenotazione_docente_manca' => 'More than one teacher is free at this time: say who the booking is with in `docente_id`.',
     'prenotazione_docente_solo_per_docente' => '`docente_id` is only for a per-teacher calendar of a venue.',
     'prenotazione_docente_senza_inizio' => 'To change teacher also send `inizio` (the current one is fine).',
+    'prenotazione_docente_non_cambia' => 'The booking\'s professional cannot be changed from here: send the current one (`docente.id`), or nothing. For another professional, cancel and book again.',
+    'ospite_prenotazione_docente_senza_inizio' => '`docente_id` is only sent together with `inizio`, and only if it is the booking\'s own.',
     'posti_per_prenotazione_oltre_i_posti' => "Seats per booking cannot exceed the calendar's seats.",
     'prenotazione_acquisto_non_valido' => 'This purchase is not valid: it must be a purchase of the contact, of an item that opens this calendar (`accesso.voci`), and the calendar must be reserved for people who have bought.',
     'prenotazione_stato_riapri_annullata' => 'A cancelled booking cannot be reopened: a new booking is needed.',

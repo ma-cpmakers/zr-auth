@@ -200,6 +200,8 @@ return [
     'prenotazione_docente_manca' => 'A esta hora hay más de un docente libre: indica con quién se reserva en `docente_id`.',
     'prenotazione_docente_solo_per_docente' => '`docente_id` solo sirve en un calendario por docente de un local.',
     'prenotazione_docente_senza_inizio' => 'Para cambiar de docente envía también `inizio` (vale el actual).',
+    'prenotazione_docente_non_cambia' => 'El profesional de la reserva no cambia desde aquí: envía el que tiene (`docente.id`), o nada. Para otro profesional, cancela y reserva de nuevo.',
+    'ospite_prenotazione_docente_senza_inizio' => '`docente_id` solo se envía junto con `inizio`, y solo si es el de la reserva.',
     'posti_per_prenotazione_oltre_i_posti' => 'Las plazas por reserva no pueden superar las plazas del calendario.',
     'prenotazione_acquisto_non_valido' => 'Esta compra no vale: debe ser una compra del contacto, de un artículo que abre este calendario (`accesso.voci`), y el calendario debe estar reservado a quien ha comprado.',
     'prenotazione_stato_riapri_annullata' => 'Una reserva cancelada no se reabre: hace falta una reserva nueva.',

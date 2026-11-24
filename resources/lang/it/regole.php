@@ -201,6 +201,8 @@ return [
     'prenotazione_docente_manca' => 'A questo orario ci sono più docenti liberi: indica con chi si prenota in `docente_id`.',
     'prenotazione_docente_solo_per_docente' => '`docente_id` serve solo in un calendario per docente di una struttura.',
     'prenotazione_docente_senza_inizio' => 'Per cambiare docente manda anche `inizio` (va bene quello di adesso).',
+    'prenotazione_docente_non_cambia' => 'Il professionista della prenotazione non cambia da qui: manda quello che ha (`docente.id`), o niente. Per un altro professionista annulla e prenota di nuovo.',
+    'ospite_prenotazione_docente_senza_inizio' => '`docente_id` si manda solo insieme a `inizio`, e solo se è quello della prenotazione.',
     'posti_per_prenotazione_oltre_i_posti' => 'I posti per prenotazione non possono superare i posti del calendario.',
     'prenotazione_acquisto_non_valido' => 'Questo acquisto non va: deve essere un acquisto del contatto, di una voce che apre questo calendario (`accesso.voci`), e il calendario deve essere riservato a chi ha comprato.',
     'prenotazione_stato_riapri_annullata' => 'Una prenotazione annullata non si riapre: serve una prenotazione nuova.',
