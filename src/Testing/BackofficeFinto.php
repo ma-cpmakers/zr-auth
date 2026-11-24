@@ -462,6 +462,7 @@ final class BackofficeFinto
         ['POST', '#^/v1/workspace/inviti$#', 'workspace.inviti.crea'],
         ['DELETE', '#^/v1/workspace/inviti/([^/]+)$#', 'workspace.inviti.elimina'],
         ['POST', '#^/v1/workspace/inviti/([^/]+)/reinvio$#', 'workspace.inviti.reinvio.crea'],
+        ['GET', '#^/v1/workspace$#', 'workspace.mostra'],
         ['GET', '#^/v1/workspace/primi-passi$#', 'workspace.primi-passi.mostra'],
         ['GET', '#^/v1/workspace/membri$#', 'workspace.membri.elenca'],
         ['GET', '#^/v1/workspace/membri/([^/]+)/foto$#', 'workspace.membri.foto.mostra'],
@@ -719,6 +720,9 @@ final class BackofficeFinto
 
     /** @var array<string, string> il colore scelto per workspace (#2010): senza una scelta il workspace è `neutral` (Forme::workspaceConRuolo) */
     private array $colori = [];
+
+    /** @var array<string, array{tema: string, sfondo: ?string, principale: ?string}> l'aspetto delle pagine pubbliche scelto per workspace (#4211): senza una riga è `null`, quello di partenza */
+    private array $aspetti = [];
 
     /** @var array<string, CarbonImmutable> quando si archivia ogni workspace di cui il proprietario ha chiesto l'eliminazione, per id: il finto non archivia alla scadenza */
     private array $eliminazioni = [];
@@ -1888,6 +1892,7 @@ final class BackofficeFinto
                 'workspace.inviti.crea' => $this->creaInvito($richiesta, $corpo),
                 'workspace.inviti.elimina' => $this->eliminaInvito($richiesta, $parametri[0]),
                 'workspace.inviti.reinvio.crea' => $this->reinviaInvito($richiesta, $corpo, $parametri[0]),
+                'workspace.mostra' => $this->mostraWorkspace($richiesta),
                 'workspace.primi-passi.mostra' => $this->mostraPrimiPassi($richiesta),
                 'workspace.membri.elenca' => $this->elencaMembri($richiesta),
                 'workspace.membri.foto.mostra' => $this->leggiFotoDelMembro($richiesta, $parametri[0]),
@@ -6330,11 +6335,17 @@ final class BackofficeFinto
             'lingua_contenuti' => ['nullable', 'bail', 'string', Rule::in(Testi::LINGUE)],
             'colore' => ['nullable', 'bail', 'string', Rule::in(self::COLORI)],
         ];
-        $campi = $this->testi->validaStretta($corpo, $regole);
+        $regole += [
+            'aspetto_pubblico' => ['nullable', 'bail', 'array', 'min:1'],
+            'aspetto_pubblico.tema' => ['bail', 'string', Rule::in(['chiaro', 'scuro'])],
+            'aspetto_pubblico.sfondo' => ['nullable', 'bail', 'string', 'regex:/^#[0-9a-fA-F]{6}$/D'],
+            'aspetto_pubblico.principale' => ['nullable', 'bail', 'string', 'regex:/^#[0-9a-fA-F]{6}$/D'],
+        ];
+        $campi = $this->testi->validaCorpo($corpo, $regole);
 
         if ($campi === []) {
             throw new Problema('dati_non_validi', [[
-                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => implode(', ', array_keys($regole))]),
+                'detail' => $this->testi->testo('regole.almeno_un_campo', ['campi' => implode(', ', array_filter(array_keys($regole), fn (string $chiave) => ! str_contains($chiave, '.')))]),
                 'regola' => 'obbligatorio',
                 'pointer' => '#',
             ]]);
@@ -6350,7 +6361,33 @@ final class BackofficeFinto
             $this->colori[$workspace] = (string) $campi['colore'];
         }
 
+        // L'aspetto delle pagine pubbliche (#4211): `null` torna a quello di partenza, un oggetto è un Merge Patch (da `null` si parte con tema chiaro), i colori si salvano minuscoli.
+        if (array_key_exists('aspetto_pubblico', $campi)) {
+            if ($campi['aspetto_pubblico'] === null) {
+                unset($this->aspetti[$workspace]);
+            } else {
+                $aspetto = $this->aspetti[$workspace] ?? ['tema' => 'chiaro', 'sfondo' => null, 'principale' => null];
+
+                foreach (['tema', 'sfondo', 'principale'] as $chiave) {
+                    if (array_key_exists($chiave, $campi['aspetto_pubblico'])) {
+                        $valore = $campi['aspetto_pubblico'][$chiave];
+                        $aspetto[$chiave] = is_string($valore) && $chiave !== 'tema' ? strtolower($valore) : $valore;
+                    }
+                }
+
+                $this->aspetti[$workspace] = $aspetto;
+            }
+        }
+
         return [200, ['data' => $this->conRuolo($workspace, $this->membri[$workspace][$chi['persona']], $chi['persona'])]];
+    }
+
+    /** workspace.mostra (WorkspaceController::mostra): il workspace del gettone, a ogni ruolo, nella forma di un elemento di io.workspace.elenca. */
+    private function mostraWorkspace(Request $richiesta): array
+    {
+        $chi = $this->conWorkspace($richiesta);
+
+        return [200, ['data' => $this->conRuolo($chi['workspace'], $this->membri[$chi['workspace']][$chi['persona']], $chi['persona'])]];
     }
 
     /**
@@ -6364,6 +6401,7 @@ final class BackofficeFinto
         return [
             ...$this->workspace[$workspace],
             'colore' => $this->colori[$workspace] ?? 'neutral',
+            'aspetto_pubblico' => $this->aspetti[$workspace] ?? null,
             'ruolo' => $ruolo,
             'eliminazione_il' => $inEliminazione ? self::iso($this->eliminazioni[$workspace]) : null,
             'eliminato_da' => $inEliminazione ? ($this->eliminatiDa[$workspace] ?? null) : null,
