@@ -235,7 +235,7 @@ return [
             'persone_per_struttura' => 'Questa struttura ha già il massimo di :tetto persone. Togli una persona e ripeti.',
             'rimandi_per_persona' => 'Hai già il massimo di :tetto rimandi attivi in questo workspace. Aspetta che uno scada e ripeti.',
             'vetrine_per_pagina' => 'Questa pagina ha già il massimo di :tetto vetrine. Elimina una vetrina e ripeti.',
-            'file_per_vetrina' => 'Questa vetrina ha già il massimo di :tetto file (la copertina conta). Elimina un file e ripeti.',
+            'file_per_vetrina' => 'Questa vetrina ha già il massimo di :tetto file (la copertina conta). Anche i file eliminati occupano ancora spazio: per liberarne o per alzare il limite scrivi all\'assistenza di Zeiras.',
             'peso_file_per_workspace' => 'I file delle vetrine del workspace pesano già il massimo di :tetto MB. Elimina un file e ripeti.',
             'peso_scritto_per_workspace' => 'Il workspace ha già scritto il massimo di :tetto MB di file delle vetrine, contando anche quelli archiviati o scartati. Eliminare un file non libera spazio: scrivi a chi gestisce Zeiras.',
             'link_per_vetrina' => 'Questa vetrina ha già il massimo di :tetto link. Elimina un link e ripeti.',
