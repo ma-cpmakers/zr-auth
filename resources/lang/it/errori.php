@@ -676,6 +676,10 @@ return [
         'title' => 'File non scansionabile',
         'detail' => 'La scansione non è riuscita a controllare il file entro il tempo previsto: non si scarica.',
     ],
+    'allegato_non_disponibile' => [
+        'title' => 'File non disponibile',
+        'detail' => 'Il file di questo allegato non si trova più nel deposito: non si scarica e riprovare non serve. Il servizio è stato avvisato.',
+    ],
     'gate_in_approvazione' => [
         'title' => 'Richiesta di approvazione in corso',
         'detail' => 'Il Gate è in approvazione e il suo approvatore è disponibile: non si cambia né si toglie l\'approvatore, né si cambia il tipo della scheda, finché la richiesta è aperta. Registra la decisione con board.schede.gate.decisione.crea, oppure annulla prima la richiesta.',

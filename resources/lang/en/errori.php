@@ -676,6 +676,10 @@ return [
         'title' => 'File that cannot be scanned',
         'detail' => 'The scan could not check the file within the allowed time: it cannot be downloaded.',
     ],
+    'allegato_non_disponibile' => [
+        'title' => 'File not available',
+        'detail' => 'The file of this attachment is no longer in the store: it cannot be downloaded and retrying will not help. The service has been notified.',
+    ],
     'gate_in_approvazione' => [
         'title' => 'Approval request pending',
         'detail' => 'The Gate is awaiting approval and its approver is available: the approver cannot be changed or removed, nor the card\'s type changed, while the request is open. Record the decision with board.schede.gate.decisione.crea, or cancel the request first.',
